@@ -356,17 +356,16 @@ describe("App", () => {
     vi.useRealTimers();
   });
 
-  it("shows a static loading state without spinner animation while map data loads", () => {
+  it("keeps the initial loading overlay hidden while map data loads", () => {
     fetchMock.mockImplementation(
       () =>
         new Promise(() => {
-          // Keep the initial overlay visible just long enough for the assertion.
+          // Keep the request pending so the app stays in its initial loading phase.
         }),
     );
     const { container, unmount } = render(<App />);
 
-    expect(container.querySelector(".loading-screen-overlay")).toBeInTheDocument();
-    expect(container.querySelector(".loading-spinner")).not.toBeInTheDocument();
+    expect(container.querySelector(".loading-screen-overlay")).not.toBeInTheDocument();
 
     unmount();
   });

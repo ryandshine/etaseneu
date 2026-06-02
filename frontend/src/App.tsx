@@ -581,25 +581,19 @@ export default function App() {
         )}
       </main>
 
-      {initialLoading.isLoading && (
+      {initialLoading.error && (
         <div className="loading-screen-overlay">
           <div className="loading-card">
             <div className="loading-logo">ES</div>
-            {initialLoading.error ? (
-              <>
-                <h2 className="loading-error-title">{initialLoading.error}</h2>
-                <p className="loading-subtitle">Gagal terhubung ke server. Periksa koneksi Anda.</p>
-                <button
-                  type="button"
-                  className="loading-retry-button"
-                  onClick={retryInitialLoad}
-                >
-                  Coba Lagi
-                </button>
-              </>
-            ) : (
-              <p className="loading-subtitle">Memuat tampilan peta...</p>
-            )}
+            <h2 className="loading-error-title">{initialLoading.error}</h2>
+            <p className="loading-subtitle">Gagal terhubung ke server. Periksa koneksi Anda.</p>
+            <button
+              type="button"
+              className="loading-retry-button"
+              onClick={retryInitialLoad}
+            >
+              Coba Lagi
+            </button>
           </div>
         </div>
       )}
