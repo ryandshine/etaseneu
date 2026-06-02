@@ -34,7 +34,7 @@ def _defer_scheduler_start(
             )
         )
 
-    handle = loop.call_soon(_start_scheduler)
+    handle = loop.call_later(1.0, _start_scheduler)
     return handle, holder
 
 

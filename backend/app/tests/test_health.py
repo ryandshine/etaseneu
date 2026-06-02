@@ -100,8 +100,10 @@ def test_scheduler_start_is_deferred_until_after_startup(monkeypatch: pytest.Mon
     class DummyLoop:
         def __init__(self) -> None:
             self.callback = None
+            self.delay = None
 
-        def call_soon(self, callback):
+        def call_later(self, delay, callback):
+            self.delay = delay
             self.callback = callback
             return DummyHandle()
 
@@ -121,6 +123,7 @@ def test_scheduler_start_is_deferred_until_after_startup(monkeypatch: pytest.Mon
 
     assert handle is not None
     assert holder["task"] is None
+    assert dummy_loop.delay == 1.0
     assert dummy_loop.callback is not None
 
     dummy_loop.callback()
