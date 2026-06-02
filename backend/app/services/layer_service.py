@@ -86,6 +86,12 @@ class LayerService:
         self._layers_cache = layers
         return layers
 
+    def get_layer(self, layer_id: str) -> LayerFeature | None:
+        for layer in self.list_layers():
+            if layer.id == layer_id:
+                return layer
+        return None
+
     def bounds_for_layer_ids(self, layer_ids: list[str]) -> LayerBounds | None:
         selected = [layer.bounds for layer in self.list_layers() if layer.id in layer_ids]
         if not selected:

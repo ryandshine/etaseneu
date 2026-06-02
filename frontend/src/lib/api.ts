@@ -5,6 +5,7 @@ import type {
   GeoJsonStatusResponse,
   HotspotCollectionResponse,
   HotspotQueryParams,
+  LayerFeature,
   LayerListResponse,
   ManualSyncResponse,
   SchedulerMetricsResponse,
@@ -98,6 +99,7 @@ export function createApiClient(baseUrl = "/api"): ApiClient {
   const endpoints = {
     health: `${baseUrl}/health`,
     layers: `${baseUrl}/layers`,
+    layer: (id: string) => `${baseUrl}/layers/${encodeURIComponent(id)}`,
     hotspots: `${baseUrl}/hotspots`,
     stats: `${baseUrl}/stats`,
     cacheHistoryStatus: `${baseUrl}/cache/history/status`,
@@ -114,6 +116,8 @@ export function createApiClient(baseUrl = "/api"): ApiClient {
     getHealth: () => fetchJson<HealthResponse>(endpoints.health),
     getLayers: (view) =>
       fetchJson<LayerListResponse>(withQuery(endpoints.layers, toLayerQueryRecord(view))),
+    getLayer: (id, view) =>
+      fetchJson<LayerFeature>(withQuery(endpoints.layer(id), toLayerQueryRecord(view))),
     getHotspots: (params: HotspotQueryParams) =>
       fetchJson<HotspotCollectionResponse>(
         withQuery(endpoints.hotspots, toQueryRecord(params)),

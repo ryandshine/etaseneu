@@ -32,7 +32,7 @@ vi.mock("react-leaflet", () => ({
   useMapEvents: () => ({})
 }));
 
-const layersResponse = {
+const previewLayersResponse = {
   count: 1,
   layers: [
     {
@@ -48,13 +48,51 @@ const layersResponse = {
         max_lat: -6,
         max_lon: 108
       },
-      geojson_mode: "full",
+      geojson_mode: "preview",
       geojson: {
         type: "FeatureCollection",
-        features: []
+        features: [
+          {
+            type: "Feature",
+            properties: {},
+            geometry: {
+              type: "Polygon",
+              coordinates: [[[107, -7], [108, -7], [108, -6], [107, -6], [107, -7]]]
+            }
+          }
+        ]
       }
     }
   ]
+};
+
+const fullLayerResponse = {
+  id: "sample_area",
+  name: "Sample Area",
+  label: "LPHD Nyuai Peningun",
+  color: "#ff7a00",
+  active: true,
+  feature_count: 1,
+  bounds: {
+    min_lat: -7,
+    min_lon: 107,
+    max_lat: -6,
+    max_lon: 108
+  },
+  geojson_mode: "full",
+  geojson: {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: { label: "LPHD Nyuai Peningun" },
+        geometry: {
+          type: "Polygon",
+          coordinates: [[[107.1, -6.9], [107.9, -6.9], [107.9, -6.1], [107.1, -6.1], [107.1, -6.9]]]
+        }
+      }
+    ]
+  }
 };
 
 const hotspotsResponse = {
@@ -124,8 +162,15 @@ describe("Hotspot map integration", () => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
 
-      if (url.startsWith("/api/layers")) {
-        return new Response(JSON.stringify(layersResponse), {
+      if (url === "/api/layers?view=preview") {
+        return new Response(JSON.stringify(previewLayersResponse), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      if (url === "/api/layers/sample_area") {
+        return new Response(JSON.stringify(fullLayerResponse), {
           status: 200,
           headers: { "Content-Type": "application/json" }
         });
@@ -314,11 +359,11 @@ describe("Hotspot map integration", () => {
     expect(mapContainerPropsMock).toHaveBeenCalled();
     expect(mapContainerPropsMock.mock.calls[0]?.[0]).toMatchObject({ preferCanvas: true });
     expect(
-      fetchMock.mock.calls.some(([input]) => String(input) === "/api/layers")
+      fetchMock.mock.calls.some(([input]) => String(input).includes("/api/layers?view=preview"))
     ).toBe(true);
     expect(
-      fetchMock.mock.calls.some(([input]) => String(input).includes("/api/layers?view=preview"))
-    ).toBe(false);
+      fetchMock.mock.calls.some(([input]) => String(input) === "/api/layers/sample_area")
+    ).toBe(true);
   });
 
   it("loads full geojson layers on initial map render", async () => {
@@ -328,11 +373,11 @@ describe("Hotspot map integration", () => {
 
     await waitFor(() => {
       expect(
-        fetchMock.mock.calls.some(([input]) => String(input) === "/api/layers")
+        fetchMock.mock.calls.some(([input]) => String(input) === "/api/layers/sample_area")
       ).toBe(true);
     });
 
     const layerCalls = fetchMock.mock.calls.filter(([input]) => String(input).startsWith("/api/layers"));
-    expect(layerCalls).toHaveLength(1);
+    expect(layerCalls).toHaveLength(2);
   });
 });

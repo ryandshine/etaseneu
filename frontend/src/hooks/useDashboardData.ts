@@ -56,6 +56,21 @@ function normalizeLembagaName(name: string): string {
   return name;
 }
 
+function mapLayerResponse(layer: LayerFeature): DashboardLayer {
+  return {
+    id: layer.id,
+    name: normalizeLembagaName(layer.name),
+    label: normalizeLembagaName(layer.label),
+    active: layer.active,
+    color: layer.color,
+    bounds: layer.bounds as LayerBounds,
+    geojson: layer.geojson,
+    geojson_mode: layer.geojson_mode,
+    feature_count: layer.feature_count,
+    agencies: layer.agencies ?? [],
+  };
+}
+
 function toIsoDate(value: Date): string {
   return formatDateWIB(value);
 }
@@ -210,6 +225,7 @@ export function useDashboardData(activeView: "map" | "matrix" | "monitoring" = "
   });
   const [isInitLoaded, setIsInitLoaded] = useState(false);
   const hasStartedInitialLoadRef = useRef(false);
+  const fullLayerRequestIdsRef = useRef<Set<string>>(new Set());
   const hotspotView: "map" | "full" = activeView === "matrix" ? "full" : "map";
 
   const handleLoadingFadeEnd = useCallback(() => {
@@ -225,21 +241,10 @@ export function useDashboardData(activeView: "map" | "matrix" | "monitoring" = "
       const [schedulerRes, storageRes, layersRes] = await Promise.all([
         api.getSchedulerMetrics(),
         api.getStorageStatus(),
-        api.getLayers(),
+        api.getLayers("preview"),
       ]);
-
-      const mappedLayers = layersRes.layers.map((layer) => ({
-        id: layer.id,
-        name: normalizeLembagaName(layer.name),
-        label: normalizeLembagaName(layer.label),
-        active: layer.active,
-        color: layer.color,
-        bounds: layer.bounds as LayerBounds,
-        geojson: layer.geojson,
-        geojson_mode: layer.geojson_mode,
-        feature_count: layer.feature_count,
-        agencies: layer.agencies ?? []
-      }));
+      fullLayerRequestIdsRef.current.clear();
+      const mappedLayers = layersRes.layers.map(mapLayerResponse);
 
       const activeLayerIds = mappedLayers.filter((layer) => layer.active).map((layer) => layer.id);
       const initialTimeRange = buildTimeRange(timePreset, startDate, endDate, clockTick);
@@ -377,6 +382,13 @@ export function useDashboardData(activeView: "map" | "matrix" | "monitoring" = "
     () => layers.filter((layer) => layer.active).map((layer) => layer.id),
     [layers],
   );
+  const previewLayerIdsNeedingFullData = useMemo(
+    () =>
+      layers
+        .filter((layer) => layer.active && layer.geojson_mode !== "full")
+        .map((layer) => layer.id),
+    [layers],
+  );
   const timeRange = useMemo(
     () => buildTimeRange(timePreset, startDate, endDate, clockTick),
     [clockTick, endDate, startDate, timePreset],
@@ -405,6 +417,35 @@ export function useDashboardData(activeView: "map" | "matrix" | "monitoring" = "
   );
 
   const isFirstHotspotsRef = useRef(true);
+  useEffect(() => {
+    if (!isInitLoaded) return;
+    const layerIdsToFetch = previewLayerIdsNeedingFullData.filter(
+      (layerId) => !fullLayerRequestIdsRef.current.has(layerId),
+    );
+    if (layerIdsToFetch.length === 0) return;
+
+    let isMounted = true;
+    layerIdsToFetch.forEach((layerId) => {
+      fullLayerRequestIdsRef.current.add(layerId);
+      api
+        .getLayer(layerId)
+        .then((layer) => {
+          if (!isMounted) return;
+          const mappedLayer = mapLayerResponse(layer);
+          setLayers((current) =>
+            current.map((existing) => (existing.id === layerId ? { ...existing, ...mappedLayer } : existing)),
+          );
+        })
+        .catch(() => {
+          fullLayerRequestIdsRef.current.delete(layerId);
+        });
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isInitLoaded, previewLayerIdsNeedingFullData]);
+
   useEffect(() => {
     if (!isInitLoaded) return;
     if (isFirstHotspotsRef.current) {

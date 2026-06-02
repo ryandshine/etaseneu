@@ -154,6 +154,7 @@ export interface ApiClient {
   endpoints: {
     health: string;
     layers: string;
+    layer: (id: string) => string;
     hotspots: string;
     stats: string;
     cacheHistoryStatus: string;
@@ -165,6 +166,7 @@ export interface ApiClient {
   };
   getHealth: () => Promise<HealthResponse>;
   getLayers: (view?: "preview" | "full") => Promise<LayerListResponse>;
+  getLayer: (id: string, view?: "preview" | "full") => Promise<LayerFeature>;
   getHotspots: (params: HotspotQueryParams) => Promise<HotspotCollectionResponse>;
   getStats: (params: HotspotQueryParams) => Promise<StatsResponse>;
   getHistoryStatus: (params: HotspotQueryParams & { year: number }) => Promise<HistoryStatusResponse>;

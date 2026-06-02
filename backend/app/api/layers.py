@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Query
+from fastapi import HTTPException
 
 from app.core.config import get_settings
 from app.models.layers import LayerFeature
@@ -16,6 +17,18 @@ async def list_layers(view: str | None = Query(default=None)) -> dict[str, objec
     if view == "preview":
         layers = [_to_preview_layer(layer) for layer in layers]
     return {"count": len(layers), "layers": [layer.model_dump() for layer in layers]}
+
+
+@router.get("/layers/{layer_id}")
+async def get_layer(layer_id: str, view: str | None = Query(default=None)) -> dict[str, object]:
+    settings = get_settings()
+    service = get_layer_service(str(settings.resolved_shp_dir))
+    layer = service.get_layer(layer_id)
+    if layer is None:
+        raise HTTPException(status_code=404, detail="Layer not found")
+    if view == "preview":
+        layer = _to_preview_layer(layer)
+    return layer.model_dump()
 
 
 def _to_preview_layer(layer: LayerFeature) -> LayerFeature:

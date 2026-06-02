@@ -54,10 +54,75 @@ describe("App", () => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
 
-      if (url.startsWith("/api/layers")) {
+      if (url === "/api/layers?view=preview") {
         return new Response(JSON.stringify({
-          count: 0,
-          layers: []
+          count: 1,
+          layers: [
+            {
+              id: "sample_area",
+              name: "Sample Area",
+              label: "Sample Area",
+              color: "#1d4ed8",
+              active: true,
+              feature_count: 1,
+              bounds: {
+                min_lat: -1,
+                min_lon: 100,
+                max_lat: 1,
+                max_lon: 102
+              },
+              geojson: {
+                type: "FeatureCollection",
+                features: [
+                  {
+                    type: "Feature",
+                    properties: {},
+                    geometry: {
+                      type: "Polygon",
+                      coordinates: [[[100, -1], [102, -1], [102, 1], [100, 1], [100, -1]]]
+                    }
+                  }
+                ]
+              },
+              geojson_mode: "preview",
+              agencies: ["Sample Area"]
+            }
+          ]
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      if (url === "/api/layers/sample_area") {
+        return new Response(JSON.stringify({
+          id: "sample_area",
+          name: "Sample Area",
+          label: "Sample Area",
+          color: "#1d4ed8",
+          active: true,
+          feature_count: 1,
+          bounds: {
+            min_lat: -1,
+            min_lon: 100,
+            max_lat: 1,
+            max_lon: 102
+          },
+          geojson: {
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                properties: { label: "Sample Area" },
+                geometry: {
+                  type: "Polygon",
+                  coordinates: [[[100, -1], [101, -1], [101, 0], [100, 0], [100, -1]]]
+                }
+              }
+            ]
+          },
+          geojson_mode: "full",
+          agencies: ["Sample Area"]
         }), {
           status: 200,
           headers: { "Content-Type": "application/json" }
@@ -249,11 +314,14 @@ describe("App", () => {
     expect(screen.getAllByText("Sinkronisasi NASA").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Aktif").length).toBeGreaterThanOrEqual(1);
     expect(
-      fetchMock.mock.calls.some(([input]) => String(input) === "/api/layers")
+      fetchMock.mock.calls.some(([input]) => String(input).includes("/api/layers?view=preview"))
     ).toBe(true);
     expect(
-      fetchMock.mock.calls.some(([input]) => String(input).includes("/api/layers?view=preview"))
+      fetchMock.mock.calls.some(([input]) => String(input) === "/api/layers")
     ).toBe(false);
+    expect(
+      fetchMock.mock.calls.some(([input]) => String(input) === "/api/layers/sample_area")
+    ).toBe(true);
     expect(
       fetchMock.mock.calls.some(([input]) => String(input).includes("/api/hotspots?") && String(input).includes("view=map"))
     ).toBe(true);
