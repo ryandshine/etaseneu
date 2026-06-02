@@ -833,6 +833,241 @@ body {
   }
 }
 
+/* Informative 24h Hotspots Section */
+.monitor-hotspots-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.5rem;
+}
+
+.monitor-hotspots-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.85rem;
+}
+
+.monitor-hotspots-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  letter-spacing: -0.01em;
+}
+
+.monitor-hotspots-icon {
+  font-size: 1.25rem;
+  animation: pulse-glow 2s infinite alternate;
+}
+
+@keyframes pulse-glow {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  100% { transform: scale(1.05); opacity: 1; }
+}
+
+.monitor-hotspots-count {
+  font-size: 0.75rem;
+  background: rgba(255, 92, 92, 0.15);
+  color: #ff5c5c;
+  padding: 0.22rem 0.65rem;
+  border-radius: 99px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 92, 92, 0.25);
+  letter-spacing: 0.02em;
+}
+
+.monitor-hotspots-list {
+  max-height: 420px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-right: 0.5rem;
+}
+
+.monitor-hotspots-list::-webkit-scrollbar {
+  width: 6px;
+}
+.monitor-hotspots-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.01);
+  border-radius: 3px;
+}
+.monitor-hotspots-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+.monitor-hotspots-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.hotspot-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.015);
+  border-radius: 8px;
+  align-items: center;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hotspot-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.hotspot-meta-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.hotspot-badge-container {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.hotspot-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0.18rem 0.5rem;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+}
+
+.hotspot-badge--new {
+  background: rgba(239, 68, 68, 0.18);
+  color: #ff6b6b;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.15);
+}
+
+.hotspot-badge--medium {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fcc033;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.hotspot-badge--old {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(235, 238, 243, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.hotspot-badge--source {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.hotspot-sensor {
+  font-size: 0.76rem;
+  color: rgba(235, 238, 243, 0.8);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 500;
+}
+
+.hotspot-conf {
+  font-size: 0.68rem;
+  color: rgba(209, 213, 219, 0.48);
+}
+
+.hotspot-info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.hotspot-loc {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hotspot-subloc {
+  font-size: 0.74rem;
+  color: rgba(235, 238, 243, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hotspot-frp {
+  font-size: 0.76rem;
+  color: rgba(235, 238, 243, 0.75);
+}
+
+.hotspot-action-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.hotspot-age {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: rgba(235, 238, 243, 0.9);
+}
+
+.hotspot-link {
+  font-size: 0.78rem;
+  color: #3b82f6;
+  text-decoration: none;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: all 0.18s ease;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+.hotspot-link:hover {
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
+  text-decoration: none;
+}
+
+.hotspot-empty {
+  padding: 3.5rem 2rem;
+  text-align: center;
+  color: rgba(235, 238, 243, 0.45);
+  font-size: 0.92rem;
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.01);
+}
+
+@media (max-width: 768px) {
+  .hotspot-item {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  
+  .hotspot-action-col {
+    align-items: flex-start;
+  }
+}
+
 .toast-error--bottom {
   top: auto;
   bottom: 1rem;

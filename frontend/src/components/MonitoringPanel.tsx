@@ -1,7 +1,10 @@
+import { useMemo, useState, useEffect } from "react";
 import type { SchedulerMetricsResponse } from "../types/api";
+import type { DashboardHotspot } from "../hooks/useDashboardData";
 
 type MonitoringPanelProps = {
   metrics: SchedulerMetricsResponse | null;
+  hotspots: DashboardHotspot[];
   onManualSync: () => void;
   onPrewarmHistory: () => void;
   manualSyncBusy: boolean;
@@ -15,6 +18,46 @@ type MonitoringPanelProps = {
   onToggleAlertVolume: () => void;
   onDismissSignalChangeNotice: () => void;
 };
+
+function getHotspotAgeLabel(detectedAtStr: string): string {
+  const detectedAt = new Date(detectedAtStr);
+  if (Number.isNaN(detectedAt.getTime())) {
+    return "Waktu tidak diketahui";
+  }
+  const diffMs = Date.now() - detectedAt.getTime();
+  if (diffMs < 0) {
+    return "Baru saja";
+  }
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  if (diffMins < 60) {
+    return `${diffMins} menit yang lalu`;
+  }
+  const diffHours = Math.floor(diffMins / 60);
+  const remainderMins = diffMins % 60;
+  if (diffHours < 24) {
+    return remainderMins > 0
+      ? `${diffHours} jam ${remainderMins} menit yang lalu`
+      : `${diffHours} jam yang lalu`;
+  }
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} hari yang lalu`;
+}
+
+function getAgeLevel(detectedAtStr: string): "new" | "medium" | "old" {
+  const detectedAt = new Date(detectedAtStr);
+  if (Number.isNaN(detectedAt.getTime())) {
+    return "old";
+  }
+  const diffMs = Date.now() - detectedAt.getTime();
+  const diffHours = diffMs / (1000 * 60 * 60);
+  if (diffHours < 3) {
+    return "new";
+  }
+  if (diffHours < 12) {
+    return "medium";
+  }
+  return "old";
+}
 
 function isSchedulerFailureStatus(status?: string | null): boolean {
   return status === "failure" || status === "failed";
@@ -127,6 +170,7 @@ function getHealthLabel(metrics: SchedulerMetricsResponse | null): string {
 
 export function MonitoringPanel({
   metrics,
+  hotspots,
   onManualSync,
   onPrewarmHistory,
   manualSyncBusy,
@@ -140,6 +184,25 @@ export function MonitoringPanel({
   onToggleAlertVolume,
   onDismissSignalChangeNotice
 }: MonitoringPanelProps) {
+  const [clockTick, setClockTick] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setClockTick((prev) => prev + 1);
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const active24hHotspots = useMemo(() => {
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    return hotspots
+      .filter((h) => {
+        const time = new Date(h.detectedAt).getTime();
+        return !Number.isNaN(time) && time >= oneDayAgo;
+      })
+      .sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime());
+  }, [hotspots, clockTick]);
+
   const healthTone = getHealthTone(metrics);
   const healthLabel = getHealthLabel(metrics);
   const signalBanner =
@@ -342,6 +405,81 @@ export function MonitoringPanel({
               </li>
             </ul>
           </article>
+        </section>
+
+        <section className="panel glass-panel monitor-hotspots-card">
+          <header className="monitor-hotspots-header">
+            <h2 className="monitor-hotspots-title">
+              <span className="monitor-hotspots-icon" aria-hidden="true">🔥</span>
+              Alert Hotspot Aktif (24 Jam Terakhir)
+            </h2>
+            <span className="monitor-hotspots-count">
+              {active24hHotspots.length} Hotspot
+            </span>
+          </header>
+          
+          <div className="monitor-hotspots-list">
+            {active24hHotspots.length === 0 ? (
+              <div className="hotspot-empty">
+                Tidak ada hotspot aktif terdeteksi dalam 24 jam terakhir.
+              </div>
+            ) : (
+              active24hHotspots.map((h) => {
+                const ageLevel = getAgeLevel(h.detectedAt);
+                const ageLabel = getHotspotAgeLabel(h.detectedAt);
+                
+                return (
+                  <article key={h.id} className="hotspot-item">
+                    <div className="hotspot-meta-col">
+                      <div className="hotspot-badge-container">
+                        <span className={`hotspot-badge hotspot-badge--${ageLevel}`}>
+                          {ageLevel === "new" ? "Sangat Baru" : ageLevel === "medium" ? "Sedang" : "Lama"}
+                        </span>
+                        <span className="hotspot-badge hotspot-badge--source">
+                          {h.source}
+                        </span>
+                      </div>
+                      <span className="hotspot-sensor">
+                        🛰️ {h.satellite}
+                      </span>
+                      <span className="hotspot-conf">
+                        Conf: {h.confidence || "Unknown"}
+                      </span>
+                    </div>
+                    
+                    <div className="hotspot-info-col">
+                      <div className="hotspot-loc" title={h.agencyName || h.layerName || "Umum"}>
+                        {h.agencyName || h.layerName || "Umum"}
+                      </div>
+                      <div className="hotspot-subloc" title={h.provinceName}>
+                        Provinsi: {h.provinceName || "-"}
+                      </div>
+                      {h.frp !== null && (
+                        <div className="hotspot-frp">
+                          Radiasi (FRP): <strong>{h.frp} MW</strong>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="hotspot-action-col">
+                      <time className="hotspot-age" dateTime={h.detectedAt}>
+                        {ageLabel}
+                      </time>
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${h.latitude},${h.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hotspot-link"
+                        title="Buka lokasi di Google Maps"
+                      >
+                        📍 {h.latitude.toFixed(5)}, {h.longitude.toFixed(5)}
+                      </a>
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
         </section>
       </div>
     </section>

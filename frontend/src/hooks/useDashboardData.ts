@@ -21,7 +21,7 @@ type DashboardLayer = Pick<
   LayerFeature,
   "id" | "name" | "label" | "active" | "color" | "bounds" | "geojson" | "geojson_mode" | "feature_count" | "agencies"
 >;
-type DashboardHotspot = {
+export type DashboardHotspot = {
   id: string;
   latitude: number;
   longitude: number;

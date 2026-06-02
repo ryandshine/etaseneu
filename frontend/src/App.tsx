@@ -583,6 +583,7 @@ export default function App() {
           <Suspense fallback={<ViewLoader label="Memuat pemantauan..." />}>
             <MonitoringPanel
               metrics={schedulerMetrics}
+              hotspots={hotspots}
               onManualSync={() => void manualSync()}
               onPrewarmHistory={() => void prewarmHistory()}
               manualSyncBusy={isTriggeringManualSync}
