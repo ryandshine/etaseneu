@@ -1164,7 +1164,270 @@ body {
 /* ZONA 3 & 4: SUB-GRID */
 .commander-sub-grid {
   display: grid;
-  grid-template-columns: 1fr 1.2fr;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 1.5rem;
+}
+
+/* ZONA 3: NEURAL OPERATIONS ENGINE */
+.commander-neural-engine {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  background: radial-gradient(circle at bottom left, rgba(59, 130, 246, 0.05), transparent 45%), rgba(19, 21, 26, 0.88);
+}
+
+.neural-engine-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 0.75rem;
+}
+
+.neural-title-block {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.neural-pulse-ring {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: #3b82f6;
+  box-shadow: 0 0 10px #3b82f6;
+  animation: pulse-active 1.5s infinite alternate;
+}
+
+.neural-engine-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0;
+  color: #ffffff;
+}
+
+.neural-status-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  letter-spacing: 0.05em;
+}
+
+.neural-engine-desc {
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: rgba(235, 238, 243, 0.6);
+  margin: 0;
+}
+
+.neural-analysis-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.neural-indicator-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.neural-indicator-card:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.indicator-top {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.indicator-icon {
+  font-size: 1rem;
+}
+
+.indicator-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.indicator-middle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.25rem;
+}
+
+.indicator-value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #ffffff;
+  font-family: monospace;
+}
+
+.indicator-unit {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 500;
+}
+
+.indicator-badge {
+  font-size: 0.6rem;
+  font-weight: 800;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
+.indicator-badge--danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.indicator-badge--warn {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fde047;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.indicator-badge--ok {
+  background: rgba(16, 185, 129, 0.15);
+  color: #a7f3d0;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.indicator-badge--neutral {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.indicator-bottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
+  padding-top: 0.45rem;
+}
+
+.indicator-desc {
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: rgba(235, 238, 243, 0.55);
+  margin: 0;
+}
+
+/* Neural Network Map Graphic */
+.neural-network-viz {
+  position: relative;
+  height: 60px;
+  background: rgba(255, 255, 255, 0.01);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  margin-top: auto;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.viz-network-line {
+  position: absolute;
+  top: 50%;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.3) 20%, rgba(59, 130, 246, 0.3) 80%, transparent);
+  transform: translateY(-50%);
+}
+
+.viz-network-line--secondary {
+  transform: translateY(-50%) rotate(5deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1) 20%, rgba(255, 255, 255, 0.1) 80%, transparent);
+}
+
+.viz-node-container {
+  display: flex;
+  justify-content: space-between;
+  width: 70%;
+  z-index: 2;
+}
+
+.viz-node {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid #1e293b;
+  position: relative;
+  transition: all 0.3s;
+}
+
+.viz-node::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  opacity: 0;
+  scale: 0.8;
+}
+
+.viz-node--active-ok {
+  background: #10b981;
+  color: #10b981;
+  box-shadow: 0 0 10px #10b981;
+}
+.viz-node--active-ok::after {
+  animation: radar-pulse 2s infinite linear;
+}
+
+.viz-node--active-warn {
+  background: #f59e0b;
+  color: #f59e0b;
+  box-shadow: 0 0 10px #f59e0b;
+}
+.viz-node--active-warn::after {
+  animation: radar-pulse 2s infinite linear;
+}
+
+.viz-node--active-danger {
+  background: #ef4444;
+  color: #ef4444;
+  box-shadow: 0 0 12px #ef4444;
+}
+.viz-node--active-danger::after {
+  animation: radar-pulse 1.2s infinite linear;
+}
+
+.viz-caption {
+  position: absolute;
+  bottom: 0.3rem;
+  right: 0.5rem;
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+}
+
+/* Sidebar Column Layout */
+.commander-sidebar-col {
+  display: flex;
+  flex-direction: column;
   gap: 1.5rem;
 }
 

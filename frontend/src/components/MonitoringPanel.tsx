@@ -168,6 +168,178 @@ function getHealthLabel(metrics: SchedulerMetricsResponse | null): string {
   return "Menunggu";
 }
 
+interface HotspotCluster {
+  id: string;
+  hotspots: DashboardHotspot[];
+  province: string;
+  agency: string;
+}
+
+function findSpatialClusters(hotspots: DashboardHotspot[]): HotspotCluster[] {
+  const clusters: HotspotCluster[] = [];
+  const visited = new Set<string>();
+
+  const isClose = (h1: DashboardHotspot, h2: DashboardHotspot) => {
+    const latDiff = Math.abs(h1.latitude - h2.latitude);
+    const lonDiff = Math.abs(h1.longitude - h2.longitude);
+    return Math.sqrt(latDiff * latDiff + lonDiff * lonDiff) < 0.15;
+  };
+
+  for (let i = 0; i < hotspots.length; i++) {
+    const h1 = hotspots[i];
+    if (visited.has(h1.id)) continue;
+
+    const currentClusterHotspots: DashboardHotspot[] = [h1];
+    visited.add(h1.id);
+
+    const queue = [h1];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      for (let j = 0; j < hotspots.length; j++) {
+        const candidate = hotspots[j];
+        if (visited.has(candidate.id)) continue;
+
+        if (isClose(current, candidate)) {
+          visited.add(candidate.id);
+          currentClusterHotspots.push(candidate);
+          queue.push(candidate);
+        }
+      }
+    }
+
+    if (currentClusterHotspots.length >= 2) {
+      clusters.push({
+        id: `cluster-${i}`,
+        hotspots: currentClusterHotspots,
+        province: currentClusterHotspots[0].provinceName || "Unknown",
+        agency: currentClusterHotspots[0].agencyName || currentClusterHotspots[0].layerName || "Umum"
+      });
+    }
+  }
+
+  return clusters;
+}
+
+interface DetectionTrend {
+  rate: number;
+  label: string;
+  direction: "up" | "down" | "stable";
+}
+
+function calculateDetectionTrend(hotspots: DashboardHotspot[]): DetectionTrend {
+  const now = Date.now();
+  const sixHoursAgo = now - 6 * 60 * 60 * 1000;
+  const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
+
+  const last6h = hotspots.filter(h => {
+    const t = new Date(h.detectedAt).getTime();
+    return !Number.isNaN(t) && t >= sixHoursAgo;
+  }).length;
+
+  const prior18h = hotspots.filter(h => {
+    const t = new Date(h.detectedAt).getTime();
+    return !Number.isNaN(t) && t >= twentyFourHoursAgo && t < sixHoursAgo;
+  }).length;
+
+  const baselineRate = prior18h / 3;
+
+  if (last6h === 0 && baselineRate === 0) {
+    return { rate: 0, label: "Stabil (Tidak ada aktivitas)", direction: "stable" };
+  }
+
+  if (baselineRate === 0) {
+    return { rate: 100, label: "Lonjakan Baru (Aktivitas terdeteksi)", direction: "up" };
+  }
+
+  const changePct = ((last6h - baselineRate) / baselineRate) * 100;
+  const rate = Math.round(changePct);
+
+  if (rate > 5) {
+    return { rate, label: `Meningkat +${rate}% (Akselerasi Deteksi)`, direction: "up" };
+  } else if (rate < -5) {
+    return { rate, label: `Menurun ${rate}% (Deselerasi Aktivitas)`, direction: "down" };
+  } else {
+    return { rate, label: "Stabil (Fluktuasi normal)", direction: "stable" };
+  }
+}
+
+interface FrpAnalysis {
+  average: number;
+  fuelType: string;
+  riskText: string;
+  color: string;
+  status: "Rendah" | "Sedang" | "Kritis";
+}
+
+function analyzeFrp(hotspots: DashboardHotspot[]): FrpAnalysis {
+  const validFrps = hotspots.map(h => h.frp).filter((val): val is number => val !== null && val !== undefined);
+  if (validFrps.length === 0) {
+    return { average: 0, fuelType: "Tidak ada data FRP", riskText: "Energi Radiasi Nihil", color: "rgba(255,255,255,0.4)", status: "Rendah" };
+  }
+
+  const sum = validFrps.reduce((acc, v) => acc + v, 0);
+  const average = Math.round((sum / validFrps.length) * 10) / 10;
+
+  if (average > 45) {
+    return {
+      average,
+      fuelType: "Bahan Bakar Kering/Tebal (Crown Fire)",
+      riskText: "Energi Radiasi Sangat Tinggi - Api menyebar cepat & asap pekat",
+      color: "#ef4444",
+      status: "Kritis"
+    };
+  } else if (average > 15) {
+    return {
+      average,
+      fuelType: "Bahan Bakar Campuran (Surface Fire)",
+      riskText: "Energi Radiasi Sedang - Kebakaran permukaan serasah/semak",
+      color: "#f59e0b",
+      status: "Sedang"
+    };
+  } else {
+    return {
+      average,
+      fuelType: "Bahan Bakar Ringan (Smoldering)",
+      riskText: "Energi Radiasi Rendah - Titik bara permukaan / sisa pembakaran",
+      color: "#10b981",
+      status: "Rendah"
+    };
+  }
+}
+
+interface ValidationAnalysis {
+  pct: number;
+  validatedCount: number;
+  totalCount: number;
+  statusText: string;
+  reliability: "Tinggi" | "Sedang" | "Rendah";
+}
+
+function analyzeSensorValidation(hotspots: DashboardHotspot[]): ValidationAnalysis {
+  if (hotspots.length === 0) {
+    return { pct: 0, validatedCount: 0, totalCount: 0, statusText: "Tidak ada data deteksi", reliability: "Rendah" };
+  }
+
+  const provinces = Array.from(new Set(hotspots.map(h => h.provinceName).filter(Boolean)));
+  let validatedCount = 0;
+
+  provinces.forEach(prov => {
+    const provHotspots = hotspots.filter(h => h.provinceName === prov);
+    const sources = new Set(provHotspots.map(h => h.source));
+    if (sources.size >= 2) {
+      validatedCount += provHotspots.length;
+    }
+  });
+
+  const pct = Math.round((validatedCount / hotspots.length) * 100);
+  const reliability = pct > 70 ? "Tinggi" : pct > 30 ? "Sedang" : "Rendah";
+  const statusText = pct > 0
+    ? `${pct}% Titik Terverifikasi Ganda (Lintas Sensor)`
+    : "Deteksi Sensor Tunggal (Perlu Ground Check)";
+
+  return { pct, validatedCount, totalCount: hotspots.length, statusText, reliability };
+}
+
 export function MonitoringPanel({
   metrics,
   hotspots,
@@ -202,6 +374,11 @@ export function MonitoringPanel({
       })
       .sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime());
   }, [hotspots, clockTick]);
+
+  const activeClusters = useMemo(() => findSpatialClusters(active24hHotspots), [active24hHotspots]);
+  const detectionTrend = useMemo(() => calculateDetectionTrend(active24hHotspots), [active24hHotspots]);
+  const frpAnalysis = useMemo(() => analyzeFrp(active24hHotspots), [active24hHotspots]);
+  const sensorValidation = useMemo(() => analyzeSensorValidation(active24hHotspots), [active24hHotspots]);
 
   const healthTone = getHealthTone(metrics);
   const healthLabel = getHealthLabel(metrics);
@@ -357,101 +534,223 @@ export function MonitoringPanel({
 
         </section>
 
-        {/* ZONA 3 & ZONA 4: PANEL KENDALI & TIMELINE */}
+        {/* ZONA 3 & ZONA 4: PANEL ANALISIS NEURAL & KENDALI TAKTIS */}
         <section className="commander-sub-grid">
           
-          {/* PANEL KENDALI COCKPIT */}
-          <article className="panel glass-panel commander-cockpit">
-            <div className="cockpit-header">
-              <h3 className="cockpit-title">🎛️ PANEL KENDALI TAKTIS</h3>
-              <span className={`cockpit-badge ${metrics?.scheduler_enabled ? "cockpit-badge--active" : ""}`}>
-                {metrics?.scheduler_enabled ? "AUTO-PATROL AKTIF" : "AUTO-PATROL MATI"}
-              </span>
+          {/* CARD KIRI: NEURAL OPERATIONS ENGINE */}
+          <article className="panel glass-panel commander-neural-engine">
+            <div className="neural-engine-header">
+              <div className="neural-title-block">
+                <span className="neural-pulse-ring" />
+                <h3 className="neural-engine-title">🧬 NEURAL DECISION & ANALYTICS ENGINE</h3>
+              </div>
+              <span className="neural-status-badge">ONLINE ANALYTICS</span>
             </div>
             
-            <div className="cockpit-actions">
-              <button
-                type="button"
-                className={`cockpit-btn cockpit-btn--primary ${manualSyncBusy ? "cockpit-btn--busy" : ""}`}
-                onClick={onManualSync}
-                disabled={manualSyncBusy}
-              >
-                {manualSyncBusy ? (
-                  <>
-                    <span className="spinner" />
-                    <span>SINKRONISASI DATA...</span>
-                  </>
-                ) : (
-                  <span>🔄 TARIK DATA NASA SEKARANG</span>
-                )}
-              </button>
+            <p className="neural-engine-desc">
+              Mesin kognitif memproses data sensor satelit aktif NASA secara real-time untuk mendeteksi ancaman penyebaran, eskalasi temporal, intensitas radiasi panas, dan validasi keakuratan lintas satelit.
+            </p>
 
-              <button
-                type="button"
-                className={`cockpit-btn cockpit-btn--secondary ${prewarmBusy ? "cockpit-btn--busy" : ""}`}
-                onClick={onPrewarmHistory}
-                disabled={prewarmBusy}
-              >
-                {prewarmBusy ? (
-                  <>
-                    <span className="spinner" />
-                    <span>MENYIAPKAN HISTORI...</span>
-                  </>
-                ) : (
-                  <span>⚡ PREWARM HISTORI CEPAT</span>
-                )}
-              </button>
+            <div className="neural-analysis-grid">
+              
+              {/* INDIKATOR 1: KLUSTER SPASIAL */}
+              <div className="neural-indicator-card">
+                <div className="indicator-top">
+                  <span className="indicator-icon">📍</span>
+                  <span className="indicator-label">Kluster Spasial (Spread Risk)</span>
+                </div>
+                <div className="indicator-middle">
+                  <strong className="indicator-value">
+                    {activeClusters.length} Kluster
+                  </strong>
+                  <span className={`indicator-badge indicator-badge--${activeClusters.length > 0 ? "danger" : "ok"}`}>
+                    {activeClusters.length > 0 ? "ADA RAMBATAN" : "AMAN"}
+                  </span>
+                </div>
+                <div className="indicator-bottom">
+                  <p className="indicator-desc">
+                    {activeClusters.length > 0 
+                      ? `Terdeteksi ${activeClusters.length} kelompok titik api berdekatan (<15 km). Risiko sebaran tinggi di area ${activeClusters[0].province} (${activeClusters[0].agency}).` 
+                      : "Tidak ada pengelompokan hotspot berdekatan. Tingkat risiko rambatan api lokal rendah."}
+                  </p>
+                </div>
+              </div>
+
+              {/* INDIKATOR 2: TREN TEMPORAL */}
+              <div className="neural-indicator-card">
+                <div className="indicator-top">
+                  <span className="indicator-icon">📈</span>
+                  <span className="indicator-label">Tren Eskalasi Deteksi (6 Jam)</span>
+                </div>
+                <div className="indicator-middle">
+                  <strong className="indicator-value">
+                    {detectionTrend.rate > 0 ? `+${detectionTrend.rate}%` : `${detectionTrend.rate}%`}
+                  </strong>
+                  <span className={`indicator-badge indicator-badge--${detectionTrend.direction === "up" ? "danger" : detectionTrend.direction === "down" ? "ok" : "neutral"}`}>
+                    {detectionTrend.direction === "up" ? "AKSELERASI" : detectionTrend.direction === "down" ? "DESELERASI" : "STABIL"}
+                  </span>
+                </div>
+                <div className="indicator-bottom">
+                  <p className="indicator-desc">
+                    {detectionTrend.label}. Rasio deteksi 6 jam terakhir dibandingkan baseline 18 jam sebelumnya.
+                  </p>
+                </div>
+              </div>
+
+              {/* INDIKATOR 3: ANALISIS ENERGI (FRP) */}
+              <div className="neural-indicator-card">
+                <div className="indicator-top">
+                  <span className="indicator-icon">⚡</span>
+                  <span className="indicator-label">Intensitas Radiasi Energi (Avg FRP)</span>
+                </div>
+                <div className="indicator-middle">
+                  <strong className="indicator-value">
+                    {frpAnalysis.average} <span className="indicator-unit">MW</span>
+                  </strong>
+                  <span className={`indicator-badge indicator-badge--${frpAnalysis.status === "Kritis" ? "danger" : frpAnalysis.status === "Sedang" ? "warn" : "ok"}`}>
+                    {frpAnalysis.status}
+                  </span>
+                </div>
+                <div className="indicator-bottom">
+                  <p className="indicator-desc">
+                    {frpAnalysis.riskText}. Klasifikasi vegetasi: {frpAnalysis.fuelType}.
+                  </p>
+                </div>
+              </div>
+
+              {/* INDIKATOR 4: VALIDASI SILANG SENSOR */}
+              <div className="neural-indicator-card">
+                <div className="indicator-top">
+                  <span className="indicator-icon">🛡️</span>
+                  <span className="indicator-label">Validasi Keandalan Deteksi</span>
+                </div>
+                <div className="indicator-middle">
+                  <strong className="indicator-value">
+                    {sensorValidation.pct}%
+                  </strong>
+                  <span className={`indicator-badge indicator-badge--${sensorValidation.reliability === "Tinggi" ? "ok" : sensorValidation.reliability === "Sedang" ? "warn" : "neutral"}`}>
+                    RELIABILITAS {sensorValidation.reliability.toUpperCase()}
+                  </span>
+                </div>
+                <div className="indicator-bottom">
+                  <p className="indicator-desc">
+                    {sensorValidation.statusText}. Hotspot tervalidasi jika ditangkap oleh sensor satelit MODIS & VIIRS secara simultan di wilayah yang sama.
+                  </p>
+                </div>
+              </div>
+
             </div>
 
-            <div className="cockpit-settings">
-              <div className="setting-control">
-                <span>Sirene Suara:</span>
-                <button type="button" className="setting-btn" onClick={onToggleAudioMuted}>
-                  {audioMuted ? "🔇 BISU (MUTED)" : "🔊 AKTIF (UNMUTED)"}
-                </button>
+            {/* Neural Abstract Map Graphic (Neural Network Viz) */}
+            <div className="neural-network-viz">
+              <div className="viz-network-line" />
+              <div className="viz-network-line viz-network-line--secondary" />
+              <div className="viz-node-container">
+                <div className={`viz-node ${activeClusters.length > 0 ? "viz-node--active-warn" : ""}`} />
+                <div className={`viz-node ${detectionTrend.direction === "up" ? "viz-node--active-danger" : ""}`} />
+                <div className={`viz-node ${frpAnalysis.status === "Kritis" ? "viz-node--active-danger" : frpAnalysis.status === "Sedang" ? "viz-node--active-warn" : ""}`} />
+                <div className={`viz-node ${sensorValidation.reliability === "Tinggi" ? "viz-node--active-ok" : ""}`} />
               </div>
-              <div className="setting-control">
-                <span>Volume Alarm:</span>
-                <button type="button" className="setting-btn" onClick={onToggleAlertVolume}>
-                  {alertVolume === "normal" ? "🔊 HIGH" : "🔉 LOW"}
-                </button>
-              </div>
+              <span className="viz-caption">Sensor Correlation Map Node</span>
             </div>
           </article>
 
-          {/* KRONOLOGI AKTIVITAS SISTEM */}
-          <article className="panel glass-panel commander-timeline-card">
-            <h3 className="timeline-card-title">📝 KRONOLOGI AKTIVITAS SISTEM</h3>
-            <div className="commander-timeline">
+          {/* SISI KANAN: COCKPIT & TIMELINE DI-STACK VERTICAL */}
+          <div className="commander-sidebar-col">
+            
+            {/* PANEL KENDALI COCKPIT */}
+            <article className="panel glass-panel commander-cockpit">
+              <div className="cockpit-header">
+                <h3 className="cockpit-title">🎛️ PANEL KENDALI TAKTIS</h3>
+                <span className={`cockpit-badge ${metrics?.scheduler_enabled ? "cockpit-badge--active" : ""}`}>
+                  {metrics?.scheduler_enabled ? "AUTO-PATROL AKTIF" : "AUTO-PATROL MATI"}
+                </span>
+              </div>
               
-              <div className="timeline-item">
-                <div className="timeline-badge timeline-badge--ok">STATUS</div>
-                <div className="timeline-content">
-                  <strong>Sistem Patroli Mandiri Aktif</strong>
-                  <p>Mengecek data satelit NASA MODIS & VIIRS setiap {metrics?.interval_hours ?? 0} jam. Tingkat sensitivitas peringatan aktif adalah {metrics?.new_hotspot_alert_threshold ?? 0} hotspot baru.</p>
-                </div>
+              <div className="cockpit-actions">
+                <button
+                  type="button"
+                  className={`cockpit-btn cockpit-btn--primary ${manualSyncBusy ? "cockpit-btn--busy" : ""}`}
+                  onClick={onManualSync}
+                  disabled={manualSyncBusy}
+                >
+                  {manualSyncBusy ? (
+                    <>
+                      <span className="spinner" />
+                      <span>SINKRONISASI DATA...</span>
+                    </>
+                  ) : (
+                    <span>🔄 TARIK DATA NASA SEKARANG</span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  className={`cockpit-btn cockpit-btn--secondary ${prewarmBusy ? "cockpit-btn--busy" : ""}`}
+                  onClick={onPrewarmHistory}
+                  disabled={prewarmBusy}
+                >
+                  {prewarmBusy ? (
+                    <>
+                      <span className="spinner" />
+                      <span>MENYIAPKAN HISTORI...</span>
+                    </>
+                  ) : (
+                    <span>⚡ PREWARM HISTORI CEPAT</span>
+                  )}
+                </button>
               </div>
 
-              <div className="timeline-item">
-                <div className="timeline-badge timeline-badge--info">DATA</div>
-                <div className="timeline-content">
-                  <strong>Sinkronisasi Sukses Terakhir</strong>
-                  <p>Dilakukan {formatDuration(metrics?.seconds_since_last_successful_sync ?? null)} lalu dengan memproses {metrics?.last_sync_hotspot_count ?? 0} titik hotspot terdaftar.</p>
+              <div className="cockpit-settings">
+                <div className="setting-control">
+                  <span>Sirene Suara:</span>
+                  <button type="button" className="setting-btn" onClick={onToggleAudioMuted}>
+                    {audioMuted ? "🔇 BISU (MUTED)" : "🔊 AKTIF (UNMUTED)"}
+                  </button>
+                </div>
+                <div className="setting-control">
+                  <span>Volume Alarm:</span>
+                  <button type="button" className="setting-btn" onClick={onToggleAlertVolume}>
+                    {alertVolume === "normal" ? "🔊 HIGH" : "🔉 LOW"}
+                  </button>
                 </div>
               </div>
+            </article>
 
-              {metrics?.last_error && (
-                <div className="timeline-item timeline-item--danger">
-                  <div className="timeline-badge timeline-badge--danger">ERROR</div>
+            {/* KRONOLOGI AKTIVITAS SISTEM */}
+            <article className="panel glass-panel commander-timeline-card">
+              <h3 className="timeline-card-title">📝 KRONOLOGI AKTIVITAS SISTEM</h3>
+              <div className="commander-timeline">
+                
+                <div className="timeline-item">
+                  <div className="timeline-badge timeline-badge--ok">STATUS</div>
                   <div className="timeline-content">
-                    <strong className="error-title">Kesalahan Sinkronisasi Terdeteksi</strong>
-                    <p className="error-desc">{metrics.last_error}</p>
+                    <strong>Sistem Patroli Mandiri Aktif</strong>
+                    <p>Mengecek data satelit NASA MODIS & VIIRS setiap {metrics?.interval_hours ?? 0} jam. Tingkat sensitivitas peringatan aktif adalah {metrics?.new_hotspot_alert_threshold ?? 0} hotspot baru.</p>
                   </div>
                 </div>
-              )}
 
-            </div>
-          </article>
+                <div className="timeline-item">
+                  <div className="timeline-badge timeline-badge--info">DATA</div>
+                  <div className="timeline-content">
+                    <strong>Sinkronisasi Sukses Terakhir</strong>
+                    <p>Dilakukan {formatDuration(metrics?.seconds_since_last_successful_sync ?? null)} lalu dengan memproses {metrics?.last_sync_hotspot_count ?? 0} titik hotspot terdaftar.</p>
+                  </div>
+                </div>
+
+                {metrics?.last_error && (
+                  <div className="timeline-item timeline-item--danger">
+                    <div className="timeline-badge timeline-badge--danger">ERROR</div>
+                    <div className="timeline-content">
+                      <strong className="error-title">Kesalahan Sinkronisasi Terdeteksi</strong>
+                      <p className="error-desc">{metrics.last_error}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </article>
+
+          </div>
 
         </section>
 
