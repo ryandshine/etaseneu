@@ -292,6 +292,50 @@ def test_fetch_filtered_hotspots_reads_postgres_observations_before_nasa() -> No
     assert query.cache_key() in service.cache_service.written
 
 
+def test_fetch_filtered_hotspots_ignores_empty_query_cache_when_postgres_has_data() -> None:
+    import asyncio
+
+    from app.models.query import HotspotQuery
+    from app.services.hotspot_service import HotspotService
+
+    service = HotspotService()
+    service.cache_service = DummyCacheService(reads={"empty-cache-key": []})
+    service.history_store = DummyHistoryStore()
+    service.nasa_client = DummyNasaClient()
+    service.postgres_store = DummyPostgresStore(
+        observations=[
+            {
+                "id": "db-1",
+                "source": "VIIRS NOAA-21",
+                "satellite": "N21",
+                "latitude": -6.66069,
+                "longitude": 138.8714,
+                "layer_id": "PS_FEB_26",
+                "layer_name": "Perhutanan Sosial",
+                "agency_name": "LPHK KABE",
+                "province_name": "Papua Selatan",
+                "detected_at": "2026-06-02T03:51:00Z",
+            }
+        ]
+    )
+
+    query = HotspotQuery(
+        start_at=datetime(2026, 6, 1, 17, 0, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 6, 2, 17, 0, 0, tzinfo=timezone.utc),
+        satellites=["MODIS", "VIIRS_SNPP", "VIIRS_NOAA20", "VIIRS_NOAA21"],
+        active_layers=["PS_FEB_26"],
+    )
+
+    service.cache_service.reads = {query.cache_key(): []}
+
+    payload = asyncio.run(service.fetch_filtered_hotspots(query))
+
+    assert payload["count"] == 1
+    assert payload["hotspots"][0]["id"] == "db-1"
+    assert service.nasa_client.paths == []
+    assert query.cache_key() in service.cache_service.written
+
+
 def test_fetch_filtered_hotspots_supports_all_viirs_sensors(monkeypatch) -> None:
     import asyncio
 
@@ -510,4 +554,3 @@ def test_filter_hotspots_by_datetime_half_open_interval() -> None:
     assert any(h["id"] == "h1" for h in filtered)
     assert any(h["id"] == "h2" for h in filtered)
     assert not any(h["id"] == "h3" for h in filtered)
-

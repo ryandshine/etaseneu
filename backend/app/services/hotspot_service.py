@@ -55,7 +55,7 @@ class HotspotService:
 
         if not bypass_cache:
             cached_hotspots = self.cache_service.read(query.cache_key())
-            if cached_hotspots is not None:
+            if cached_hotspots:
                 hydrated_hotspots = self._hydrate_polygon_metadata(query, cached_hotspots)
                 cache_hit = True
 
