@@ -268,7 +268,6 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind }: Hot
             key={hotspot.id}
             center={[hotspot.latitude, hotspot.longitude]}
             radius={7}
-            renderer={canvas()}
             pathOptions={{
               color: "#1b120d",
               weight: 2,

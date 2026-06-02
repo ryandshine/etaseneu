@@ -340,7 +340,44 @@ async def hotspot_scheduler_loop(
 
     global _next_scheduled_sync_at
 
+    # Check if we can skip immediate sync on startup because of a recent success
+    now = datetime.now(timezone.utc)
+    next_run = _next_fixed_schedule_at(
+        now,
+        effective_schedule_hours,
+        schedule_timezone,
+        fallback_interval_hours,
+    )
+    _next_scheduled_sync_at = next_run
+
+    skip_immediate = False
+    if _last_successful_sync_at is not None:
+        elapsed_seconds = (now - _last_successful_sync_at).total_seconds()
+        # threshold is 80% of fallback interval, capped at a maximum of 2 hours (7200 seconds)
+        threshold_seconds = min(7200.0, fallback_interval_hours * 3600.0 * 0.8)
+        if elapsed_seconds < threshold_seconds:
+            skip_immediate = True
+            logger.info(
+                "SCHEDULER: Melewati sync langsung pada startup karena sync terakhir sukses baru dilakukan %d detik yang lalu (threshold: %d detik).",
+                int(elapsed_seconds),
+                int(threshold_seconds),
+            )
+
+    first_iteration = True
     while True:
+        if first_iteration and skip_immediate:
+            first_iteration = False
+            now = datetime.now(timezone.utc)
+            sleep_seconds = max(1.0, (next_run - now).total_seconds())
+            logger.info(
+                "SCHEDULER: Menunggu %d detik sampai jadwal berikutnya pada %s.",
+                int(sleep_seconds),
+                next_run.strftime("%Y-%m-%d %H:%M UTC"),
+            )
+            await asyncio.sleep(sleep_seconds)
+            continue
+
+        first_iteration = False
         result = await _run_sync_cycle(service)
 
         now = datetime.now(timezone.utc)
