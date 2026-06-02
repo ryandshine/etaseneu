@@ -380,6 +380,84 @@ export function MonitoringPanel({
   const frpAnalysis = useMemo(() => analyzeFrp(active24hHotspots), [active24hHotspots]);
   const sensorValidation = useMemo(() => analyzeSensorValidation(active24hHotspots), [active24hHotspots]);
 
+  const timeBins = useMemo(() => {
+    const now = Date.now();
+    const bins = [0, 0, 0, 0, 0];
+    active24hHotspots.forEach(h => {
+      const diff = now - new Date(h.detectedAt).getTime();
+      const hours = diff / (1000 * 60 * 60);
+      if (hours < 6) bins[0]++;
+      else if (hours < 12) bins[1]++;
+      else if (hours < 18) bins[2]++;
+      else if (hours < 24) bins[3]++;
+    });
+
+    const maxVal = Math.max(...bins, 1);
+    const points = bins.map((val, idx) => {
+      const x = (idx * 300) / 4;
+      const y = 80 - (val * 60) / maxVal;
+      return { x, y };
+    });
+
+    const simplePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x},${p.y}`).join(" ");
+    const fillPath = `${simplePath} L 300,80 L 0,80 Z`;
+
+    return { bins, points, simplePath, fillPath };
+  }, [active24hHotspots]);
+
+  const satelliteCounts = useMemo(() => {
+    let viirs = 0;
+    let modis = 0;
+    active24hHotspots.forEach(h => {
+      const src = (h.source || "").toUpperCase();
+      if (src.includes("VIIRS") || src.includes("SUOMI") || src.includes("NOAA")) {
+        viirs++;
+      } else {
+        modis++;
+      }
+    });
+    const total = viirs + modis || 1;
+    const viirsPct = Math.round((viirs / total) * 100);
+    const modisPct = 100 - viirsPct;
+
+    const viirsDash = (viirsPct / 100) * 251.2;
+    const modisDash = (modisPct / 100) * 251.2;
+
+    return { viirs, modis, viirsPct, modisPct, viirsDash, modisDash };
+  }, [active24hHotspots]);
+
+  const thermalGrid = useMemo(() => {
+    const grid = Array(16).fill(null).map(() => ({ count: 0, frp: 0 }));
+    if (active24hHotspots.length === 0) return grid;
+
+    let minLat = Infinity, maxLat = -Infinity;
+    let minLon = Infinity, maxLon = -Infinity;
+
+    active24hHotspots.forEach(h => {
+      if (h.latitude < minLat) minLat = h.latitude;
+      if (h.latitude > maxLat) maxLat = h.latitude;
+      if (h.longitude < minLon) minLon = h.longitude;
+      if (h.longitude > maxLon) maxLon = h.longitude;
+    });
+
+    const latSpan = maxLat - minLat || 0.01;
+    const lonSpan = maxLon - minLon || 0.01;
+
+    active24hHotspots.forEach(h => {
+      const latPct = (h.latitude - minLat) / latSpan;
+      const lonPct = (h.longitude - minLon) / lonSpan;
+
+      const row = Math.min(Math.floor(latPct * 4), 3);
+      const col = Math.min(Math.floor(lonPct * 4), 3);
+      const index = row * 4 + col;
+
+      grid[index].count++;
+      grid[index].frp += h.frp || 0;
+    });
+
+    return grid;
+  }, [active24hHotspots]);
+
   const healthTone = getHealthTone(metrics);
   const healthLabel = getHealthLabel(metrics);
   const commanderStatus = useMemo(() => {
@@ -532,6 +610,148 @@ export function MonitoringPanel({
             </div>
           </article>
 
+        </section>
+
+        {/* ZONA EXTRA: CYBER TELEMETRY GRAPHICS (REAL-DATA CYBERPUNK HUD) */}
+        <section className="panel glass-panel cyber-intel-board">
+          <header className="cyber-intel-header">
+            <div className="cyber-title-group">
+              <span className="cyber-glitch-dot" />
+              <h2 className="cyber-intel-title">⚡ COGNITIVE CYBER-TELEMETRY SCREEN</h2>
+            </div>
+            <span className="cyber-intel-mode">REAL-TIME DATA LINK v1.28</span>
+          </header>
+
+          <div className="cyber-grid-layout">
+            
+            {/* GRAPH 1: WAVEFORM FREKUENSI TEMPORAL */}
+            <div className="cyber-viz-panel">
+              <div className="viz-header">
+                <span className="viz-dot" />
+                <span className="viz-title">Waveform Frekuensi Deteksi (24 Jam)</span>
+              </div>
+              <div className="waveform-container">
+                <svg className="waveform-svg" viewBox="0 0 300 80" width="100%" height="80px">
+                  <defs>
+                    <linearGradient id="neonGlow" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#00f0ff" stopOpacity="0.3" />
+                      <stop offset="100%" stopColor="#00f0ff" stopOpacity="0.0" />
+                    </linearGradient>
+                  </defs>
+                  
+                  {/* Grid Lines Background */}
+                  <line x1="0" y1="20" x2="300" y2="20" stroke="rgba(255,255,255,0.03)" strokeDasharray="3,3" />
+                  <line x1="0" y1="40" x2="300" y2="40" stroke="rgba(255,255,255,0.03)" strokeDasharray="3,3" />
+                  <line x1="0" y1="60" x2="300" y2="60" stroke="rgba(255,255,255,0.03)" strokeDasharray="3,3" />
+                  <line x1="75" y1="0" x2="75" y2="80" stroke="rgba(255,255,255,0.02)" />
+                  <line x1="150" y1="0" x2="150" y2="80" stroke="rgba(255,255,255,0.02)" />
+                  <line x1="225" y1="0" x2="225" y2="80" stroke="rgba(255,255,255,0.02)" />
+
+                  {/* Shaded Area Under Curve */}
+                  <path d={timeBins.fillPath} fill="url(#neonGlow)" />
+                  
+                  {/* The Pulse Wave Line */}
+                  <path d={timeBins.simplePath} fill="none" stroke="#00f0ff" strokeWidth="2.5" strokeLinecap="round" filter="drop-shadow(0 0 3px #00f0ff)" />
+                  
+                  {/* Neon node markers */}
+                  {timeBins.points.map((p, idx) => (
+                    <g key={idx}>
+                      <circle cx={p.x} cy={p.y} r="3.5" fill="#00f0ff" />
+                      <circle cx={p.x} cy={p.y} r="7" fill="none" stroke="#00f0ff" strokeWidth="0.8" opacity="0.4" className="pulse-ping" />
+                    </g>
+                  ))}
+                </svg>
+              </div>
+              <div className="viz-label-row">
+                <span className="viz-tag">-24j</span>
+                <span className="viz-tag">-18j</span>
+                <span className="viz-tag">-12j</span>
+                <span className="viz-tag">-6j</span>
+                <span className="viz-tag">Sekarang</span>
+              </div>
+            </div>
+
+            {/* GRAPH 2: SONAR RADAR SATELIT */}
+            <div className="cyber-viz-panel">
+              <div className="viz-header">
+                <span className="viz-dot viz-dot--pink" />
+                <span className="viz-title">Radar Kontributor Satelit (Rasio Sensor)</span>
+              </div>
+              <div className="sonar-container">
+                <svg className="sonar-svg" viewBox="0 0 100 100" width="100px" height="100px">
+                  {/* Radar grid circles */}
+                  <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.03)" />
+                  <circle cx="50" cy="50" r="30" fill="none" stroke="rgba(255,255,255,0.03)" />
+                  <circle cx="50" cy="50" r="15" fill="none" stroke="rgba(255,255,255,0.03)" />
+                  
+                  {/* Sonar sweep line */}
+                  <line x1="50" y1="50" x2="50" y2="5" stroke="rgba(0, 240, 255, 0.25)" className="radar-sweep" />
+
+                  {/* Satellite Proportions concentric rings */}
+                  {/* VIIRS Ring */}
+                  <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(0, 240, 255, 0.07)" strokeWidth="4.5" />
+                  <circle cx="50" cy="50" r="40" fill="none" stroke="#00f0ff" strokeWidth="4.5" 
+                    strokeDasharray={`${satelliteCounts.viirsDash} 251.2`} 
+                    strokeLinecap="round" 
+                    transform="rotate(-90 50 50)" 
+                    filter="drop-shadow(0 0 3px #00f0ff)" 
+                  />
+                  
+                  {/* MODIS Ring */}
+                  <circle cx="50" cy="50" r="25" fill="none" stroke="rgba(255, 0, 85, 0.07)" strokeWidth="4.5" />
+                  <circle cx="50" cy="50" r="25" fill="none" stroke="#ff0055" strokeWidth="4.5" 
+                    strokeDasharray={`${satelliteCounts.modisDash} 251.2`} 
+                    strokeLinecap="round" 
+                    transform="rotate(-90 50 50)" 
+                    filter="drop-shadow(0 0 3px #ff0055)" 
+                  />
+                </svg>
+                
+                <div className="sonar-legend">
+                  <div className="legend-row">
+                    <span className="legend-color legend-color--cyan" />
+                    <span>VIIRS: <strong>{satelliteCounts.viirsPct}%</strong> ({satelliteCounts.viirs} Poin)</span>
+                  </div>
+                  <div className="legend-row">
+                    <span className="legend-color legend-color--pink" />
+                    <span>MODIS: <strong>{satelliteCounts.modisPct}%</strong> ({satelliteCounts.modis} Poin)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* GRAPH 3: MATRIX GRID RISIKO SPASIAL */}
+            <div className="cyber-viz-panel">
+              <div className="viz-header">
+                <span className="viz-dot viz-dot--yellow" />
+                <span className="viz-title">Threat Matrix Kepadatan (FRP Grid)</span>
+              </div>
+              <div className="threat-matrix-wrapper">
+                <div className="threat-matrix-grid">
+                  <div className="matrix-scanline" />
+                  {thermalGrid.map((cell, idx) => {
+                    const level = cell.frp > 150 ? 3 : cell.frp > 50 ? 2 : cell.count > 0 ? 1 : 0;
+                    return (
+                      <div 
+                        key={idx} 
+                        className={`matrix-cell matrix-cell--level-${level}`}
+                        title={`Hotspot: ${cell.count}, Total FRP: ${Math.round(cell.frp)} MW`}
+                      >
+                        {cell.count > 0 && <span className="cell-pulse-dot" />}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="matrix-legend">
+                  <div className="legend-tag"><span className="tag-color level-0" /> Aman</div>
+                  <div className="legend-tag"><span className="tag-color level-1" /> Rendah</div>
+                  <div className="legend-tag"><span className="tag-color level-2" /> Sedang</div>
+                  <div className="legend-tag"><span className="tag-color level-3" /> Tinggi</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
         </section>
 
         {/* ZONA 3 & ZONA 4: PANEL ANALISIS NEURAL & KENDALI TAKTIS */}
