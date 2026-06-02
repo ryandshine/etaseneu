@@ -386,16 +386,17 @@ export function MonitoringPanel({
     active24hHotspots.forEach(h => {
       const diff = now - new Date(h.detectedAt).getTime();
       const hours = diff / (1000 * 60 * 60);
-      if (hours < 6) bins[0]++;
-      else if (hours < 12) bins[1]++;
-      else if (hours < 18) bins[2]++;
-      else if (hours < 24) bins[3]++;
+      if (hours >= 18 && hours < 24) bins[0]++;
+      else if (hours >= 12 && hours < 18) bins[1]++;
+      else if (hours >= 6 && hours < 12) bins[2]++;
+      else if (hours >= 2 && hours < 6) bins[3]++;
+      else if (hours >= 0 && hours < 2) bins[4]++;
     });
 
     const maxVal = Math.max(...bins, 1);
     const points = bins.map((val, idx) => {
       const x = (idx * 300) / 4;
-      const y = 80 - (val * 60) / maxVal;
+      const y = 70 - (val * 45) / maxVal;
       return { x, y };
     });
 
@@ -617,7 +618,7 @@ export function MonitoringPanel({
           <header className="cyber-intel-header">
             <div className="cyber-title-group">
               <span className="cyber-glitch-dot" />
-              <h2 className="cyber-intel-title">⚡ COGNITIVE CYBER-TELEMETRY SCREEN</h2>
+              <h2 className="cyber-intel-title">⚡ TACTICAL CYBER-TELEMETRY SCREEN</h2>
             </div>
             <span className="cyber-intel-mode">REAL-TIME DATA LINK v1.28</span>
           </header>
@@ -628,7 +629,7 @@ export function MonitoringPanel({
             <div className="cyber-viz-panel">
               <div className="viz-header">
                 <span className="viz-dot" />
-                <span className="viz-title">Waveform Frekuensi Deteksi (24 Jam)</span>
+                <span className="viz-title">Tren Kemunculan Hotspot (24 Jam)</span>
               </div>
               <div className="waveform-container">
                 <svg className="waveform-svg" viewBox="0 0 300 80" width="100%" height="80px">
@@ -653,29 +654,41 @@ export function MonitoringPanel({
                   {/* The Pulse Wave Line */}
                   <path d={timeBins.simplePath} fill="none" stroke="#00f0ff" strokeWidth="2.5" strokeLinecap="round" filter="drop-shadow(0 0 3px #00f0ff)" />
                   
-                  {/* Neon node markers */}
+                  {/* Neon node markers and numerical labels */}
                   {timeBins.points.map((p, idx) => (
                     <g key={idx}>
                       <circle cx={p.x} cy={p.y} r="3.5" fill="#00f0ff" />
                       <circle cx={p.x} cy={p.y} r="7" fill="none" stroke="#00f0ff" strokeWidth="0.8" opacity="0.4" className="pulse-ping" />
+                      <text 
+                        x={p.x} 
+                        y={p.y - 8} 
+                        fill="#ffffff" 
+                        fontSize="7px" 
+                        fontWeight="bold" 
+                        textAnchor="middle"
+                        filter="drop-shadow(0 0 2px rgba(0,0,0,0.9))"
+                      >
+                        {timeBins.bins[idx]} pt
+                      </text>
                     </g>
                   ))}
                 </svg>
               </div>
               <div className="viz-label-row">
-                <span className="viz-tag">-24j</span>
-                <span className="viz-tag">-18j</span>
-                <span className="viz-tag">-12j</span>
-                <span className="viz-tag">-6j</span>
-                <span className="viz-tag">Sekarang</span>
+                <span className="viz-tag">24j lalu</span>
+                <span className="viz-tag">18j lalu</span>
+                <span className="viz-tag">12j lalu</span>
+                <span className="viz-tag">6j lalu</span>
+                <span className="viz-tag">Baru (0-2j)</span>
               </div>
+              <p className="viz-explanation">Grafik historis sebaran kemunculan titik api baru berdasarkan rentang waktu deteksi satelit.</p>
             </div>
 
             {/* GRAPH 2: SONAR RADAR SATELIT */}
             <div className="cyber-viz-panel">
               <div className="viz-header">
                 <span className="viz-dot viz-dot--pink" />
-                <span className="viz-title">Radar Kontributor Satelit (Rasio Sensor)</span>
+                <span className="viz-title">Radar Sensor Penyuplai Data</span>
               </div>
               <div className="sonar-container">
                 <svg className="sonar-svg" viewBox="0 0 100 100" width="100px" height="100px">
@@ -705,26 +718,39 @@ export function MonitoringPanel({
                     transform="rotate(-90 50 50)" 
                     filter="drop-shadow(0 0 3px #ff0055)" 
                   />
+
+                  {/* Ring Text Labels overlay */}
+                  {satelliteCounts.viirsPct > 0 && (
+                    <text x="50" y="22" fill="#00f0ff" fontSize="7px" fontWeight="bold" textAnchor="middle">
+                      {satelliteCounts.viirsPct}%
+                    </text>
+                  )}
+                  {satelliteCounts.modisPct > 0 && (
+                    <text x="50" y="37" fill="#ff0055" fontSize="7px" fontWeight="bold" textAnchor="middle">
+                      {satelliteCounts.modisPct}%
+                    </text>
+                  )}
                 </svg>
                 
                 <div className="sonar-legend">
                   <div className="legend-row">
                     <span className="legend-color legend-color--cyan" />
-                    <span>VIIRS: <strong>{satelliteCounts.viirsPct}%</strong> ({satelliteCounts.viirs} Poin)</span>
+                    <span>VIIRS: <strong>{satelliteCounts.viirsPct}%</strong> ({satelliteCounts.viirs} pt)</span>
                   </div>
                   <div className="legend-row">
                     <span className="legend-color legend-color--pink" />
-                    <span>MODIS: <strong>{satelliteCounts.modisPct}%</strong> ({satelliteCounts.modis} Poin)</span>
+                    <span>MODIS: <strong>{satelliteCounts.modisPct}%</strong> ({satelliteCounts.modis} pt)</span>
                   </div>
                 </div>
               </div>
+              <p className="viz-explanation">Rasio penyuplai data satelit (Sensor VIIRS memberikan resolusi spasial yang lebih tinggi).</p>
             </div>
 
             {/* GRAPH 3: MATRIX GRID RISIKO SPASIAL */}
             <div className="cyber-viz-panel">
               <div className="viz-header">
                 <span className="viz-dot viz-dot--yellow" />
-                <span className="viz-title">Threat Matrix Kepadatan (FRP Grid)</span>
+                <span className="viz-title">Threat Matrix Kepadatan Sebaran</span>
               </div>
               <div className="threat-matrix-wrapper">
                 <div className="threat-matrix-grid">
@@ -737,18 +763,21 @@ export function MonitoringPanel({
                         className={`matrix-cell matrix-cell--level-${level}`}
                         title={`Hotspot: ${cell.count}, Total FRP: ${Math.round(cell.frp)} MW`}
                       >
-                        {cell.count > 0 && <span className="cell-pulse-dot" />}
+                        {cell.count > 0 ? (
+                          <span className="matrix-cell-number">{cell.count}</span>
+                        ) : null}
                       </div>
                     );
                   })}
                 </div>
                 <div className="matrix-legend">
-                  <div className="legend-tag"><span className="tag-color level-0" /> Aman</div>
+                  <div className="legend-tag"><span className="tag-color level-0" /> 0</div>
                   <div className="legend-tag"><span className="tag-color level-1" /> Rendah</div>
                   <div className="legend-tag"><span className="tag-color level-2" /> Sedang</div>
                   <div className="legend-tag"><span className="tag-color level-3" /> Tinggi</div>
                 </div>
               </div>
+              <p className="viz-explanation">Matriks area persebaran titik panas geografis. Angka dalam kotak mewakili jumlah titik api.</p>
             </div>
 
           </div>

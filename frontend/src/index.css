@@ -1695,6 +1695,23 @@ body {
   transition: all 0.2s;
 }
 
+.matrix-cell-number {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #ffffff;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+  font-family: monospace;
+}
+
+.viz-explanation {
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 0.5rem 0 0;
+  border-top: 1px dashed rgba(0, 240, 255, 0.1);
+  padding-top: 0.5rem;
+}
+
 .matrix-cell--level-0 {
   background: rgba(255, 255, 255, 0.01);
 }
