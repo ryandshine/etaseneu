@@ -6,6 +6,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env.dokploy
+    volumes:
+      - ${HOST_SHP_DIR:-/etc/dokploy/data/etaseneu/shp}:/app/shp:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

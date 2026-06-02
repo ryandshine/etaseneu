@@ -1,6 +1,6 @@
 # ETA SEUNEU
 
-Aplikasi pemantauan hotspot lokal berbasis FastAPI dan React/Vite untuk membaca layer GeoJSON dari folder `shp/`, memfilter hotspot aktif, menampilkan ringkasan, dan mengekspor hasil ke Excel.
+Aplikasi pemantauan hotspot lokal berbasis FastAPI dan React/Vite untuk membaca layer GeoJSON dari folder `shp/` atau path runtime yang ditentukan lewat `SHP_DIR`, memfilter hotspot aktif, menampilkan ringkasan, dan mengekspor hasil ke Excel.
 
 ## Backend
 
@@ -41,8 +41,12 @@ File yang disiapkan untuk deployment publik:
 Langkah ringkas:
 
 1. Salin `.env.dokploy.example` menjadi `.env.dokploy` lalu isi `NASA_FIRMS_API_KEY`.
-2. Deploy `docker-compose.dokploy.yml` di Dokploy.
-3. Pastikan service `web` terhubung ke domain `etaseneu.ditpps.com`.
+2. Siapkan folder data di host Dokploy, misalnya `/etc/dokploy/data/etaseneu/shp`, lalu salin file `.geojson` ke sana.
+3. Pastikan `.env.dokploy` berisi `SHP_DIR=/app/shp` dan `HOST_SHP_DIR=/etc/dokploy/data/etaseneu/shp`.
+4. Deploy `docker-compose.dokploy.yml` di Dokploy.
+5. Pastikan service `web` terhubung ke domain `etaseneu.ditpps.com`.
+
+`docker-compose.dokploy.yml` sudah mem-mount `${HOST_SHP_DIR}` ke `/app/shp` sebagai read-only, jadi data layer tidak perlu ikut di repo atau Docker build context.
 
 Stack ini dirancang untuk satu domain publik:
 

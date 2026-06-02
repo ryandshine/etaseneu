@@ -57,3 +57,18 @@ def test_settings_load_env_values_and_resolve_paths(tmp_path: Path, monkeypatch)
     assert settings.scheduler_new_hotspot_alert_threshold == 5
     assert settings.resolved_shp_dir == (BACKEND_DIR / "../shp").resolve()
     assert settings.resolved_cache_dir == (BACKEND_DIR / ".cache").resolve()
+
+
+def test_settings_preserve_absolute_shp_path() -> None:
+    from app.core.config import Settings
+
+    settings = Settings(
+        _env_file=None,
+        nasa_firms_api_key="demo-key",
+        database_url="postgresql://demo:demo@localhost:5432/etaseneu",
+        shp_dir="/app/shp",
+        cache_dir=".cache",
+    )
+
+    assert settings.shp_dir == "/app/shp"
+    assert settings.resolved_shp_dir == Path("/app/shp")
