@@ -14,12 +14,14 @@ import App from "../App";
 const fitBoundsMock = vi.fn();
 const mapContainerPropsMock = vi.fn();
 const mapZoomMock = vi.fn(() => 5);
+const geoJsonPropsMock = vi.fn();
 
 vi.mock("react-leaflet", () => ({
   CircleMarker: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  GeoJSON: ({ children }: { children?: ReactNode }) => (
-    <div data-testid="geojson-layer">{children}</div>
-  ),
+  GeoJSON: ({ children, ...props }: { children?: ReactNode }) => {
+    geoJsonPropsMock(props);
+    return <div data-testid="geojson-layer">{children}</div>;
+  },
   MapContainer: ({ children, ...props }: { children?: ReactNode }) => {
     mapContainerPropsMock(props);
     return <div data-testid="leaflet-map">{children}</div>;
@@ -158,6 +160,7 @@ describe("Hotspot map integration", () => {
     fitBoundsMock.mockReset();
     mapContainerPropsMock.mockReset();
     mapZoomMock.mockReset();
+    geoJsonPropsMock.mockReset();
     mapZoomMock.mockReturnValue(5);
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
@@ -379,5 +382,14 @@ describe("Hotspot map integration", () => {
 
     const layerCalls = fetchMock.mock.calls.filter(([input]) => String(input).startsWith("/api/layers"));
     expect(layerCalls).toHaveLength(1);
+  });
+
+  it("renders boundary layers as non-interactive so hotspot markers remain clickable", async () => {
+    render(<App />);
+
+    expect(await screen.findByTestId("leaflet-map", {}, { timeout: 5000 })).toBeInTheDocument();
+
+    expect(geoJsonPropsMock).toHaveBeenCalled();
+    expect(geoJsonPropsMock.mock.calls[0]?.[0]).toMatchObject({ interactive: false });
   });
 });

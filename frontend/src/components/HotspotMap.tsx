@@ -250,6 +250,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind }: Hot
             <GeoJSON
               key={layer.id}
               data={layer.geojson as never}
+              interactive={false}
               style={{
                 color: layer.color,
                 weight: 4,
