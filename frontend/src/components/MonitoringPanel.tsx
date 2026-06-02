@@ -169,6 +169,12 @@ function getHealthLabel(metrics: SchedulerMetricsResponse | null): string {
   return "Menunggu";
 }
 
+function normalizeLembagaName(name: string): string {
+  if (!name) return name;
+  if (name.toLowerCase() === "lphd nyuai peningun") return "Areal Perhutanan Sosial";
+  return name;
+}
+
 interface HotspotCluster {
   id: string;
   hotspots: DashboardHotspot[];
@@ -384,62 +390,143 @@ export function MonitoringPanel({
   const frpAnalysis = useMemo(() => analyzeFrp(active24hHotspots), [active24hHotspots]);
   const sensorValidation = useMemo(() => analyzeSensorValidation(active24hHotspots), [active24hHotspots]);
 
-  // Inspector states & calculations for enlarged Spatial Cluster Card
-  const [inspectLayerId, setInspectLayerId] = useState<string | null>(null);
+  // Helper function to extract bounding box of a single GeoJSON Feature
+  const getFeatureBounds = (feature: any) => {
+    let min_lon = Infinity, max_lon = -Infinity;
+    let min_lat = Infinity, max_lat = -Infinity;
 
-  const clusterLayers = useMemo(() => {
-    const ids = new Set<string>();
-    activeClusters.forEach(c => {
-      c.hotspots.forEach(h => {
-        const matching = layers.find(l => l.name === h.agencyName || l.id === h.layerName || l.name === h.layerName);
-        if (matching) {
-          ids.add(matching.id);
+    const processCoord = (coord: [number, number]) => {
+      const lon = coord[0];
+      const lat = coord[1];
+      if (lon < min_lon) min_lon = lon;
+      if (lon > max_lon) max_lon = lon;
+      if (lat < min_lat) min_lat = lat;
+      if (lat > max_lat) max_lat = lat;
+    };
+
+    const geom = feature.geometry;
+    if (geom) {
+      if (geom.type === "Polygon") {
+        geom.coordinates.forEach((ring: [number, number][]) => {
+          ring.forEach(processCoord);
+        });
+      } else if (geom.type === "MultiPolygon") {
+        geom.coordinates.forEach((polygon: [number, number][][]) => {
+          polygon.forEach((ring: [number, number][]) => {
+            ring.forEach(processCoord);
+          });
+        });
+      }
+    }
+
+    if (min_lon === Infinity) return null;
+    return { min_lon, max_lon, min_lat, max_lat };
+  };
+
+  // List of polygons (agencies/lembagas) with active hotspots (prioritizing clusters)
+  const inspectPolygons = useMemo(() => {
+    const list: Array<{ name: string; layerId: string }> = [];
+    const seen = new Set<string>();
+
+    activeClusters.forEach(cluster => {
+      cluster.hotspots.forEach(h => {
+        const name = h.agencyName || h.layerName;
+        if (name && name !== "Unassigned" && name !== "Umum") {
+          if (!seen.has(name)) {
+            seen.add(name);
+            list.push({ name, layerId: h.layerName });
+          }
         }
       });
     });
-    return Array.from(ids);
-  }, [activeClusters, layers]);
 
-  // Set default inspection layer to the first one available
-  useEffect(() => {
-    if (clusterLayers.length > 0 && !inspectLayerId) {
-      setInspectLayerId(clusterLayers[0]);
-    } else if (layers.length > 0 && !inspectLayerId) {
-      const active = layers.find(l => l.active);
-      if (active) setInspectLayerId(active.id);
+    if (list.length === 0) {
+      active24hHotspots.forEach(h => {
+        const name = h.agencyName || h.layerName;
+        if (name && name !== "Unassigned" && name !== "Umum") {
+          if (!seen.has(name)) {
+            seen.add(name);
+            list.push({ name, layerId: h.layerName });
+          }
+        }
+      });
     }
-  }, [clusterLayers, layers, inspectLayerId]);
 
-  const inspectLayer = useMemo(() => {
-    return layers.find(l => l.id === inspectLayerId);
-  }, [layers, inspectLayerId]);
+    return list;
+  }, [activeClusters, active24hHotspots]);
 
+  // Selected polygon name state
+  const [inspectPolygonName, setInspectPolygonName] = useState<string | null>(null);
+
+  // Auto-select the first polygon with a hotspot
+  useEffect(() => {
+    if (inspectPolygons.length > 0) {
+      if (!inspectPolygonName || !inspectPolygons.some(p => p.name === inspectPolygonName)) {
+        setInspectPolygonName(inspectPolygons[0].name);
+      }
+    } else {
+      setInspectPolygonName(null);
+    }
+  }, [inspectPolygons, inspectPolygonName]);
+
+  // Retrieve the GeoJSON Feature representing the selected polygon
+  const inspectPolygonFeature = useMemo(() => {
+    if (!inspectPolygonName) return null;
+    const matchInfo = inspectPolygons.find(p => p.name === inspectPolygonName);
+    if (!matchInfo) return null;
+
+    const layer = layers.find(l => l.id === matchInfo.layerId);
+    if (!layer || !layer.geojson) return null;
+
+    const geojson = layer.geojson as any;
+    if (!geojson.features) return null;
+
+    // Find the feature with matching properties
+    const feature = geojson.features.find((f: any) => {
+      const props = f.properties || {};
+      const name = props.LEMBAGA || props.lembaga || props.Name || props.name;
+      return name && normalizeLembagaName(String(name)) === inspectPolygonName;
+    });
+
+    return feature;
+  }, [layers, inspectPolygonName, inspectPolygons]);
+
+  // Bounding box of the selected inspect polygon padded for hotspots centering
   const mapBounds = useMemo(() => {
-    let min_lon = inspectLayer?.bounds?.min_lon ?? 95;
-    let max_lon = inspectLayer?.bounds?.max_lon ?? 141;
-    let min_lat = inspectLayer?.bounds?.min_lat ?? -11;
-    let max_lat = inspectLayer?.bounds?.max_lat ?? 6;
+    const bounds = inspectPolygonFeature ? getFeatureBounds(inspectPolygonFeature) : null;
+    
+    let min_lon = bounds?.min_lon ?? 95;
+    let max_lon = bounds?.max_lon ?? 141;
+    let min_lat = bounds?.min_lat ?? -11;
+    let max_lat = bounds?.max_lat ?? 6;
 
-    // Filter active 24h hotspots matching the inspected layer
-    const layerHotspots = active24hHotspots.filter(
-      h => inspectLayer && (h.agencyName === inspectLayer.name || h.layerName === inspectLayer.id || h.layerName === inspectLayer.name)
+    const polygonHotspots = active24hHotspots.filter(
+      h => h.agencyName === inspectPolygonName || h.layerName === inspectPolygonName
     );
 
-    if (layerHotspots.length > 0) {
-      const hsMinLon = Math.min(...layerHotspots.map(h => h.longitude));
-      const hsMaxLon = Math.max(...layerHotspots.map(h => h.longitude));
-      const hsMinLat = Math.min(...layerHotspots.map(h => h.latitude));
-      const hsMaxLat = Math.max(...layerHotspots.map(h => h.latitude));
+    if (polygonHotspots.length > 0) {
+      const hsMinLon = Math.min(...polygonHotspots.map(h => h.longitude));
+      const hsMaxLon = Math.max(...polygonHotspots.map(h => h.longitude));
+      const hsMinLat = Math.min(...polygonHotspots.map(h => h.latitude));
+      const hsMaxLat = Math.max(...polygonHotspots.map(h => h.latitude));
 
-      // Pad slightly to center neatly (0.05 degrees padding)
-      min_lon = Math.min(min_lon, hsMinLon) - 0.05;
-      max_lon = Math.max(max_lon, hsMaxLon) + 0.05;
-      min_lat = Math.min(min_lat, hsMinLat) - 0.05;
-      max_lat = Math.max(max_lat, hsMaxLat) + 0.05;
+      // Pad slightly to center neatly (0.02 degrees padding)
+      min_lon = Math.min(min_lon, hsMinLon) - 0.02;
+      max_lon = Math.max(max_lon, hsMaxLon) + 0.02;
+      min_lat = Math.min(min_lat, hsMinLat) - 0.02;
+      max_lat = Math.max(max_lat, hsMaxLat) + 0.02;
+    } else if (bounds) {
+      // Pad boundaries slightly if no hotspots
+      const lonPadding = (max_lon - min_lon) * 0.1 || 0.01;
+      const latPadding = (max_lat - min_lat) * 0.1 || 0.01;
+      min_lon -= lonPadding;
+      max_lon += lonPadding;
+      min_lat -= latPadding;
+      max_lat += latPadding;
     }
 
     return { min_lon, max_lon, min_lat, max_lat };
-  }, [inspectLayer, active24hHotspots]);
+  }, [inspectPolygonFeature, inspectPolygonName, active24hHotspots]);
 
   // Project longitude/latitude coordinates into a 500x250 SVG coordinate space
   const svgWidth = 500;
@@ -456,60 +543,54 @@ export function MonitoringPanel({
   };
 
   const svgPolygons = useMemo(() => {
-    if (!inspectLayer || !inspectLayer.geojson) return [];
+    if (!inspectPolygonFeature) return [];
     const paths: string[] = [];
-    const geojson = inspectLayer.geojson as any;
+    const geom = inspectPolygonFeature.geometry;
+    if (!geom) return [];
 
-    if (!geojson.features) return [];
-
-    geojson.features.forEach((feature: any) => {
-      const geom = feature.geometry;
-      if (!geom) return;
-
-      if (geom.type === "Polygon") {
-        geom.coordinates.forEach((ring: [number, number][]) => {
+    if (geom.type === "Polygon") {
+      geom.coordinates.forEach((ring: [number, number][]) => {
+        if (ring.length < 3) return;
+        const d = ring
+          .map((coord, i) => `${i === 0 ? "M" : "L"} ${getX(coord[0])},${getY(coord[1])}`)
+          .join(" ") + " Z";
+        paths.push(d);
+      });
+    } else if (geom.type === "MultiPolygon") {
+      geom.coordinates.forEach((polygon: [number, number][][]) => {
+        polygon.forEach((ring: [number, number][]) => {
           if (ring.length < 3) return;
           const d = ring
             .map((coord, i) => `${i === 0 ? "M" : "L"} ${getX(coord[0])},${getY(coord[1])}`)
             .join(" ") + " Z";
           paths.push(d);
         });
-      } else if (geom.type === "MultiPolygon") {
-        geom.coordinates.forEach((polygon: [number, number][][]) => {
-          polygon.forEach((ring: [number, number][]) => {
-            if (ring.length < 3) return;
-            const d = ring
-              .map((coord, i) => `${i === 0 ? "M" : "L"} ${getX(coord[0])},${getY(coord[1])}`)
-              .join(" ") + " Z";
-            paths.push(d);
-          });
-        });
-      }
-    });
+      });
+    }
 
     return paths;
-  }, [inspectLayer, mapBounds]);
+  }, [inspectPolygonFeature, mapBounds]);
 
-  // Map active hotspots to SVG space (only for the inspected layer)
+  // Map active hotspots to SVG space (only for the inspected polygon)
   const mapHotspots = useMemo(() => {
-    const layerHotspots = active24hHotspots.filter(
-      h => inspectLayer && (h.agencyName === inspectLayer.name || h.layerName === inspectLayer.id || h.layerName === inspectLayer.name)
+    const polygonHotspots = active24hHotspots.filter(
+      h => h.agencyName === inspectPolygonName || h.layerName === inspectPolygonName
     );
-    return layerHotspots.map(h => ({
+    return polygonHotspots.map(h => ({
       ...h,
       x: getX(h.longitude),
       y: getY(h.latitude)
     }));
-  }, [active24hHotspots, inspectLayer, mapBounds]);
+  }, [active24hHotspots, inspectPolygonName, mapBounds]);
 
-  // Compute lines of propagation between hotspots in same cluster (only for current inspect layer)
+  // Compute lines of propagation between hotspots in same cluster (only for current inspect polygon)
   const clusterLines = useMemo(() => {
     const lines: Array<{ x1: number; y1: number; x2: number; y2: number; dist: number; key: string }> = [];
     activeClusters.forEach(cluster => {
-      const layerHotspots = cluster.hotspots.filter(
-        h => inspectLayer && (h.agencyName === inspectLayer.name || h.layerName === inspectLayer.id || h.layerName === inspectLayer.name)
+      const polygonHotspots = cluster.hotspots.filter(
+        h => h.agencyName === inspectPolygonName || h.layerName === inspectPolygonName
       );
-      const clusterHs = layerHotspots.map(h => ({
+      const clusterHs = polygonHotspots.map(h => ({
         ...h,
         x: getX(h.longitude),
         y: getY(h.latitude)
@@ -553,7 +634,7 @@ export function MonitoringPanel({
       }
     });
     return lines;
-  }, [activeClusters, inspectLayer, mapBounds]);
+  }, [activeClusters, inspectPolygonName, mapBounds]);
 
   const timeBins = useMemo(() => {
     const now = Date.now();
@@ -1004,22 +1085,25 @@ export function MonitoringPanel({
                   </div>
 
                   <div>
-                    {layers.length > 0 && (
+                    {inspectPolygons.length > 0 && (
                       <div style={{ marginTop: "0.6rem" }}>
-                        <label htmlFor="inspect-layer-select" style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.45)", textTransform: "uppercase", fontWeight: "bold", display: "block" }}>
-                          Pilih Polygon Inspeksi:
+                        <label htmlFor="inspect-polygon-select" style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.45)", textTransform: "uppercase", fontWeight: "bold", display: "block" }}>
+                          Pilih Polygon Terancam Rambatan:
                         </label>
                         <select
-                          id="inspect-layer-select"
+                          id="inspect-polygon-select"
                           className="inspect-selector"
-                          value={inspectLayerId || ""}
-                          onChange={(e) => setInspectLayerId(e.target.value)}
+                          value={inspectPolygonName || ""}
+                          onChange={(e) => setInspectPolygonName(e.target.value)}
                         >
-                          {layers.map(l => (
-                            <option key={l.id} value={l.id}>
-                              {l.label} ({l.feature_count} Poligon) {clusterLayers.includes(l.id) ? "⚠️ RAMBATAN" : ""}
-                            </option>
-                          ))}
+                          {inspectPolygons.map(p => {
+                            const isClustered = activeClusters.some(c => c.hotspots.some(h => h.agencyName === p.name));
+                            return (
+                              <option key={p.name} value={p.name}>
+                                🏢 {p.name} {isClustered ? "⚠️ RAMBATAN" : ""}
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
                     )}
@@ -1034,7 +1118,7 @@ export function MonitoringPanel({
                 <div className="tactical-map-container">
                   <div className="tactical-map-header">
                     <span>📡 PETA TAKTIS SPASIAL</span>
-                    <span style={{ color: "#f59e0b" }}>{inspectLayer?.label || "Umum"}</span>
+                    <span style={{ color: "#f59e0b" }}>{inspectPolygonName || "Umum"}</span>
                   </div>
                   <div className="tactical-map-canvas">
                     <svg width="100%" height="100%" viewBox="0 0 500 250" style={{ display: "block" }}>
