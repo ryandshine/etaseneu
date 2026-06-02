@@ -17,7 +17,7 @@ const api = createApiClient();
 
 
 
-type DashboardLayer = Pick<
+export type DashboardLayer = Pick<
   LayerFeature,
   "id" | "name" | "label" | "active" | "color" | "bounds" | "geojson" | "geojson_mode" | "feature_count" | "agencies"
 >;

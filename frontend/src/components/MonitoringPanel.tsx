@@ -1,10 +1,11 @@
 import { useMemo, useState, useEffect } from "react";
 import type { SchedulerMetricsResponse } from "../types/api";
-import type { DashboardHotspot } from "../hooks/useDashboardData";
+import type { DashboardHotspot, DashboardLayer } from "../hooks/useDashboardData";
 
 type MonitoringPanelProps = {
   metrics: SchedulerMetricsResponse | null;
   hotspots: DashboardHotspot[];
+  layers: DashboardLayer[];
   onManualSync: () => void;
   onPrewarmHistory: () => void;
   manualSyncBusy: boolean;
@@ -345,6 +346,7 @@ function analyzeSensorValidation(hotspots: DashboardHotspot[]): ValidationAnalys
 export function MonitoringPanel({
   metrics,
   hotspots,
+  layers,
   onManualSync,
   onPrewarmHistory,
   manualSyncBusy,
@@ -381,6 +383,177 @@ export function MonitoringPanel({
   const detectionTrend = useMemo(() => calculateDetectionTrend(active24hHotspots), [active24hHotspots]);
   const frpAnalysis = useMemo(() => analyzeFrp(active24hHotspots), [active24hHotspots]);
   const sensorValidation = useMemo(() => analyzeSensorValidation(active24hHotspots), [active24hHotspots]);
+
+  // Inspector states & calculations for enlarged Spatial Cluster Card
+  const [inspectLayerId, setInspectLayerId] = useState<string | null>(null);
+
+  const clusterLayers = useMemo(() => {
+    const ids = new Set<string>();
+    activeClusters.forEach(c => {
+      c.hotspots.forEach(h => {
+        const matching = layers.find(l => l.name === h.agencyName || l.id === h.layerName || l.name === h.layerName);
+        if (matching) {
+          ids.add(matching.id);
+        }
+      });
+    });
+    return Array.from(ids);
+  }, [activeClusters, layers]);
+
+  // Set default inspection layer to the first one available
+  useEffect(() => {
+    if (clusterLayers.length > 0 && !inspectLayerId) {
+      setInspectLayerId(clusterLayers[0]);
+    } else if (layers.length > 0 && !inspectLayerId) {
+      const active = layers.find(l => l.active);
+      if (active) setInspectLayerId(active.id);
+    }
+  }, [clusterLayers, layers, inspectLayerId]);
+
+  const inspectLayer = useMemo(() => {
+    return layers.find(l => l.id === inspectLayerId);
+  }, [layers, inspectLayerId]);
+
+  const mapBounds = useMemo(() => {
+    let min_lon = inspectLayer?.bounds?.min_lon ?? 95;
+    let max_lon = inspectLayer?.bounds?.max_lon ?? 141;
+    let min_lat = inspectLayer?.bounds?.min_lat ?? -11;
+    let max_lat = inspectLayer?.bounds?.max_lat ?? 6;
+
+    // Filter active 24h hotspots matching the inspected layer
+    const layerHotspots = active24hHotspots.filter(
+      h => inspectLayer && (h.agencyName === inspectLayer.name || h.layerName === inspectLayer.id || h.layerName === inspectLayer.name)
+    );
+
+    if (layerHotspots.length > 0) {
+      const hsMinLon = Math.min(...layerHotspots.map(h => h.longitude));
+      const hsMaxLon = Math.max(...layerHotspots.map(h => h.longitude));
+      const hsMinLat = Math.min(...layerHotspots.map(h => h.latitude));
+      const hsMaxLat = Math.max(...layerHotspots.map(h => h.latitude));
+
+      // Pad slightly to center neatly (0.05 degrees padding)
+      min_lon = Math.min(min_lon, hsMinLon) - 0.05;
+      max_lon = Math.max(max_lon, hsMaxLon) + 0.05;
+      min_lat = Math.min(min_lat, hsMinLat) - 0.05;
+      max_lat = Math.max(max_lat, hsMaxLat) + 0.05;
+    }
+
+    return { min_lon, max_lon, min_lat, max_lat };
+  }, [inspectLayer, active24hHotspots]);
+
+  // Project longitude/latitude coordinates into a 500x250 SVG coordinate space
+  const svgWidth = 500;
+  const svgHeight = 250;
+  
+  const getX = (lon: number) => {
+    const span = mapBounds.max_lon - mapBounds.min_lon || 0.001;
+    return ((lon - mapBounds.min_lon) / span) * svgWidth;
+  };
+  
+  const getY = (lat: number) => {
+    const span = mapBounds.max_lat - mapBounds.min_lat || 0.001;
+    return ((mapBounds.max_lat - lat) / span) * svgHeight;
+  };
+
+  const svgPolygons = useMemo(() => {
+    if (!inspectLayer || !inspectLayer.geojson) return [];
+    const paths: string[] = [];
+    const geojson = inspectLayer.geojson as any;
+
+    if (!geojson.features) return [];
+
+    geojson.features.forEach((feature: any) => {
+      const geom = feature.geometry;
+      if (!geom) return;
+
+      if (geom.type === "Polygon") {
+        geom.coordinates.forEach((ring: [number, number][]) => {
+          if (ring.length < 3) return;
+          const d = ring
+            .map((coord, i) => `${i === 0 ? "M" : "L"} ${getX(coord[0])},${getY(coord[1])}`)
+            .join(" ") + " Z";
+          paths.push(d);
+        });
+      } else if (geom.type === "MultiPolygon") {
+        geom.coordinates.forEach((polygon: [number, number][][]) => {
+          polygon.forEach((ring: [number, number][]) => {
+            if (ring.length < 3) return;
+            const d = ring
+              .map((coord, i) => `${i === 0 ? "M" : "L"} ${getX(coord[0])},${getY(coord[1])}`)
+              .join(" ") + " Z";
+            paths.push(d);
+          });
+        });
+      }
+    });
+
+    return paths;
+  }, [inspectLayer, mapBounds]);
+
+  // Map active hotspots to SVG space (only for the inspected layer)
+  const mapHotspots = useMemo(() => {
+    const layerHotspots = active24hHotspots.filter(
+      h => inspectLayer && (h.agencyName === inspectLayer.name || h.layerName === inspectLayer.id || h.layerName === inspectLayer.name)
+    );
+    return layerHotspots.map(h => ({
+      ...h,
+      x: getX(h.longitude),
+      y: getY(h.latitude)
+    }));
+  }, [active24hHotspots, inspectLayer, mapBounds]);
+
+  // Compute lines of propagation between hotspots in same cluster (only for current inspect layer)
+  const clusterLines = useMemo(() => {
+    const lines: Array<{ x1: number; y1: number; x2: number; y2: number; dist: number; key: string }> = [];
+    activeClusters.forEach(cluster => {
+      const layerHotspots = cluster.hotspots.filter(
+        h => inspectLayer && (h.agencyName === inspectLayer.name || h.layerName === inspectLayer.id || h.layerName === inspectLayer.name)
+      );
+      const clusterHs = layerHotspots.map(h => ({
+        ...h,
+        x: getX(h.longitude),
+        y: getY(h.latitude)
+      }));
+
+      // Draw lines between neighbors in same cluster
+      for (let i = 0; i < clusterHs.length; i++) {
+        for (let j = i + 1; j < clusterHs.length; j++) {
+          const h1 = clusterHs[i];
+          const h2 = clusterHs[j];
+          // Calculate distance in km
+          const lat1 = h1.latitude;
+          const lon1 = h1.longitude;
+          const lat2 = h2.latitude;
+          const lon2 = h2.longitude;
+
+          // Simple distance formula for line drawing
+          const R = 6371;
+          const dLat = ((lat2 - lat1) * Math.PI) / 180;
+          const dLon = ((lon2 - lon1) * Math.PI) / 180;
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos((lat1 * Math.PI) / 180) *
+              Math.cos((lat2 * Math.PI) / 180) *
+              Math.sin(dLon / 2) *
+              Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          const dist = Math.round(R * c * 10) / 10;
+
+          if (dist < 20) {
+            lines.push({
+              x1: h1.x,
+              y1: h1.y,
+              x2: h2.x,
+              y2: h2.y,
+              dist,
+              key: `${h1.id}-${h2.id}`
+            });
+          }
+        }
+      }
+    });
+    return lines;
+  }, [activeClusters, inspectLayer, mapBounds]);
 
   const timeBins = useMemo(() => {
     const now = Date.now();
@@ -804,77 +977,151 @@ export function MonitoringPanel({
 
             <div className="neural-analysis-grid">
               
-              {/* INDIKATOR 1: KLUSTER SPASIAL */}
-              <div className="neural-indicator-card">
-                <div className="indicator-top">
-                  <span className="indicator-icon">📍</span>
-                  <span className="indicator-label">Kluster Spasial (Spread Risk)</span>
-                </div>
-                <div className="indicator-middle">
-                  <strong className="indicator-value">
-                    {activeClusters.length} Kluster
-                  </strong>
-                  <span className={`indicator-badge indicator-badge--${activeClusters.length > 0 ? "danger" : "ok"}`}>
-                    {activeClusters.length > 0 ? "ADA RAMBATAN" : "AMAN"}
-                  </span>
+              {/* INDIKATOR 1: KLUSTER SPASIAL (ENLARGED & INTERACTIVE SHAPEFILE MAP) */}
+              <div className="neural-indicator-card neural-indicator-card--large">
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", justifyContent: "space-between" }}>
+                  <div>
+                    <div className="indicator-top">
+                      <span className="indicator-icon">📍</span>
+                      <span className="indicator-label">Kluster Spasial (Spread Risk)</span>
+                    </div>
+                    <div className="indicator-middle" style={{ marginTop: "0.5rem" }}>
+                      <strong className="indicator-value">
+                        {activeClusters.length} Kluster
+                      </strong>
+                      <span className={`indicator-badge indicator-badge--${activeClusters.length > 0 ? "danger" : "ok"}`}>
+                        {activeClusters.length > 0 ? "ADA RAMBATAN" : "AMAN"}
+                      </span>
+                    </div>
+                    
+                    <div className="indicator-bottom" style={{ border: "none", paddingTop: "0.5rem" }}>
+                      <p className="indicator-desc">
+                        {activeClusters.length > 0 
+                          ? `Terdeteksi ${activeClusters.length} kelompok titik api berdekatan (<15 km). Risiko sebaran tinggi di area ${activeClusters[0].province} (${activeClusters[0].agency}).` 
+                          : "Tidak ada pengelompokan hotspot berdekatan. Tingkat risiko rambatan api lokal rendah."}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    {layers.length > 0 && (
+                      <div style={{ marginTop: "0.6rem" }}>
+                        <label htmlFor="inspect-layer-select" style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.45)", textTransform: "uppercase", fontWeight: "bold", display: "block" }}>
+                          Pilih Polygon Inspeksi:
+                        </label>
+                        <select
+                          id="inspect-layer-select"
+                          className="inspect-selector"
+                          value={inspectLayerId || ""}
+                          onChange={(e) => setInspectLayerId(e.target.value)}
+                        >
+                          {layers.map(l => (
+                            <option key={l.id} value={l.id}>
+                              {l.label} ({l.feature_count} Poligon) {clusterLayers.includes(l.id) ? "⚠️ RAMBATAN" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <div className="indicator-extra-info" style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.3)", marginTop: "10px", borderTop: "1px solid rgba(255,255,255,0.03)", paddingTop: "6px" }}>
+                      ℹ️ Peta taktis menunjukkan batas-batas wilayah Shapefile (poligon SHP) dan interkoneksi jarak rambatan termal di antara kluster titik api terdekat.
+                    </div>
+                  </div>
                 </div>
 
-                {/* Visual Graphic: Spatial Nodes & Proximity Scan */}
-                <div className="indicator-graphic" style={{ height: "45px", margin: "6px 0", position: "relative", background: "rgba(0,0,0,0.2)", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.03)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                  {activeClusters.length > 0 ? (
-                    <svg className="neural-mini-svg" width="100%" height="100%" viewBox="0 0 200 45" style={{ display: "block" }}>
+                {/* Right Column: Mini Interactive Tactical Map */}
+                <div className="tactical-map-container">
+                  <div className="tactical-map-header">
+                    <span>📡 PETA TAKTIS SPASIAL</span>
+                    <span style={{ color: "#f59e0b" }}>{inspectLayer?.label || "Umum"}</span>
+                  </div>
+                  <div className="tactical-map-canvas">
+                    <svg width="100%" height="100%" viewBox="0 0 500 250" style={{ display: "block" }}>
                       <defs>
-                        <radialGradient id="threatGlow" cx="50%" cy="50%" r="50%">
-                          <stop offset="0%" stopColor="rgba(239, 68, 68, 0.4)" />
+                        <radialGradient id="hotspotPulse" cx="50%" cy="50%" r="50%">
+                          <stop offset="0%" stopColor="rgba(239, 68, 68, 0.6)" />
                           <stop offset="100%" stopColor="rgba(239, 68, 68, 0)" />
                         </radialGradient>
-                        <radialGradient id="threatGlow2" cx="50%" cy="50%" r="50%">
-                          <stop offset="0%" stopColor="rgba(245, 158, 11, 0.3)" />
-                          <stop offset="100%" stopColor="rgba(245, 158, 11, 0)" />
-                        </radialGradient>
                       </defs>
-                      <path d="M 0 15 L 200 15 M 0 30 L 200 30 M 50 0 L 50 45 M 100 0 L 100 45 M 150 0 L 150 45" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                      <circle cx="60" cy="22" r="18" fill="url(#threatGlow)" />
-                      <circle cx="60" cy="22" r="2.5" fill="#ef4444" />
-                      <line x1="60" y1="22" x2="85" y2="15" stroke="rgba(239, 68, 68, 0.6)" strokeWidth="1.5" strokeDasharray="2,2" />
-                      <circle cx="85" cy="15" r="2" fill="#ef4444" />
-                      {activeClusters.length > 1 && (
-                        <>
-                          <circle cx="140" cy="25" r="14" fill="url(#threatGlow2)" />
-                          <circle cx="140" cy="25" r="2.5" fill="#f59e0b" />
-                          <line x1="140" y1="25" x2="160" y2="30" stroke="rgba(245, 158, 11, 0.5)" strokeWidth="1.5" strokeDasharray="2,2" />
-                          <circle cx="160" cy="30" r="2" fill="#f59e0b" />
-                        </>
-                      )}
-                      <line x1="0" y1="0" x2="0" y2="45" stroke="#ef4444" strokeWidth="1.5" opacity="0.4">
-                        <animate attributeName="x1" values="0;200;0" dur="4s" repeatCount="indefinite" />
-                        <animate attributeName="x2" values="0;200;0" dur="4s" repeatCount="indefinite" />
-                      </line>
-                    </svg>
-                  ) : (
-                    <svg className="neural-mini-svg" width="100%" height="100%" viewBox="0 0 200 45" style={{ display: "block" }}>
-                      <defs>
-                        <radialGradient id="safeGlow" cx="50%" cy="50%" r="50%">
-                          <stop offset="0%" stopColor="rgba(16, 185, 129, 0.2)" />
-                          <stop offset="100%" stopColor="rgba(16, 185, 129, 0)" />
-                        </radialGradient>
-                      </defs>
-                      <path d="M 0 15 L 200 15 M 0 30 L 200 30 M 50 0 L 50 45 M 100 0 L 100 45 M 150 0 L 150 45" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                      <circle cx="100" cy="22" r="16" fill="url(#safeGlow)" />
-                      <circle cx="100" cy="22" r="2" fill="#10b981" />
-                      <circle cx="100" cy="22" r="8" stroke="rgba(16, 185, 129, 0.3)" fill="none" strokeWidth="0.5" />
-                    </svg>
-                  )}
-                </div>
 
-                <div className="indicator-bottom">
-                  <p className="indicator-desc">
-                    {activeClusters.length > 0 
-                      ? `Terdeteksi ${activeClusters.length} kelompok titik api berdekatan (<15 km). Risiko sebaran tinggi di area ${activeClusters[0].province} (${activeClusters[0].agency}).` 
-                      : "Tidak ada pengelompokan hotspot berdekatan. Tingkat risiko rambatan api lokal rendah."}
-                  </p>
-                  <div className="indicator-extra-info" style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.3)", marginTop: "6px", borderTop: "1px solid rgba(255,255,255,0.03)", paddingTop: "4px" }}>
-                    ℹ️ Kluster spasial mengidentifikasi kedekatan sebaran titik api aktif. Jarak api rapat (&lt;15 km) memicu peningkatan status kerawanan rambatan secara eksponensial.
+                      {/* Map Boundaries Info Label */}
+                      <text x="10" y="240" fill="rgba(255,255,255,0.2)" fontSize="7" fontFamily="monospace">
+                        BOUNDS: {mapBounds.min_lon.toFixed(3)}E, {mapBounds.min_lat.toFixed(3)}N TO {mapBounds.max_lon.toFixed(3)}E, {mapBounds.max_lat.toFixed(3)}N
+                      </text>
+
+                      {/* 1. Shapefile Polygons (SHP geometries) */}
+                      {svgPolygons.map((path, idx) => (
+                        <path
+                          key={`poly-${idx}`}
+                          d={path}
+                          fill="rgba(59, 130, 246, 0.08)"
+                          stroke="rgba(59, 130, 246, 0.4)"
+                          strokeWidth="1.5"
+                          style={{ transition: "all 0.5s ease" }}
+                        />
+                      ))}
+
+                      {/* 2. Cluster propagation/distance lines */}
+                      {clusterLines.map((line) => (
+                        <g key={line.key}>
+                          <line
+                            x1={line.x1}
+                            y1={line.y1}
+                            x2={line.x2}
+                            y2={line.y2}
+                            stroke="#ef4444"
+                            strokeWidth="1.5"
+                            strokeDasharray="3,3"
+                          />
+                          {/* Distance label bubble */}
+                          <rect
+                            x={(line.x1 + line.x2) / 2 - 16}
+                            y={(line.y1 + line.y2) / 2 - 7}
+                            width="32"
+                            height="13"
+                            rx="3"
+                            fill="#0b0f19"
+                            stroke="rgba(239, 68, 68, 0.4)"
+                            strokeWidth="0.5"
+                          />
+                          <text
+                            x={(line.x1 + line.x2) / 2}
+                            y={(line.y1 + line.y2) / 2 + 2.5}
+                            textAnchor="middle"
+                            fill="#f87171"
+                            fontSize="7.5"
+                            fontWeight="bold"
+                            fontFamily="monospace"
+                          >
+                            {line.dist}km
+                          </text>
+                        </g>
+                      ))}
+
+                      {/* 3. Hotspot Dots */}
+                      {mapHotspots.map((h) => (
+                        <g key={h.id}>
+                          {/* Pulse halo */}
+                          <circle cx={h.x} cy={h.y} r="10" fill="url(#hotspotPulse)">
+                            <animate attributeName="r" values="4;14;4" dur="2.5s" repeatCount="indefinite" />
+                          </circle>
+                          {/* Core dot */}
+                          <circle cx={h.x} cy={h.y} r="3" fill="#ef4444" />
+                          {/* Sensor identifier text */}
+                          <text x={h.x + 6} y={h.y + 2.5} fill="#ffffff" fontSize="7" fontWeight="bold" fontFamily="monospace" style={{ textShadow: "1px 1px 2px #000" }}>
+                            {h.satellite} ({h.frp ?? 0}MW)
+                          </text>
+                        </g>
+                      ))}
+
+                      {/* Empty display helper if no data */}
+                      {mapHotspots.length === 0 && (
+                        <text x="250" y="125" textAnchor="middle" fill="rgba(255,255,255,0.25)" fontSize="10" fontFamily="monospace">
+                          TIDAK ADA HOTSPOT DETEKSI PADA POLYGON INI
+                        </text>
+                      )}
+                    </svg>
                   </div>
                 </div>
               </div>

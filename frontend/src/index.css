@@ -1248,6 +1248,77 @@ body {
   border-color: rgba(255, 255, 255, 0.08);
 }
 
+.neural-indicator-card--large {
+  grid-column: span 2;
+}
+
+@media (min-width: 800px) {
+  .neural-indicator-card--large {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 1.5rem;
+    align-items: stretch;
+  }
+}
+
+.inspect-selector {
+  background: rgba(0, 0, 0, 0.5) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #ebf0f5 !important;
+  font-size: 0.72rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  width: 100%;
+  outline: none;
+  font-family: inherit;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  transition: border-color 0.2s;
+}
+
+.inspect-selector:hover {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.inspect-selector option {
+  background: #111;
+  color: #fff;
+}
+
+.tactical-map-container {
+  position: relative;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  overflow: hidden;
+  height: 280px;
+  display: flex;
+  flex-direction: column;
+}
+
+.tactical-map-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.8rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  font-family: monospace;
+}
+
+.tactical-map-canvas {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
 .indicator-top {
   display: flex;
   align-items: center;

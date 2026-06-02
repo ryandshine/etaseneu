@@ -584,6 +584,7 @@ export default function App() {
             <MonitoringPanel
               metrics={schedulerMetrics}
               hotspots={hotspots}
+              layers={layers}
               onManualSync={() => void manualSync()}
               onPrewarmHistory={() => void prewarmHistory()}
               manualSyncBusy={isTriggeringManualSync}
