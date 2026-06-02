@@ -224,6 +224,8 @@ interface DetectionTrend {
   rate: number;
   label: string;
   direction: "up" | "down" | "stable";
+  last6hCount: number;
+  baseline6hCount: number;
 }
 
 function calculateDetectionTrend(hotspots: DashboardHotspot[]): DetectionTrend {
@@ -244,22 +246,22 @@ function calculateDetectionTrend(hotspots: DashboardHotspot[]): DetectionTrend {
   const baselineRate = prior18h / 3;
 
   if (last6h === 0 && baselineRate === 0) {
-    return { rate: 0, label: "Stabil (Tidak ada aktivitas)", direction: "stable" };
+    return { rate: 0, label: "Stabil (Tidak ada aktivitas)", direction: "stable", last6hCount: 0, baseline6hCount: 0 };
   }
 
   if (baselineRate === 0) {
-    return { rate: 100, label: "Lonjakan Baru (Aktivitas terdeteksi)", direction: "up" };
+    return { rate: 100, label: "Lonjakan Baru (Aktivitas terdeteksi)", direction: "up", last6hCount: last6h, baseline6hCount: 0 };
   }
 
   const changePct = ((last6h - baselineRate) / baselineRate) * 100;
   const rate = Math.round(changePct);
 
   if (rate > 5) {
-    return { rate, label: `Meningkat +${rate}% (Akselerasi Deteksi)`, direction: "up" };
+    return { rate, label: `Meningkat +${rate}% (Akselerasi Deteksi)`, direction: "up", last6hCount: last6h, baseline6hCount: Math.round(baselineRate * 10) / 10 };
   } else if (rate < -5) {
-    return { rate, label: `Menurun ${rate}% (Deselerasi Aktivitas)`, direction: "down" };
+    return { rate, label: `Menurun ${rate}% (Deselerasi Aktivitas)`, direction: "down", last6hCount: last6h, baseline6hCount: Math.round(baselineRate * 10) / 10 };
   } else {
-    return { rate, label: "Stabil (Fluktuasi normal)", direction: "stable" };
+    return { rate, label: "Stabil (Fluktuasi normal)", direction: "stable", last6hCount: last6h, baseline6hCount: Math.round(baselineRate * 10) / 10 };
   }
 }
 
@@ -816,12 +818,64 @@ export function MonitoringPanel({
                     {activeClusters.length > 0 ? "ADA RAMBATAN" : "AMAN"}
                   </span>
                 </div>
+
+                {/* Visual Graphic: Spatial Nodes & Proximity Scan */}
+                <div className="indicator-graphic" style={{ height: "45px", margin: "6px 0", position: "relative", background: "rgba(0,0,0,0.2)", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.03)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                  {activeClusters.length > 0 ? (
+                    <svg className="neural-mini-svg" width="100%" height="100%" viewBox="0 0 200 45" style={{ display: "block" }}>
+                      <defs>
+                        <radialGradient id="threatGlow" cx="50%" cy="50%" r="50%">
+                          <stop offset="0%" stopColor="rgba(239, 68, 68, 0.4)" />
+                          <stop offset="100%" stopColor="rgba(239, 68, 68, 0)" />
+                        </radialGradient>
+                        <radialGradient id="threatGlow2" cx="50%" cy="50%" r="50%">
+                          <stop offset="0%" stopColor="rgba(245, 158, 11, 0.3)" />
+                          <stop offset="100%" stopColor="rgba(245, 158, 11, 0)" />
+                        </radialGradient>
+                      </defs>
+                      <path d="M 0 15 L 200 15 M 0 30 L 200 30 M 50 0 L 50 45 M 100 0 L 100 45 M 150 0 L 150 45" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+                      <circle cx="60" cy="22" r="18" fill="url(#threatGlow)" />
+                      <circle cx="60" cy="22" r="2.5" fill="#ef4444" />
+                      <line x1="60" y1="22" x2="85" y2="15" stroke="rgba(239, 68, 68, 0.6)" strokeWidth="1.5" strokeDasharray="2,2" />
+                      <circle cx="85" cy="15" r="2" fill="#ef4444" />
+                      {activeClusters.length > 1 && (
+                        <>
+                          <circle cx="140" cy="25" r="14" fill="url(#threatGlow2)" />
+                          <circle cx="140" cy="25" r="2.5" fill="#f59e0b" />
+                          <line x1="140" y1="25" x2="160" y2="30" stroke="rgba(245, 158, 11, 0.5)" strokeWidth="1.5" strokeDasharray="2,2" />
+                          <circle cx="160" cy="30" r="2" fill="#f59e0b" />
+                        </>
+                      )}
+                      <line x1="0" y1="0" x2="0" y2="45" stroke="#ef4444" strokeWidth="1.5" opacity="0.4">
+                        <animate attributeName="x1" values="0;200;0" dur="4s" repeatCount="indefinite" />
+                        <animate attributeName="x2" values="0;200;0" dur="4s" repeatCount="indefinite" />
+                      </line>
+                    </svg>
+                  ) : (
+                    <svg className="neural-mini-svg" width="100%" height="100%" viewBox="0 0 200 45" style={{ display: "block" }}>
+                      <defs>
+                        <radialGradient id="safeGlow" cx="50%" cy="50%" r="50%">
+                          <stop offset="0%" stopColor="rgba(16, 185, 129, 0.2)" />
+                          <stop offset="100%" stopColor="rgba(16, 185, 129, 0)" />
+                        </radialGradient>
+                      </defs>
+                      <path d="M 0 15 L 200 15 M 0 30 L 200 30 M 50 0 L 50 45 M 100 0 L 100 45 M 150 0 L 150 45" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+                      <circle cx="100" cy="22" r="16" fill="url(#safeGlow)" />
+                      <circle cx="100" cy="22" r="2" fill="#10b981" />
+                      <circle cx="100" cy="22" r="8" stroke="rgba(16, 185, 129, 0.3)" fill="none" strokeWidth="0.5" />
+                    </svg>
+                  )}
+                </div>
+
                 <div className="indicator-bottom">
                   <p className="indicator-desc">
                     {activeClusters.length > 0 
                       ? `Terdeteksi ${activeClusters.length} kelompok titik api berdekatan (<15 km). Risiko sebaran tinggi di area ${activeClusters[0].province} (${activeClusters[0].agency}).` 
                       : "Tidak ada pengelompokan hotspot berdekatan. Tingkat risiko rambatan api lokal rendah."}
                   </p>
+                  <div className="indicator-extra-info" style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.3)", marginTop: "6px", borderTop: "1px solid rgba(255,255,255,0.03)", paddingTop: "4px" }}>
+                    ℹ️ Kluster spasial mengidentifikasi kedekatan sebaran titik api aktif. Jarak api rapat (&lt;15 km) memicu peningkatan status kerawanan rambatan secara eksponensial.
+                  </div>
                 </div>
               </div>
 
@@ -839,10 +893,45 @@ export function MonitoringPanel({
                     {detectionTrend.direction === "up" ? "AKSELERASI" : detectionTrend.direction === "down" ? "DESELERASI" : "STABIL"}
                   </span>
                 </div>
+
+                {/* Visual Graphic: Side-by-side Comparative Bars */}
+                <div className="indicator-graphic" style={{ height: "45px", margin: "6px 0", position: "relative", background: "rgba(0,0,0,0.2)", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.03)", padding: "4px 8px", display: "flex", flexDirection: "column", justifyContent: "space-around" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", width: "65px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>Baseline (6h Avg)</span>
+                    <div style={{ flex: 1, height: "6px", background: "rgba(255,255,255,0.05)", borderRadius: "3px", overflow: "hidden", position: "relative" }}>
+                      <div style={{ height: "100%", width: `${Math.min(100, (detectionTrend.baseline6hCount / Math.max(detectionTrend.last6hCount, detectionTrend.baseline6hCount, 1)) * 100)}%`, background: "rgba(255,255,255,0.3)", borderRadius: "3px" }} />
+                    </div>
+                    <span style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.6)", width: "20px", textAlign: "right", fontFamily: "monospace" }}>{detectionTrend.baseline6hCount}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", width: "65px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>6 Jam Terakhir</span>
+                    <div style={{ flex: 1, height: "6px", background: "rgba(255,255,255,0.05)", borderRadius: "3px", overflow: "hidden", position: "relative" }}>
+                      <div style={{ 
+                        height: "100%", 
+                        width: `${Math.min(100, (detectionTrend.last6hCount / Math.max(detectionTrend.last6hCount, detectionTrend.baseline6hCount, 1)) * 100)}%`, 
+                        background: detectionTrend.direction === "up" ? "#ef4444" : detectionTrend.direction === "down" ? "#10b981" : "#3b82f6", 
+                        borderRadius: "3px",
+                        boxShadow: detectionTrend.direction === "up" ? "0 0 6px rgba(239, 68, 68, 0.4)" : "none"
+                      }} />
+                    </div>
+                    <span style={{ 
+                      fontSize: "0.65rem", 
+                      color: detectionTrend.direction === "up" ? "#f87171" : detectionTrend.direction === "down" ? "#34d399" : "#60a5fa", 
+                      width: "20px", 
+                      textAlign: "right", 
+                      fontFamily: "monospace",
+                      fontWeight: "bold"
+                    }}>{detectionTrend.last6hCount}</span>
+                  </div>
+                </div>
+
                 <div className="indicator-bottom">
                   <p className="indicator-desc">
                     {detectionTrend.label}. Rasio deteksi 6 jam terakhir dibandingkan baseline 18 jam sebelumnya.
                   </p>
+                  <div className="indicator-extra-info" style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.3)", marginTop: "6px", borderTop: "1px solid rgba(255,255,255,0.03)", paddingTop: "4px" }}>
+                    ℹ️ Mengukur kecepatan eskalasi titik api baru. Tren akselerasi (&gt;0%) mengindikasikan adanya kebakaran baru yang sedang bertumbuh cepat.
+                  </div>
                 </div>
               </div>
 
@@ -860,10 +949,39 @@ export function MonitoringPanel({
                     {frpAnalysis.status}
                   </span>
                 </div>
+
+                {/* Visual Graphic: Slider bar with cursor point */}
+                <div className="indicator-graphic" style={{ height: "45px", margin: "6px 0", position: "relative", background: "rgba(0,0,0,0.2)", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.03)", padding: "8px 12px 2px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <div style={{ position: "relative", width: "100%", height: "8px", background: "linear-gradient(90deg, #10b981 0%, #f59e0b 30%, #ef4444 80%, #b91c1c 100%)", borderRadius: "4px" }}>
+                    <div style={{
+                      position: "absolute",
+                      top: "50%",
+                      left: `${Math.min(100, (frpAnalysis.average / 80) * 100)}%`,
+                      transform: "translate(-50%, -50%)",
+                      width: "12px",
+                      height: "12px",
+                      background: "#ffffff",
+                      border: `2px solid ${frpAnalysis.color}`,
+                      borderRadius: "50%",
+                      boxShadow: `0 0 8px ${frpAnalysis.color}, 0 0 15px #fff`,
+                      transition: "left 0.5s ease"
+                    }} />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.55rem", color: "rgba(255,255,255,0.3)", marginTop: "4px" }}>
+                    <span>0 MW</span>
+                    <span>15 MW (Semak)</span>
+                    <span>45 MW (Hutan)</span>
+                    <span>80+ MW</span>
+                  </div>
+                </div>
+
                 <div className="indicator-bottom">
                   <p className="indicator-desc">
                     {frpAnalysis.riskText}. Klasifikasi vegetasi: {frpAnalysis.fuelType}.
                   </p>
+                  <div className="indicator-extra-info" style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.3)", marginTop: "6px", borderTop: "1px solid rgba(255,255,255,0.03)", paddingTop: "4px" }}>
+                    ℹ️ FRP (Fire Radiative Power) mengukur kekuatan pelepasan energi panas. Nilai di atas 45 MW menandakan api mahkota berkekuatan besar yang memakan vegetasi tebal.
+                  </div>
                 </div>
               </div>
 
@@ -881,10 +999,53 @@ export function MonitoringPanel({
                     RELIABILITAS {sensorValidation.reliability.toUpperCase()}
                   </span>
                 </div>
+
+                {/* Visual Graphic: Radial Gauge & Cross-sensor Venn Illustration */}
+                <div className="indicator-graphic" style={{ height: "45px", margin: "6px 0", position: "relative", background: "rgba(0,0,0,0.2)", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.03)", padding: "2px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ position: "relative", width: "36px", height: "36px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="36" height="36" viewBox="0 0 36 36">
+                      <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="3" />
+                      <circle cx="18" cy="18" r="14" fill="none" 
+                        stroke={sensorValidation.reliability === "Tinggi" ? "#10b981" : sensorValidation.reliability === "Sedang" ? "#f59e0b" : "#ef4444"} 
+                        strokeWidth="3" 
+                        strokeDasharray="88" 
+                        strokeDashoffset={88 - (88 * sensorValidation.pct) / 100}
+                        strokeLinecap="round"
+                        transform="rotate(-90 18 18)"
+                        style={{ transition: "stroke-dashoffset 0.5s ease" }}
+                      />
+                    </svg>
+                    <span style={{ position: "absolute", fontSize: "0.55rem", fontWeight: "bold", color: "#fff", fontFamily: "monospace" }}>
+                      {sensorValidation.pct}%
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                    <div title="MODIS Sensor" style={{ width: "20px", height: "20px", borderRadius: "50%", background: "rgba(59, 130, 246, 0.25)", border: "1px solid rgba(59, 130, 246, 0.5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.45rem", color: "#93c5fd", fontWeight: "bold" }}>M</div>
+                    <div style={{ width: "12px", height: "1px", background: "rgba(255,255,255,0.15)", position: "relative" }}>
+                      <div style={{ position: "absolute", top: "-2px", left: "4.5px", width: "5px", height: "5px", borderRadius: "50%", background: sensorValidation.pct > 0 ? "#10b981" : "rgba(255,255,255,0.2)", boxShadow: sensorValidation.pct > 0 ? "0 0 4px #10b981" : "none" }} />
+                    </div>
+                    <div title="VIIRS Sensor" style={{ width: "20px", height: "20px", borderRadius: "50%", background: "rgba(139, 92, 246, 0.25)", border: "1px solid rgba(139, 92, 246, 0.5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.45rem", color: "#c084fc", fontWeight: "bold" }}>V</div>
+                  </div>
+                  
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", fontSize: "0.55rem" }}>
+                    <span style={{ color: "rgba(255,255,255,0.4)" }}>Status Validasi:</span>
+                    <span style={{ 
+                      color: sensorValidation.pct > 70 ? "#34d399" : sensorValidation.pct > 30 ? "#fde047" : "#f87171",
+                      fontWeight: "bold"
+                    }}>
+                      {sensorValidation.pct > 70 ? "SANGAT AKURAT" : sensorValidation.pct > 30 ? "MODERAT" : "BUTUH CHECK"}
+                    </span>
+                  </div>
+                </div>
+
                 <div className="indicator-bottom">
                   <p className="indicator-desc">
                     {sensorValidation.statusText}. Hotspot tervalidasi jika ditangkap oleh sensor satelit MODIS & VIIRS secara simultan di wilayah yang sama.
                   </p>
+                  <div className="indicator-extra-info" style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.3)", marginTop: "6px", borderTop: "1px solid rgba(255,255,255,0.03)", paddingTop: "4px" }}>
+                    ℹ️ Validasi lintas sensor (MODIS & VIIRS) membandingkan tangkapan sensor satelit berbeda di titik waktu berdekatan. Verifikasi silang ini mengurangi false alarm hingga &gt;95%.
+                  </div>
                 </div>
               </div>
 
