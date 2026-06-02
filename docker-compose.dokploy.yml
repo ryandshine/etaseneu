@@ -1,0 +1,39 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    env_file:
+      - .env.dokploy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - dokploy-network
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    restart: unless-stopped
+    depends_on:
+      - api
+    networks:
+      - dokploy-network
+    labels:
+      traefik.docker.network: dokploy-network
+      traefik.enable: "true"
+      traefik.http.routers.etaseneu-web.entrypoints: web
+      traefik.http.routers.etaseneu-web.middlewares: redirect-to-https@file
+      traefik.http.routers.etaseneu-web.rule: Host(`etaseneu.ditpps.com`)
+      traefik.http.routers.etaseneu-web.service: etaseneu-web
+      traefik.http.routers.etaseneu-websecure.entrypoints: websecure
+      traefik.http.routers.etaseneu-websecure.rule: Host(`etaseneu.ditpps.com`)
+      traefik.http.routers.etaseneu-websecure.service: etaseneu-websecure
+      traefik.http.routers.etaseneu-websecure.tls.certresolver: letsencrypt
+      traefik.http.services.etaseneu-web.loadbalancer.server.port: "80"
+      traefik.http.services.etaseneu-websecure.loadbalancer.server.port: "80"
+
+networks:
+  dokploy-network:
+    external: true

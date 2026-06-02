@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+backend/.cache/
+backend/.env
+/.env.dokploy
+/.cloudflared-*.json
+backend/.pytest_cache/
+frontend/node_modules/
+frontend/dist/
+*.geojson
