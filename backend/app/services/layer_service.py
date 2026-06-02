@@ -36,6 +36,12 @@ class LayerService:
         self.postgres_store = PostgresStore(get_settings().database_url)
         self.geojson_sync_service = GeoJsonSyncService(self.shp_dir, get_settings().database_url)
 
+    def clear_caches(self) -> None:
+        self._layers_cache = None
+        self._preview_layers_cache = None
+        self._spatial_layers_cache = None
+        get_layer_service.cache_clear()
+
     def list_layers(self) -> list[LayerFeature]:
         if self._layers_cache is not None:
             return self._layers_cache

@@ -250,10 +250,22 @@ class PostgresStore:
                         last_sync_message = %s,
                         updated_at = NOW()
                     WHERE file_name = %s
+                    RETURNING layer_key
                     """,
                     ("removed", message, file_name),
                 )
-                return cur.rowcount > 0
+                row = cur.fetchone()
+                if row and row.get("layer_key"):
+                    cur.execute(
+                        """
+                        UPDATE polygon_metadata
+                        SET is_active = FALSE, updated_at = NOW()
+                        WHERE layer_key = %s AND is_active = TRUE
+                        """,
+                        (row["layer_key"],),
+                    )
+                    return True
+                return False
 
     def upsert_polygon_metadata(self, records: list[dict[str, Any]]) -> int:
         if not records:
@@ -948,7 +960,48 @@ class PostgresStore:
                     params,
                 )
 
-        return len(params)
+    def intersect_hotspots_for_layer(self, layer_key: str) -> int:
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                # 1. Insert relations
+                cur.execute(
+                    """
+                    INSERT INTO hotspot_polygon_relation (
+                        hotspot_observation_id,
+                        polygon_metadata_id,
+                        layer_key,
+                        match_method
+                    )
+                    SELECT
+                        obs.id AS hotspot_observation_id,
+                        poly.id AS polygon_metadata_id,
+                        poly.layer_key AS layer_key,
+                        'contains' AS match_method
+                    FROM polygon_metadata poly
+                    JOIN hotspot_observations obs ON ST_Contains(poly.geometry, obs.geom)
+                    WHERE poly.layer_key = %s
+                      AND poly.is_active = TRUE
+                    ON CONFLICT (hotspot_observation_id, polygon_metadata_id) DO NOTHING
+                    """,
+                    (layer_key,),
+                )
+                relation_count = getattr(cur, "rowcount", 0) or 0
+
+                # 2. Get all polygon IDs of this layer to rebuild summary
+                cur.execute(
+                    """
+                    SELECT id FROM polygon_metadata
+                    WHERE layer_key = %s AND is_active = TRUE
+                    """,
+                    (layer_key,),
+                )
+                rows = cur.fetchall()
+                polygon_ids = [int(row["id"]) for row in rows if row.get("id") is not None]
+
+        if polygon_ids:
+            self.rebuild_polygon_hotspot_summary(polygon_ids)
+
+        return relation_count
 
     def rebuild_polygon_hotspot_summary(self, polygon_metadata_ids: Sequence[int]) -> int:
         unique_ids = [int(polygon_metadata_id) for polygon_metadata_id in dict.fromkeys(polygon_metadata_ids)]

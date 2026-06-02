@@ -1,6 +1,6 @@
 type SidebarNavProps = {
-  activeView: "map" | "matrix" | "monitoring";
-  onChangeView: (view: "map" | "matrix" | "monitoring") => void;
+  activeView: "map" | "matrix" | "monitoring" | "settings";
+  onChangeView: (view: "map" | "matrix" | "monitoring" | "settings") => void;
   onManualSync: () => void;
   onPrewarmHistory: () => void;
   syncLabel: string;
@@ -99,6 +99,14 @@ export function SidebarNav({
               PERINGATAN
             </span>
           ) : null}
+        </button>
+        <button
+          type="button"
+          onClick={() => onChangeView("settings")}
+          className={`side-nav-link${activeView === "settings" ? " side-nav-link--active" : ""}`}
+        >
+          <span className="side-nav-mark" aria-hidden="true" />
+          <span>Pengaturan</span>
         </button>
       </nav>
 

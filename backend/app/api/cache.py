@@ -1,5 +1,7 @@
 import asyncio
-from fastapi import APIRouter, Query
+import os
+import shutil
+from fastapi import APIRouter, Query, UploadFile, File, HTTPException
 
 from app.services.hotspot_service import HotspotService
 
@@ -22,9 +24,56 @@ async def geojson_status() -> dict[str, object]:
 async def geojson_refresh() -> dict[str, object]:
     service = HotspotService()
     summary = service.refresh_geojson()
-    service.layer_service._layers_cache = None
-    service.layer_service._spatial_layers_cache = None
+    service.layer_service.clear_caches()
     return summary
+
+
+@router.post("/geojson/upload")
+async def upload_geojson(file: UploadFile = File(...)) -> dict[str, object]:
+    if not file.filename.endswith(".geojson"):
+        raise HTTPException(status_code=400, detail="Hanya file dengan ekstensi .geojson yang diperbolehkan.")
+
+    service = HotspotService()
+    shp_dir = service.layer_service.shp_dir
+
+    # 1. Clean up old geojson files in shp_dir
+    try:
+        for old_file in shp_dir.glob("*.geojson"):
+            file_name = old_file.name
+            try:
+                service.layer_service.geojson_sync_service.postgres_store.deactivate_geojson_file_registry(file_name)
+            except Exception:
+                pass
+            os.remove(old_file)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal membersihkan file geojson lama: {str(e)}")
+
+    # 2. Write new file in chunks
+    target_path = shp_dir / file.filename
+    try:
+        with open(target_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        if os.path.exists(target_path):
+            os.remove(target_path)
+        raise HTTPException(status_code=500, detail=f"Gagal menyimpan file geojson baru: {str(e)}")
+    finally:
+        file.file.close()
+
+    # 3. Clear caches
+    service.layer_service.clear_caches()
+
+    # 4. Trigger sync
+    try:
+        summary = service.refresh_geojson()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal melakukan sinkronisasi geojson: {str(e)}")
+
+    return {
+        "status": "success",
+        "file_name": file.filename,
+        "summary": summary
+    }
 
 
 @router.post("/polygon-hotspot-summary/refresh")

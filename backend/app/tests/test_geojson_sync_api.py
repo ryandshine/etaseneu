@@ -140,3 +140,48 @@ def test_geojson_refresh_endpoint(monkeypatch) -> None:
     assert body["files_scanned"] == 1
     assert body["files_changed"] == 1
     assert body["files"][0]["file_name"] == "sample.geojson"
+
+
+def test_geojson_upload_endpoint(monkeypatch, tmp_path) -> None:
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+    from app.services.hotspot_service import HotspotService
+
+    # Mock refresh_geojson to prevent actual database sync during test
+    monkeypatch.setattr(HotspotService, "refresh_geojson", lambda self: {"files_scanned": 1})
+    
+    app = create_app()
+    client = TestClient(app)
+
+    # Mock the HotspotService init to use the temporary path for shape files
+    original_init = HotspotService.__init__
+    def mock_init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        self.layer_service.shp_dir = tmp_path
+        self.layer_service.clear_caches = lambda: None
+    
+    monkeypatch.setattr(HotspotService, "__init__", mock_init)
+
+    # 1. Invalid file extension test
+    response = client.post(
+        "/api/geojson/upload",
+        files={"file": ("test.txt", b"invalid data", "text/plain")},
+    )
+    assert response.status_code == 400
+    assert "Hanya file dengan ekstensi .geojson yang diperbolehkan" in response.json()["detail"]
+
+    # 2. Valid file test
+    old_file = tmp_path / "old.geojson"
+    old_file.write_text("{}", encoding="utf-8")
+
+    response = client.post(
+        "/api/geojson/upload",
+        files={"file": ("new.geojson", b'{"type": "FeatureCollection"}', "application/json")},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"
+    assert response.json()["file_name"] == "new.geojson"
+    
+    # Verify old file was deleted and new file was written
+    assert not old_file.exists()
+    assert (tmp_path / "new.geojson").exists()

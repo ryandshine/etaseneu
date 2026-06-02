@@ -189,7 +189,7 @@ function withQuery(
   return queryString ? `${path}?${queryString}` : path;
 }
 
-export function useDashboardData(activeView: "map" | "matrix" | "monitoring" = "map") {
+export function useDashboardData(activeView: "map" | "matrix" | "monitoring" | "settings" = "map") {
   const today = getCurrentDateWIB();
   const [layers, setLayers] = useState<DashboardLayer[]>([]);
   const [hotspots, setHotspots] = useState<DashboardHotspot[]>([]);

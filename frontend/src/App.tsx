@@ -20,6 +20,11 @@ const MonitoringPanel = lazy(async () => {
   return { default: module.MonitoringPanel };
 });
 
+const SettingsPanel = lazy(async () => {
+  const module = await import("./components/SettingsPanel");
+  return { default: module.SettingsPanel };
+});
+
 function isSchedulerFailureStatus(status?: string | null): boolean {
   return status === "failure" || status === "failed";
 }
@@ -68,7 +73,7 @@ import { Maximize, Minimize } from "lucide-react";
 export default function App() {
   const [selectedProvince, setSelectedProvince] = useState<string>("");
   const [showWind, setShowWind] = useState(false);
-  const [activeView, setActiveView] = useState<"map" | "matrix" | "monitoring">("map");
+  const [activeView, setActiveView] = useState<"map" | "matrix" | "monitoring" | "settings">("map");
   const [signalChangeNotice, setSignalChangeNotice] = useState<string | null>(null);
   const [audioMuted, setAudioMuted] = useState(false);
   const [alertVolume, setAlertVolume] = useState<"normal" | "low">("normal");
@@ -566,6 +571,12 @@ export default function App() {
                 endDate={endDate}
                 dateRangeLabel={timeRange.label}
               />
+            </Suspense>
+          </section>
+        ) : activeView === "settings" ? (
+          <section aria-label="Settings workspace" className="workspace-stage">
+            <Suspense fallback={<ViewLoader label="Memuat pengaturan..." />}>
+              <SettingsPanel onRefreshLayers={() => void retryInitialLoad()} />
             </Suspense>
           </section>
         ) : (

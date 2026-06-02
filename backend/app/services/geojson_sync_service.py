@@ -177,6 +177,15 @@ class GeoJsonSyncService:
 
             features_upserted = self.postgres_store.upsert_polygon_metadata(records)
             features_deactivated = self.postgres_store.deactivate_missing_polygons(layer_key, active_feature_keys)
+            
+            if features_upserted > 0:
+                try:
+                    self.postgres_store.intersect_hotspots_for_layer(layer_key)
+                except Exception as e:
+                    import logging
+                    logging.getLogger("hotspot.geojson_sync").error(
+                        "GEOJSON SYNC: Gagal melakukan intersect hotspot untuk layer %s — %s", layer_key, e
+                    )
         else:
             features_upserted = 0
             features_deactivated = 0
