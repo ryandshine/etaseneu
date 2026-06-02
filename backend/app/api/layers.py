@@ -13,9 +13,7 @@ router = APIRouter()
 async def list_layers(view: str | None = Query(default=None)) -> dict[str, object]:
     settings = get_settings()
     service = get_layer_service(str(settings.resolved_shp_dir))
-    layers = service.list_layers()
-    if view == "preview":
-        layers = [_to_preview_layer(layer) for layer in layers]
+    layers = service.list_preview_layers() if view == "preview" else service.list_layers()
     return {"count": len(layers), "layers": [layer.model_dump() for layer in layers]}
 
 

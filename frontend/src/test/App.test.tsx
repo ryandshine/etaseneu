@@ -321,7 +321,7 @@ describe("App", () => {
     ).toBe(false);
     expect(
       fetchMock.mock.calls.some(([input]) => String(input) === "/api/layers/sample_area")
-    ).toBe(true);
+    ).toBe(false);
     expect(
       fetchMock.mock.calls.some(([input]) => String(input).includes("/api/hotspots?") && String(input).includes("view=map"))
     ).toBe(true);

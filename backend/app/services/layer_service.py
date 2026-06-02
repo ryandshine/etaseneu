@@ -31,6 +31,7 @@ class LayerService:
     def __init__(self, shp_dir: Path) -> None:
         self.shp_dir = shp_dir
         self._layers_cache: list[LayerFeature] | None = None
+        self._preview_layers_cache: list[LayerFeature] | None = None
         self._spatial_layers_cache: list[dict] | None = None
         self.postgres_store = PostgresStore(get_settings().database_url)
         self.geojson_sync_service = GeoJsonSyncService(self.shp_dir, get_settings().database_url)
@@ -84,6 +85,42 @@ class LayerService:
         except Exception:
             pass
         self._layers_cache = layers
+        return layers
+
+    def list_preview_layers(self) -> list[LayerFeature]:
+        if self._preview_layers_cache is not None:
+            return self._preview_layers_cache
+
+        layers: list[LayerFeature] = []
+
+        for index, path in enumerate(sorted(self.shp_dir.glob("*.geojson"))):
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            source_crs = _extract_crs_name(payload)
+            source_bounds = _build_source_bounds(payload)
+            bounds = _transform_bounds(source_bounds, source_crs)
+            layer_id = path.stem
+            color = LAYER_COLORS[index % len(LAYER_COLORS)]
+            agencies = _extract_agencies(payload)
+
+            friendly_name = _friendly_layer_name(layer_id)
+            friendly_label = _friendly_layer_label(layer_id, agencies)
+
+            layers.append(
+                LayerFeature(
+                    id=layer_id,
+                    name=friendly_name,
+                    label=friendly_label,
+                    color=color,
+                    active=True,
+                    feature_count=len(payload.get("features", [])),
+                    bounds=bounds,
+                    geojson=_build_preview_payload(bounds),
+                    geojson_mode="preview",
+                    agencies=agencies,
+                )
+            )
+
+        self._preview_layers_cache = layers
         return layers
 
     def get_layer(self, layer_id: str) -> LayerFeature | None:

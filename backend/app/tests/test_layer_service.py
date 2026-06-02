@@ -67,3 +67,20 @@ def test_display_simplification_tolerance_stays_close_to_spatial_boundary() -> N
     from app.services.layer_service import _display_simplify_tolerance
 
     assert _display_simplify_tolerance(7000) <= 0.001
+
+
+def test_layer_service_lists_preview_layers_without_building_full_display(monkeypatch) -> None:
+    from app.services.layer_service import LayerService
+
+    service = LayerService(FIXTURE_DIR)
+
+    monkeypatch.setattr(
+        "app.services.layer_service._build_display_payload",
+        lambda payload: (_ for _ in ()).throw(AssertionError("full display payload should not be built")),
+    )
+
+    layers = service.list_preview_layers()
+
+    assert len(layers) == 1
+    assert layers[0].geojson_mode == "preview"
+    assert len(layers[0].geojson["features"]) == 1

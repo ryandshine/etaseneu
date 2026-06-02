@@ -363,21 +363,21 @@ describe("Hotspot map integration", () => {
     ).toBe(true);
     expect(
       fetchMock.mock.calls.some(([input]) => String(input) === "/api/layers/sample_area")
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("loads full geojson layers on initial map render", async () => {
+  it("does not load full geojson layers on initial map render", async () => {
     render(<App />);
 
     expect(await screen.findByTestId("leaflet-map", {}, { timeout: 5000 })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(
-        fetchMock.mock.calls.some(([input]) => String(input) === "/api/layers/sample_area")
+        fetchMock.mock.calls.some(([input]) => String(input).includes("/api/layers?view=preview"))
       ).toBe(true);
     });
 
     const layerCalls = fetchMock.mock.calls.filter(([input]) => String(input).startsWith("/api/layers"));
-    expect(layerCalls).toHaveLength(2);
+    expect(layerCalls).toHaveLength(1);
   });
 });
