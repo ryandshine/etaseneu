@@ -205,223 +205,272 @@ export function MonitoringPanel({
 
   const healthTone = getHealthTone(metrics);
   const healthLabel = getHealthLabel(metrics);
-  const signalBanner =
-    (metrics?.consecutive_failures ?? 0) > 1
-      ? {
-          tone: "danger",
-          title: "Scheduler memerlukan perhatian",
-          body: metrics?.last_error || "Sync terakhir gagal beberapa kali dan perlu ditindaklanjuti."
-        }
-      : isSchedulerFailureStatus(metrics?.last_sync_status) || (metrics?.consecutive_failures ?? 0) === 1
-        ? {
-            tone: "warn",
-            title: "Sync scheduler gagal sekali",
-            body: metrics?.last_error || "Terjadi kesalahan pada sync terakhir. Scheduler akan mencoba lagi sesuai jadwal."
-          }
-        : metrics?.new_hotspot_over_threshold
-          ? {
-              tone: "danger",
-              title: "Ambang batas terlampaui",
-              body: "Jumlah hotspot baru pada sync terakhir melebihi ambang operasional."
-            }
-          : metrics?.has_new_hotspot
-          ? {
-              tone: "warn",
-              title: "Sinyal insiden baru",
-              body: "Scheduler mendeteksi hotspot baru sejak sync sukses sebelumnya."
-            }
-          : null;
+  const commanderStatus = useMemo(() => {
+    if (healthTone === "danger") {
+      return {
+        label: "STATUS OPERASI: SIAGA I (BAHAYA)",
+        desc: "Terdeteksi ancaman hotspot kritis atau gangguan sinkronisasi beruntun. Tindakan segera diperlukan!",
+        colorClass: "commander-status--danger",
+        icon: "🚨"
+      };
+    } else if (healthTone === "warn") {
+      return {
+        label: "STATUS OPERASI: SIAGA II (WASPADA)",
+        desc: "Terjadi gangguan sinkronisasi sementara atau terdeteksi hotspot baru dalam batas normal.",
+        colorClass: "commander-status--warn",
+        icon: "⚠️"
+      };
+    } else {
+      return {
+        label: "STATUS OPERASI: NORMAL (AMAN)",
+        desc: "Sistem aktif memantau. Seluruh wilayah terpantau aman tanpa titik api kritis baru.",
+        colorClass: "commander-status--ok",
+        icon: "🛡️"
+      };
+    }
+  }, [healthTone]);
 
-  const refreshLabel = refreshing ? "Menyegarkan telemetri..." : "Auto-refresh aktif setiap 60 detik";
+  const refreshLabel = refreshing ? "Menyegarkan data..." : "Patroli otomatis aktif setiap 60 detik";
 
   return (
     <section aria-label="Monitoring workspace" className="workspace-stage workspace-stage--monitoring">
-      <div className="monitor-shell">
-        <section className={`panel glass-panel monitor-hero monitor-hero--${healthTone}`}>
-          <div className="monitor-hero-copy">
-            <p className="monitor-eyebrow">Pusat operasi kebakaran</p>
-            <h1 className="monitor-title">Pemantauan Insiden</h1>
-            <p className="monitor-description">
-              Halaman ini hanya menampilkan sinyal operasional scheduler dan alert hotspot baru,
-              tanpa mengulang peta atau tabel investigasi.
-            </p>
+      <div className="monitor-shell commander-shell">
+        
+        {/* ZONA 1: BANNER STATUS KOMANDO UTAMA */}
+        <section className={`panel glass-panel commander-hero ${commanderStatus.colorClass}`}>
+          <div className="commander-hero-radar">
+            <span className="radar-circle circle-1" />
+            <span className="radar-circle circle-2" />
+            <span className="radar-circle circle-3" />
+            <span className="radar-icon">{commanderStatus.icon}</span>
           </div>
-
-          <div className="monitor-hero-status">
-            {autoRefreshActive ? (
-              <div className={`monitor-refresh-chip${refreshing ? " monitor-refresh-chip--active" : ""}`}>
-                <span className="monitor-refresh-dot" aria-hidden="true" />
+          <div className="commander-hero-info">
+            <span className="commander-hero-eyebrow">COMMANDER OPERATIONS CENTER</span>
+            <h1 className="commander-hero-title">{commanderStatus.label}</h1>
+            <p className="commander-hero-desc">{commanderStatus.desc}</p>
+          </div>
+          <div className="commander-hero-meta">
+            {autoRefreshActive && (
+              <div className={`commander-pulse-badge ${refreshing ? "commander-pulse-badge--active" : ""}`}>
+                <span className="pulse-dot" />
                 <span>{refreshLabel}</span>
               </div>
-            ) : null}
-            <div className={`monitor-pulse monitor-pulse--${healthTone}`}>
-              <span className="monitor-pulse-dot" aria-hidden="true" />
-              <span>Denyut Scheduler</span>
+            )}
+            <div className="system-time">
+              <span>WAKTU LOKAL:</span>
+              <strong>{new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB</strong>
             </div>
-            <strong className="monitor-status-value">{healthLabel}</strong>
-            <span className="monitor-status-caption">
-              {metrics?.scheduler_enabled ? "Scheduler aktif" : "Scheduler nonaktif"}
-            </span>
-            <div className="monitor-action-row">
-              <button
-                type="button"
-                className={`monitor-sync${manualSyncBusy ? " monitor-sync--busy" : ""}`}
-                onClick={onManualSync}
-                disabled={manualSyncBusy}
-                aria-busy={manualSyncBusy}
-              >
-                <span className="sync-button-label">
-                  {manualSyncBusy ? "Sync Hotspot..." : "Sync Hotspot Manual"}
-                </span>
-                {manualSyncBusy ? (
-                  <span className="sync-button-progress" aria-hidden="true">
-                    <span className="sync-button-progress-bar" />
-                  </span>
-                ) : null}
-              </button>
-              <button
-                type="button"
-                className={`monitor-sync monitor-sync--ghost${prewarmBusy ? " monitor-sync--busy" : ""}`}
-                onClick={onPrewarmHistory}
-                disabled={prewarmBusy}
-                aria-busy={prewarmBusy}
-              >
-                <span className="sync-button-label">
-                  {prewarmBusy ? "Menyiapkan Histori..." : "Prewarm Histori"}
-                </span>
-                {prewarmBusy ? (
-                  <span className="sync-button-progress" aria-hidden="true">
-                    <span className="sync-button-progress-bar" />
-                  </span>
-                ) : null}
-              </button>
-            </div>
-            <button type="button" className="monitor-audio-toggle" onClick={onToggleAudioMuted}>
-              {audioMuted ? "Bunyikan Suara Peringatan" : "Bisukan Suara Peringatan"}
-            </button>
-            <button type="button" className="monitor-audio-toggle" onClick={onToggleAlertVolume}>
-              {`Volume Peringatan ${alertVolume}`}
-            </button>
           </div>
         </section>
 
-        {signalBanner ? (
-          <section className={`panel glass-panel monitor-banner monitor-banner--${signalBanner.tone}`}>
-            <div>
-              <p className="monitor-eyebrow">Peringatan visual</p>
-              <strong className="monitor-banner-title">{signalBanner.title}</strong>
+        {/* NOTIFIKASI PERUBAHAN STATUS */}
+        {signalChangeNotice && (
+          <section className="panel glass-panel commander-alert-banner">
+            <div className="alert-banner-content">
+              <span className="alert-banner-badge">PERUBAHAN DETEKSI</span>
+              <strong className="alert-banner-text">{signalChangeNotice}</strong>
             </div>
-            <p className="monitor-banner-body">{signalBanner.body}</p>
+            <button
+              type="button"
+              className="alert-banner-dismiss"
+              onClick={onDismissSignalChangeNotice}
+            >
+              TUTUP NOTIFIKASI
+            </button>
           </section>
-        ) : null}
+        )}
 
-        {signalChangeNotice ? (
-          <section className="panel glass-panel monitor-change-banner">
-            <div className="monitor-change-banner-head">
-              <div>
-                <p className="monitor-eyebrow">Perubahan terdeteksi</p>
-                <strong className="monitor-banner-title">{signalChangeNotice}</strong>
-              </div>
+        {/* ZONA 2: COMMANDER BOARD (KARTU STRATEGIS) */}
+        <section className="commander-grid" aria-label="Operational metrics">
+          
+          <article className="panel glass-panel commander-card commander-card--hotspots">
+            <div className="card-header">
+              <span className="card-icon">🔥</span>
+              <span className="card-label">Ancaman Kebakaran</span>
+            </div>
+            <div className="card-body">
+              <strong className="card-value">{metrics?.last_new_hotspot_count ?? 0}</strong>
+              <span className="card-unit">Hotspot Baru</span>
+            </div>
+            <div className="card-footer">
+              <span className="card-meta">Ambang Batas: {metrics?.new_hotspot_alert_threshold ?? 0}</span>
+              <span className={`card-badge ${metrics?.new_hotspot_over_threshold ? "card-badge--danger" : "card-badge--ok"}`}>
+                {metrics?.new_hotspot_over_threshold ? "SIAGA ANCAMAN" : "AMAN"}
+              </span>
+            </div>
+          </article>
+
+          <article className="panel glass-panel commander-card commander-card--koneksi">
+            <div className="card-header">
+              <span className="card-icon">📡</span>
+              <span className="card-label">Status Sinkronisasi</span>
+            </div>
+            <div className="card-body">
+              <strong className="card-value">
+                {metrics?.last_sync_status === "success" ? "SUKSES" : "GAGAL"}
+              </strong>
+              <span className="card-unit">Koneksi NASA</span>
+            </div>
+            <div className="card-footer">
+              <span className="card-meta">Kegagalan Beruntun: {metrics?.consecutive_failures ?? 0}</span>
+              <span className={`card-badge ${metrics?.consecutive_failures && metrics.consecutive_failures > 0 ? "card-badge--danger" : "card-badge--ok"}`}>
+                {metrics?.consecutive_failures && metrics.consecutive_failures > 0 ? "GANGGUAN" : "ONLINE"}
+              </span>
+            </div>
+          </article>
+
+          <article className="panel glass-panel commander-card commander-card--terakhir">
+            <div className="card-header">
+              <span className="card-icon">⏱️</span>
+              <span className="card-label">Pemeriksaan Terakhir</span>
+            </div>
+            <div className="card-body">
+              <strong className="card-value card-value--small">
+                {formatDuration(metrics?.seconds_since_last_sync ?? null)}
+              </strong>
+              <span className="card-unit">Yang lalu</span>
+            </div>
+            <div className="card-footer">
+              <span className="card-meta" title={metrics?.last_sync_at ?? ""}>
+                Waktu: {metrics?.last_sync_at ? formatTimestamp(metrics.last_sync_at).split(" ")[1] : "Belum ada"} WIB
+              </span>
+              <span className="card-badge card-badge--neutral">TERBARU</span>
+            </div>
+          </article>
+
+          <article className="panel glass-panel commander-card commander-card--patroli">
+            <div className="card-header">
+              <span className="card-icon">📅</span>
+              <span className="card-label">Patroli Otomatis</span>
+            </div>
+            <div className="card-body">
+              <strong className="card-value card-value--small">
+                {metrics?.next_scheduled_sync_at ? formatTimestamp(metrics.next_scheduled_sync_at).split(" ")[1] : "--:--"}
+              </strong>
+              <span className="card-unit">WIB</span>
+            </div>
+            <div className="card-footer">
+              <span className="card-meta">Interval: {metrics?.interval_hours ?? 0} Jam</span>
+              <span className="card-badge card-badge--neutral">TERJADWAL</span>
+            </div>
+          </article>
+
+        </section>
+
+        {/* ZONA 3 & ZONA 4: PANEL KENDALI & TIMELINE */}
+        <section className="commander-sub-grid">
+          
+          {/* PANEL KENDALI COCKPIT */}
+          <article className="panel glass-panel commander-cockpit">
+            <div className="cockpit-header">
+              <h3 className="cockpit-title">🎛️ PANEL KENDALI TAKTIS</h3>
+              <span className={`cockpit-badge ${metrics?.scheduler_enabled ? "cockpit-badge--active" : ""}`}>
+                {metrics?.scheduler_enabled ? "AUTO-PATROL AKTIF" : "AUTO-PATROL MATI"}
+              </span>
+            </div>
+            
+            <div className="cockpit-actions">
               <button
                 type="button"
-                className="monitor-dismiss"
-                onClick={onDismissSignalChangeNotice}
+                className={`cockpit-btn cockpit-btn--primary ${manualSyncBusy ? "cockpit-btn--busy" : ""}`}
+                onClick={onManualSync}
+                disabled={manualSyncBusy}
               >
-                Dismiss Status Change
+                {manualSyncBusy ? (
+                  <>
+                    <span className="spinner" />
+                    <span>SINKRONISASI DATA...</span>
+                  </>
+                ) : (
+                  <span>🔄 TARIK DATA NASA SEKARANG</span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className={`cockpit-btn cockpit-btn--secondary ${prewarmBusy ? "cockpit-btn--busy" : ""}`}
+                onClick={onPrewarmHistory}
+                disabled={prewarmBusy}
+              >
+                {prewarmBusy ? (
+                  <>
+                    <span className="spinner" />
+                    <span>MENYIAPKAN HISTORI...</span>
+                  </>
+                ) : (
+                  <span>⚡ PREWARM HISTORI CEPAT</span>
+                )}
               </button>
             </div>
-          </section>
-        ) : null}
 
-        <section className="monitor-grid" aria-label="Operational metrics">
-          <article className="panel glass-panel monitor-card monitor-card--signal">
-            <p className="monitor-card-label">Hotspot Baru</p>
-            <strong className="monitor-card-value">
-              {metrics?.last_new_hotspot_count ?? 0}
-            </strong>
-            <span className="monitor-card-meta">
-              {metrics?.new_hotspot_over_threshold ? "Melewati threshold" : "Dalam batas pantau"}
-            </span>
-          </article>
-
-          <article className="panel glass-panel monitor-card">
-            <p className="monitor-card-label">Sinkronisasi Terakhir</p>
-            <strong className="monitor-card-value monitor-card-value--small">
-              {formatTimestamp(metrics?.last_sync_at ?? null)}
-            </strong>
-            <span className="monitor-card-meta">
-              {formatDuration(metrics?.seconds_since_last_sync ?? null)} lalu
-            </span>
-          </article>
-
-          <article className="panel glass-panel monitor-card">
-            <p className="monitor-card-label">Sinkronisasi Berikutnya</p>
-            <strong className="monitor-card-value monitor-card-value--small">
-              {formatTimestamp(metrics?.next_scheduled_sync_at ?? null)}
-            </strong>
-            <span className="monitor-card-meta">
-              Interval {metrics?.interval_hours ?? 0} jam
-            </span>
-          </article>
-
-          <article className="panel glass-panel monitor-card">
-            <p className="monitor-card-label">Kegagalan Beruntun</p>
-            <strong className="monitor-card-value">{metrics?.consecutive_failures ?? 0}</strong>
-            <span className="monitor-card-meta">
-              {metrics?.last_error ? metrics.last_error : "Tidak ada error aktif"}
-            </span>
-          </article>
-        </section>
-
-        <section className="monitor-detail-grid">
-          <article className="panel glass-panel monitor-detail-card">
-            <p className="monitor-detail-label">Pantauan Ambang Batas</p>
-            <div className="monitor-flag-stack">
-              <div className={`monitor-flag${metrics?.has_new_hotspot ? " monitor-flag--warn" : ""}`}>
-                <span>Ada hotspot baru</span>
-                <strong>{metrics?.has_new_hotspot ? "YA" : "TIDAK"}</strong>
+            <div className="cockpit-settings">
+              <div className="setting-control">
+                <span>Sirene Suara:</span>
+                <button type="button" className="setting-btn" onClick={onToggleAudioMuted}>
+                  {audioMuted ? "🔇 BISU (MUTED)" : "🔊 AKTIF (UNMUTED)"}
+                </button>
               </div>
-              <div
-                className={`monitor-flag${metrics?.new_hotspot_over_threshold ? " monitor-flag--danger" : ""}`}
-              >
-                <span>Melebihi ambang batas</span>
-                <strong>{metrics?.new_hotspot_over_threshold ? "YA" : "TIDAK"}</strong>
+              <div className="setting-control">
+                <span>Volume Alarm:</span>
+                <button type="button" className="setting-btn" onClick={onToggleAlertVolume}>
+                  {alertVolume === "normal" ? "🔊 HIGH" : "🔉 LOW"}
+                </button>
               </div>
             </div>
           </article>
 
-          <article className="panel glass-panel monitor-detail-card">
-            <p className="monitor-detail-label">Catatan Operasional</p>
-            <ul className="monitor-note-list">
-              <li>
-                Threshold aktif: <strong>{metrics?.new_hotspot_alert_threshold ?? 0}</strong> hotspot baru.
-              </li>
-              <li>
-                Sync sukses terakhir:{" "}
-                <strong>{formatDuration(metrics?.seconds_since_last_successful_sync ?? null)} lalu</strong>.
-              </li>
-              <li>
-                Sampel sync terakhir memuat <strong>{metrics?.last_sync_hotspot_count ?? 0}</strong> hotspot.
-              </li>
-            </ul>
+          {/* KRONOLOGI AKTIVITAS SISTEM */}
+          <article className="panel glass-panel commander-timeline-card">
+            <h3 className="timeline-card-title">📝 KRONOLOGI AKTIVITAS SISTEM</h3>
+            <div className="commander-timeline">
+              
+              <div className="timeline-item">
+                <div className="timeline-badge timeline-badge--ok">STATUS</div>
+                <div className="timeline-content">
+                  <strong>Sistem Patroli Mandiri Aktif</strong>
+                  <p>Mengecek data satelit NASA MODIS & VIIRS setiap {metrics?.interval_hours ?? 0} jam. Tingkat sensitivitas peringatan aktif adalah {metrics?.new_hotspot_alert_threshold ?? 0} hotspot baru.</p>
+                </div>
+              </div>
+
+              <div className="timeline-item">
+                <div className="timeline-badge timeline-badge--info">DATA</div>
+                <div className="timeline-content">
+                  <strong>Sinkronisasi Sukses Terakhir</strong>
+                  <p>Dilakukan {formatDuration(metrics?.seconds_since_last_successful_sync ?? null)} lalu dengan memproses {metrics?.last_sync_hotspot_count ?? 0} titik hotspot terdaftar.</p>
+                </div>
+              </div>
+
+              {metrics?.last_error && (
+                <div className="timeline-item timeline-item--danger">
+                  <div className="timeline-badge timeline-badge--danger">ERROR</div>
+                  <div className="timeline-content">
+                    <strong className="error-title">Kesalahan Sinkronisasi Terdeteksi</strong>
+                    <p className="error-desc">{metrics.last_error}</p>
+                  </div>
+                </div>
+              )}
+
+            </div>
           </article>
+
         </section>
 
-        <section className="panel glass-panel monitor-hotspots-card">
+        {/* FEED 24 JAM HOTSPOT */}
+        <section className="panel glass-panel commander-hotspots-section monitor-hotspots-card">
           <header className="monitor-hotspots-header">
             <h2 className="monitor-hotspots-title">
               <span className="monitor-hotspots-icon" aria-hidden="true">🔥</span>
-              Alert Hotspot Aktif (24 Jam Terakhir)
+              DAFTAR ANCAMAN HOTSPOT (24 JAM TERAKHIR)
             </h2>
             <span className="monitor-hotspots-count">
-              {active24hHotspots.length} Hotspot
+              {active24hHotspots.length} TITIK
             </span>
           </header>
           
           <div className="monitor-hotspots-list">
             {active24hHotspots.length === 0 ? (
               <div className="hotspot-empty">
-                Tidak ada hotspot aktif terdeteksi dalam 24 jam terakhir.
+                Tidak ada ancaman hotspot aktif yang terdeteksi dalam 24 jam terakhir.
               </div>
             ) : (
               active24hHotspots.map((h) => {
@@ -456,7 +505,7 @@ export function MonitoringPanel({
                       </div>
                       {h.frp !== null && (
                         <div className="hotspot-frp">
-                          Radiasi (FRP): <strong>{h.frp} MW</strong>
+                          Kekuatan Radiasi (FRP): <strong>{h.frp} MW</strong>
                         </div>
                       )}
                     </div>
@@ -481,6 +530,7 @@ export function MonitoringPanel({
             )}
           </div>
         </section>
+
       </div>
     </section>
   );
