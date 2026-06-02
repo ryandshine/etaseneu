@@ -97,7 +97,47 @@ def _next_fixed_schedule_at(
     ).astimezone(timezone.utc)
 
 
-def _record_sync_result(result: dict) -> None:
+_bootstrapped: bool = False
+
+
+def bootstrap_scheduler_metrics(service: HotspotService) -> None:
+    global _bootstrapped
+    if _bootstrapped:
+        return
+    _bootstrapped = True
+    if service.postgres_store.enabled:
+        try:
+            metrics = service.postgres_store.read_scheduler_metrics()
+            if metrics:
+                global _last_sync_result, _last_sync_at, _last_successful_sync_at
+                global _last_hotspot_fingerprints, _last_new_hotspot_count, _consecutive_failures
+                
+                _last_sync_result = metrics.get("last_sync_result") or {}
+                _last_sync_at = metrics.get("last_sync_at")
+                _last_successful_sync_at = metrics.get("last_successful_sync_at")
+                
+                fingerprints = metrics.get("last_hotspot_fingerprints")
+                if isinstance(fingerprints, list):
+                    _last_hotspot_fingerprints = set(fingerprints)
+                elif isinstance(fingerprints, set):
+                    _last_hotspot_fingerprints = fingerprints
+                else:
+                    _last_hotspot_fingerprints = None
+                    
+                _last_new_hotspot_count = metrics.get("last_new_hotspot_count") or 0
+                _consecutive_failures = metrics.get("consecutive_failures") or 0
+                
+                logger.info(
+                    "SCHEDULER: Berhasil memuat state dari database. "
+                    "Last successful sync: %s, consecutive failures: %d",
+                    _last_successful_sync_at,
+                    _consecutive_failures,
+                )
+        except Exception as e:
+            logger.error("SCHEDULER: Gagal memuat state dari database — %s", e)
+
+
+def _record_sync_result(result: dict, service: HotspotService | None = None) -> None:
     global _last_sync_result, _last_sync_at, _last_successful_sync_at, _consecutive_failures
     _last_sync_result = result
     _last_sync_at = datetime.now(timezone.utc)
@@ -106,6 +146,26 @@ def _record_sync_result(result: dict) -> None:
         _consecutive_failures = 0
     elif result.get("success") is False:
         _consecutive_failures += 1
+
+    if service is None:
+        try:
+            service = HotspotService()
+        except Exception:
+            return
+
+    if service.postgres_store.enabled:
+        try:
+            fingerprints_list = list(_last_hotspot_fingerprints) if _last_hotspot_fingerprints is not None else None
+            service.postgres_store.save_scheduler_metrics(
+                last_sync_result=_last_sync_result,
+                last_sync_at=_last_sync_at,
+                last_successful_sync_at=_last_successful_sync_at,
+                consecutive_failures=_consecutive_failures,
+                last_new_hotspot_count=_last_new_hotspot_count,
+                last_hotspot_fingerprints=fingerprints_list,
+            )
+        except Exception as e:
+            logger.error("SCHEDULER: Gagal menyimpan status sync ke DB — %s", e)
 
 
 def _isoformat(value: datetime | None) -> str | None:
@@ -140,6 +200,10 @@ def _count_new_hotspots(hotspots: list[dict]) -> int:
 
 def get_scheduler_metrics_snapshot() -> dict[str, object]:
     settings = get_settings()
+    try:
+        bootstrap_scheduler_metrics(HotspotService())
+    except Exception:
+        pass
     now = datetime.now(timezone.utc)
     schedule_hours = _parse_fixed_hours(settings.scheduler_fixed_hours)
     schedule_timezone = _resolve_schedule_timezone(settings.scheduler_timezone)
@@ -192,7 +256,7 @@ async def _run_sync_cycle(service: HotspotService) -> dict:
     if not settings.nasa_firms_api_key:
         logger.warning("SCHEDULER: nasa_firms_api_key belum dikonfigurasi, sync dilewati.")
         result = {"skipped": True, "reason": "no_api_key"}
-        _record_sync_result(result)
+        _record_sync_result(result, service=service)
         return result
 
     now = datetime.now(timezone.utc)
@@ -205,7 +269,7 @@ async def _run_sync_cycle(service: HotspotService) -> dict:
     if not layer_ids:
         logger.warning("SCHEDULER: Tidak ada layer aktif ditemukan, sync dilewati.")
         result = {"skipped": True, "reason": "no_layers"}
-        _record_sync_result(result)
+        _record_sync_result(result, service=service)
         return result
 
     logger.info(
@@ -243,12 +307,12 @@ async def _run_sync_cycle(service: HotspotService) -> dict:
             "range_start": start_at.isoformat(),
             "range_end": end_at.isoformat(),
         }
-        _record_sync_result(summary)
+        _record_sync_result(summary, service=service)
         return summary
     except Exception as exc:
         logger.error("SCHEDULER: Sync gagal — %s", exc, exc_info=True)
         result = {"success": False, "error": str(exc)}
-        _record_sync_result(result)
+        _record_sync_result(result, service=service)
         return result
 
 
@@ -262,6 +326,10 @@ async def hotspot_scheduler_loop(
     """
     settings = get_settings()
     service = HotspotService()
+    try:
+        bootstrap_scheduler_metrics(service)
+    except Exception:
+        pass
     effective_schedule_hours = schedule_hours if schedule_hours is not None else _parse_fixed_hours(settings.scheduler_fixed_hours)
     schedule_timezone = _resolve_schedule_timezone(settings.scheduler_timezone)
 

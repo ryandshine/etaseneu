@@ -82,8 +82,12 @@ function getHealthTone(metrics: SchedulerMetricsResponse | null): "ok" | "warn" 
     return "warn";
   }
 
-  if (isSchedulerFailureStatus(metrics.last_sync_status) || metrics.consecutive_failures > 0) {
+  if (metrics.consecutive_failures > 1) {
     return "danger";
+  }
+
+  if (isSchedulerFailureStatus(metrics.last_sync_status) || metrics.consecutive_failures === 1) {
+    return "warn";
   }
 
   if (metrics.new_hotspot_over_threshold || metrics.has_new_hotspot) {
@@ -98,8 +102,12 @@ function getHealthLabel(metrics: SchedulerMetricsResponse | null): string {
     return "Tidak ada telemetri";
   }
 
-  if (isSchedulerFailureStatus(metrics.last_sync_status)) {
+  if (metrics.consecutive_failures > 1) {
     return "Gagal";
+  }
+
+  if (isSchedulerFailureStatus(metrics.last_sync_status) || metrics.consecutive_failures === 1) {
+    return "Gagal Sekali";
   }
 
   if (metrics.new_hotspot_over_threshold) {
@@ -135,19 +143,25 @@ export function MonitoringPanel({
   const healthTone = getHealthTone(metrics);
   const healthLabel = getHealthLabel(metrics);
   const signalBanner =
-    isSchedulerFailureStatus(metrics?.last_sync_status)
+    (metrics?.consecutive_failures ?? 0) > 1
       ? {
           tone: "danger",
           title: "Scheduler memerlukan perhatian",
-          body: metrics?.last_error || "Sync terakhir gagal dan perlu ditindaklanjuti."
+          body: metrics?.last_error || "Sync terakhir gagal beberapa kali dan perlu ditindaklanjuti."
         }
-      : metrics?.new_hotspot_over_threshold
+      : isSchedulerFailureStatus(metrics?.last_sync_status) || (metrics?.consecutive_failures ?? 0) === 1
         ? {
-            tone: "danger",
-            title: "Ambang batas terlampaui",
-            body: "Jumlah hotspot baru pada sync terakhir melebihi ambang operasional."
+            tone: "warn",
+            title: "Sync scheduler gagal sekali",
+            body: metrics?.last_error || "Terjadi kesalahan pada sync terakhir. Scheduler akan mencoba lagi sesuai jadwal."
           }
-        : metrics?.has_new_hotspot
+        : metrics?.new_hotspot_over_threshold
+          ? {
+              tone: "danger",
+              title: "Ambang batas terlampaui",
+              body: "Jumlah hotspot baru pada sync terakhir melebihi ambang operasional."
+            }
+          : metrics?.has_new_hotspot
           ? {
               tone: "warn",
               title: "Sinyal insiden baru",

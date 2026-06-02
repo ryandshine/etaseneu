@@ -36,12 +36,16 @@ function deriveMonitoringSignal(
     return "normal";
   }
 
-  if (isSchedulerFailureStatus(metrics.last_sync_status) || (metrics.consecutive_failures ?? 0) > 0) {
+  if ((metrics.consecutive_failures ?? 0) > 1) {
     return "critical";
   }
 
   if (metrics.new_hotspot_over_threshold) {
     return "critical";
+  }
+
+  if (isSchedulerFailureStatus(metrics.last_sync_status) || (metrics.consecutive_failures ?? 0) === 1) {
+    return "incident";
   }
 
   if (metrics.has_new_hotspot) {
@@ -261,9 +265,12 @@ export default function App() {
   if (!schedulerMetrics || !schedulerMetrics.scheduler_enabled) {
     healthStatus = "warning";
     healthLabel = "Scheduler Nonaktif";
-  } else if (isSchedulerFailureStatus(schedulerMetrics.last_sync_status) || schedulerMetrics.consecutive_failures > 0) {
+  } else if ((schedulerMetrics.consecutive_failures ?? 0) > 1) {
     healthStatus = "error";
     healthLabel = "Sinkronisasi Bermasalah";
+  } else if (isSchedulerFailureStatus(schedulerMetrics.last_sync_status) || (schedulerMetrics.consecutive_failures ?? 0) === 1) {
+    healthStatus = "warning";
+    healthLabel = "Sinkronisasi Gagal Sekali";
   } else if (lastSyncTime) {
     const diffMs = nowMs - lastSyncTime;
     if (diffMs > 2 * intervalMs) {
@@ -274,8 +281,8 @@ export default function App() {
       healthLabel = "Data Mulai Terlambat";
     }
   } else {
-    healthStatus = "error";
-    healthLabel = "Sinkronisasi Bermasalah";
+    healthStatus = "warning";
+    healthLabel = "Menunggu Sinkronisasi";
   }
 
   const syncTodayRatio = useMemo(() => {
@@ -314,8 +321,11 @@ export default function App() {
     if (!schedulerMetrics || !schedulerMetrics.scheduler_enabled) {
       return { label: "Nonaktif", color: "#6b7280", bg: "rgba(107, 114, 128, 0.15)" };
     }
-    if (isSchedulerFailureStatus(schedulerMetrics.last_sync_status) || schedulerMetrics.consecutive_failures > 0) {
+    if ((schedulerMetrics.consecutive_failures ?? 0) > 1) {
       return { label: "Error", color: "#ef4444", bg: "rgba(239, 68, 68, 0.15)" };
+    }
+    if (isSchedulerFailureStatus(schedulerMetrics.last_sync_status) || (schedulerMetrics.consecutive_failures ?? 0) === 1) {
+      return { label: "Peringatan", color: "#f59e0b", bg: "rgba(245, 158, 11, 0.15)" };
     }
     return { label: "Aktif", color: "#10b981", bg: "rgba(16, 185, 129, 0.15)" };
   }, [schedulerMetrics]);

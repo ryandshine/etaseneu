@@ -124,6 +124,8 @@ def test_scheduler_status_reads_shared_scheduler_state(monkeypatch) -> None:
     from app.api import scheduler as scheduler_api
     from app.services import scheduler as scheduler_module
 
+    monkeypatch.setattr(scheduler_module, "bootstrap_scheduler_metrics", lambda *args, **kwargs: None)
+
     now = datetime(2026, 5, 28, 8, 30, tzinfo=timezone.utc)
     scheduler_module._last_sync_at = now
     scheduler_module._last_sync_result = {"success": True, "hotspot_count": 3}
@@ -134,11 +136,13 @@ def test_scheduler_status_reads_shared_scheduler_state(monkeypatch) -> None:
     assert payload["last_sync_result"] == {"success": True, "hotspot_count": 3}
 
 
-def test_scheduler_metrics_endpoint_returns_operational_snapshot() -> None:
+def test_scheduler_metrics_endpoint_returns_operational_snapshot(monkeypatch) -> None:
     import asyncio
 
     from app.core.config import get_settings
     from app.services import scheduler as scheduler_module
+
+    monkeypatch.setattr(scheduler_module, "bootstrap_scheduler_metrics", lambda *args, **kwargs: None)
 
     get_settings.cache_clear()
     now = datetime(2026, 5, 28, 8, 30, tzinfo=timezone.utc)
@@ -165,11 +169,13 @@ def test_scheduler_metrics_endpoint_returns_operational_snapshot() -> None:
     assert payload["next_scheduled_sync_at"] == "2026-05-28T11:30:00+00:00"
 
 
-def test_prometheus_metrics_endpoint_exposes_scheduler_metrics() -> None:
+def test_prometheus_metrics_endpoint_exposes_scheduler_metrics(monkeypatch) -> None:
     import asyncio
 
     from app.core.config import get_settings
     from app.services import scheduler as scheduler_module
+
+    monkeypatch.setattr(scheduler_module, "bootstrap_scheduler_metrics", lambda *args, **kwargs: None)
 
     get_settings.cache_clear()
     now = datetime(2026, 5, 28, 8, 30, tzinfo=timezone.utc)

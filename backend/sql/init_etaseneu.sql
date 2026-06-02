@@ -81,6 +81,11 @@ CREATE TABLE IF NOT EXISTS hotspot_sync_state (
     sync_key TEXT PRIMARY KEY,
     last_hotspot_sync_at TIMESTAMPTZ,
     last_hotspot_sync_count INTEGER NOT NULL DEFAULT 0,
+    last_sync_at TIMESTAMPTZ,
+    last_sync_result JSONB,
+    consecutive_failures INTEGER DEFAULT 0,
+    last_hotspot_fingerprints JSONB,
+    last_new_hotspot_count INTEGER DEFAULT 0,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
