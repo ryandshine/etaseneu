@@ -225,7 +225,7 @@ export function useDashboardData(activeView: "map" | "matrix" | "monitoring" | "
   });
   const [isInitLoaded, setIsInitLoaded] = useState(false);
   const hasStartedInitialLoadRef = useRef(false);
-  const hotspotView: "map" | "full" = activeView === "matrix" ? "full" : "map";
+  const hotspotView: "map" | "full" = (activeView === "matrix" || activeView === "monitoring") ? "full" : "map";
 
   const handleLoadingFadeEnd = useCallback(() => {
     // Called by onTransitionEnd on the overlay (visual cleanup only)
