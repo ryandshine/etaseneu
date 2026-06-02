@@ -84,3 +84,48 @@ def test_layer_service_lists_preview_layers_without_building_full_display(monkey
     assert len(layers) == 1
     assert layers[0].geojson_mode == "preview"
     assert len(layers[0].geojson["features"]) == 1
+
+
+def test_layer_service_preview_layers_preserve_original_shape(tmp_path) -> None:
+    from app.services.layer_service import LayerService
+
+    payload = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {"LEMBAGA": "Sample Agency"},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[
+                        [100.0, -2.0],
+                        [100.4, -1.8],
+                        [100.9, -1.9],
+                        [101.2, -1.3],
+                        [101.0, -0.7],
+                        [100.5, -0.5],
+                        [100.1, -0.9],
+                        [100.0, -2.0],
+                    ]],
+                },
+            }
+        ],
+    }
+    (tmp_path / "sample.geojson").write_text(json.dumps(payload), encoding="utf-8")
+
+    service = LayerService(tmp_path)
+    layers = service.list_preview_layers()
+
+    preview_feature = layers[0].geojson["features"][0]
+    preview_ring = preview_feature["geometry"]["coordinates"][0]
+
+    assert layers[0].geojson_mode == "preview"
+    assert preview_feature["properties"]["label"] == "Sample Agency"
+    assert len(preview_ring) > 5
+    assert preview_ring != [
+        [100.0, -2.0],
+        [101.2, -2.0],
+        [101.2, -0.5],
+        [100.0, -0.5],
+        [100.0, -2.0],
+    ]

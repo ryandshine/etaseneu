@@ -114,7 +114,7 @@ class LayerService:
                     active=True,
                     feature_count=len(payload.get("features", [])),
                     bounds=bounds,
-                    geojson=_build_preview_payload(bounds),
+                    geojson=_build_preview_display_payload(self._normalize_payload(payload)),
                     geojson_mode="preview",
                     agencies=agencies,
                 )
@@ -289,6 +289,16 @@ def _build_transformer(source_crs: str) -> Transformer:
 def _build_display_payload(payload: dict) -> dict:
     features = payload.get("features", [])
     tolerance = _display_simplify_tolerance(len(features))
+    return _build_simplified_payload(features, tolerance)
+
+
+def _build_preview_display_payload(payload: dict) -> dict:
+    features = payload.get("features", [])
+    tolerance = _preview_simplify_tolerance(len(features))
+    return _build_simplified_payload(features, tolerance)
+
+
+def _build_simplified_payload(features: list[dict], tolerance: float) -> dict:
     display_features: list[dict] = []
 
     for feature in features:
@@ -329,33 +339,19 @@ def _display_simplify_tolerance(feature_count: int) -> float:
     return 0.0003
 
 
+def _preview_simplify_tolerance(feature_count: int) -> float:
+    if feature_count >= 7000:
+        return 0.0025
+    if feature_count >= 3000:
+        return 0.002
+    if feature_count >= 1000:
+        return 0.0015
+    return 0.0005
+
+
 def _simplify_geometry(geometry: dict, tolerance: float) -> dict:
     simplified = shape(geometry).simplify(tolerance=tolerance, preserve_topology=True)
     return mapping(simplified)
-
-
-def _build_preview_payload(bounds: LayerBounds) -> dict:
-    return {
-        "type": "FeatureCollection",
-        "features": [
-            {
-                "type": "Feature",
-                "properties": {},
-                "geometry": {
-                    "type": "Polygon",
-                    "coordinates": [
-                        [
-                            [bounds.min_lon, bounds.min_lat],
-                            [bounds.max_lon, bounds.min_lat],
-                            [bounds.max_lon, bounds.max_lat],
-                            [bounds.min_lon, bounds.max_lat],
-                            [bounds.min_lon, bounds.min_lat],
-                        ]
-                    ],
-                },
-            }
-        ],
-    }
 
 
 def _extract_agencies(payload: dict) -> list[str]:
