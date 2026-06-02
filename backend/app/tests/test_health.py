@@ -83,3 +83,48 @@ def test_app_imports_without_optional_psycopg_dependency() -> None:
     app = create_app()
 
     assert app.title
+
+
+def test_scheduler_start_is_deferred_until_after_startup(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app import main as main_module
+
+    created_tasks = []
+
+    class DummyHandle:
+        def __init__(self) -> None:
+            self.cancelled = False
+
+        def cancel(self) -> None:
+            self.cancelled = True
+
+    class DummyLoop:
+        def __init__(self) -> None:
+            self.callback = None
+
+        def call_soon(self, callback):
+            self.callback = callback
+            return DummyHandle()
+
+    dummy_loop = DummyLoop()
+
+    monkeypatch.setattr(main_module.asyncio, "get_running_loop", lambda: dummy_loop)
+    monkeypatch.setattr(
+        main_module.asyncio,
+        "create_task",
+        lambda coro: created_tasks.append(coro) or "scheduler-task",
+    )
+
+    handle, holder = main_module._defer_scheduler_start(
+        schedule_hours=[0, 3, 6],
+        fallback_interval_hours=3.0,
+    )
+
+    assert handle is not None
+    assert holder["task"] is None
+    assert dummy_loop.callback is not None
+
+    dummy_loop.callback()
+
+    assert holder["task"] == "scheduler-task"
+    assert len(created_tasks) == 1
+    created_tasks[0].close()
