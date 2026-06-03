@@ -299,6 +299,17 @@ async def _run_sync_cycle(service: HotspotService) -> dict:
             except Exception as e:
                 logger.error("SCHEDULER: Gagal merekam status sync ke DB — %s", e)
 
+        if new_hotspot_count > 0:
+            try:
+                cleared_count = service.cache_service.clear_query_cache()
+                logger.info(
+                    "SCHEDULER: Terdeteksi %d hotspot baru. Cache API dibersihkan (%d entri dihapus).",
+                    new_hotspot_count,
+                    cleared_count,
+                )
+            except Exception as e:
+                logger.error("SCHEDULER: Gagal membersihkan cache API — %s", e)
+
         summary = {
             "success": True,
             "hotspot_count": count,
