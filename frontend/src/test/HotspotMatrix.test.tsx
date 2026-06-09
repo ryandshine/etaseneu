@@ -79,7 +79,7 @@ describe("HotspotMatrix", () => {
     expect(screen.getByText("Confidence")).toBeInTheDocument();
 
     expect(screen.getByText("Baris Hotspot")).toBeInTheDocument();
-    expect(screen.getByText("Lembaga / Entitas")).toBeInTheDocument();
+    expect(screen.getByText("KPS")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("28-05-2026 07:10 WIB"));
 

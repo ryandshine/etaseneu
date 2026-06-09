@@ -1105,7 +1105,9 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                           <td>
                             <div className="matrix-satellite">
                               <strong>{group.key}</strong>
-                              <span style={{ opacity: 0.65 }}>{hotspot.layerName}</span>
+                              {group.key !== hotspot.layerName && (
+                                <span style={{ opacity: 0.65 }}>{hotspot.layerName}</span>
+                              )}
                             </div>
                           </td>
                           <td>
