@@ -1031,7 +1031,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                   Belum tersedia data untuk rentang waktu yang dipilih.
                 </div>
               ) : (
-                <div style={{ flex: 1, width: '100%', minHeight: 240, position: 'relative' }}>
+                <div style={{ width: '100%', height: 240, position: 'relative' }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={dailyTrend} layout="vertical" margin={{ top: 0, right: 60, left: 80, bottom: 0 }} barSize={24}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" horizontal={true} vertical={false} />
