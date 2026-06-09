@@ -1003,7 +1003,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                     <XAxis dataKey="label" stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} />
                     <YAxis hide />
                     <ChartTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.01)' }} />
-                    <Bar dataKey="value" fill="#FF4E00" radius={[4, 4, 0, 0]} background={{ fill: 'rgba(255,255,255,0.03)', radius: [4, 4, 0, 0] }} barSize={16}>
+                    <Bar dataKey="value" fill="#FF4E00" radius={[4, 4, 0, 0]} background={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} barSize={16}>
                       <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
                       {topWilker.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color || '#FF4E00'} opacity={0.85} />
