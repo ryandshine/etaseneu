@@ -4501,6 +4501,26 @@ a[href] {
   min-width: 44px;
 }
 
+/* Keyboard Navigation Focus Styles */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid #f59e0b;
+  outline-offset: 2px;
+}
+
+/* Reduce motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* Mobile-Friendly Input & Select */
 input[type="text"],
 input[type="email"],
@@ -4539,11 +4559,18 @@ a + a {
     max-width: 320px;
     height: 100vh;
     z-index: 1000;
-    transition: left 0.3s ease;
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: left;
   }
 
   .side-rail.mobile-open {
     left: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .side-rail {
+      transition: none;
+    }
   }
 
   /* Hamburger Menu Button */
@@ -4607,12 +4634,19 @@ a + a {
     border-radius: 1rem 1rem 0 0;
     z-index: 800;
     transform: translateY(100%);
-    transition: transform 0.3s ease;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     overflow-y: auto;
+    will-change: transform;
   }
 
   .control-overlay--top-left.mobile-open {
     transform: translateY(0);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .control-overlay--top-left {
+      transition: none;
+    }
   }
 
   .panel--filters {
