@@ -4467,6 +4467,288 @@ body {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* ============================================
+   MOBILE OPTIMIZATION - Touch Targets & Responsive
+   ============================================ */
+
+/* Touch Target Minimum: 44x44px */
+button,
+input[type="button"],
+input[type="submit"],
+input[type="checkbox"],
+input[type="radio"],
+a[href] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Mobile-Friendly Input & Select */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="number"],
+input[type="date"],
+select,
+textarea {
+  min-height: 44px;
+  font-size: 16px; /* Prevent auto-zoom on iOS */
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+}
+
+/* Touch-Friendly Button Spacing */
+button + button,
+button + a,
+a + button,
+a + a {
+  margin-left: 0.5rem;
+}
+
+/* ============================================
+   RESPONSIVE LAYOUT - Mobile First
+   ============================================ */
+
+/* Mobile: < 640px */
+@media (max-width: 639px) {
+  /* Sidebar: Hide by default, show as hamburger */
+  .side-rail {
+    position: fixed;
+    left: -100%;
+    top: 0;
+    width: 80vw;
+    max-width: 320px;
+    height: 100vh;
+    z-index: 1000;
+    transition: left 0.3s ease;
+  }
+
+  .side-rail.mobile-open {
+    left: 0;
+  }
+
+  /* Hamburger Menu Button */
+  .mobile-hamburger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    width: 44px;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.25rem;
+    cursor: pointer;
+    z-index: 999;
+    color: #f3f4f6;
+  }
+
+  .mobile-hamburger:active {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .mobile-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 500;
+    display: none;
+  }
+
+  .mobile-overlay.mobile-open {
+    display: block;
+  }
+
+  /* Main Layout: Full Width on Mobile */
+  .app-frame {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 1fr;
+  }
+
+  .workspace {
+    width: 100%;
+    height: 100vh;
+  }
+
+  /* Filter Panel: Drawer Bottom */
+  .control-overlay--top-left {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    width: 100%;
+    max-width: 100%;
+    max-height: 70vh;
+    border-radius: 1rem 1rem 0 0;
+    z-index: 800;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    overflow-y: auto;
+  }
+
+  .control-overlay--top-left.mobile-open {
+    transform: translateY(0);
+  }
+
+  .panel--filters {
+    padding: 1rem;
+    max-height: calc(70vh - 2rem);
+    overflow-y: auto;
+  }
+
+  /* Stats Panel: Hidden on Mobile, Show as Tab */
+  .control-overlay--top-right {
+    display: none;
+  }
+
+  /* Responsive Table -> Card View on Mobile */
+  .matrix-table thead {
+    display: none;
+  }
+
+  .matrix-table tbody tr {
+    display: block;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .matrix-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border: none;
+    min-height: 44px;
+  }
+
+  .matrix-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: #9ca3af;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .matrix-table td:first-child::before {
+    content: "No.";
+  }
+  .matrix-table td:nth-child(2)::before {
+    content: "KPS";
+  }
+  .matrix-table td:nth-child(3)::before {
+    content: "Balai PS";
+  }
+  .matrix-table td:nth-child(4)::before {
+    content: "Jumlah";
+  }
+  .matrix-table td:nth-child(5)::before {
+    content: "Detected";
+  }
+  .matrix-table td:nth-child(6)::before {
+    content: "Lat/Lon";
+  }
+  .matrix-table td:nth-child(7)::before {
+    content: "Provinsi";
+  }
+  .matrix-table td:nth-child(8)::before {
+    content: "FRP %";
+  }
+  .matrix-table td:nth-child(9)::before {
+    content: "Satelit";
+  }
+
+  /* Responsive Charts: Stack Vertically */
+  .matrix-ledger {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  /* Readable Font Sizes on Mobile */
+  body {
+    font-size: 14px;
+  }
+
+  button,
+  a {
+    font-size: 14px;
+  }
+
+  /* Padding for Mobile */
+  .panel {
+    padding: 1rem;
+  }
+
+  .matrix-table-wrap {
+    padding: 1rem;
+  }
+
+  .matrix-scroll {
+    max-height: calc(100vh - 400px);
+  }
+
+  /* Search Bar: Full Width */
+  .search-input-container {
+    width: 100%;
+  }
+
+  /* No Horizontal Scroll */
+  body {
+    overflow-x: hidden;
+  }
+
+  .workspace,
+  .app-frame {
+    overflow-x: hidden;
+  }
+}
+
+/* Tablet: 640px - 1023px */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .side-rail {
+    width: 200px;
+  }
+
+  .workspace {
+    grid-template-columns: 200px 1fr;
+  }
+
+  .control-overlay--top-right {
+    max-width: 350px;
+  }
+
+  .matrix-table {
+    font-size: 0.8rem;
+  }
+
+  .matrix-table td {
+    padding: 0.5rem 0.25rem;
+  }
+}
+
+/* Desktop: 1024px+ */
+@media (min-width: 1024px) {
+  .mobile-hamburger,
+  .mobile-overlay {
+    display: none;
+  }
+
+  .side-rail {
+    position: relative;
+    left: auto;
+    width: auto;
+  }
+}
+
 .loading-retry-button:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 14px rgba(255, 78, 0, 0.35);

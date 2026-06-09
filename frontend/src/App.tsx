@@ -68,12 +68,14 @@ function ViewLoader({ label }: { label: string }) {
     </div>
   );
 }
-import { Maximize, Minimize } from "lucide-react";
+import { Maximize, Minimize, Menu, X } from "lucide-react";
 
 export default function App() {
   const [selectedProvince, setSelectedProvince] = useState<string>("");
   const [showWind, setShowWind] = useState(false);
   const [activeView, setActiveView] = useState<"map" | "matrix" | "monitoring" | "settings">("map");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const handleViewChange = (view: "map" | "matrix" | "monitoring" | "settings") => {
     if (view === "settings") {
       const password = prompt("Masukkan password untuk mengakses Pengaturan:");
@@ -372,9 +374,31 @@ export default function App() {
 
   return (
     <div className="app-frame grid-lines">
-      <SidebarNav
-        activeView={activeView}
-        onChangeView={handleViewChange}
+      {/* Mobile Hamburger Button */}
+      <button
+        className="mobile-hamburger"
+        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        aria-label="Toggle navigation menu"
+        style={{ display: 'none' }}
+      >
+        {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+      </button>
+
+      {/* Mobile Overlay */}
+      <div
+        className={`mobile-overlay${mobileMenuOpen ? ' mobile-open' : ''}`}
+        onClick={() => setMobileMenuOpen(false)}
+        style={{ display: 'none' }}
+      />
+
+      {/* Sidebar with Mobile Support */}
+      <div className={`side-rail${mobileMenuOpen ? ' mobile-open' : ''}`}>
+        <SidebarNav
+          activeView={activeView}
+          onChangeView={(view) => {
+            handleViewChange(view);
+            setMobileMenuOpen(false);
+          }}
         onManualSync={() => void manualSync()}
         onPrewarmHistory={() => void prewarmHistory()}
         syncLabel={syncLabel}
@@ -394,7 +418,8 @@ export default function App() {
         latestHotspotTimeLabel={latestHotspotTimeLabel}
         dataAgeLabel={dataAgeLabel}
         hasLatestHotspot={!!latestHotspot}
-      />
+        />
+      </div>
 
       <main className="workspace">
         {activeView === "map" ? (
@@ -410,7 +435,30 @@ export default function App() {
 
             {showPanels && (
               <>
-                <aside className="control-overlay control-overlay--top-left">
+                {/* Mobile Filter Toggle Button */}
+                <button
+                  className="mobile-filter-btn"
+                  onClick={() => setMobileFilterOpen(!mobileFilterOpen)}
+                  style={{
+                    display: 'none',
+                    position: 'fixed',
+                    bottom: '1rem',
+                    right: '1rem',
+                    width: '50px',
+                    height: '50px',
+                    borderRadius: '50%',
+                    background: 'rgba(249, 115, 22, 0.2)',
+                    border: '1px solid rgba(249, 115, 22, 0.5)',
+                    color: '#f59e0b',
+                    cursor: 'pointer',
+                    zIndex: 700,
+                    fontSize: '20px'
+                  }}
+                >
+                  🔍
+                </button>
+
+                <aside className={`control-overlay control-overlay--top-left${mobileFilterOpen ? ' mobile-open' : ''}`}>
                               <FilterPanel
                                 layers={layers}
                                 selectedSatellites={selectedSatellites}
