@@ -74,6 +74,16 @@ export default function App() {
   const [selectedProvince, setSelectedProvince] = useState<string>("");
   const [showWind, setShowWind] = useState(false);
   const [activeView, setActiveView] = useState<"map" | "matrix" | "monitoring" | "settings">("map");
+  const handleViewChange = (view: "map" | "matrix" | "monitoring" | "settings") => {
+    if (view === "settings") {
+      const password = prompt("Masukkan password untuk mengakses Pengaturan:");
+      if (password !== "admin@5150") {
+        alert("Password salah!");
+        return;
+      }
+    }
+    setActiveView(view);
+  };
   const [signalChangeNotice, setSignalChangeNotice] = useState<string | null>(null);
   const [audioMuted, setAudioMuted] = useState(false);
   const [alertVolume, setAlertVolume] = useState<"normal" | "low">("normal");
@@ -364,7 +374,7 @@ export default function App() {
     <div className="app-frame grid-lines">
       <SidebarNav
         activeView={activeView}
-        onChangeView={setActiveView}
+        onChangeView={handleViewChange}
         onManualSync={() => void manualSync()}
         onPrewarmHistory={() => void prewarmHistory()}
         syncLabel={syncLabel}
