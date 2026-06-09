@@ -720,6 +720,10 @@ export function HotspotMatrix({
   const [provinceFilter, setProvinceFilter] = useState("");
   const [activeFrpCategory, setActiveFrpCategory] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
+  const [searchKps, setSearchKps] = useState("");
+  const [searchBalaiPs, setSearchBalaiPs] = useState("");
+  const [searchProvinsi, setSearchProvinsi] = useState("");
+  const [searchKabupaten, setSearchKabupaten] = useState("");
   const [selectedHotspot, setSelectedHotspot] = useState<MatrixHotspot | null>(null);
   const [showAnalytics, setShowAnalytics] = useState(true);
   const [yoyMetric, setYoyMetric] = useState<"count" | "frp">("count");
@@ -783,9 +787,21 @@ export function HotspotMatrix({
           periodMatch = periodKey === selectedPeriod;
         }
 
-        return wilkerMatch && provinceMatch && frpMatch && periodMatch;
+        const kpsValue = (hotspot.polygonMetadata.LEMBAGA || hotspot.agencyName).toLowerCase();
+        const kpsMatch = searchKps ? kpsValue.includes(searchKps.toLowerCase()) : true;
+
+        const balaiPsValue = (hotspot.polygonMetadata.WILKER_BPS || "").toLowerCase();
+        const balaiPsMatch = searchBalaiPs ? balaiPsValue.includes(searchBalaiPs.toLowerCase()) : true;
+
+        const provinsiValue = (hotspot.provinceName || hotspot.polygonMetadata.NAMA_PROV || "").toLowerCase();
+        const provinsiMatch = searchProvinsi ? provinsiValue.includes(searchProvinsi.toLowerCase()) : true;
+
+        const kabupatenValue = (hotspot.polygonMetadata.NAMA_KAB || "").toLowerCase();
+        const kabupatenMatch = searchKabupaten ? kabupatenValue.includes(searchKabupaten.toLowerCase()) : true;
+
+        return wilkerMatch && provinceMatch && frpMatch && periodMatch && kpsMatch && balaiPsMatch && provinsiMatch && kabupatenMatch;
       }),
-    [activeFrpCategory, hotspots, wilkerFilter, provinceFilter, selectedPeriod],
+    [activeFrpCategory, hotspots, wilkerFilter, provinceFilter, selectedPeriod, searchKps, searchBalaiPs, searchProvinsi, searchKabupaten],
   );
 
   const groupedRows = useMemo(() => {
@@ -1128,7 +1144,168 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
           {filteredHotspots.length === 0 ? (
             <div className="matrix-empty matrix-empty--card">Tidak ada hotspot ditemukan</div>
           ) : (
-            <div className="matrix-table-wrap">
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '1rem', padding: '0 1rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '600', marginBottom: '0.3rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Cari KPS</label>
+                  <input
+                    type="text"
+                    placeholder="Filter KPS..."
+                    value={searchKps}
+                    onChange={(e) => {
+                      setSearchKps(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '0.5rem',
+                      fontSize: '0.85rem',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '0.25rem',
+                      color: '#f3f4f6',
+                      outline: 'none',
+                      fontFamily: 'inherit'
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '600', marginBottom: '0.3rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Cari Balai PS</label>
+                  <input
+                    type="text"
+                    placeholder="Filter Balai PS..."
+                    value={searchBalaiPs}
+                    onChange={(e) => {
+                      setSearchBalaiPs(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '0.5rem',
+                      fontSize: '0.85rem',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '0.25rem',
+                      color: '#f3f4f6',
+                      outline: 'none',
+                      fontFamily: 'inherit'
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '600', marginBottom: '0.3rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Cari Provinsi</label>
+                  <input
+                    type="text"
+                    placeholder="Filter Provinsi..."
+                    value={searchProvinsi}
+                    onChange={(e) => {
+                      setSearchProvinsi(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '0.5rem',
+                      fontSize: '0.85rem',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '0.25rem',
+                      color: '#f3f4f6',
+                      outline: 'none',
+                      fontFamily: 'inherit'
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '600', marginBottom: '0.3rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Cari Kabupaten</label>
+                  <input
+                    type="text"
+                    placeholder="Filter Kabupaten..."
+                    value={searchKabupaten}
+                    onChange={(e) => {
+                      setSearchKabupaten(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '0.5rem',
+                      fontSize: '0.85rem',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '0.25rem',
+                      color: '#f3f4f6',
+                      outline: 'none',
+                      fontFamily: 'inherit'
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', padding: '0 1rem', marginBottom: '1rem', fontSize: '0.8rem' }}>
+                {searchKps && (
+                  <>
+                    <span style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', color: '#60A5FA', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>
+                      KPS: {searchKps}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchKps("");
+                        setCurrentPage(1);
+                      }}
+                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '0.2rem' }}
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+                {searchBalaiPs && (
+                  <>
+                    <span style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', color: '#4ADE80', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>
+                      Balai PS: {searchBalaiPs}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchBalaiPs("");
+                        setCurrentPage(1);
+                      }}
+                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '0.2rem' }}
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+                {searchProvinsi && (
+                  <>
+                    <span style={{ backgroundColor: 'rgba(168, 85, 247, 0.2)', color: '#D8B4FE', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>
+                      Provinsi: {searchProvinsi}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchProvinsi("");
+                        setCurrentPage(1);
+                      }}
+                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '0.2rem' }}
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+                {searchKabupaten && (
+                  <>
+                    <span style={{ backgroundColor: 'rgba(245, 158, 11, 0.2)', color: '#FBBF24', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>
+                      Kabupaten: {searchKabupaten}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchKabupaten("");
+                        setCurrentPage(1);
+                      }}
+                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '0.2rem' }}
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+              </div>
+              <div className="matrix-table-wrap">
               <div className="matrix-scroll">
                 <table className="matrix-table">
                   <thead>
@@ -1227,6 +1404,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                 </div>
               </div>
             </div>
+              </>
           )}
         </section>
 
