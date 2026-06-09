@@ -478,7 +478,7 @@ export default function App() {
                               />
                             </aside>
                 
-                            <aside className="control-overlay control-overlay--top-right panel panel--stats" style={{ maxHeight: '100%', overflowY: 'auto' }}>
+                            <aside className="control-overlay control-overlay--top-right panel panel--stats" style={{ maxHeight: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
                               <div className="metric-grid" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                 <article className="metric-card" style={{ paddingBottom: '1rem' }}>
                                   <p className="metric-label" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

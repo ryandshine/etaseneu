@@ -2383,21 +2383,22 @@ body {
   display: grid;
   gap: 0.5rem;
   padding: 0.75rem;
-  border-radius: 0.125rem;
+  border-radius: 0.625rem;
 }
 
 .panel--status {
   padding: 0.8rem;
-  border-radius: 0.125rem;
+  border-radius: 0.625rem;
   display: grid;
   gap: 0.45rem;
 }
 
 .panel--stats {
   padding: 0.8rem;
-  border-radius: 0.125rem;
+  border-radius: 0.625rem;
   display: grid;
   gap: 0.55rem;
+  overflow-x: hidden;
 }
 
 .status-actions {
