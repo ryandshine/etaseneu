@@ -1156,6 +1156,8 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                         setCurrentPage(1);
                       }}
                       style={{
+                        minHeight: '44px',
+                        minWidth: '44px',
                         padding: '0.5rem 1rem',
                         fontSize: '0.85rem',
                         background: 'rgba(255, 107, 53, 0.2)',
@@ -1164,7 +1166,10 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                         borderRadius: '0.25rem',
                         cursor: 'pointer',
                         fontWeight: '500',
-                        fontFamily: 'inherit'
+                        fontFamily: 'inherit',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
                       }}
                     >
                       Clear Search
@@ -1177,7 +1182,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
           ) : (
             <>
               <div style={{ padding: '1rem', marginBottom: '0.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '0.5rem', padding: '0.75rem 1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '0.5rem', padding: '0.75rem 1rem', minHeight: '44px', flexWrap: 'wrap' }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: '#9ca3af', flexShrink: 0 }}>
                     <circle cx="11" cy="11" r="8" />
                     <path d="m21 21-4.35-4.35" />
@@ -1217,6 +1222,8 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                         setCurrentPage(1);
                       }}
                       style={{
+                        minHeight: '44px',
+                        minWidth: '44px',
                         fontSize: '1.2rem',
                         padding: '0.25rem 0.5rem',
                         cursor: 'pointer',
@@ -1224,7 +1231,10 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                         border: 'none',
                         color: '#fff',
                         borderRadius: '0.25rem',
-                        flexShrink: 0
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
                       }}
                     >
                       ✕
@@ -1237,6 +1247,8 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                       setCurrentPage(1);
                     }}
                     style={{
+                      minHeight: '44px',
+                      minWidth: '44px',
                       padding: '0.5rem 1rem',
                       fontSize: '0.85rem',
                       fontWeight: '600',
@@ -1248,7 +1260,10 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                       fontFamily: 'inherit',
                       flexShrink: 0,
                       textTransform: 'uppercase',
-                      letterSpacing: '0.05em'
+                      letterSpacing: '0.05em',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
                     }}
                   >
                     Cari
@@ -1336,23 +1351,25 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                   </tbody>
                 </table>
               </div>
-              <div className="matrix-footer">
-                <span>{groupedRows.length} lembaga ditemukan ({filteredHotspots.length} total titik hotspot)</span>
-                <div className="matrix-pagination">
+              <div className="matrix-footer" style={{ padding: '1rem' }}>
+                <span style={{ fontSize: '0.85rem' }}>{groupedRows.length} lembaga ditemukan ({filteredHotspots.length} total titik hotspot)</span>
+                <div className="matrix-pagination" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'center', marginTop: '0.75rem' }}>
                   <button
                     className="matrix-page-btn"
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
+                    style={{ minHeight: '44px', minWidth: '44px', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                   >
                     ‹
                   </button>
-                  <span className="matrix-page-info">
+                  <span className="matrix-page-info" style={{ fontSize: '0.85rem', margin: '0 0.5rem' }}>
                     Halaman {currentPage} / {Math.max(1, Math.ceil(groupedRows.length / PAGE_SIZE))}
                   </span>
                   <button
                     className="matrix-page-btn"
                     onClick={() => setCurrentPage((p) => Math.min(Math.ceil(groupedRows.length / PAGE_SIZE), p + 1))}
                     disabled={currentPage >= Math.ceil(groupedRows.length / PAGE_SIZE)}
+                    style={{ minHeight: '44px', minWidth: '44px', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                   >
                     ›
                   </button>
