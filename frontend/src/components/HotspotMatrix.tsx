@@ -719,6 +719,7 @@ export function HotspotMatrix({
   const [wilkerFilter, setWilkerFilter] = useState("");
   const [provinceFilter, setProvinceFilter] = useState("");
   const [activeFrpCategory, setActiveFrpCategory] = useState<string | null>(null);
+  const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
   const [selectedHotspot, setSelectedHotspot] = useState<MatrixHotspot | null>(null);
   const [showAnalytics, setShowAnalytics] = useState(true);
   const [yoyMetric, setYoyMetric] = useState<"count" | "frp">("count");
@@ -775,9 +776,16 @@ export function HotspotMatrix({
         const provinceMatch = provinceFilter ? hotspot.provinceName === provinceFilter : true;
         const frpMatch = activeFrpCategory ? getFrpCategory(hotspot) === activeFrpCategory : true;
 
-        return wilkerMatch && provinceMatch && frpMatch;
+        let periodMatch = true;
+        if (selectedPeriod) {
+          const parts = getWibDateParts(hotspot.detectedAt);
+          const periodKey = trendGroupBy === 'month' ? parts.yearMonthStr : parts.dateStr;
+          periodMatch = periodKey === selectedPeriod;
+        }
+
+        return wilkerMatch && provinceMatch && frpMatch && periodMatch;
       }),
-    [activeFrpCategory, hotspots, wilkerFilter, provinceFilter],
+    [activeFrpCategory, hotspots, wilkerFilter, provinceFilter, selectedPeriod],
   );
 
   const groupedRows = useMemo(() => {
@@ -1039,10 +1047,16 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
               ) : (
                 <div style={{ width: '100%', height: 240, position: 'relative' }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={dailyTrend} margin={{ top: 20, right: 30, left: 10, bottom: 8 }}>
+                    <AreaChart data={dailyTrend} margin={{ top: 20, right: 30, left: 10, bottom: 8 }} onClick={(state) => {
+                      if (state && state.activeLabel) {
+                        const label = String(state.activeLabel);
+                        setSelectedPeriod(label === selectedPeriod ? null : label);
+                        setCurrentPage(1);
+                      }
+                    }}>
                       <defs>
                         <linearGradient id="dailyTrendGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f97316" stopOpacity={0.4}/>
+                          <stop offset="5%" stopColor={selectedPeriod ? "rgba(249, 115, 22, 0.2)" : "rgba(249, 115, 22, 0.4)"}/>
                           <stop offset="95%" stopColor="#f97316" stopOpacity={0.0}/>
                         </linearGradient>
                       </defs>
@@ -1050,7 +1064,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                       <XAxis dataKey="label" stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} tickFormatter={(val) => { if (typeof val !== 'string') return ''; return trendGroupBy === 'month' ? val.slice(0, 7) : val.slice(8, 10); }} />
                       <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} allowDecimals={false} />
                       <ChartTooltip content={<DailyTrendTooltip />} />
-                      <Area type="monotone" dataKey="value" stroke="#f97316" strokeWidth={2} fill="url(#dailyTrendGradient)" isAnimationActive={true}>
+                      <Area type="monotone" dataKey="value" stroke={selectedPeriod ? "#FF6B35" : "#f97316"} strokeWidth={selectedPeriod ? 3 : 2} fill="url(#dailyTrendGradient)" isAnimationActive={true} style={{ cursor: 'pointer' }}>
                         <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
                       </Area>
                     </AreaChart>
@@ -1071,7 +1085,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
             </div>
             <div className="matrix-ledger-summary">
               <span>{filteredHotspots.length} terlihat</span>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                 {wilkerFilter && (
                   <>
                     <span style={{ backgroundColor: 'rgba(255, 107, 53, 0.2)', color: '#FF6B35', padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.8rem', fontWeight: '500' }}>
@@ -1081,6 +1095,23 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                       type="button"
                       onClick={() => {
                         setWilkerFilter("");
+                        setCurrentPage(1);
+                      }}
+                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '0.2rem' }}
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+                {selectedPeriod && (
+                  <>
+                    <span style={{ backgroundColor: 'rgba(249, 115, 22, 0.2)', color: '#FF8C00', padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.8rem', fontWeight: '500' }}>
+                      PERIODE: {trendGroupBy === 'month' ? selectedPeriod.slice(0, 7) : selectedPeriod.slice(8, 10)} {trendGroupBy === 'day' && selectedPeriod.slice(0, 7)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPeriod(null);
                         setCurrentPage(1);
                       }}
                       style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '0.2rem' }}
