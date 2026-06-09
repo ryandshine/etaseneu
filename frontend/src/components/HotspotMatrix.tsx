@@ -985,7 +985,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
           {renderCompactCard("Confidence", confidenceDistribution, filteredHotspots.length)}
           {renderCompactCard("FRP", frpDistribution, filteredHotspots.length, activeFrpCategory, handleSelectFrpCategory)}
           
-          <section className="matrix-chart-card glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+          <section className="matrix-chart-card matrix-chart-card--wide glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>
             <div className="matrix-chart-card__header">
               <div>
                 <p className="panel-eyebrow">Peringkat WILKER</p>
@@ -1036,7 +1036,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                     <BarChart data={dailyTrend} layout="vertical" margin={{ top: 0, right: 60, left: 80, bottom: 0 }} barSize={24}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" horizontal={true} vertical={false} />
                       <XAxis type="number" stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 9, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={{ stroke: "rgba(255,255,255,0.08)" }} tickLine={false} allowDecimals={false} />
-                      <YAxis type="category" dataKey="label" width={75} stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 9, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} tickFormatter={(val) => trendGroupBy === 'month' ? val.slice(0, 7) : val.slice(8, 10)} />
+                      <YAxis type="category" dataKey="label" width={75} stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 9, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} tickFormatter={(val) => { if (typeof val !== 'string') return ''; return trendGroupBy === 'month' ? val.slice(0, 7) : val.slice(8, 10); }} />
                       <ChartTooltip content={<DailyTrendTooltip />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
                       <Bar dataKey="value" fill="#f97316" radius={[0, 3, 3, 0]} isAnimationActive={true}>
                         <LabelList dataKey="value" position="right" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
@@ -1072,6 +1072,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                   <thead>
                     <tr>
                       <th>Lembaga / Entitas</th>
+                      <th>Balai PS</th>
                       <th>Jumlah Hotspot</th>
                       <th>Most Recent Detected</th>
                       <th>Lat / Lon</th>
@@ -1104,8 +1105,13 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                           <td>
                             <div className="matrix-satellite">
                               <strong>{group.key}</strong>
-                              <span style={{ opacity: 0.65 }}>{group.wilker || hotspot.layerName}</span>
+                              <span style={{ opacity: 0.65 }}>{hotspot.layerName}</span>
                             </div>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: '0.85rem', color: '#d1d5db' }}>
+                              {group.wilker || '-'}
+                            </span>
                           </td>
                           <td>
                             <span className="matrix-id-badge" style={{ backgroundColor: '#ff8c4224', color: '#ffb86b' }}>
