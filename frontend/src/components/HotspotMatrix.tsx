@@ -1181,8 +1181,8 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
             </div>
           ) : (
             <>
-              <div style={{ padding: '1rem', marginBottom: '0.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '0.5rem', padding: '0.75rem 1rem', minHeight: '44px', flexWrap: 'wrap' }}>
+              <div style={{ padding: '1rem', marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: '0.75rem', padding: '0.875rem 1.125rem', minHeight: '48px', flexWrap: 'wrap', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)' }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: '#9ca3af', flexShrink: 0 }}>
                     <circle cx="11" cy="11" r="8" />
                     <path d="m21 21-4.35-4.35" />
@@ -1224,18 +1224,20 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                       style={{
                         minHeight: '44px',
                         minWidth: '44px',
-                        fontSize: '1.2rem',
-                        padding: '0.25rem 0.5rem',
+                        fontSize: '1.1rem',
+                        padding: '0.5rem',
                         cursor: 'pointer',
-                        background: 'rgba(255,255,255,0.1)',
-                        border: 'none',
-                        color: '#fff',
-                        borderRadius: '0.25rem',
+                        background: 'rgba(255,255,255,0.08)',
+                        border: '1px solid rgba(255,255,255,0.12)',
+                        color: '#d1d5db',
+                        borderRadius: '0.375rem',
                         flexShrink: 0,
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        transition: 'all 0.2s ease'
                       }}
+                      title="Clear search"
                     >
                       ✕
                     </button>
@@ -1247,15 +1249,15 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                       setCurrentPage(1);
                     }}
                     style={{
-                      minHeight: '44px',
-                      minWidth: '44px',
-                      padding: '0.5rem 1rem',
+                      minHeight: '48px',
+                      minWidth: '48px',
+                      padding: '0.75rem 1.25rem',
                       fontSize: '0.85rem',
                       fontWeight: '600',
-                      background: 'rgba(249, 115, 22, 0.2)',
-                      border: '1px solid rgba(249, 115, 22, 0.5)',
+                      background: 'rgba(249, 115, 22, 0.15)',
+                      border: '1px solid rgba(249, 115, 22, 0.4)',
                       color: '#f59e0b',
-                      borderRadius: '0.25rem',
+                      borderRadius: '0.5rem',
                       cursor: 'pointer',
                       fontFamily: 'inherit',
                       flexShrink: 0,
@@ -1263,7 +1265,9 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                       letterSpacing: '0.05em',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                      justifyContent: 'center',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 2px 6px rgba(245, 158, 11, 0.1)'
                     }}
                   >
                     Cari
