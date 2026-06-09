@@ -1260,6 +1260,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                 <table className="matrix-table">
                   <thead>
                     <tr>
+                      <th style={{ width: '4%', textAlign: 'center' }}>No.</th>
                       <th>KPS</th>
                       <th>Balai PS</th>
                       <th>Jumlah Hotspot</th>
@@ -1271,11 +1272,12 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                     </tr>
                   </thead>
                   <tbody>
-                    {groupedRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((group) => {
+                    {groupedRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((group, index) => {
                       const hotspot = group.representativeHotspot;
                       const statusLabel = getStatusLabel(hotspot);
                       const statusTone = getStatusTone(statusLabel);
                       const isSelected = selectedHotspot && formatMetadataValue(selectedHotspot.polygonMetadata.LEMBAGA || selectedHotspot.agencyName) === group.key;
+                      const rowNumber = (currentPage - 1) * PAGE_SIZE + index + 1;
 
                       return (
                         <tr
@@ -1291,6 +1293,9 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                             }
                           }}
                         >
+                          <td style={{ textAlign: 'center', fontSize: '0.85rem', color: '#9ca3af', fontWeight: '500' }}>
+                            {rowNumber}
+                          </td>
                           <td>
                             <div className="matrix-satellite">
                               <strong>{group.key}</strong>
