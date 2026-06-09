@@ -1033,15 +1033,21 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
               ) : (
                 <div style={{ width: '100%', height: 240, position: 'relative' }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={dailyTrend} layout="vertical" margin={{ top: 0, right: 60, left: 80, bottom: 0 }} barSize={24}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" horizontal={true} vertical={false} />
-                      <XAxis type="number" stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 9, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={{ stroke: "rgba(255,255,255,0.08)" }} tickLine={false} allowDecimals={false} />
-                      <YAxis type="category" dataKey="label" width={75} stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 9, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} tickFormatter={(val) => { if (typeof val !== 'string') return ''; return trendGroupBy === 'month' ? val.slice(0, 7) : val.slice(8, 10); }} />
-                      <ChartTooltip content={<DailyTrendTooltip />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
-                      <Bar dataKey="value" fill="#f97316" radius={[0, 3, 3, 0]} isAnimationActive={true}>
-                        <LabelList dataKey="value" position="right" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
-                      </Bar>
-                    </BarChart>
+                    <AreaChart data={dailyTrend} margin={{ top: 20, right: 30, left: 10, bottom: 8 }}>
+                      <defs>
+                        <linearGradient id="dailyTrendGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f97316" stopOpacity={0.4}/>
+                          <stop offset="95%" stopColor="#f97316" stopOpacity={0.0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
+                      <XAxis dataKey="label" stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} tickFormatter={(val) => { if (typeof val !== 'string') return ''; return trendGroupBy === 'month' ? val.slice(0, 7) : val.slice(8, 10); }} />
+                      <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <ChartTooltip content={<DailyTrendTooltip />} />
+                      <Area type="monotone" dataKey="value" stroke="#f97316" strokeWidth={2} fill="url(#dailyTrendGradient)" isAnimationActive={true}>
+                        <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
+                      </Area>
+                    </AreaChart>
                   </ResponsiveContainer>
                 </div>
               )}
