@@ -998,15 +998,21 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
             ) : (
               <div style={{ width: '100%', height: 240, position: 'relative' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topWilker} layout="horizontal" margin={{ top: 24, right: 20, left: 20, bottom: 8 }}>
+                  <BarChart data={topWilker} layout="horizontal" margin={{ top: 24, right: 20, left: 20, bottom: 8 }} onClick={(state) => {
+                    if (state && state.activeLabel) {
+                      const label = String(state.activeLabel);
+                      setWilkerFilter(label === wilkerFilter ? "" : label);
+                      setCurrentPage(1);
+                    }
+                  }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
                     <XAxis dataKey="label" stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} />
                     <YAxis hide />
                     <ChartTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.01)' }} />
-                    <Bar dataKey="value" fill="#FF4E00" radius={[4, 4, 0, 0]} background={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} barSize={16}>
+                    <Bar dataKey="value" fill="#FF4E00" radius={[4, 4, 0, 0]} background={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} barSize={16} style={{ cursor: 'pointer' }}>
                       <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
                       {topWilker.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color || '#FF4E00'} opacity={0.85} />
+                        <Cell key={`cell-${index}`} fill={wilkerFilter === entry.label ? '#FF6B35' : (entry.color || '#FF4E00')} opacity={wilkerFilter === entry.label ? 1 : 0.85} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -1065,7 +1071,26 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
             </div>
             <div className="matrix-ledger-summary">
               <span>{filteredHotspots.length} terlihat</span>
-              <span>{activeFrpCategory ? `FRP: ${activeFrpCategory}` : "Tidak ada saringan FRP"}</span>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                {wilkerFilter && (
+                  <>
+                    <span style={{ backgroundColor: 'rgba(255, 107, 53, 0.2)', color: '#FF6B35', padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.8rem', fontWeight: '500' }}>
+                      WILKER: {wilkerFilter}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWilkerFilter("");
+                        setCurrentPage(1);
+                      }}
+                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '0.2rem' }}
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+                <span>{activeFrpCategory ? `FRP: ${activeFrpCategory}` : "Tidak ada saringan FRP"}</span>
+              </div>
             </div>
           </div>
 
