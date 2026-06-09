@@ -720,10 +720,7 @@ export function HotspotMatrix({
   const [provinceFilter, setProvinceFilter] = useState("");
   const [activeFrpCategory, setActiveFrpCategory] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
-  const [searchKps, setSearchKps] = useState("");
-  const [searchBalaiPs, setSearchBalaiPs] = useState("");
-  const [searchProvinsi, setSearchProvinsi] = useState("");
-  const [searchKabupaten, setSearchKabupaten] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedHotspot, setSelectedHotspot] = useState<MatrixHotspot | null>(null);
   const [showAnalytics, setShowAnalytics] = useState(true);
   const [yoyMetric, setYoyMetric] = useState<"count" | "frp">("count");
@@ -787,21 +784,20 @@ export function HotspotMatrix({
           periodMatch = periodKey === selectedPeriod;
         }
 
-        const kpsValue = (hotspot.polygonMetadata.LEMBAGA || hotspot.agencyName).toLowerCase();
-        const kpsMatch = searchKps ? kpsValue.includes(searchKps.toLowerCase()) : true;
+        let searchMatch = true;
+        if (searchQuery) {
+          const query = searchQuery.toLowerCase();
+          const kpsValue = (hotspot.polygonMetadata.LEMBAGA || hotspot.agencyName).toLowerCase();
+          const balaiPsValue = (hotspot.polygonMetadata.WILKER_BPS || "").toLowerCase();
+          const provinsiValue = (hotspot.provinceName || hotspot.polygonMetadata.NAMA_PROV || "").toLowerCase();
+          const kabupatenValue = (hotspot.polygonMetadata.NAMA_KAB || "").toLowerCase();
 
-        const balaiPsValue = (hotspot.polygonMetadata.WILKER_BPS || "").toLowerCase();
-        const balaiPsMatch = searchBalaiPs ? balaiPsValue.includes(searchBalaiPs.toLowerCase()) : true;
+          searchMatch = kpsValue.includes(query) || balaiPsValue.includes(query) || provinsiValue.includes(query) || kabupatenValue.includes(query);
+        }
 
-        const provinsiValue = (hotspot.provinceName || hotspot.polygonMetadata.NAMA_PROV || "").toLowerCase();
-        const provinsiMatch = searchProvinsi ? provinsiValue.includes(searchProvinsi.toLowerCase()) : true;
-
-        const kabupatenValue = (hotspot.polygonMetadata.NAMA_KAB || "").toLowerCase();
-        const kabupatenMatch = searchKabupaten ? kabupatenValue.includes(searchKabupaten.toLowerCase()) : true;
-
-        return wilkerMatch && provinceMatch && frpMatch && periodMatch && kpsMatch && balaiPsMatch && provinsiMatch && kabupatenMatch;
+        return wilkerMatch && provinceMatch && frpMatch && periodMatch && searchMatch;
       }),
-    [activeFrpCategory, hotspots, wilkerFilter, provinceFilter, selectedPeriod, searchKps, searchBalaiPs, searchProvinsi, searchKabupaten],
+    [activeFrpCategory, hotspots, wilkerFilter, provinceFilter, selectedPeriod, searchQuery],
   );
 
   const groupedRows = useMemo(() => {
@@ -1145,165 +1141,53 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
             <div className="matrix-empty matrix-empty--card">Tidak ada hotspot ditemukan</div>
           ) : (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '1rem', padding: '0 1rem' }}>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: '600', marginBottom: '0.3rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Cari KPS</label>
+              <div style={{ padding: '1rem', marginBottom: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '0.5rem', padding: '0.75rem 1rem' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: '#9ca3af', flexShrink: 0 }}>
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                  </svg>
                   <input
                     type="text"
-                    placeholder="Filter KPS..."
-                    value={searchKps}
+                    placeholder="Cari KPS, Balai PS, Provinsi, Kabupaten..."
+                    value={searchQuery}
                     onChange={(e) => {
-                      setSearchKps(e.target.value);
+                      setSearchQuery(e.target.value);
                       setCurrentPage(1);
                     }}
                     style={{
-                      padding: '0.5rem',
-                      fontSize: '0.85rem',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '0.25rem',
+                      flex: 1,
+                      padding: 0,
+                      fontSize: '0.95rem',
+                      background: 'transparent',
+                      border: 'none',
                       color: '#f3f4f6',
                       outline: 'none',
                       fontFamily: 'inherit'
                     }}
                   />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: '600', marginBottom: '0.3rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Cari Balai PS</label>
-                  <input
-                    type="text"
-                    placeholder="Filter Balai PS..."
-                    value={searchBalaiPs}
-                    onChange={(e) => {
-                      setSearchBalaiPs(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    style={{
-                      padding: '0.5rem',
-                      fontSize: '0.85rem',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '0.25rem',
-                      color: '#f3f4f6',
-                      outline: 'none',
-                      fontFamily: 'inherit'
-                    }}
-                  />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: '600', marginBottom: '0.3rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Cari Provinsi</label>
-                  <input
-                    type="text"
-                    placeholder="Filter Provinsi..."
-                    value={searchProvinsi}
-                    onChange={(e) => {
-                      setSearchProvinsi(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    style={{
-                      padding: '0.5rem',
-                      fontSize: '0.85rem',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '0.25rem',
-                      color: '#f3f4f6',
-                      outline: 'none',
-                      fontFamily: 'inherit'
-                    }}
-                  />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: '600', marginBottom: '0.3rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Cari Kabupaten</label>
-                  <input
-                    type="text"
-                    placeholder="Filter Kabupaten..."
-                    value={searchKabupaten}
-                    onChange={(e) => {
-                      setSearchKabupaten(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    style={{
-                      padding: '0.5rem',
-                      fontSize: '0.85rem',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '0.25rem',
-                      color: '#f3f4f6',
-                      outline: 'none',
-                      fontFamily: 'inherit'
-                    }}
-                  />
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', padding: '0 1rem', marginBottom: '1rem', fontSize: '0.8rem' }}>
-                {searchKps && (
-                  <>
-                    <span style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', color: '#60A5FA', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>
-                      KPS: {searchKps}
-                    </span>
+                  {searchQuery && (
                     <button
                       type="button"
                       onClick={() => {
-                        setSearchKps("");
+                        setSearchQuery("");
                         setCurrentPage(1);
                       }}
-                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '0.2rem' }}
+                      style={{
+                        fontSize: '1.2rem',
+                        padding: '0.25rem 0.5rem',
+                        cursor: 'pointer',
+                        background: 'rgba(255,255,255,0.1)',
+                        border: 'none',
+                        color: '#fff',
+                        borderRadius: '0.25rem',
+                        flexShrink: 0
+                      }}
                     >
                       ✕
                     </button>
-                  </>
-                )}
-                {searchBalaiPs && (
-                  <>
-                    <span style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', color: '#4ADE80', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>
-                      Balai PS: {searchBalaiPs}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSearchBalaiPs("");
-                        setCurrentPage(1);
-                      }}
-                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '0.2rem' }}
-                    >
-                      ✕
-                    </button>
-                  </>
-                )}
-                {searchProvinsi && (
-                  <>
-                    <span style={{ backgroundColor: 'rgba(168, 85, 247, 0.2)', color: '#D8B4FE', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>
-                      Provinsi: {searchProvinsi}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSearchProvinsi("");
-                        setCurrentPage(1);
-                      }}
-                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '0.2rem' }}
-                    >
-                      ✕
-                    </button>
-                  </>
-                )}
-                {searchKabupaten && (
-                  <>
-                    <span style={{ backgroundColor: 'rgba(245, 158, 11, 0.2)', color: '#FBBF24', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>
-                      Kabupaten: {searchKabupaten}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSearchKabupaten("");
-                        setCurrentPage(1);
-                      }}
-                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '0.2rem' }}
-                    >
-                      ✕
-                    </button>
-                  </>
-                )}
+                  )}
+                </div>
               </div>
               <div className="matrix-table-wrap">
               <div className="matrix-scroll">
