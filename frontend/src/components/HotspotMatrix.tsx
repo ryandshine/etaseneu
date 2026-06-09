@@ -1149,7 +1149,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                   </svg>
                   <input
                     type="text"
-                    placeholder="[KPS, BPS, Provinsi, Kabupaten]"
+                    placeholder="Cari KPS, Balai PS, Provinsi, Kabupaten"
                     value={searchQuery}
                     onChange={(e) => {
                       setSearchQuery(e.target.value);
