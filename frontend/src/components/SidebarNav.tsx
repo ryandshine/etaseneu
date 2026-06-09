@@ -158,36 +158,35 @@ export function SidebarNav({
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.68rem', color: '#9ca3af', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', fontSize: '0.65rem', color: '#9ca3af', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.4rem', marginBottom: '0.4rem' }}>
           <div>
-            <span>LAST SYNC: </span>
-            <strong style={{ color: '#fff' }}>{lastSyncLabel}</strong>
+            <span style={{ fontSize: '0.6rem', color: '#6b7280' }}>LAST SYNC</span>
+            <div style={{ color: '#fff', fontSize: '0.65rem', marginTop: '0.1rem', wordBreak: 'break-word' }}>{lastSyncLabel}</div>
           </div>
           <div>
-            <span>NEXT SYNC: </span>
-            <strong style={{ color: '#fff' }}>{nextScheduledSyncLabel}</strong>
+            <span style={{ fontSize: '0.6rem', color: '#6b7280' }}>NEXT SYNC</span>
+            <div style={{ color: '#fff', fontSize: '0.65rem', marginTop: '0.1rem', wordBreak: 'break-word' }}>{nextScheduledSyncLabel}</div>
           </div>
-          <div style={{ borderTop: '1px dashed rgba(255,255,255,0.05)', paddingTop: '0.25rem', marginTop: '0.25rem' }}>
-            <span>HOTSPOT TERBARU: </span>
-            <strong style={{ color: '#fff', display: 'block' }}>{latestHotspotTimeLabel}</strong>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <span style={{ fontSize: '0.6rem', color: '#6b7280' }}>HOTSPOT TERBARU</span>
+            <div style={{ color: '#fff', fontSize: '0.65rem', marginTop: '0.1rem', wordBreak: 'break-word' }}>{latestHotspotTimeLabel}</div>
           </div>
-          <div>
-            <span>USIA DATA: </span>
-            <strong style={{ color: hasLatestHotspot ? '#fff' : '#6b7280', fontSize: hasLatestHotspot ? '0.68rem' : '0.62rem' }}>
-              {dataAgeLabel}
-            </strong>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <span style={{ fontSize: '0.6rem', color: '#6b7280' }}>USIA DATA</span>
+            <div style={{ color: hasLatestHotspot ? '#fff' : '#6b7280', fontSize: '0.65rem', marginTop: '0.1rem', wordBreak: 'break-word' }}>{dataAgeLabel}</div>
           </div>
         </div>
-        <div className="side-sync-actions">
+        <div className="side-sync-actions" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
           <button
             type="button"
             className={`side-sync${manualSyncBusy ? " side-sync--busy" : ""}`}
             onClick={onManualSync}
             disabled={manualSyncBusy}
             aria-busy={manualSyncBusy}
+            style={{ flex: '1 1 48%', fontSize: '0.75rem', padding: '0.5rem' }}
           >
             <span className="sync-button-label">
-              {manualSyncBusy ? "Sync Hotspot..." : "Sync Hotspot Manual"}
+              {manualSyncBusy ? "Sync..." : "Sync Hotspot"}
             </span>
             {manualSyncBusy ? (
               <span className="sync-button-progress" aria-hidden="true">
@@ -201,9 +200,10 @@ export function SidebarNav({
             onClick={onPrewarmHistory}
             disabled={prewarmBusy}
             aria-busy={prewarmBusy}
+            style={{ flex: '1 1 48%', fontSize: '0.75rem', padding: '0.5rem' }}
           >
             <span className="sync-button-label">
-              {prewarmBusy ? "Menyiapkan Histori..." : "Prewarm Histori"}
+              {prewarmBusy ? "Prewarm..." : "Prewarm"}
             </span>
             {prewarmBusy ? (
               <span className="sync-button-progress" aria-hidden="true">
