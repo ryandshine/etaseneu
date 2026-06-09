@@ -1023,27 +1023,25 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
               </div>
             </div>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <p className="matrix-spark-title" style={{ flexShrink: 0, marginBottom: '8px' }}>
+              <p className="matrix-spark-title" style={{ flexShrink: 0, marginBottom: '12px' }}>
                 {trendGroupBy === 'month' ? 'Volume Insiden Bulanan' : 'Volume Insiden Harian'}
               </p>
               {dailyTrend.length === 0 ? (
-                <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Data hotspot tidak tersedia</div>
+                <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '240px', color: '#9ca3af' }}>
+                  Belum tersedia data untuk rentang waktu yang dipilih.
+                </div>
               ) : (
-                <div style={{ flex: 1, width: '100%', minHeight: 0, position: 'relative' }}>
+                <div style={{ flex: 1, width: '100%', minHeight: 240, position: 'relative' }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={dailyTrend} margin={{ top: 5, right: 20, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f97316" stopOpacity={0.25}/>
-                          <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
-                      <XAxis dataKey="label" tickFormatter={(val) => trendGroupBy === 'month' ? val.slice(0, 7) : val.slice(8, 10)} stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} />
-                      <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={{ stroke: "rgba(255,255,255,0.08)" }} tickLine={false} allowDecimals={false} />
-                      <ChartTooltip content={<DailyTrendTooltip />} cursor={{ stroke: 'rgba(249, 115, 22, 0.15)', strokeWidth: 1 }} />
-                      <Area type="monotone" dataKey="value" stroke="#f97316" fillOpacity={1} fill="url(#trendGrad)" strokeWidth={1.5} />
-                    </AreaChart>
+                    <BarChart data={dailyTrend} layout="vertical" margin={{ top: 0, right: 60, left: 80, bottom: 0 }} barSize={24}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" horizontal={true} vertical={false} />
+                      <XAxis type="number" stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 9, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={{ stroke: "rgba(255,255,255,0.08)" }} tickLine={false} allowDecimals={false} />
+                      <YAxis type="category" dataKey="label" width={75} stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 9, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} tickFormatter={(val) => trendGroupBy === 'month' ? val.slice(0, 7) : val.slice(8, 10)} />
+                      <ChartTooltip content={<DailyTrendTooltip />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
+                      <Bar dataKey="value" fill="#f97316" radius={[0, 3, 3, 0]} isAnimationActive={true}>
+                        <LabelList dataKey="value" position="right" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                 </div>
               )}
