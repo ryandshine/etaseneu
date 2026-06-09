@@ -1017,7 +1017,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
             {topWilker.length === 0 ? (
               <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Data hotspot tidak tersedia</div>
             ) : (
-              <div style={{ width: '100%', height: 240, position: 'relative' }}>
+              <div style={{ width: '100%', height: 'clamp(240px, 50vw, 400px)', position: 'relative' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={topWilker} layout="horizontal" margin={{ top: 24, right: 20, left: 20, bottom: 8 }} onClick={(state) => {
                     if (state && state.activeLabel) {
@@ -1058,7 +1058,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                   Belum tersedia data untuk rentang waktu yang dipilih.
                 </div>
               ) : (
-                <div style={{ width: '100%', height: 240, position: 'relative' }}>
+                <div style={{ width: '100%', height: 'clamp(200px, 45vw, 350px)', position: 'relative' }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={dailyTrend} margin={{ top: 20, right: 30, left: 10, bottom: 8 }} onClick={(state) => {
                       if (state && state.activeLabel) {

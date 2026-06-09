@@ -3003,6 +3003,25 @@ body {
   }
 }
 
+/* Mobile Chart Optimization */
+@media (max-width: 639px) {
+  .matrix-analytics-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .matrix-chart-card--wide {
+    grid-column: 1 !important;
+  }
+
+  .matrix-chart-card {
+    min-height: 250px;
+  }
+
+  .recharts-responsive-container {
+    width: 100% !important;
+  }
+}
+
 .matrix-chart-card {
   display: flex;
   flex-direction: column;
