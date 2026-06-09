@@ -720,6 +720,7 @@ export function HotspotMatrix({
   const [provinceFilter, setProvinceFilter] = useState("");
   const [activeFrpCategory, setActiveFrpCategory] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedHotspot, setSelectedHotspot] = useState<MatrixHotspot | null>(null);
   const [showAnalytics, setShowAnalytics] = useState(true);
@@ -1184,13 +1185,14 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                   <input
                     type="text"
                     placeholder="Cari KPS, Balai PS, Provinsi, Kabupaten"
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setCurrentPage(1);
-                    }}
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Escape') {
+                      if (e.key === 'Enter') {
+                        setSearchQuery(searchInput);
+                        setCurrentPage(1);
+                      } else if (e.key === 'Escape') {
+                        setSearchInput("");
                         setSearchQuery("");
                         setCurrentPage(1);
                       }
@@ -1206,10 +1208,11 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                       fontFamily: 'inherit'
                     }}
                   />
-                  {searchQuery && (
+                  {searchInput && (
                     <button
                       type="button"
                       onClick={() => {
+                        setSearchInput("");
                         setSearchQuery("");
                         setCurrentPage(1);
                       }}
@@ -1227,6 +1230,29 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                       ✕
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery(searchInput);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      fontSize: '0.85rem',
+                      fontWeight: '600',
+                      background: 'rgba(249, 115, 22, 0.2)',
+                      border: '1px solid rgba(249, 115, 22, 0.5)',
+                      color: '#f59e0b',
+                      borderRadius: '0.25rem',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      flexShrink: 0,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em'
+                    }}
+                  >
+                    Cari
+                  </button>
                 </div>
               </div>
               <div className="matrix-table-wrap">
