@@ -998,13 +998,13 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
             ) : (
               <div style={{ width: '100%', height: 240, position: 'relative' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topWilker} layout="horizontal" margin={{ top: 24, right: 20, left: 20, bottom: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
-                    <XAxis dataKey="label" stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} />
-                    <YAxis hide />
+                  <BarChart data={topWilker} layout="vertical" margin={{ top: 12, right: 60, left: 140, bottom: 12 }} barSize={12}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" horizontal={false} />
+                    <XAxis type="number" hide />
+                    <YAxis type="category" dataKey="label" width={130} stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 9, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} tickMargin={8} />
                     <ChartTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.01)' }} />
-                    <Bar dataKey="value" fill="#FF4E00" radius={[4, 4, 0, 0]} background={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} barSize={16}>
-                      <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
+                    <Bar dataKey="value" fill="#FF4E00" radius={[0, 4, 4, 0]} background={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }}>
+                      <LabelList dataKey="value" position="right" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
                       {topWilker.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color || '#FF4E00'} opacity={0.85} />
                       ))}
