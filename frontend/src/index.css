@@ -71,18 +71,14 @@ body {
 .panel {
   border: 1px solid rgba(255, 255, 255, 0.095);
   border-radius: 0.625rem;
-  background: rgba(15, 23, 42, 0.75);
+  background: #0f172a;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
 }
 
 .glass-panel {
-  background: rgba(15, 23, 42, 0.45);
+  background: #0f172a;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0.625rem;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
 }
 
@@ -2669,9 +2665,7 @@ body {
   padding: 0;
   border-radius: 0.625rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(30, 41, 59, 0.45);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: #1e293b;
   margin-bottom: 1rem;
   transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
@@ -4640,8 +4634,7 @@ a + a {
 
   /* Card & Visual Polish */
   .glass-panel {
-    background: rgba(15, 23, 42, 0.4) !important;
-    backdrop-filter: blur(10px) !important;
+    background: #0f172a !important;
     border: 1px solid rgba(255, 255, 255, 0.08) !important;
     border-radius: 0.75rem !important;
   }
