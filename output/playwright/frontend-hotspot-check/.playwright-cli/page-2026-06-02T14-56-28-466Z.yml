@@ -1,0 +1,106 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e6]:
+      - generic [ref=e7]: ETAseneu
+      - generic [ref=e8]: KPS Hotspot Monitoring
+    - navigation "Utama" [ref=e9]:
+      - paragraph [ref=e10]: Navigasi
+      - button "Peta Langsung" [ref=e11] [cursor=pointer]:
+        - generic [ref=e13]: Peta Langsung
+      - button "Matriks Data" [ref=e14] [cursor=pointer]:
+        - generic [ref=e16]: Matriks Data
+      - button "Pemantauan" [ref=e17] [cursor=pointer]:
+        - generic [ref=e19]: Pemantauan
+    - generic [ref=e20]:
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - generic [ref=e23]:
+            - text: Sinkronisasi NASA
+            - 'generic "Info Sinkronisasi NASA Tidak adanya hotspot baru tidak selalu berarti sinkronisasi gagal. Periksa: - Last Sync - Next Sync - Hotspot Terbaru - Status Scheduler" [ref=e24]': i
+          - generic [ref=e27]: LATE
+        - generic [ref=e28]:
+          - generic [ref=e29]:
+            - text: "Scheduler:"
+            - strong [ref=e30]: Nonaktif
+          - generic [ref=e31]:
+            - text: "Sync Hari Ini:"
+            - strong [ref=e32]: 8 / 8
+          - generic [ref=e33]:
+            - text: "Interval:"
+            - strong [ref=e34]: 3 Jam
+          - generic [ref=e35]:
+            - text: "Database:"
+            - strong [ref=e36]: fallback file
+      - generic [ref=e37]:
+        - generic [ref=e38]:
+          - text: "LAST SYNC:"
+          - strong [ref=e39]: never
+        - generic [ref=e40]:
+          - text: "NEXT SYNC:"
+          - strong [ref=e41]: "-"
+        - generic [ref=e42]:
+          - text: "HOTSPOT TERBARU:"
+          - strong [ref=e43]: Tidak ada dalam filter
+        - generic [ref=e44]:
+          - text: "USIA DATA:"
+          - strong [ref=e45]: Pilih filter 48 Jam / 7 Hari untuk melihat data sebelumnya.
+      - generic [ref=e46]:
+        - button "Sync Hotspot Manual" [ref=e47] [cursor=pointer]
+        - button "Prewarm Histori" [ref=e48] [cursor=pointer]
+  - main [ref=e49]:
+    - region "Dashboard workspace" [ref=e50]:
+      - status [ref=e51]:
+        - generic [ref=e53]: Memuat tampilan peta...
+      - complementary [ref=e54]:
+        - complementary "Filters" [ref=e55]:
+          - generic [ref=e56]:
+            - generic [ref=e57]:
+              - paragraph [ref=e58]: Filter temporal
+              - heading "Filter temporal" [level=2] [ref=e59]
+            - paragraph [ref=e60]: AKTIF
+          - generic [ref=e61]:
+            - heading "Preset rentang waktu" [level=3] [ref=e62]
+            - generic [ref=e63]:
+              - button "24 Jam" [ref=e64] [cursor=pointer]:
+                - generic [ref=e65]: 24 Jam
+              - button "48 Jam" [ref=e66] [cursor=pointer]:
+                - generic [ref=e67]: 48 Jam
+              - button "3 Hari" [ref=e68] [cursor=pointer]:
+                - generic [ref=e69]: 3 Hari
+              - button "7 Hari" [ref=e70] [cursor=pointer]:
+                - generic [ref=e71]: 7 Hari
+              - button "30 Hari" [ref=e72] [cursor=pointer]:
+                - generic [ref=e73]: 30 Hari
+              - button "Custom" [ref=e74] [cursor=pointer]:
+                - generic [ref=e75]: Custom
+            - generic [ref=e76]:
+              - generic [ref=e77]: Hotspot beririsan
+              - strong [ref=e78]: "0"
+          - generic [ref=e79]:
+            - heading "Provinsi" [level=3] [ref=e80]
+            - combobox [ref=e81] [cursor=pointer]:
+              - option "Semua Provinsi" [selected]
+          - generic [ref=e83] [cursor=pointer]:
+            - checkbox "Tampilkan Angin" [ref=e84]
+            - generic [ref=e85]: Tampilkan Angin
+          - generic [ref=e86]:
+            - heading "Rentang kustom" [level=3] [ref=e87]
+            - generic [ref=e88]:
+              - generic [ref=e89]:
+                - generic [ref=e90]: Dari
+                - textbox "Dari" [disabled] [ref=e91]: 2026-06-01
+              - generic [ref=e92]:
+                - generic [ref=e93]: Ke
+                - textbox "Ke" [disabled] [ref=e94]: 2026-06-02
+          - button "Tampilkan satelit & lapisan" [ref=e95] [cursor=pointer]
+      - complementary [ref=e96]:
+        - article [ref=e98]:
+          - paragraph [ref=e99]:
+            - text: Titik Panas (FRP)
+            - 'generic "Kategori Intensitas Panas (FRP) Tinggi: > 30 MW Sedang: 10–30 MW Rendah: < 10 MW FRP (Fire Radiative Power) menunjukkan tingkat energi panas yang dipancarkan oleh hotspot yang terdeteksi satelit." [ref=e100]': i
+          - generic [ref=e101]:
+            - strong [ref=e102]: "0"
+            - generic [ref=e103]: Total Hotspot
+      - button "Sembunyikan UI" [ref=e104] [cursor=pointer]:
+        - img [ref=e105]
+        - text: Sembunyikan UI
