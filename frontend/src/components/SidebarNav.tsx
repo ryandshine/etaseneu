@@ -20,6 +20,7 @@ type SidebarNavProps = {
   latestHotspotTimeLabel: string;
   dataAgeLabel: string;
   hasLatestHotspot: boolean;
+  mobileOpen?: boolean;
 };
 
 function NavButton({
@@ -64,10 +65,11 @@ export function SidebarNav({
   nextScheduledSyncLabel,
   latestHotspotTimeLabel,
   dataAgeLabel,
-  hasLatestHotspot
+  hasLatestHotspot,
+  mobileOpen
 }: SidebarNavProps) {
   return (
-    <aside className="side-rail">
+    <aside className={`side-rail${mobileOpen ? " mobile-open" : ""}`}>
       <div className="side-brand">
         <div>
           <div className="side-brand-name">ETAseneu</div>

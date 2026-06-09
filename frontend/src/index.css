@@ -3989,11 +3989,89 @@ body {
 
 .panel--filters {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.6rem;
+}
+
+.filter-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.filter-panel-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #ffb36b;
+}
+
+.filter-panel-badge {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: rgba(245, 239, 230, 0.7);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.2rem;
+  padding: 0.15rem 0.45rem;
+}
+
+.filter-group-label {
+  margin: 0 0 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(209, 213, 219, 0.6);
+}
+
+.filter-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.3rem;
+  margin-bottom: 0.4rem;
+}
+
+/* Touch targets — default 44px for mobile/tablet */
+.filter-preset-btn {
+  min-height: 44px;
+  font-size: 0.73rem;
+  padding: 0.35rem 0.25rem;
+  justify-content: center;
+}
+
+.filter-select-input {
+  min-height: 44px;
+  padding: 0.45rem 0.5rem;
+}
+
+.filter-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+  min-height: 44px;
+}
+
+.filter-date-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.45rem 0.4rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f6efe6;
+  font: inherit;
 }
 
 .filter-group + .filter-group {
-  padding-top: 0.6rem;
+  padding-top: 0.5rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -4884,6 +4962,32 @@ a + a {
     overflow-y: auto;
   }
 
+  /* Mobile Filter Floating Button */
+  .mobile-filter-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    bottom: 1.25rem;
+    right: 1.25rem;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(249, 115, 22, 0.4);
+    color: #f59e0b;
+    cursor: pointer;
+    z-index: 700;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+  }
+
+  .mobile-filter-btn:active {
+    transform: scale(0.92);
+    background: rgba(249, 115, 22, 0.15);
+  }
+
   /* Stats Panel: Hidden on Mobile, Show as Tab */
   .control-overlay--top-right {
     display: none;
@@ -5017,10 +5121,17 @@ a + a {
   }
 }
 
+/* Base: hide mobile-only elements by default (overridden in mobile media query) */
+.mobile-hamburger,
+.mobile-filter-btn {
+  display: none;
+}
+
 /* Desktop: 1024px+ */
 @media (min-width: 1024px) {
   .mobile-hamburger,
-  .mobile-overlay {
+  .mobile-overlay,
+  .mobile-filter-btn {
     display: none;
   }
 
@@ -5028,6 +5139,55 @@ a + a {
     position: relative;
     left: auto;
     width: auto;
+  }
+
+  /* FilterPanel: compact for mouse interaction */
+  .panel--filters {
+    padding: 0.7rem 0.75rem;
+    gap: 0.45rem;
+  }
+
+  .filter-preset-btn {
+    min-height: 32px;
+    font-size: 0.7rem;
+    padding: 0.2rem 0.2rem;
+  }
+
+  .filter-preset-grid {
+    gap: 0.25rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .filter-select-input {
+    min-height: 32px;
+    padding: 0.3rem 0.4rem;
+  }
+
+  .filter-checkbox-label {
+    min-height: 30px;
+    font-size: 0.73rem;
+  }
+
+  .filter-date-input {
+    min-height: 32px;
+    padding: 0.3rem 0.4rem;
+  }
+
+  .filter-group + .filter-group {
+    padding-top: 0.4rem;
+  }
+
+  .filter-panel-header {
+    padding-bottom: 0.4rem;
+  }
+
+  /* Equalize overlay panel widths for symmetry */
+  .control-overlay--top-left {
+    width: min(17rem, calc(100% - 2rem));
+  }
+
+  .control-overlay--top-right {
+    width: min(17rem, calc(100% - 2rem));
   }
 }
 

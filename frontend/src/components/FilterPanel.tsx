@@ -39,44 +39,39 @@ export function FilterPanel(props: FilterPanelProps) {
 
   return (
     <aside aria-label="Filters" className="panel panel--filters glass-panel" style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 2rem)' }}>
-      <div className="panel-header">
-        <div>
-          <p className="panel-eyebrow">Filter temporal</p>
-          <h2>Filter temporal</h2>
-        </div>
-        <p className="panel-badge">AKTIF</p>
+      <div className="filter-panel-header">
+        <span className="filter-panel-title">Filter Waktu</span>
+        <span className="filter-panel-badge">AKTIF</span>
       </div>
 
-      <section className="filter-group" style={{ paddingBottom: '0.75rem' }}>
-        <h3 style={{ fontSize: '0.85rem', marginBottom: '0.4rem' }}>Preset waktu</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.35rem', marginBottom: '0.5rem' }}>
+      <section className="filter-group">
+        <p className="filter-group-label">Preset waktu</p>
+        <div className="filter-preset-grid">
           {TIME_PRESET_OPTIONS.map((preset) => (
             <button
               key={preset.value}
               type="button"
-              className={`chip chip--button${props.timePreset === preset.value ? " chip--active" : ""}`}
+              className={`chip chip--button filter-preset-btn${props.timePreset === preset.value ? " chip--active" : ""}`}
               onClick={() => props.onTimePresetChange(preset.value)}
-              style={{ fontSize: '0.75rem', padding: '0.4rem 0.35rem', minHeight: '44px', minWidth: '44px' }}
             >
               <span>{preset.label}</span>
             </button>
           ))}
         </div>
-        <div className="control-metric" style={{ fontSize: '0.7rem' }}>
+        <div className="control-metric" style={{ fontSize: '0.68rem' }}>
           <span>Hotspot beririsan:</span>
           <strong style={{ marginLeft: '0.3rem' }}>{props.hotspotCount}</strong>
         </div>
       </section>
 
-      <section className="filter-group" style={{ paddingBottom: '0.5rem' }}>
-        <h3 style={{ fontSize: '0.85rem', marginBottom: '0.4rem' }}>Provinsi</h3>
+      <section className="filter-group">
+        <p className="filter-group-label">Provinsi</p>
         <select
           value={props.selectedProvince}
           onChange={(e) => props.onProvinceChange(e.target.value)}
+          className="filter-select-input"
           style={{
             width: "100%",
-            minHeight: "44px",
-            padding: "0.5rem",
             fontSize: "0.75rem",
             background: "rgba(255, 255, 255, 0.05)",
             border: "1px solid rgba(255, 255, 255, 0.1)",
@@ -95,23 +90,23 @@ export function FilterPanel(props: FilterPanelProps) {
         </select>
       </section>
 
-      <section className="filter-group" style={{ paddingBottom: '0.5rem' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.75rem', minHeight: '44px', padding: '0.5rem 0' }}>
+      <section className="filter-group">
+        <label className="filter-checkbox-label">
           <input
             type="checkbox"
             checked={props.showWind}
             onChange={props.onToggleWind}
-            style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+            style={{ cursor: 'pointer', width: '16px', height: '16px', flexShrink: 0 }}
           />
           <span>Tampilkan Angin</span>
         </label>
       </section>
 
-      <section className="filter-group" style={{ paddingBottom: '0.75rem' }}>
-        <h3 style={{ fontSize: '0.85rem', marginBottom: '0.4rem' }}>Rentang kustom</h3>
+      <section className="filter-group">
+        <p className="filter-group-label">Rentang kustom</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
           <label className="field" style={{ margin: 0 }}>
-            <span style={{ fontSize: '0.7rem' }}>Dari</span>
+            <span style={{ fontSize: '0.68rem' }}>Dari</span>
             <input
               type="date"
               value={props.startDate}
@@ -119,11 +114,12 @@ export function FilterPanel(props: FilterPanelProps) {
               onChange={(event) =>
                 props.onDateChange("startDate", event.currentTarget.value)
               }
-              style={{ minHeight: '44px', padding: '0.5rem', fontSize: '0.75rem' }}
+              className="filter-date-input"
+              style={{ fontSize: '0.73rem' }}
             />
           </label>
           <label className="field" style={{ margin: 0 }}>
-            <span style={{ fontSize: '0.7rem' }}>Ke</span>
+            <span style={{ fontSize: '0.68rem' }}>Ke</span>
             <input
               type="date"
               value={props.endDate}
@@ -131,11 +127,12 @@ export function FilterPanel(props: FilterPanelProps) {
               onChange={(event) =>
                 props.onDateChange("endDate", event.currentTarget.value)
               }
-              style={{ minHeight: '44px', padding: '0.5rem', fontSize: '0.75rem' }}
+              className="filter-date-input"
+              style={{ fontSize: '0.73rem' }}
             />
           </label>
         </div>
-        {props.timePreset === "custom" && <p className="help-copy" style={{ fontSize: '0.65rem', marginTop: '0.25rem' }}>Tanggal manual aktif.</p>}
+        {props.timePreset === "custom" && <p className="help-copy" style={{ fontSize: '0.64rem', marginTop: '0.2rem' }}>Tanggal manual aktif.</p>}
       </section>
 
       <button
