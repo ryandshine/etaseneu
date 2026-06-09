@@ -992,18 +992,19 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                 <h3>Hotspot per WILKER</h3>
               </div>
             </div>
-            
+
             {topWilker.length === 0 ? (
               <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Data hotspot tidak tersedia</div>
             ) : (
               <div style={{ width: '100%', height: analyticsChartHeight, position: 'relative' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topWilker} layout="vertical" margin={{ top: 0, right: 10, left: 8, bottom: 0 }} barSize={12}>
+                  <BarChart data={topWilker} layout="vertical" margin={{ top: 0, right: 60, left: 140, bottom: 0 }} barSize={12}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" horizontal={false} />
                     <XAxis type="number" hide />
-                    <YAxis type="category" dataKey="label" width={128} stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 9, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} tickMargin={10} />
+                    <YAxis type="category" dataKey="label" width={130} stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 9, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} tickMargin={8} />
                     <ChartTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
                     <Bar dataKey="value" fill="#FF4E00" radius={[0, 2, 2, 0]}>
+                      <LabelList dataKey="value" position="right" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
                       {topWilker.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color || '#FF4E00'} opacity={0.85} />
                       ))}
@@ -1018,62 +1019,34 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
             <div className="matrix-chart-card__header">
               <div>
                 <p className="panel-eyebrow">Analitik Tren</p>
-                <h3>{trendGroupBy === 'month' ? 'Tren Volume & FRP Bulanan' : 'Tren Volume & FRP Harian'}</h3>
+                <h3>{trendGroupBy === 'month' ? 'Tren Volume Bulanan' : 'Tren Volume Harian'}</h3>
               </div>
             </div>
-            <div className="matrix-trend-split" style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
-              <div className="matrix-trend-split__item" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                <p className="matrix-spark-title" style={{ flexShrink: 0, marginBottom: '8px' }}>
-                  {trendGroupBy === 'month' ? 'Volume Insiden Bulanan' : 'Volume Insiden Harian'}
-                </p>
-                {dailyTrend.length === 0 ? (
-                  <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Data hotspot tidak tersedia</div>
-                ) : (
-                  <div style={{ flex: 1, width: '100%', minHeight: 0, position: 'relative' }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={dailyTrend} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#f97316" stopOpacity={0.25}/>
-                            <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
-                        <XAxis dataKey="label" tickFormatter={(val) => trendGroupBy === 'month' ? val.slice(0, 7) : val.slice(8, 10)} stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} />
-                        <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={{ stroke: "rgba(255,255,255,0.08)" }} tickLine={false} allowDecimals={false} />
-                        <ChartTooltip content={<DailyTrendTooltip />} cursor={{ stroke: 'rgba(249, 115, 22, 0.15)', strokeWidth: 1 }} />
-                        <Area type="monotone" dataKey="value" stroke="#f97316" fillOpacity={1} fill="url(#trendGrad)" strokeWidth={1.5} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </div>
-              <div className="matrix-trend-split__item" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                <p className="matrix-spark-title" style={{ flexShrink: 0, marginBottom: '8px' }}>
-                  {trendGroupBy === 'month' ? 'Fire Radiative Power Bulanan' : 'Fire Radiative Power Harian'}
-                </p>
-                {dailyFrpTrend.length === 0 ? (
-                  <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Data hotspot tidak tersedia</div>
-                ) : (
-                  <div style={{ flex: 1, width: '100%', minHeight: 0, position: 'relative' }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={dailyFrpTrend} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="frpGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.25}/>
-                            <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
-                        <XAxis dataKey="label" tickFormatter={(val) => trendGroupBy === 'month' ? val.slice(0, 7) : val.slice(8, 10)} stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} />
-                        <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={{ stroke: "rgba(255,255,255,0.08)" }} tickLine={false} allowDecimals={false} />
-                        <ChartTooltip content={<DailyFrpTrendTooltip />} cursor={{ stroke: 'rgba(245, 158, 11, 0.15)', strokeWidth: 1 }} />
-                        <Area type="monotone" dataKey="value" stroke="#f59e0b" fillOpacity={1} fill="url(#frpGrad)" strokeWidth={1.5} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <p className="matrix-spark-title" style={{ flexShrink: 0, marginBottom: '8px' }}>
+                {trendGroupBy === 'month' ? 'Volume Insiden Bulanan' : 'Volume Insiden Harian'}
+              </p>
+              {dailyTrend.length === 0 ? (
+                <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Data hotspot tidak tersedia</div>
+              ) : (
+                <div style={{ flex: 1, width: '100%', minHeight: 0, position: 'relative' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={dailyTrend} margin={{ top: 5, right: 20, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f97316" stopOpacity={0.25}/>
+                          <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
+                      <XAxis dataKey="label" tickFormatter={(val) => trendGroupBy === 'month' ? val.slice(0, 7) : val.slice(8, 10)} stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} />
+                      <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={{ stroke: "rgba(255,255,255,0.08)" }} tickLine={false} allowDecimals={false} />
+                      <ChartTooltip content={<DailyTrendTooltip />} cursor={{ stroke: 'rgba(249, 115, 22, 0.15)', strokeWidth: 1 }} />
+                      <Area type="monotone" dataKey="value" stroke="#f97316" fillOpacity={1} fill="url(#trendGrad)" strokeWidth={1.5} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
           </section>
         </div>
