@@ -112,23 +112,24 @@ export function SidebarNav({
         </button>
       </nav>
 
-      <div className="side-footer" style={{ padding: '0.75rem', fontSize: '0.75rem' }}>
+      <div className="side-footer" style={{ padding: '0.75rem', fontSize: '0.75rem', overflowX: 'hidden' }}>
         <div className="side-footer-block" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
             <span className="side-footer-label" style={{ fontWeight: '600', letterSpacing: '0.03em', textTransform: 'uppercase', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
               Sinkronisasi NASA
-              <span 
-                title="Info Sinkronisasi NASA&#10;&#10;Tidak adanya hotspot baru tidak selalu berarti sinkronisasi gagal.&#10;&#10;Periksa:&#10;- Last Sync&#10;- Next Sync&#10;- Hotspot Terbaru&#10;- Status Scheduler" 
-                style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '12px', height: '12px', borderRadius: '50%', border: '1px solid currentColor', fontSize: '8px' }}
+              <span
+                title="Info Sinkronisasi NASA&#10;&#10;Tidak adanya hotspot baru tidak selalu berarti sinkronisasi gagal.&#10;&#10;Periksa:&#10;- Last Sync&#10;- Next Sync&#10;- Hotspot Terbaru&#10;- Status Scheduler"
+                style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '12px', height: '12px', borderRadius: '50%', border: '1px solid currentColor', fontSize: '8px', flexShrink: 0 }}
               >
                 i
               </span>
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-              <span style={{ 
-                width: '6px', 
-                height: '6px', 
-                borderRadius: '50%', 
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}>
+              <span style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                flexShrink: 0,
                 backgroundColor: healthStatus === 'normal' ? '#10b981' : healthStatus === 'warning' ? '#f59e0b' : '#ef4444',
                 boxShadow: `0 0 6px ${healthStatus === 'normal' ? '#10b981' : healthStatus === 'warning' ? '#f59e0b' : '#ef4444'}`
               }} />
@@ -137,45 +138,45 @@ export function SidebarNav({
               </span>
             </div>
           </div>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.3rem', color: '#9ca3af', fontSize: '0.7rem' }}>
-            <div>
-              <span>Scheduler: </span>
-              <strong style={{ color: schedulerStatusColor, backgroundColor: schedulerStatusBg, padding: '0.05rem 0.25rem', borderRadius: '3px', fontSize: '0.65rem' }}>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.22rem', color: '#9ca3af', fontSize: '0.68rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem' }}>
+              <span style={{ flexShrink: 0 }}>Scheduler</span>
+              <strong style={{ color: schedulerStatusColor, backgroundColor: schedulerStatusBg, padding: '0.05rem 0.2rem', borderRadius: '3px', fontSize: '0.62rem', flexShrink: 0 }}>
                 {schedulerStatusLabel}
               </strong>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <span>Sync Hari Ini: </span>
-              <strong style={{ color: '#fff' }}>{syncTodayRatio}</strong>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem' }}>
+              <span style={{ flexShrink: 0 }}>Sync Hari Ini</span>
+              <strong style={{ color: '#fff', flexShrink: 0 }}>{syncTodayRatio}</strong>
             </div>
-            <div>
-              <span>Interval: </span>
-              <strong style={{ color: '#fff' }}>{syncInterval}</strong>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem' }}>
+              <span style={{ flexShrink: 0 }}>Interval</span>
+              <strong style={{ color: '#fff', flexShrink: 0 }}>{syncInterval}</strong>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <span>Database: </span>
-              <strong style={{ color: '#fff' }}>{syncLabel}</strong>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem' }}>
+              <span style={{ flexShrink: 0 }}>Database</span>
+              <strong style={{ color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '55%', textAlign: 'right' }}>{syncLabel}</strong>
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', fontSize: '0.65rem', color: '#9ca3af', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.4rem', marginBottom: '0.4rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem', fontSize: '0.65rem', color: '#9ca3af', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.4rem', marginBottom: '0.4rem' }}>
           <div>
             <span style={{ fontSize: '0.6rem', color: '#6b7280' }}>LAST SYNC</span>
-            <div style={{ color: '#fff', fontSize: '0.65rem', marginTop: '0.1rem', wordBreak: 'break-word' }}>{lastSyncLabel}</div>
+            <div style={{ color: '#fff', fontSize: '0.63rem', marginTop: '0.1rem', wordBreak: 'break-word', lineHeight: 1.3 }}>{lastSyncLabel}</div>
           </div>
           <div>
             <span style={{ fontSize: '0.6rem', color: '#6b7280' }}>NEXT SYNC</span>
-            <div style={{ color: '#fff', fontSize: '0.65rem', marginTop: '0.1rem', wordBreak: 'break-word' }}>{nextScheduledSyncLabel}</div>
+            <div style={{ color: '#fff', fontSize: '0.63rem', marginTop: '0.1rem', wordBreak: 'break-word', lineHeight: 1.3 }}>{nextScheduledSyncLabel}</div>
           </div>
           <div style={{ gridColumn: '1 / -1' }}>
             <span style={{ fontSize: '0.6rem', color: '#6b7280' }}>HOTSPOT TERBARU</span>
-            <div style={{ color: '#fff', fontSize: '0.65rem', marginTop: '0.1rem', wordBreak: 'break-word' }}>{latestHotspotTimeLabel}</div>
+            <div style={{ color: '#fff', fontSize: '0.63rem', marginTop: '0.1rem', wordBreak: 'break-word', lineHeight: 1.3 }}>{latestHotspotTimeLabel}</div>
           </div>
           <div style={{ gridColumn: '1 / -1' }}>
             <span style={{ fontSize: '0.6rem', color: '#6b7280' }}>USIA DATA</span>
-            <div style={{ color: hasLatestHotspot ? '#fff' : '#6b7280', fontSize: '0.65rem', marginTop: '0.1rem', wordBreak: 'break-word' }}>{dataAgeLabel}</div>
+            <div style={{ color: hasLatestHotspot ? '#fff' : '#6b7280', fontSize: '0.63rem', marginTop: '0.1rem', wordBreak: 'break-word', lineHeight: 1.3 }}>{dataAgeLabel}</div>
           </div>
         </div>
         <div className="side-sync-actions" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>

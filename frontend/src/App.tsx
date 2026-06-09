@@ -362,7 +362,7 @@ export default function App() {
   }, [latestHotspot]);
 
   const dataAgeLabel = useMemo(() => {
-    if (!latestHotspot) return "Pilih filter 48 Jam / 7 Hari untuk melihat data sebelumnya.";
+    if (!latestHotspot) return "— (pilih filter 48J / 7H)";
     const diffMs = new Date().getTime() - new Date(latestHotspot.detectedAt).getTime();
     if (diffMs < 0) return "0 menit";
     const diffMinutes = Math.floor(diffMs / (60 * 1000));

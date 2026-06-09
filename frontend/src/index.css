@@ -100,6 +100,7 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow-x: hidden;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(19, 21, 26, 0.96);
 }
@@ -496,6 +497,7 @@ body {
   left: 1rem;
   width: min(17rem, calc(100% - 2rem));
   z-index: 1000;
+  overflow-x: hidden;
 }
 
 .control-overlay--bottom-left {
@@ -3990,6 +3992,7 @@ body {
 .panel--filters {
   display: grid;
   gap: 0.6rem;
+  overflow-x: hidden;
 }
 
 .filter-panel-header {
