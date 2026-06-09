@@ -68,7 +68,7 @@ describe("HotspotMatrix", () => {
         onDateChange={() => undefined}
         startDate="2026-05-27"
         endDate="2026-05-28"
-        dateRangeLabel="24 jam terakhir"
+        dateRangeLabel="Hari ini"
       />
     );
 

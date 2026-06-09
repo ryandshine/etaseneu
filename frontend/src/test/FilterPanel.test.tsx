@@ -48,7 +48,7 @@ describe("FilterPanel", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: /24 jam/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /hari ini/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /custom/i }));
     expect(onTimePresetChange).toHaveBeenCalledWith("custom");
     fireEvent.click(screen.getByRole("button", { name: /tampilkan satelit/i }));

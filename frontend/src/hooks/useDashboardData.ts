@@ -141,7 +141,7 @@ export function buildTimeRange(
   }
 
   const presetOffset = {
-    "24h": { days: 0, label: "24 jam terakhir" },
+    "24h": { days: 0, label: "Hari ini" },
     "48h": { days: -1, label: "48 jam terakhir" },
     "3d": { days: -2, label: "3 hari terakhir" },
     "7d": { days: -6, label: "7 hari terakhir" },

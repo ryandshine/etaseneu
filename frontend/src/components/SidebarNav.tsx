@@ -78,7 +78,7 @@ export function SidebarNav({
       <nav className="side-nav" aria-label="Utama">
         <p className="side-nav-label">Navigasi</p>
         <NavButton active={activeView === "map"} onClick={() => onChangeView("map")}>
-          Peta Langsung
+          LIVE MAP
         </NavButton>
         <NavButton active={activeView === "matrix"} onClick={() => onChangeView("matrix")}>
           Matriks Data

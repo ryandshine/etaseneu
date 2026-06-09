@@ -5,7 +5,7 @@ export const TIME_PRESET_OPTIONS: Array<{
   value: TimePreset;
   hours: number;
 }> = [
-  { label: "24 Jam", value: "24h", hours: 24 },
+  { label: "Hari Ini", value: "24h", hours: 24 },
   { label: "48 Jam", value: "48h", hours: 48 },
   { label: "3 Hari", value: "3d", hours: 72 },
   { label: "7 Hari", value: "7d", hours: 168 },

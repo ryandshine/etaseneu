@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildTimeRange } from "../hooks/useDashboardData";
 
 describe("buildTimeRange - Calendar Preset Filters & Custom Ranges in WIB", () => {
-  it("should represent 24 Jam (1 full calendar day) of the selected date in WIB", () => {
+  it("should represent Hari Ini (1 full calendar day) of the selected date in WIB", () => {
     const selectedDate = "2026-05-30";
     const range = buildTimeRange("24h", "2026-05-29", selectedDate, 0);
 
@@ -10,7 +10,7 @@ describe("buildTimeRange - Calendar Preset Filters & Custom Ranges in WIB", () =
     expect(range.startAt.toISOString()).toBe("2026-05-29T17:00:00.000Z");
     // 2026-05-31 00:00:00 WIB -> 2026-05-30 17:00:00 UTC
     expect(range.endAt.toISOString()).toBe("2026-05-30T17:00:00.000Z");
-    expect(range.label).toBe("24 jam terakhir");
+    expect(range.label).toBe("Hari ini");
   });
 
   it("should represent 48 Jam (2 full calendar days ending on selected date) in WIB", () => {

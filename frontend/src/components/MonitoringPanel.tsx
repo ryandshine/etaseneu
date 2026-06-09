@@ -885,7 +885,7 @@ export function MonitoringPanel({
             <div className="cyber-viz-panel">
               <div className="viz-header">
                 <span className="viz-dot" />
-                <span className="viz-title">Tren Kemunculan Hotspot (24 Jam)</span>
+                <span className="viz-title">Tren Kemunculan Hotspot (Hari Ini)</span>
               </div>
               <div className="waveform-container">
                 <svg className="waveform-svg" viewBox="0 0 300 80" width="100%" height="80px">
