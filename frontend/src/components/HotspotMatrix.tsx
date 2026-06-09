@@ -1138,7 +1138,41 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
           </div>
 
           {filteredHotspots.length === 0 ? (
-            <div className="matrix-empty matrix-empty--card">Tidak ada hotspot ditemukan</div>
+            <div style={{ padding: '2rem 1rem', textAlign: 'center' }}>
+              <div className="matrix-empty matrix-empty--card" style={{ marginBottom: searchQuery ? '1.5rem' : 0 }}>
+                Tidak ada hotspot ditemukan
+              </div>
+              {searchQuery && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', flexDirection: 'column' }}>
+                  <p style={{ fontSize: '0.9rem', color: '#9ca3af', margin: 0 }}>
+                    Tidak ada hasil untuk "<strong style={{ color: '#f3f4f6' }}>{searchQuery}</strong>"
+                  </p>
+                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        fontSize: '0.85rem',
+                        background: 'rgba(255, 107, 53, 0.2)',
+                        border: '1px solid rgba(255, 107, 53, 0.5)',
+                        color: '#FF6B35',
+                        borderRadius: '0.25rem',
+                        cursor: 'pointer',
+                        fontWeight: '500',
+                        fontFamily: 'inherit'
+                      }}
+                    >
+                      Clear Search
+                    </button>
+                    <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>atau tekan Escape</span>
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
             <>
               <div style={{ padding: '1rem', marginBottom: '0.5rem' }}>
@@ -1154,6 +1188,12 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                     onChange={(e) => {
                       setSearchQuery(e.target.value);
                       setCurrentPage(1);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setSearchQuery("");
+                        setCurrentPage(1);
+                      }
                     }}
                     style={{
                       flex: 1,
