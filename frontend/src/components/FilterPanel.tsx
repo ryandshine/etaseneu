@@ -38,7 +38,7 @@ export function FilterPanel(props: FilterPanelProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   return (
-    <aside aria-label="Filters" className="panel panel--filters glass-panel">
+    <aside aria-label="Filters" className="panel panel--filters glass-panel" style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 2rem)' }}>
       <div className="panel-header">
         <div>
           <p className="panel-eyebrow">Filter temporal</p>
@@ -56,7 +56,7 @@ export function FilterPanel(props: FilterPanelProps) {
               type="button"
               className={`chip chip--button${props.timePreset === preset.value ? " chip--active" : ""}`}
               onClick={() => props.onTimePresetChange(preset.value)}
-              style={{ fontSize: '0.75rem', padding: '0.4rem 0.35rem', minHeight: '28px' }}
+              style={{ fontSize: '0.75rem', padding: '0.4rem 0.35rem', minHeight: '44px', minWidth: '44px' }}
             >
               <span>{preset.label}</span>
             </button>
@@ -75,7 +75,8 @@ export function FilterPanel(props: FilterPanelProps) {
           onChange={(e) => props.onProvinceChange(e.target.value)}
           style={{
             width: "100%",
-            padding: "0.35rem",
+            minHeight: "44px",
+            padding: "0.5rem",
             fontSize: "0.75rem",
             background: "rgba(255, 255, 255, 0.05)",
             border: "1px solid rgba(255, 255, 255, 0.1)",
@@ -95,12 +96,12 @@ export function FilterPanel(props: FilterPanelProps) {
       </section>
 
       <section className="filter-group" style={{ paddingBottom: '0.5rem' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.75rem' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.75rem', minHeight: '44px', padding: '0.5rem 0' }}>
           <input
             type="checkbox"
             checked={props.showWind}
             onChange={props.onToggleWind}
-            style={{ cursor: 'pointer' }}
+            style={{ cursor: 'pointer', width: '18px', height: '18px' }}
           />
           <span>Tampilkan Angin</span>
         </label>
@@ -118,7 +119,7 @@ export function FilterPanel(props: FilterPanelProps) {
               onChange={(event) =>
                 props.onDateChange("startDate", event.currentTarget.value)
               }
-              style={{ padding: '0.35rem', fontSize: '0.75rem' }}
+              style={{ minHeight: '44px', padding: '0.5rem', fontSize: '0.75rem' }}
             />
           </label>
           <label className="field" style={{ margin: 0 }}>
@@ -130,7 +131,7 @@ export function FilterPanel(props: FilterPanelProps) {
               onChange={(event) =>
                 props.onDateChange("endDate", event.currentTarget.value)
               }
-              style={{ padding: '0.35rem', fontSize: '0.75rem' }}
+              style={{ minHeight: '44px', padding: '0.5rem', fontSize: '0.75rem' }}
             />
           </label>
         </div>

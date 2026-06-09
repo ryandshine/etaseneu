@@ -183,7 +183,7 @@ export function SidebarNav({
             onClick={onManualSync}
             disabled={manualSyncBusy}
             aria-busy={manualSyncBusy}
-            style={{ flex: '1 1 48%', fontSize: '0.75rem', padding: '0.5rem' }}
+            style={{ flex: '1 1 48%', minHeight: '44px', fontSize: '0.75rem', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}
           >
             <span className="sync-button-label">
               {manualSyncBusy ? "Sync..." : "Sync Hotspot"}
@@ -200,7 +200,7 @@ export function SidebarNav({
             onClick={onPrewarmHistory}
             disabled={prewarmBusy}
             aria-busy={prewarmBusy}
-            style={{ flex: '1 1 48%', fontSize: '0.75rem', padding: '0.5rem' }}
+            style={{ flex: '1 1 48%', minHeight: '44px', fontSize: '0.75rem', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}
           >
             <span className="sync-button-label">
               {prewarmBusy ? "Prewarm..." : "Prewarm"}
