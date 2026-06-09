@@ -1071,13 +1071,13 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                 <table className="matrix-table">
                   <thead>
                     <tr>
-                      <th>Lembaga / Entitas</th>
+                      <th>KPS</th>
                       <th>Balai PS</th>
                       <th>Jumlah Hotspot</th>
                       <th>Most Recent Detected</th>
                       <th>Lat / Lon</th>
                       <th>Provinsi</th>
-                      <th>Conf %</th>
+                      <th>FRP Conf %</th>
                       <th>Satelit</th>
                     </tr>
                   </thead>
