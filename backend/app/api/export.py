@@ -108,18 +108,26 @@ async def export_hotspots_pdf(
 
     layers_info = service.layer_service.spatial_layers_for_ids(active_layers)
 
-    from app.services.pdf_export_service import build_pdf_report
     filename = (
         f"eta-seuneu-laporan-{agency.lower().replace(' ', '-')}.pdf"
         if agency
         else "eta-seuneu-hotspots-report.pdf"
     )
-    pdf_content = build_pdf_report(
-        hotspots=hotspots,
-        query=query,
-        layers_info=layers_info,
-        agency_name=agency,
-    )
+
+    if agency:
+        from app.services.agency_pdf_service import build_agency_pdf_weasyprint
+        pdf_content = build_agency_pdf_weasyprint(
+            hotspots=hotspots,
+            query=query,
+            agency_name=agency,
+        )
+    else:
+        from app.services.pdf_export_service import build_pdf_report
+        pdf_content = build_pdf_report(
+            hotspots=hotspots,
+            query=query,
+            layers_info=layers_info,
+        )
 
     return Response(
         content=pdf_content,
