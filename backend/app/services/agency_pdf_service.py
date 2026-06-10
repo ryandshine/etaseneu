@@ -80,8 +80,10 @@ def _tile_to_latlon(xtile: int, ytile: int, zoom: int):
     return math.degrees(lat_rad), lon_deg
 
 
-def _fetch_map_b64(hotspots: list[dict], width: int = 520, height: int = 260) -> str | None:
-    """Download a CartoDB basemap + plot hotspot dots, return base64 PNG string."""
+def _fetch_map_b64(hotspots: list[dict], width: int = 520, height: int = 260,
+                   force_bounds: tuple | None = None, force_zoom: int | None = None) -> str | None:
+    """Download a CartoDB basemap + plot hotspot dots, return base64 PNG string.
+    force_bounds=(min_lat, max_lat, min_lon, max_lon) pins the viewport."""
     try:
         from PIL import Image as PILImage, ImageDraw
     except ImportError:
@@ -89,22 +91,28 @@ def _fetch_map_b64(hotspots: list[dict], width: int = 520, height: int = 260) ->
 
     lons = [float(h["longitude"]) for h in hotspots if h.get("longitude") is not None]
     lats = [float(h["latitude"])  for h in hotspots if h.get("latitude")  is not None]
-    if not lons:
-        return None
 
-    min_lon = min(lons); max_lon = max(lons)
-    min_lat = min(lats); max_lat = max(lats)
-    pad = 0.05
-    min_lon -= pad; max_lon += pad
-    min_lat -= pad; max_lat += pad
-    if max_lon - min_lon < 0.01: min_lon -= 0.05; max_lon += 0.05
-    if max_lat - min_lat < 0.01: min_lat -= 0.05; max_lat += 0.05
+    if force_bounds:
+        min_lat, max_lat, min_lon, max_lon = force_bounds
+    else:
+        if not lons:
+            return None
+        min_lon = min(lons); max_lon = max(lons)
+        min_lat = min(lats); max_lat = max(lats)
+        pad = 0.05
+        min_lon -= pad; max_lon += pad
+        min_lat -= pad; max_lat += pad
+        if max_lon - min_lon < 0.01: min_lon -= 0.05; max_lon += 0.05
+        if max_lat - min_lat < 0.01: min_lat -= 0.05; max_lat += 0.05
 
-    dlon = max_lon - min_lon
-    dlat = max_lat - min_lat
-    zoom_lon = math.log2(360.0 * width  / (dlon * 256.0 * 1.2))
-    zoom_lat = math.log2(180.0 * height / (dlat * 256.0 * 1.2))
-    zoom = max(0, min(int(min(zoom_lon, zoom_lat)), 14))
+    if force_zoom is not None:
+        zoom = force_zoom
+    else:
+        dlon = max_lon - min_lon
+        dlat = max_lat - min_lat
+        zoom_lon = math.log2(360.0 * width  / (dlon * 256.0 * 1.2))
+        zoom_lat = math.log2(180.0 * height / (dlat * 256.0 * 1.2))
+        zoom = max(0, min(int(min(zoom_lon, zoom_lat)), 14))
 
     x1, y1 = _latlon_to_tile(max_lat, min_lon, zoom)
     x2, y2 = _latlon_to_tile(min_lat, max_lon, zoom)
@@ -325,24 +333,62 @@ def build_agency_pdf_weasyprint(
     sat_counts = Counter(h.get("source", "UNKNOWN") for h in hotspots)
     sat_count  = len(sat_counts)
 
-    # ── metadata ──
+    # ── metadata (full SHP fields) ──
     first_h = hotspots[0] if hotspots else {}
-    meta = first_h.get("polygon_metadata", {})
-    prov_name   = first_h.get("province_name") or meta.get("NAMA_PROV") or "N/A"
-    bps_name    = meta.get("WILKER_BPS")  or "N/A"
-    kab_name    = meta.get("NAMA_KAB")    or "N/A"
-    fungsi_kws  = meta.get("FUNGSI_KWS")  or "N/A"
-    lembaga_val = meta.get("LEMBAGA")     or agency_name
+    meta = first_h.get("polygon_metadata", {}) or {}
+
+    def _m(key: str, fallback: str = "N/A") -> str:
+        v = meta.get(key)
+        return str(v).strip() if v not in (None, "", "null") else fallback
+
+    def _m_area(key: str) -> str:
+        v = meta.get(key)
+        try:
+            val = float(v)
+            return f"{val:,.2f} ha" if val > 0 else "—"
+        except (TypeError, ValueError):
+            return "—"
+
+    lembaga_val = _m("LEMBAGA", agency_name)
+    prov_name   = first_h.get("province_name") or _m("NAMA_PROV")
+    bps_name    = _m("WILKER_BPS")
+    kab_name    = _m("NAMA_KAB")
+    kec_name    = _m("NAMA_KEC")
+    desa_name   = _m("NAMA_DESA")
+    skema       = _m("SKEMA")
+    no_sk       = _m("NO_SK")
+    tgl_sk      = _m("TGL_SK")
+    status_ps   = _m("Status")
+    jml_kk      = _m("Jml_KK")
+    keterangan  = _m("KETERANGAN")
+    luas_final  = _m_area("LuasFinal")
+    luas_sk     = _m_area("LUAS_SK")
+    luas_hl     = _m_area("LUAS_HL")
+    luas_hpt    = _m_area("LUAS_HPT")
+    luas_hp     = _m_area("LUAS_HP")
+    luas_hpk    = _m_area("LUAS_HPK")
+    luas_hk     = _m_area("Luas_HK")
+    keliling    = _m("Keliling")
+    if keliling != "N/A":
+        try:
+            keliling = f"{float(keliling):,.2f} km"
+        except ValueError:
+            keliling = "N/A"
 
     lats = [float(h["latitude"])  for h in hotspots if h.get("latitude")  is not None]
     lons = [float(h["longitude"]) for h in hotspots if h.get("longitude") is not None]
     avg_lat = f"{sum(lats)/len(lats):.5f}" if lats else "-2.50000"
     avg_lon = f"{sum(lons)/len(lons):.5f}" if lons else "118.00000"
 
-    # ── map ──
+    # ── map — Indonesia full extent ──
     map_b64 = None
     try:
-        map_b64 = _fetch_map_b64(hotspots, width=480, height=220)
+        # Show all of Indonesia (approx bounds), hotspot dots pinned on top
+        map_b64 = _fetch_map_b64(
+            hotspots, width=520, height=200,
+            force_bounds=(-11.0, 6.0, 94.5, 141.5),
+            force_zoom=4,
+        )
     except Exception as e:
         logger.warning(f"Map generation error: {e}")
 
@@ -415,30 +461,62 @@ def build_agency_pdf_weasyprint(
         for i, (src, cnt) in enumerate(sorted(sat_counts.items(), key=lambda x: -x[1]))
     ]
 
-    # ── trend SVG ──
-    daily_vol = Counter()
+    # ── daily stats for Section 05 ──
+    daily_vol: Counter = Counter()
     daily_frp_sum: dict[str, float] = {}
+    daily_max_frp: dict[str, float] = {}
     for h in hotspots:
         dt = _wib_dt(str(h.get("detected_at", "")))
         if dt:
             day = dt.strftime("%Y-%m-%d")
             daily_vol[day] += 1
-            daily_frp_sum[day] = daily_frp_sum.get(day, 0.0) + float(h.get("frp") or 0)
+            frp_v = float(h.get("frp") or 0)
+            daily_frp_sum[day] = daily_frp_sum.get(day, 0.0) + frp_v
+            daily_max_frp[day] = max(daily_max_frp.get(day, 0.0), frp_v)
 
     sorted_days = sorted(set(list(daily_vol.keys()) + list(daily_frp_sum.keys())))
-    if len(sorted_days) > 14:
-        sorted_days = sorted_days[-14:]
 
+    max_day_count = max(daily_vol.values()) if daily_vol else 1
+    total_frp_all = round(sum(daily_frp_sum.values()), 1)
+    active_days   = len(sorted_days)
+    peak_day_count = max(daily_vol.values()) if daily_vol else 0
+    peak_day_date  = max(daily_vol, key=daily_vol.get) if daily_vol else "—"  # type: ignore[arg-type]
+    try:
+        peak_day_display = datetime.strptime(peak_day_date, "%Y-%m-%d").strftime("%d %b %Y") if peak_day_date != "—" else "—"
+    except ValueError:
+        peak_day_display = peak_day_date
+    avg_daily = f"{total_hs / active_days:.1f}" if active_days else "0"
+
+    def _day_color(count: int, max_c: int) -> tuple[str, str]:
+        ratio = count / max_c if max_c else 0
+        if ratio >= 0.75: return "#dc2626", "badge-red"
+        if ratio >= 0.40: return "#f97316", "badge-amber"
+        return "#16a34a", "badge-green"
+
+    daily_stats = []
+    for day in sorted_days:
+        cnt = daily_vol.get(day, 0)
+        frp_t = round(daily_frp_sum.get(day, 0.0), 1)
+        bar_pct = round(cnt / max_day_count * 100) if max_day_count else 0
+        bar_color, status_badge = _day_color(cnt, max_day_count)
+        status_lbl = "Tinggi" if status_badge == "badge-red" else "Sedang" if status_badge == "badge-amber" else "Rendah"
+        try:
+            date_disp = datetime.strptime(day, "%Y-%m-%d").strftime("%d %b %Y")
+        except ValueError:
+            date_disp = day
+        daily_stats.append({
+            "date_display": date_disp,
+            "count": cnt,
+            "frp_total": frp_t,
+            "bar_pct": bar_pct,
+            "bar_color": bar_color,
+            "status": status_lbl,
+            "status_badge": status_badge,
+        })
+
+    # kept for template compat (unused but harmless)
     trend_svg_w = 540
     trend_svg_h = 80
-    vol_svg = _build_trend_svg(
-        sorted_days, [daily_vol.get(d, 0) for d in sorted_days],
-        "#0f766e", trend_svg_w, trend_svg_h,
-    )
-    frp_svg = _build_trend_svg(
-        sorted_days, [daily_frp_sum.get(d, 0.0) for d in sorted_days],
-        "#f59e0b", trend_svg_w, trend_svg_h,
-    )
 
     # ── hotspot rows ──
     hotspot_rows = []
@@ -493,11 +571,27 @@ def build_agency_pdf_weasyprint(
         avg_frp=avg_frp,
         avg_lat=avg_lat,
         avg_lon=avg_lon,
+        # profile metadata
         lembaga_val=lembaga_val,
+        skema=skema,
+        no_sk=no_sk,
+        tgl_sk=tgl_sk,
+        status_ps=status_ps,
         bps_name=bps_name,
-        kab_name=kab_name,
         prov_name=prov_name,
-        fungsi_kws=fungsi_kws,
+        kab_name=kab_name,
+        kec_name=kec_name,
+        desa_name=desa_name,
+        jml_kk=jml_kk,
+        keterangan=keterangan,
+        luas_final=luas_final,
+        luas_sk=luas_sk,
+        luas_hl=luas_hl,
+        luas_hpt=luas_hpt,
+        luas_hp=luas_hp,
+        luas_hpk=luas_hpk,
+        luas_hk=luas_hk,
+        keliling=keliling,
         map_image_b64=map_b64,
         weather=weather,
         cbi_color=cbi_color_map.get(cbi_level, "#64748b"),
@@ -506,8 +600,13 @@ def build_agency_pdf_weasyprint(
         conf_rows=conf_rows,
         frp_rows=frp_rows,
         sat_rows=sat_rows,
-        vol_svg=vol_svg,
-        frp_svg=frp_svg,
+        # section 05 - daily ops
+        daily_stats=daily_stats,
+        peak_day_display=peak_day_display,
+        peak_day_count=peak_day_count,
+        total_frp_all=total_frp_all,
+        active_days=active_days,
+        avg_daily=avg_daily,
         trend_svg_w=trend_svg_w,
         trend_svg_h=trend_svg_h,
         hotspot_rows=hotspot_rows,
