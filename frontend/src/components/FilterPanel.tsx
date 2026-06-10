@@ -58,9 +58,9 @@ export function FilterPanel(props: FilterPanelProps) {
             </button>
           ))}
         </div>
-        <div className="control-metric" style={{ fontSize: '0.68rem' }}>
+        <div className="control-metric">
           <span>Hotspot beririsan:</span>
-          <strong style={{ marginLeft: '0.3rem' }}>{props.hotspotCount}</strong>
+          <strong>{props.hotspotCount}</strong>
         </div>
       </section>
 
@@ -70,20 +70,10 @@ export function FilterPanel(props: FilterPanelProps) {
           value={props.selectedProvince}
           onChange={(e) => props.onProvinceChange(e.target.value)}
           className="filter-select-input"
-          style={{
-            width: "100%",
-            fontSize: "0.75rem",
-            background: "rgba(255, 255, 255, 0.05)",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
-            borderRadius: "0.25rem",
-            color: "#f3f4f6",
-            outline: "none",
-            cursor: "pointer"
-          }}
         >
-          <option value="" style={{ background: "#111317" }}>Semua Provinsi</option>
+          <option value="">Semua Provinsi</option>
           {props.provinceOptions.map((province) => (
-            <option key={province} value={province} style={{ background: "#111317" }}>
+            <option key={province} value={province}>
               {province}
             </option>
           ))}
@@ -96,7 +86,6 @@ export function FilterPanel(props: FilterPanelProps) {
             type="checkbox"
             checked={props.showWind}
             onChange={props.onToggleWind}
-            style={{ cursor: 'pointer', width: '16px', height: '16px', flexShrink: 0 }}
           />
           <span>Tampilkan Angin</span>
         </label>
@@ -104,9 +93,9 @@ export function FilterPanel(props: FilterPanelProps) {
 
       <section className="filter-group">
         <p className="filter-group-label">Rentang kustom</p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
-          <label className="field" style={{ margin: 0 }}>
-            <span style={{ fontSize: '0.68rem' }}>Dari</span>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+          <label className="field">
+            <span>Dari</span>
             <input
               type="date"
               value={props.startDate}
@@ -115,11 +104,10 @@ export function FilterPanel(props: FilterPanelProps) {
                 props.onDateChange("startDate", event.currentTarget.value)
               }
               className="filter-date-input"
-              style={{ fontSize: '0.73rem' }}
             />
           </label>
-          <label className="field" style={{ margin: 0 }}>
-            <span style={{ fontSize: '0.68rem' }}>Ke</span>
+          <label className="field">
+            <span>Ke</span>
             <input
               type="date"
               value={props.endDate}
@@ -128,11 +116,10 @@ export function FilterPanel(props: FilterPanelProps) {
                 props.onDateChange("endDate", event.currentTarget.value)
               }
               className="filter-date-input"
-              style={{ fontSize: '0.73rem' }}
             />
           </label>
         </div>
-        {props.timePreset === "custom" && <p className="help-copy" style={{ fontSize: '0.64rem', marginTop: '0.2rem' }}>Tanggal manual aktif.</p>}
+        {props.timePreset === "custom" && <p className="help-copy">Tanggal manual aktif.</p>}
       </section>
 
       <button

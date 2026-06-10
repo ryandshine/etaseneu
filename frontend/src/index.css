@@ -159,6 +159,7 @@ body {
 .side-nav-link {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 0.7rem;
   width: 100%;
   padding: 0.85rem 0.95rem;
@@ -169,6 +170,7 @@ body {
   cursor: pointer;
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.72rem;
+  line-height: 1;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
@@ -187,6 +189,11 @@ body {
   font-size: 0.56rem;
   font-weight: 800;
   letter-spacing: 0.16em;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .side-nav-alert--incident {
@@ -212,8 +219,23 @@ body {
 .side-nav-mark {
   width: 0.55rem;
   height: 0.55rem;
+  min-width: 0.55rem;
+  min-height: 0.55rem;
   border-radius: 0.125rem;
   background: currentColor;
+  flex-shrink: 0;
+}
+
+.side-nav-link > span {
+  display: flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.side-nav-link .side-nav-alert {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
 }
 
 .side-footer {
@@ -338,7 +360,7 @@ body {
   position: relative;
   overflow: hidden;
   min-height: 2.5rem;
-  padding: 0 0.95rem;
+  padding: 0 0.9rem;
   border: 1px solid rgba(255, 120, 72, 0.24);
   border-radius: 0.125rem;
   background: linear-gradient(135deg, rgba(255, 94, 0, 0.18), rgba(255, 155, 70, 0.08));
@@ -693,7 +715,7 @@ body {
 }
 
 .monitor-audio-toggle {
-  min-height: 2.45rem;
+  min-height: 2.5rem;
   width: fit-content;
   padding: 0 0.9rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -715,8 +737,8 @@ body {
 }
 
 .monitor-dismiss {
-  min-height: 2rem;
-  padding: 0 0.8rem;
+  min-height: 2.5rem;
+  padding: 0 0.9rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.04);
   color: rgba(255, 245, 237, 0.9);
@@ -1036,7 +1058,7 @@ body {
   font-size: 0.65rem;
   font-weight: 800;
   padding: 0.2rem 0.5rem;
-  border-radius: 4px;
+  border-radius: 0.25rem;
   background: #fbbf24;
   color: #0f172a;
   letter-spacing: 0.05em;
@@ -1075,7 +1097,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 1.25rem;
+  padding: 1rem;
   min-height: 140px;
   position: relative;
   transition: transform 0.2s;
@@ -1260,7 +1282,7 @@ body {
   padding: 1rem;
   background: rgba(255, 255, 255, 0.015);
   border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 6px;
+  border-radius: 0.5rem;
   transition: all 0.2s;
 }
 
@@ -1310,7 +1332,7 @@ body {
   position: relative;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 6px;
+  border-radius: 0.5rem;
   overflow: hidden;
   height: 280px;
   display: flex;
@@ -1428,7 +1450,7 @@ body {
   height: 60px;
   background: rgba(255, 255, 255, 0.01);
   border: 1px solid rgba(255, 255, 255, 0.03);
-  border-radius: 6px;
+  border-radius: 0.375rem;
   margin-top: auto;
   overflow: hidden;
   display: flex;
@@ -1592,7 +1614,7 @@ body {
   gap: 0.75rem;
   background: rgba(0, 240, 255, 0.01);
   border: 1px solid rgba(0, 240, 255, 0.05);
-  border-radius: 6px;
+  border-radius: 0.375rem;
   padding: 1rem;
   position: relative;
   overflow: hidden;
@@ -1923,7 +1945,7 @@ body {
 .cockpit-btn {
   width: 100%;
   padding: 0.85rem;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   font-weight: 700;
   font-size: 0.8rem;
   letter-spacing: 0.05em;
@@ -2187,7 +2209,7 @@ body {
   padding: 1rem;
   border: 1px solid rgba(255, 255, 255, 0.05);
   background: rgba(255, 255, 255, 0.015);
-  border-radius: 8px;
+  border-radius: 0.5rem;
   align-items: center;
   transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -2329,7 +2351,7 @@ body {
   color: rgba(235, 238, 243, 0.45);
   font-size: 0.92rem;
   border: 1px dashed rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: 0.5rem;
   background: rgba(255, 255, 255, 0.01);
 }
 
@@ -2384,19 +2406,19 @@ body {
 .panel--filters {
   display: grid;
   gap: 0.5rem;
-  padding: 0.75rem;
+  padding: 1rem;
   border-radius: 0.625rem;
 }
 
 .panel--status {
-  padding: 0.8rem;
+  padding: 1rem;
   border-radius: 0.625rem;
   display: grid;
   gap: 0.45rem;
 }
 
 .panel--stats {
-  padding: 0.8rem;
+  padding: 1rem;
   border-radius: 0.625rem;
   display: grid;
   gap: 0.55rem;
@@ -2413,19 +2435,25 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 0.6rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(209, 213, 219, 0.56);
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  padding: 0.5rem 0.5rem;
+  border-radius: 0.375rem;
+  background: rgba(255, 142, 66, 0.06);
+  border: 1px solid rgba(255, 142, 66, 0.15);
+  color: rgba(255, 255, 255, 0.7);
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.68rem;
-  letter-spacing: 0.14em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .control-metric strong {
-  color: #ff6b00;
-  font-size: 0.82rem;
+  color: #ff8c42;
+  font-size: 0.9rem;
+  font-weight: 800;
+  flex-shrink: 0;
 }
 
 .control-metric--wind {
@@ -2487,14 +2515,21 @@ body {
 .advanced-toggle {
   justify-self: start;
   border: 0;
-  padding: 0;
+  padding: 0.5rem 0;
   background: transparent;
   color: #ff8c42;
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.68rem;
-  letter-spacing: 0.14em;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   cursor: pointer;
+  transition: color 150ms ease;
+  margin-top: 0.25rem;
+}
+
+.advanced-toggle:hover {
+  color: #ffb36b;
 }
 
 .panel--matrix {
@@ -2542,9 +2577,9 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  min-height: 2.4rem;
+  min-height: 2.5rem;
   padding: 0.55rem 0.85rem;
-  border-radius: 0.3rem;
+  border-radius: 0.25rem;
   border: 1px solid rgba(255, 255, 255, 0.09);
   background: rgba(255, 255, 255, 0.03);
   color: #ffffff;
@@ -2584,7 +2619,7 @@ body {
 .matrix-stat-card {
   display: grid;
   gap: 0.3rem;
-  padding: 0.95rem 1rem;
+  padding: 1rem;
   border-radius: 0.5rem;
   background: rgba(30, 41, 59, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -3006,7 +3041,7 @@ body {
 }
 
 .matrix-inline-action {
-  min-height: 2rem;
+  min-height: 2.25rem;
   padding: 0.4rem 0.7rem;
   border-radius: 0.125rem;
   border: 1px solid rgba(255, 255, 255, 0.09);
@@ -3107,7 +3142,7 @@ body {
 }
 
 .matrix-toggle {
-  min-height: 2rem;
+  min-height: 2.25rem;
   padding: 0.42rem 0.7rem;
   border: 0;
   border-radius: 0.125rem;
@@ -3991,7 +4026,7 @@ body {
 
 .panel--filters {
   display: grid;
-  gap: 0.6rem;
+  gap: 1rem;
   overflow-x: hidden;
 }
 
@@ -3999,89 +4034,186 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
-  padding-bottom: 0.5rem;
-  margin-bottom: 0.1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  gap: 0.8rem;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .filter-panel-title {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #ffb36b;
+  color: #ff8c42;
 }
 
 .filter-panel-badge {
   font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  color: rgba(245, 239, 230, 0.7);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0.2rem;
-  padding: 0.15rem 0.45rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #26d97f;
+  background: rgba(38, 217, 127, 0.12);
+  border: 1px solid rgba(38, 217, 127, 0.25);
+  border-radius: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  box-shadow: 0 0 8px rgba(38, 217, 127, 0.1);
+}
+
+.filter-group {
+  display: grid;
+  gap: 0.5rem;
 }
 
 .filter-group-label {
-  margin: 0 0 0.3rem;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(209, 213, 219, 0.6);
+  color: rgba(255, 255, 255, 0.5);
+  padding: 0 0.05rem;
 }
 
 .filter-preset-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 0.3rem;
-  margin-bottom: 0.4rem;
+  gap: 0.45rem;
+  margin-bottom: 0.5rem;
 }
 
 /* Touch targets — default 44px for mobile/tablet */
 .filter-preset-btn {
-  min-height: 44px;
-  font-size: 0.73rem;
-  padding: 0.35rem 0.25rem;
+  min-height: 40px;
+  height: 40px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.5rem 0.3rem;
   justify-content: center;
+  align-items: center;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.filter-preset-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.filter-preset-btn.chip--active {
+  border-color: rgba(255, 142, 66, 0.5);
+  background: rgba(255, 142, 66, 0.18);
+  color: #ff8c42;
+  box-shadow: 0 0 12px rgba(255, 142, 66, 0.15);
 }
 
 .filter-select-input {
-  min-height: 44px;
-  padding: 0.45rem 0.5rem;
+  min-height: 40px;
+  height: 40px;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.72rem;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.filter-select-input:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.filter-select-input:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 142, 66, 0.4);
+  box-shadow: 0 0 10px rgba(255, 142, 66, 0.1);
+}
+
+.filter-select-input option {
+  background: #1a1f2e;
+  color: #f3f4f6;
+  padding: 0.5rem;
+}
+
+.filter-select-input option:checked {
+  background: rgba(255, 142, 66, 0.25);
+  color: #ffffff;
 }
 
 .filter-checkbox-label {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.6rem;
   cursor: pointer;
-  font-size: 0.75rem;
-  min-height: 44px;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.8);
+  padding: 0.25rem 0;
+  user-select: none;
+}
+
+.filter-checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: #ff8c42;
 }
 
 .filter-date-input {
   width: 100%;
-  min-height: 44px;
-  padding: 0.45rem 0.4rem;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-  color: #f6efe6;
+  min-height: 40px;
+  height: 40px;
+  padding: 0.5rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: #f3f4f6;
   font: inherit;
+  font-size: 0.72rem;
+  transition: all 150ms ease;
+}
+
+.filter-date-input:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.filter-date-input:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 142, 66, 0.4);
+  box-shadow: 0 0 10px rgba(255, 142, 66, 0.1);
+}
+
+.filter-date-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .filter-group + .filter-group {
-  padding-top: 0.5rem;
+  padding-top: 0.75rem;
+  margin-top: 0.25rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .filter-group h3 {
-  margin: 0 0 0.75rem;
-  font-size: 0.94rem;
-  letter-spacing: -0.02em;
+  margin: 0 0 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .field-grid {
@@ -4099,22 +4231,46 @@ body {
 
 .field {
   display: grid;
-  gap: 0.15rem;
-  color: rgba(245, 239, 230, 0.86);
-  font-size: 0.75rem;
+  gap: 0.35rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.68rem;
+}
+
+.field > span {
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.65rem;
 }
 
 .field input,
 .panel--filters input[type="date"] {
   width: 100%;
-  min-height: 2rem;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-  color: #f6efe6;
-  padding: 0.2rem 0.4rem;
+  min-height: 40px;
+  height: 40px;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: #f3f4f6;
+  padding: 0.5rem 0.5rem;
   font: inherit;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
+  transition: all 150ms ease;
+}
+
+.field input:hover,
+.panel--filters input[type="date"]:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.field input:focus,
+.panel--filters input[type="date"]:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 142, 66, 0.4);
+  box-shadow: 0 0 10px rgba(255, 142, 66, 0.1);
 }
 
 .chip-list {
@@ -4161,9 +4317,14 @@ body {
 }
 
 .help-copy {
-  margin: 0.15rem 0 0;
-  color: rgba(245, 239, 230, 0.66);
-  font-size: 0.84rem;
+  margin: 0.4rem 0 0;
+  padding: 0.4rem 0.5rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 0.25rem;
+  border-left: 2px solid rgba(255, 142, 66, 0.3);
 }
 
 .layer-list {
@@ -4177,7 +4338,7 @@ body {
   gap: 0.7rem;
   align-items: center;
   padding: 0.7rem 0.8rem;
-  border-radius: 18px;
+  border-radius: 1.125rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.045);
   cursor: pointer;
@@ -4223,8 +4384,8 @@ body {
 }
 
 .metric-card {
-  padding: 0.8rem 0.85rem;
-  border-radius: 16px;
+  padding: 1rem;
+  border-radius: 0.625rem;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -4260,13 +4421,26 @@ body {
 
 .map-frame {
   min-height: 34rem;
-  border-radius: 20px;
+  border-radius: 1.25rem;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .leaflet-container {
   background: #1b120d;
+}
+
+/* Reset font/line-height so global :root font-family doesn't break zoom button alignment */
+.leaflet-bar a {
+  font-family: 'Lucida Console', Monaco, monospace;
+  line-height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.leaflet-touch .leaflet-bar a {
+  line-height: 30px;
 }
 
 .leaflet-popup-content-wrapper,
@@ -4391,7 +4565,7 @@ body {
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.45rem 0.55rem;
-  border-radius: 12px;
+  border-radius: 0.75rem;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
   font-family: "Plus Jakarta Sans", sans-serif;
@@ -4570,7 +4744,7 @@ body {
   height: 3.5rem;
   display: grid;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 0.75rem;
   background: linear-gradient(135deg, #ff8a3d 0%, #ff4e00 100%);
   color: #0b0c10;
   font-weight: 800;
@@ -4600,7 +4774,7 @@ body {
   font-weight: 700;
   font-size: 0.88rem;
   padding: 0.65rem 1.5rem;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
@@ -5151,37 +5325,62 @@ a + a {
   }
 
   .filter-preset-btn {
-    min-height: 32px;
-    font-size: 0.7rem;
-    padding: 0.2rem 0.2rem;
+    min-height: 36px;
+    height: 36px;
+    font-size: 0.68rem;
+    padding: 0.4rem 0.2rem;
   }
 
   .filter-preset-grid {
-    gap: 0.25rem;
-    margin-bottom: 0.3rem;
+    gap: 0.35rem;
+    margin-bottom: 0.4rem;
   }
 
   .filter-select-input {
-    min-height: 32px;
-    padding: 0.3rem 0.4rem;
+    min-height: 36px;
+    height: 36px;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.68rem;
   }
 
   .filter-checkbox-label {
-    min-height: 30px;
-    font-size: 0.73rem;
+    min-height: auto;
+    font-size: 0.68rem;
+    padding: 0.2rem 0;
+  }
+
+  .filter-checkbox-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    min-height: 16px;
   }
 
   .filter-date-input {
-    min-height: 32px;
-    padding: 0.3rem 0.4rem;
+    min-height: 36px;
+    height: 36px;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.68rem;
   }
 
   .filter-group + .filter-group {
-    padding-top: 0.4rem;
+    padding-top: 0.6rem;
+    margin-top: 0.2rem;
   }
 
   .filter-panel-header {
-    padding-bottom: 0.4rem;
+    padding-bottom: 0.6rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .filter-group-label {
+    font-size: 0.65rem;
+  }
+
+  .control-metric {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.65rem;
+    margin-top: 0.35rem;
   }
 
   /* Equalize overlay panel widths for symmetry */
