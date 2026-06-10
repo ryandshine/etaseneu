@@ -127,7 +127,7 @@ export function FilterPanel(props: FilterPanelProps) {
         className="advanced-toggle"
         onClick={() => setShowAdvanced((current) => !current)}
       >
-        {showAdvanced ? "Sembunyikan filter lanjutan" : "Tampilkan satelit & lapisan"}
+        {showAdvanced ? "Sembunyikan filter lanjutan" : "Tampilkan satelit"}
       </button>
 
       {showAdvanced ? (
@@ -150,10 +150,6 @@ export function FilterPanel(props: FilterPanelProps) {
                 );
               })}
             </div>
-          </section>
-          <section className="filter-group">
-            <h3>Lapisan</h3>
-            <LayerList layers={props.layers} onToggleLayer={props.onToggleLayer} />
           </section>
         </>
       ) : null}
