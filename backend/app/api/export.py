@@ -101,21 +101,30 @@ async def export_hotspots_pdf(
     if confidence:
         hotspots = [h for h in hotspots if _get_frp_category(h) == confidence]
     if agency:
-        hotspots = [h for h in hotspots if h.get("agency_name") == agency]
+        hotspots = [
+            h for h in hotspots
+            if (h.get("layer_name") or h.get("agency_name") or "") == agency
+        ]
 
     layers_info = service.layer_service.spatial_layers_for_ids(active_layers)
-    
+
     from app.services.pdf_export_service import build_pdf_report
+    filename = (
+        f"eta-seuneu-laporan-{agency.lower().replace(' ', '-')}.pdf"
+        if agency
+        else "eta-seuneu-hotspots-report.pdf"
+    )
     pdf_content = build_pdf_report(
         hotspots=hotspots,
         query=query,
-        layers_info=layers_info
+        layers_info=layers_info,
+        agency_name=agency,
     )
-    
+
     return Response(
         content=pdf_content,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=eta-seuneu-hotspots-report.pdf"},
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 
