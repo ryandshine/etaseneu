@@ -135,17 +135,20 @@ export function FilterPanel(props: FilterPanelProps) {
           <section className="filter-group">
             <h3>Satelit</h3>
             <div className="chip-list">
-              {SATELLITE_OPTIONS.map((satellite) => (
-                <label key={satellite.value} className="chip">
-                  <input
-                    type="checkbox"
-                    aria-label={satellite.label}
-                    checked={props.selectedSatellites.includes(satellite.value)}
-                    onChange={() => props.onToggleSatellite(satellite.value)}
-                  />
-                  <span>{satellite.label}</span>
-                </label>
-              ))}
+              {SATELLITE_OPTIONS.map((satellite) => {
+                const isActive = props.selectedSatellites.includes(satellite.value);
+                return (
+                  <label key={satellite.value} className={`chip${isActive ? " chip--active" : ""}`}>
+                    <input
+                      type="checkbox"
+                      aria-label={satellite.label}
+                      checked={isActive}
+                      onChange={() => props.onToggleSatellite(satellite.value)}
+                    />
+                    <span>{satellite.label}</span>
+                  </label>
+                );
+              })}
             </div>
           </section>
           <section className="filter-group">

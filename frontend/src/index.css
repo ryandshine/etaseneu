@@ -4294,12 +4294,16 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.55rem 0.8rem;
-  border-radius: 0.125rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
   border: 1px solid rgba(255, 255, 255, 0.09);
   background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.75);
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 0.72rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
 }
 
 .chip--button {
@@ -4310,17 +4314,24 @@ body {
 
 .chip:hover {
   background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
   transform: translateY(-1px);
 }
 
 .chip--active {
-  border-color: rgba(255, 157, 77, 0.48);
-  background: rgba(255, 157, 77, 0.16);
-  box-shadow: 0 0 0 1px rgba(255, 157, 77, 0.12) inset;
+  border-color: rgba(255, 142, 66, 0.5);
+  background: rgba(255, 142, 66, 0.16);
+  color: #ff8c42;
+  box-shadow: 0 0 0 1px rgba(255, 142, 66, 0.12) inset, 0 0 12px rgba(255, 142, 66, 0.1);
 }
 
 .chip input {
-  accent-color: #ff9d4d;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #ff8c42;
+  cursor: pointer;
 }
 
 .help-copy {
