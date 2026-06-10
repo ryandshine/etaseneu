@@ -5415,7 +5415,7 @@ a + a {
 
   /* Equalize overlay panel widths for symmetry */
   .control-overlay--top-left {
-    width: min(17rem, calc(100% - 2rem));
+    width: min(22rem, calc(100% - 2rem));
   }
 
   .control-overlay--top-right {
