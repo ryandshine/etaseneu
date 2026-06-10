@@ -11,9 +11,12 @@ RUN npm run build --no-update-notifier
 # Stage 2: Final Image (Python + Nginx)
 FROM python:3.11-slim
 
-# Install Nginx and Supervisor
+# Install Nginx, Supervisor, and WeasyPrint system dependencies
 RUN apt-get update && \
-    apt-get install -y nginx supervisor && \
+    apt-get install -y nginx supervisor \
+        libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 \
+        libgdk-pixbuf-2.0-0 libgobject-2.0-0 libffi8 \
+        shared-mime-info fonts-dejavu-core && \
     rm -rf /var/lib/apt/lists/*
 
 # Setup Python Backend
