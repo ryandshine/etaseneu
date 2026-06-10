@@ -6,11 +6,12 @@ import {
   GeoJSON,
   MapContainer,
   Popup,
+  Marker,
   TileLayer,
   useMap,
   ZoomControl
 } from "react-leaflet";
-import { canvas, latLngBounds } from "leaflet";
+import { canvas, latLngBounds, divIcon } from "leaflet";
 
 import type { LayerBounds } from "../types/api";
 
@@ -228,6 +229,45 @@ function formatMetadataValue(value?: string) {
   return value && value.trim() ? value : "Tidak tersedia";
 }
 
+const rainIcon = divIcon({
+  html: `
+    <style>
+      @keyframes pulse-rain {
+        0% {
+          transform: scale(0.9);
+          box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7);
+        }
+        70% {
+          transform: scale(1.05);
+          box-shadow: 0 0 0 10px rgba(56, 189, 248, 0);
+        }
+        100% {
+          transform: scale(0.9);
+          box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+        }
+      }
+    </style>
+    <div class="rain-glowing-icon" style="
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(56, 189, 248, 0.25);
+      border: 2px solid rgb(56, 189, 248);
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      box-shadow: 0 0 12px rgb(56, 189, 248), inset 0 0 8px rgb(56, 189, 248);
+      color: #fff;
+      animation: pulse-rain 2s infinite;
+    ">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-cloud-rain"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M16 14v6"/><path d="M8 14v6"/><path d="M12 16v6"/></svg>
+    </div>
+  `,
+  className: '',
+  iconSize: [32, 32],
+  iconAnchor: [16, 16]
+});
+
 type SpotWeather = {
   current: {
     temperature: number;
@@ -346,6 +386,64 @@ function HotspotWeatherPopup({ lat, lon }: { lat: number; lon: number }) {
 }
 
 export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weatherOverlay }: HotspotMapProps) {
+  const [rainyCoords, setRainyCoords] = useState<{ lat: number; lon: number; precipitation: number; label: string }[]>([]);
+
+  useEffect(() => {
+    const activeLayers = layers.filter(l => l.active);
+    if (activeLayers.length === 0) {
+      setRainyCoords([]);
+      return;
+    }
+
+    const coordsParam = activeLayers
+      .map(l => {
+        const lat = (l.bounds.min_lat + l.bounds.max_lat) / 2;
+        const lon = (l.bounds.min_lon + l.bounds.max_lon) / 2;
+        return `${lat},${lon}`;
+      })
+      .join(";");
+
+    if (!coordsParam) {
+      setRainyCoords([]);
+      return;
+    }
+
+    let active = true;
+    const fetchRain = () => {
+      fetch(`/api/weather/rain-check?coords=${encodeURIComponent(coordsParam)}`)
+        .then(res => {
+          if (!res.ok) throw new Error("Failed");
+          return res.json();
+        })
+        .then((data: any[]) => {
+          if (!active) return;
+          const rainy = data
+            .filter((item: any) => item.is_raining)
+            .map((item: any, index: number) => {
+              const matchLayer = activeLayers[index];
+              return {
+                lat: item.latitude,
+                lon: item.longitude,
+                precipitation: item.precipitation,
+                label: matchLayer ? matchLayer.label : "Kawasan Hutan"
+              };
+            });
+          setRainyCoords(rainy);
+        })
+        .catch(err => {
+          console.error("Rain check failed", err);
+        });
+    };
+
+    fetchRain();
+    const interval = setInterval(fetchRain, 15 * 60 * 1000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [layers]);
+
   return (
     <div className="map-frame">
       <MapContainer
@@ -364,6 +462,25 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
         <MapViewport hotspots={hotspots} layers={layers} selectedProvince={selectedProvince} />
         <WindLayer visible={showWind ?? false} />
         <WeatherOverlay parameter={weatherOverlay ?? null} />
+        {rainyCoords.map((coord, idx) => (
+          <Marker
+            key={`rain-${idx}`}
+            position={[coord.lat, coord.lon]}
+            icon={rainIcon}
+          >
+            <Popup>
+              <div style={{ fontSize: "12px", fontFamily: "sans-serif" }}>
+                <strong style={{ color: "#0ea5e9" }}>🌧️ Sedang Terjadi Hujan</strong>
+                <div style={{ marginTop: "4px" }}>
+                  Wilayah: <strong>{coord.label}</strong>
+                </div>
+                <div>
+                  Curah Hujan: <strong>{coord.precipitation.toFixed(1)} mm/jam</strong>
+                </div>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
         {layers
           .filter((layer) => layer.active)
           .map((layer) => (

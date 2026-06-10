@@ -401,3 +401,69 @@ async def get_weather_grid(
         logger.warning(f"Failed to write weather grid cache '{parameter}'.", exc_info=True)
 
     return result
+
+
+@router.get("/weather/rain-check")
+async def get_rain_check(
+    coords: str = Query(..., description="Coordinates formatted as lat1,lon1;lat2,lon2;..."),
+) -> list[dict[str, Any]]:
+    """Check if it is raining at multiple coordinate points concurrently."""
+    if not coords.strip():
+        return []
+
+    settings = get_settings()
+    points = []
+    for p in coords.split(";"):
+        if not p.strip():
+            continue
+        try:
+            lat_str, lon_str = p.split(",")
+            points.append((float(lat_str), float(lon_str)))
+        except ValueError:
+            continue
+
+    if not points:
+        return []
+
+    # Prepare batch query for Open-Meteo
+    lat_param = ",".join(str(lat) for lat, _ in points)
+    lon_param = ",".join(str(lon) for _, lon in points)
+
+    async with httpx.AsyncClient(timeout=settings.request_timeout_seconds) as client:
+        try:
+            response = await client.get(
+                OPEN_METEO_BASE,
+                params={
+                    "latitude": lat_param,
+                    "longitude": lon_param,
+                    "current": "precipitation,weather_code",
+                    "timezone": "Asia/Jakarta",
+                },
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except Exception as e:
+            logger.error(f"Failed to fetch rain check: {e}")
+            raise HTTPException(status_code=502, detail="Failed to check rain from weather upstream.")
+
+    items = payload if isinstance(payload, list) else [payload]
+    results = []
+    for idx, item in enumerate(items):
+        current = item.get("current", {})
+        precip = float(current.get("precipitation", 0.0) or 0.0)
+        wcode = int(current.get("weather_code", 0) or 0)
+        
+        # Rain weather codes in WMO standard
+        is_raining = (wcode in [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99]) or (precip > 0.1)
+        
+        lat, lon = points[idx]
+        results.append({
+            "latitude": lat,
+            "longitude": lon,
+            "precipitation": precip,
+            "weather_code": wcode,
+            "is_raining": is_raining
+        })
+
+    return results
+
