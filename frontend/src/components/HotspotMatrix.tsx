@@ -944,30 +944,23 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
       </div>
 
       <div className="matrix-toolbar glass-panel">
-        <div className="matrix-filter-block matrix-filter-block--dates">
-          <span className="matrix-filter-label">Rentang Tanggal</span>
-          <div
-            className="field-grid field-grid--matrix-dates"
-            style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.45rem" }}
-          >
-            <label className="matrix-field">
-              <span>Dari</span>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(event) => onDateChange("startDate", event.currentTarget.value)}
-              />
-            </label>
-            <label className="matrix-field">
-              <span>Ke</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(event) => onDateChange("endDate", event.currentTarget.value)}
-              />
-            </label>
-          </div>
-        </div>
+        <label className="matrix-field">
+          <span>Dari</span>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(event) => onDateChange("startDate", event.currentTarget.value)}
+          />
+        </label>
+
+        <label className="matrix-field">
+          <span>Ke</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(event) => onDateChange("endDate", event.currentTarget.value)}
+          />
+        </label>
 
         <label className="matrix-field">
           <span>Wilker Filter</span>

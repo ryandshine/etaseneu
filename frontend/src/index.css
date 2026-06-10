@@ -2666,13 +2666,15 @@ body {
 
 .matrix-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(11rem, 0.78fr) minmax(11rem, 0.78fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.6rem;
   padding: 0.8rem 0.9rem;
   border-radius: 0.5rem;
-  align-items: end;
-  background: rgba(15, 23, 42, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  align-items: start;
+  background: rgba(9, 11, 14, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .matrix-toolbar > * {
