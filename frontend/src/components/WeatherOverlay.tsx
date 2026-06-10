@@ -159,14 +159,26 @@ export function WeatherOverlay({ parameter }: WeatherOverlayProps) {
 
   return (
     <>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .weather-cell-rect {
+          filter: blur(25px);
+          mix-blend-mode: screen;
+          transition: fill-opacity 0.3s ease, filter 0.3s ease;
+        }
+        .weather-cell-rect:hover {
+          fill-opacity: 0.65 !important;
+          filter: blur(12px) !important;
+        }
+      `}} />
       {cells.map((cell, idx) => (
         <Rectangle
           key={idx}
           bounds={cell.bounds}
+          className="weather-cell-rect"
           pathOptions={{
             color: "transparent",
             fillColor: cell.color,
-            fillOpacity: 0.35,
+            fillOpacity: 0.4,
             weight: 0,
           }}
         >
