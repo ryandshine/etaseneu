@@ -1315,123 +1315,164 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
     return buffer.getvalue()
 
 
+def _agency_kpi_card(value: str, label: str, val_color, card_width: float = 126.0) -> Table:
+    p_val = Paragraph(value, ParagraphStyle(
+        "AgKpiVal", fontName="Helvetica-Bold", fontSize=18, leading=22,
+        textColor=val_color, alignment=1
+    ))
+    p_lbl = Paragraph(label, ParagraphStyle(
+        "AgKpiLbl", fontName="Helvetica-Bold", fontSize=7, leading=9,
+        textColor=colors.HexColor("#475569"), alignment=1
+    ))
+    t = Table([[p_val], [p_lbl]], colWidths=[card_width])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor("#e2e8f0")),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    return t
+
+
+def _section_header_bar(title: str, subtitle: str, bar_color, content_width: float = 523.27) -> Table:
+    p_title = Paragraph(f"<b>{title}</b>", ParagraphStyle(
+        "SecBarTitle", fontName="Helvetica-Bold", fontSize=10, leading=13,
+        textColor=colors.HexColor("#ffffff")
+    ))
+    p_sub = Paragraph(subtitle, ParagraphStyle(
+        "SecBarSub", fontName="Helvetica", fontSize=8, leading=10,
+        textColor=colors.HexColor("#e2e8f0")
+    ))
+    t = Table([[p_title], [p_sub]], colWidths=[content_width])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), bar_color),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    return t
+
+
 def build_agency_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: list[dict], agency_name: str) -> bytes:
     """
-    Generates a beautifully designed portrait A4 PDF report specifically customized for a single Agency/Lembaga.
+    Generates a modern multi-section portrait A4 PDF report for a single Agency/Lembaga,
+    including KPI cards, spatial map, charts, and full hotspot detail table.
     """
     buffer = BytesIO()
-    
-    # Portrait A4 document: margins 36pt (0.5 inch) left/right, 48pt top/bottom
+
+    # Portrait A4: margins 36pt left/right, 52pt top/bottom
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
         leftMargin=36,
         rightMargin=36,
-        topMargin=48,
-        bottomMargin=48
+        topMargin=52,
+        bottomMargin=52,
     )
+
+    CONTENT_W = 523.27  # A4 width 595.28 - 2×36 margins
 
     styles = getSampleStyleSheet()
-    
-    # Colors matching the application's visual system
-    c_primary = colors.HexColor("#0f766e")    # Teal for Agency
-    c_secondary = colors.HexColor("#0284c7")  # Sky Blue
-    c_accent = colors.HexColor("#ea580c")     # Orange
-    c_dark = colors.HexColor("#0f172a")       # Dark Slate
-    c_light = colors.HexColor("#f8fafc")      # Soft Gray
-    c_border = colors.HexColor("#e2e8f0")
-    c_white = colors.HexColor("#ffffff")
+
+    c_primary   = colors.HexColor("#0f766e")   # Teal
+    c_secondary = colors.HexColor("#0284c7")   # Sky Blue
+    c_accent    = colors.HexColor("#ea580c")   # Orange
+    c_danger    = colors.HexColor("#dc2626")   # Red
+    c_dark      = colors.HexColor("#0f172a")   # Dark Slate
+    c_muted     = colors.HexColor("#64748b")   # Slate 500
+    c_light     = colors.HexColor("#f8fafc")   # Slate 50
+    c_border    = colors.HexColor("#e2e8f0")   # Slate 200
+    c_white     = colors.HexColor("#ffffff")
 
     title_style = ParagraphStyle(
-        "AgencyReportTitle",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=18,
-        leading=22,
-        textColor=c_primary,
-        spaceAfter=2
+        "AgTitle", parent=styles["Normal"],
+        fontName="Helvetica-Bold", fontSize=20, leading=24,
+        textColor=c_primary, spaceAfter=2,
     )
-    
     subtitle_style = ParagraphStyle(
-        "AgencyReportSubtitle",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=11,
-        leading=14,
-        textColor=c_accent,
-        spaceAfter=12
+        "AgSubtitle", parent=styles["Normal"],
+        fontName="Helvetica-Bold", fontSize=11, leading=14,
+        textColor=c_accent, spaceAfter=10,
     )
-
-    section_heading = ParagraphStyle(
-        "AgencySectionHeading",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=12,
-        leading=15,
-        textColor=c_primary,
-        spaceBefore=12,
-        spaceAfter=6,
-        keepWithNext=True
-    )
-
     body_style = ParagraphStyle(
-        "AgencyReportBody",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=9,
-        textColor=c_dark,
-        leading=13
+        "AgBody", parent=styles["Normal"],
+        fontName="Helvetica", fontSize=9, leading=13, textColor=c_dark,
     )
-
+    body_sm_style = ParagraphStyle(
+        "AgBodySm", parent=styles["Normal"],
+        fontName="Helvetica", fontSize=8, leading=11, textColor=c_dark,
+    )
     bold_body_style = ParagraphStyle(
-        "AgencyReportBodyBold",
-        parent=body_style,
-        fontName="Helvetica-Bold"
+        "AgBodyBold", parent=body_style, fontName="Helvetica-Bold",
+    )
+    bold_sm_style = ParagraphStyle(
+        "AgBodySmBold", parent=body_sm_style, fontName="Helvetica-Bold",
+    )
+    muted_style = ParagraphStyle(
+        "AgMuted", parent=styles["Normal"],
+        fontName="Helvetica", fontSize=8, leading=11, textColor=c_muted,
+    )
+    tbl_hdr_style = ParagraphStyle(
+        "AgTblHdr", parent=styles["Normal"],
+        fontName="Helvetica-Bold", fontSize=7.5, leading=10, textColor=c_white,
+    )
+    tbl_body_style = ParagraphStyle(
+        "AgTblBody", parent=styles["Normal"],
+        fontName="Helvetica", fontSize=7.5, leading=10, textColor=c_dark,
+    )
+    tbl_body_bold = ParagraphStyle(
+        "AgTblBodyBold", parent=tbl_body_style, fontName="Helvetica-Bold",
     )
 
     story = []
 
-    # WIB Period
+    # ── Period strings ──────────────────────────────────────────────────────
     from datetime import timezone, timedelta
     wib_tz = timezone(timedelta(hours=7))
     start_wib = query.start_at.astimezone(wib_tz)
-    end_wib = (query.end_at - timedelta(seconds=1)).astimezone(wib_tz)
+    end_wib   = (query.end_at - timedelta(seconds=1)).astimezone(wib_tz)
     start_str = start_wib.strftime("%d %B %Y")
-    end_str = end_wib.strftime("%d %B %Y")
-    period_str = start_str if start_str == end_str else f"{start_str} - {end_str}"
+    end_str   = end_wib.strftime("%d %B %Y")
+    period_str = start_str if start_str == end_str else f"{start_str} – {end_str}"
+    download_date = datetime.now(wib_tz).strftime("%d-%m-%Y %H:%M WIB")
 
-    # Header
-    story.append(Paragraph("LAPORAN DETEKSI HOTSPOT SPESIFIK LEMBAGA", title_style))
-    story.append(Paragraph(f"Kawasan: {agency_name.upper()}", subtitle_style))
+    # ── Derived stats ───────────────────────────────────────────────────────
+    total_hs = len(hotspots)
+    conf_counts = {"Tinggi": 0, "Sedang": 0, "Rendah": 0}
+    frp_counts  = {"Tinggi": 0, "Sedang": 0, "Rendah": 0}
+    for h in hotspots:
+        conf_counts[_get_conf_cat(h)] += 1
+        frp_counts[_get_frp_cat(h)]   += 1
 
-    # Executive Summary for Agency
-    exec_summary_text = (
-        f"Laporan khusus pemantauan titik panas (hotspot) disusun secara terperinci untuk wilayah kerja lembaga "
-        f"<b>{agency_name}</b> periode <b>{period_str}</b>. Hasil analisis spasial real-time mendeteksi sebanyak "
-        f"<b>{len(hotspots)} titik panas aktif</b>. Data cuaca setempat dan bahaya kebakaran dianalisis secara presisi "
-        f"untuk mendukung antisipasi dini dan pencegahan kebakaran hutan dan lahan."
-    )
-    
-    summary_table = Table(
-        [[Paragraph(exec_summary_text, body_style)]],
-        colWidths=[523.27]
-    )
-    summary_table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f0fdfa")),
-        ('BOX', (0,0), (-1,-1), 1.5, c_primary),
-        ('PADDING', (0,0), (-1,-1), 10),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-    ]))
-    story.append(summary_table)
-    story.append(Spacer(1, 10))
+    dom_conf = max(conf_counts, key=lambda k: conf_counts[k]) if total_hs else "N/A"
+    dom_frp  = max(frp_counts,  key=lambda k: frp_counts[k])  if total_hs else "N/A"
 
-    # Calculate coordinate centroid for weather
-    lats = [h.get("latitude") for h in hotspots if h.get("latitude") is not None]
+    frp_values = [float(h.get("frp") or 0) for h in hotspots]
+    avg_frp = sum(frp_values) / len(frp_values) if frp_values else 0.0
+
+    sat_set = set(h.get("source", "") for h in hotspots if h.get("source"))
+
+    lats = [h.get("latitude")  for h in hotspots if h.get("latitude")  is not None]
     lons = [h.get("longitude") for h in hotspots if h.get("longitude") is not None]
     avg_lat = sum(lats) / len(lats) if lats else -2.5
     avg_lon = sum(lons) / len(lons) if lons else 118.0
 
-    # Fetch Weather synchronously
+    # ── Metadata from first hotspot ─────────────────────────────────────────
+    first_h = hotspots[0] if hotspots else {}
+    meta = first_h.get("polygon_metadata", {})
+    prov_name   = first_h.get("province_name") or meta.get("NAMA_PROV") or "N/A"
+    bps_name    = meta.get("WILKER_BPS")  or "N/A"
+    kab_name    = meta.get("NAMA_KAB")    or "N/A"
+    fungsi_kws  = meta.get("FUNGSI_KWS")  or "N/A"
+    lembaga_val = meta.get("LEMBAGA")     or agency_name
+
+    # ── Weather fetch ────────────────────────────────────────────────────────
     weather_info = None
     try:
         with httpx.Client(timeout=8.0) as client:
@@ -1440,66 +1481,49 @@ def build_agency_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_in
                 params={
                     "latitude": avg_lat,
                     "longitude": avg_lon,
-                    "current": "temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_direction_10m,wind_gusts_10m,soil_moisture_0_to_10cm,weather_code",
+                    "current": (
+                        "temperature_2m,relative_humidity_2m,precipitation,"
+                        "wind_speed_10m,wind_direction_10m,wind_gusts_10m,"
+                        "soil_moisture_0_to_10cm,weather_code"
+                    ),
                     "timezone": "Asia/Jakarta",
-                    "wind_speed_unit": "ms"
-                }
+                    "wind_speed_unit": "ms",
+                },
             )
             if resp.status_code == 200:
-                weather_data = resp.json().get("current", {})
-                
-                # Fetch Air Quality
+                wd = resp.json().get("current", {})
                 aq_resp = client.get(
                     "https://air-quality-api.open-meteo.com/v1/air-quality",
                     params={
-                        "latitude": avg_lat,
-                        "longitude": avg_lon,
+                        "latitude": avg_lat, "longitude": avg_lon,
                         "current": "pm2_5,us_aqi",
-                        "timezone": "Asia/Jakarta"
-                    }
+                        "timezone": "Asia/Jakarta",
+                    },
                 )
                 aq_data = aq_resp.json().get("current", {}) if aq_resp.status_code == 200 else {}
-                
-                # CBI
-                t = float(weather_data.get("temperature_2m", 0.0) or 0.0)
-                rh = float(weather_data.get("relative_humidity_2m", 0.0) or 0.0)
-                rh_clamp = max(0.0, min(100.0, rh))
-                cbi = ((110.0 - 1.37 * rh_clamp) - 9.01) * (10 ** (0.0444 * t)) / 124.0
-                cbi = max(0.0, cbi)
-                
-                if cbi < 50:
-                    cbi_level = "Rendah"
-                    cbi_color = "#22c55e"
-                elif cbi < 75:
-                    cbi_level = "Sedang"
-                    cbi_color = "#eab308"
-                elif cbi < 90:
-                    cbi_level = "Tinggi"
-                    cbi_color = "#f97316"
-                elif cbi < 97.5:
-                    cbi_level = "Sangat Tinggi"
-                    cbi_color = "#ef4444"
-                else:
-                    cbi_level = "Ekstrem"
-                    cbi_color = "#7f1d1d"
 
-                sm = float(weather_data.get("soil_moisture_0_to_10cm", 0.0) or 0.0)
-                if sm < 0.15:
-                    sm_status = "Kering (Ekstrem)"
-                    sm_color = "#ef4444"
-                elif sm < 0.25:
-                    sm_status = "Sedang"
-                    sm_color = "#eab308"
-                else:
-                    sm_status = "Basah (Aman)"
-                    sm_color = "#22c55e"
-                
+                t  = float(wd.get("temperature_2m", 0.0) or 0.0)
+                rh = float(wd.get("relative_humidity_2m", 0.0) or 0.0)
+                rh_c = max(0.0, min(100.0, rh))
+                cbi = max(0.0, ((110.0 - 1.37 * rh_c) - 9.01) * (10 ** (0.0444 * t)) / 124.0)
+
+                if cbi < 50:    cbi_level, cbi_color = "Rendah",       "#22c55e"
+                elif cbi < 75:  cbi_level, cbi_color = "Sedang",       "#eab308"
+                elif cbi < 90:  cbi_level, cbi_color = "Tinggi",       "#f97316"
+                elif cbi < 97.5:cbi_level, cbi_color = "Sangat Tinggi","#ef4444"
+                else:           cbi_level, cbi_color = "Ekstrem",      "#7f1d1d"
+
+                sm = float(wd.get("soil_moisture_0_to_10cm", 0.0) or 0.0)
+                if sm < 0.15:   sm_status, sm_color = "Kering (Ekstrem)", "#ef4444"
+                elif sm < 0.25: sm_status, sm_color = "Sedang",           "#eab308"
+                else:           sm_status, sm_color = "Basah (Aman)",     "#22c55e"
+
                 weather_info = {
-                    "temperature": t,
-                    "humidity": rh,
-                    "precipitation": float(weather_data.get("precipitation", 0.0) or 0.0),
-                    "wind_speed": float(weather_data.get("wind_speed_10m", 0.0) or 0.0),
-                    "wind_gusts": float(weather_data.get("wind_gusts_10m", 0.0) or 0.0),
+                    "temperature": t, "humidity": rh,
+                    "precipitation": float(wd.get("precipitation", 0.0) or 0.0),
+                    "wind_speed": float(wd.get("wind_speed_10m", 0.0) or 0.0),
+                    "wind_dir": float(wd.get("wind_direction_10m", 0.0) or 0.0),
+                    "wind_gusts": float(wd.get("wind_gusts_10m", 0.0) or 0.0),
                     "soil_moisture": sm,
                     "soil_moisture_status": sm_status,
                     "soil_moisture_color": sm_color,
@@ -1507,140 +1531,384 @@ def build_agency_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_in
                     "cbi_level": cbi_level,
                     "cbi_color": cbi_color,
                     "aqi": int(aq_data.get("us_aqi", 0) or 0),
-                    "pm2_5": float(aq_data.get("pm2_5", 0.0) or 0.0)
+                    "pm2_5": float(aq_data.get("pm2_5", 0.0) or 0.0),
                 }
     except Exception as e:
-        logger.warning(f"Failed to fetch weather for PDF: {e}")
+        logger.warning(f"Failed to fetch weather for agency PDF: {e}")
 
-    # Section 1: Profil Lembaga / Wilayah Kerja
-    story.append(Paragraph("Profil Lembaga & Wilayah Administrasi", section_heading))
-    
-    # Extract Metadata from first hotspot if available
-    first_h = hotspots[0] if hotspots else {}
-    meta = first_h.get("polygon_metadata", {})
-    
-    prov_name = first_h.get("province_name") or meta.get("NAMA_PROV") or "N/A"
-    bps_name = meta.get("WILKER_BPS") or "N/A"
-    kab_name = meta.get("NAMA_KAB") or "N/A"
-    fungsi_kws = meta.get("FUNGSI_KWS") or "N/A"
-    
+    # ═══════════════════════════════════════════════════════════════════════
+    # PAGE 1 — Cover, KPI Cards, Profil Lembaga
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # ── Title block ──────────────────────────────────────────────────────────
+    story.append(Paragraph("LAPORAN DETEKSI HOTSPOT SPESIFIK LEMBAGA", title_style))
+    story.append(Paragraph(agency_name.upper(), subtitle_style))
+
+    # Thin meta-bar: periode + download date
+    meta_bar = Table(
+        [[
+            Paragraph(f"Periode Laporan: <b>{period_str}</b>", muted_style),
+            Paragraph(f"Diunduh: <b>{download_date}</b>", muted_style),
+        ]],
+        colWidths=[CONTENT_W * 0.6, CONTENT_W * 0.4],
+    )
+    meta_bar.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#f1f5f9")),
+        ('BOX', (0, 0), (-1, -1), 0.5, c_border),
+        ('PADDING', (0, 0), (-1, -1), 5),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    story.append(meta_bar)
+    story.append(Spacer(1, 10))
+
+    # ── Executive Summary ────────────────────────────────────────────────────
+    exec_text = (
+        f"Laporan ini disusun khusus untuk wilayah kerja lembaga <b>{agency_name}</b> "
+        f"pada periode <b>{period_str}</b>. Sistem ETA Seuneu mendeteksi sebanyak "
+        f"<b>{total_hs} titik panas aktif</b> melalui {len(sat_set)} satelit detektor. "
+        f"Analisis mencakup kondisi cuaca, sebaran spasial, distribusi kepercayaan, "
+        f"tren harian FRP, dan rekaman lengkap tiap titik panas untuk mendukung "
+        f"respons lapangan secara cepat dan terukur."
+    )
+    exec_box = Table([[Paragraph(exec_text, body_style)]], colWidths=[CONTENT_W])
+    exec_box.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#f0fdfa")),
+        ('BOX', (0, 0), (-1, -1), 1.5, c_primary),
+        ('PADDING', (0, 0), (-1, -1), 10),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    story.append(exec_box)
+    story.append(Spacer(1, 12))
+
+    # ── KPI Cards (5 cards) ──────────────────────────────────────────────────
+    card_w = (CONTENT_W - 4 * 4) / 5   # 5 cards with 4-pt gaps between them
+    kpi_conf_color = (
+        colors.HexColor("#22c55e") if dom_conf == "Rendah"
+        else colors.HexColor("#f97316") if dom_conf == "Sedang"
+        else c_danger
+    )
+    kpi_frp_color = (
+        colors.HexColor("#22c55e") if dom_frp == "Rendah"
+        else colors.HexColor("#f97316") if dom_frp == "Sedang"
+        else c_danger
+    )
+    kpi1 = _agency_kpi_card(str(total_hs),           "TOTAL HOTSPOT",          c_danger,    card_w)
+    kpi2 = _agency_kpi_card(str(len(sat_set)),        "SATELIT DETEKTOR",       c_secondary, card_w)
+    kpi3 = _agency_kpi_card(dom_conf,                 "DOMINAN CONFIDENCE",     kpi_conf_color, card_w)
+    kpi4 = _agency_kpi_card(dom_frp,                  "DOMINAN INTENSITAS FRP", kpi_frp_color,  card_w)
+    kpi5 = _agency_kpi_card(f"{avg_frp:.1f} MW",      "RATA-RATA FRP",          c_accent,    card_w)
+
+    kpi_row = Table(
+        [[kpi1, kpi2, kpi3, kpi4, kpi5]],
+        colWidths=[card_w] * 5,
+        spaceBefore=0, spaceAfter=0,
+    )
+    kpi_row.setStyle(TableStyle([
+        ('ALIGN',   (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN',  (0, 0), (-1, -1), 'MIDDLE'),
+        ('PADDING', (0, 0), (-1, -1), 2),
+    ]))
+    story.append(kpi_row)
+    story.append(Spacer(1, 12))
+
+    # ── Section: Profil Lembaga ──────────────────────────────────────────────
+    story.append(_section_header_bar(
+        "01 · PROFIL LEMBAGA & WILAYAH ADMINISTRASI",
+        "Identitas lembaga dan informasi wilayah kerja dari metadata spasial",
+        c_primary, CONTENT_W,
+    ))
+    story.append(Spacer(1, 6))
+
     profile_data = [
-        [Paragraph("<b>Nama Lembaga:</b>", body_style), Paragraph(agency_name, bold_body_style)],
-        [Paragraph("<b>Balai Pengelola (BPS):</b>", body_style), Paragraph(bps_name, body_style)],
-        [Paragraph("<b>Kabupaten / Provinsi:</b>", body_style), Paragraph(f"{kab_name} / {prov_name}", body_style)],
-        [Paragraph("<b>Fungsi Kawasan Hutan:</b>", body_style), Paragraph(fungsi_kws, body_style)],
-        [Paragraph("<b>Koordinat Centroid:</b>", body_style), Paragraph(f"{avg_lat:.5f}, {avg_lon:.5f}", body_style)],
+        [Paragraph("<b>Nama Lembaga</b>", body_sm_style),  Paragraph(lembaga_val, bold_sm_style)],
+        [Paragraph("<b>Balai Pengelola (BPS)</b>", body_sm_style), Paragraph(bps_name, body_sm_style)],
+        [Paragraph("<b>Kabupaten / Provinsi</b>", body_sm_style),  Paragraph(f"{kab_name} / {prov_name}", body_sm_style)],
+        [Paragraph("<b>Fungsi Kawasan Hutan</b>", body_sm_style),  Paragraph(fungsi_kws, body_sm_style)],
+        [Paragraph("<b>Koordinat Centroid</b>", body_sm_style),    Paragraph(f"{avg_lat:.5f}°, {avg_lon:.5f}°", body_sm_style)],
+        [Paragraph("<b>Total Hotspot Terdeteksi</b>", body_sm_style), Paragraph(f"<b>{total_hs} titik panas</b>", bold_sm_style)],
     ]
-    
-    profile_table = Table(profile_data, colWidths=[150, 373.27])
+    profile_table = Table(profile_data, colWidths=[160, CONTENT_W - 160])
     profile_table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), c_light),
-        ('GRID', (0,0), (-1,-1), 0.5, c_border),
-        ('PADDING', (0,0), (-1,-1), 6),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor("#f1f5f9")),
+        ('BACKGROUND', (1, 0), (1, -1), c_white),
+        ('GRID',    (0, 0), (-1, -1), 0.5, c_border),
+        ('PADDING', (0, 0), (-1, -1), 6),
+        ('VALIGN',  (0, 0), (-1, -1), 'MIDDLE'),
+        ('ROWBACKGROUNDS', (0, 0), (-1, -1), [c_light, c_white]),
     ]))
     story.append(profile_table)
-    story.append(Spacer(1, 8))
+    story.append(PageBreak())
 
-    # Section 2: Meteo & Early Warning Info (Open-Meteo)
+    # ═══════════════════════════════════════════════════════════════════════
+    # PAGE 2 — Cuaca + Peta Spasial + Distribusi Satelit
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # ── Section: Cuaca & Peringatan Dini ────────────────────────────────────
+    story.append(_section_header_bar(
+        "02 · KONDISI CUACA & PERINGATAN DINI KEBAKARAN",
+        f"Data cuaca real-time pada koordinat centroid hotspot ({avg_lat:.3f}°, {avg_lon:.3f}°)",
+        colors.HexColor("#b45309"), CONTENT_W,
+    ))
+    story.append(Spacer(1, 6))
+
     if weather_info:
-        story.append(Paragraph("Kondisi Cuaca & Peringatan Dini Kebakaran", section_heading))
-        weather_table_data = [
-            [
-                Paragraph("Suhu Udara: <b>{:.1f} °C</b>".format(weather_info["temperature"]), body_style),
-                Paragraph("Kelembapan: <b>{:.0f}% RH</b>".format(weather_info["humidity"]), body_style),
-            ],
-            [
-                Paragraph("Curah Hujan: <b>{:.1f} mm/jam</b>".format(weather_info["precipitation"]), body_style),
-                Paragraph("Kecepatan Angin: <b>{:.1f} m/s</b>".format(weather_info["wind_speed"]), body_style),
-            ],
-            [
-                Paragraph("Hembusan Maks: <b>{:.1f} m/s</b>".format(weather_info["wind_gusts"]), body_style),
-                Paragraph("Gambut (Soil Moisture): <b style='color: {}'>{} ({:.1f}%)</b>".format(
-                    weather_info["soil_moisture_color"],
-                    weather_info["soil_moisture_status"],
-                    weather_info["soil_moisture"] * 100
-                ), body_style),
-            ],
-            [
-                Paragraph("Polusi PM2.5: <b>{:.1f} µg/m³</b>".format(weather_info["pm2_5"]), body_style),
-                Paragraph("Kualitas Udara: <b>{} AQI</b>".format(weather_info["aqi"]), body_style),
-            ],
-            [
-                Paragraph("<b>Indeks Bahaya Api (CBI):</b>", bold_body_style),
-                Paragraph("<b style='color: {}'>{} ({:.2f})</b>".format(
-                    weather_info["cbi_color"],
-                    weather_info["cbi_level"],
-                    weather_info["cbi_value"]
-                ), bold_body_style),
-            ]
-        ]
-        weather_table = Table(weather_table_data, colWidths=[261.6, 261.6])
-        weather_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#fffbfa")),
-            ('BOX', (0,0), (-1,-1), 1.5, colors.HexColor("#ea580c")),
-            ('GRID', (0,0), (-1,-1), 0.5, c_border),
-            ('PADDING', (0,0), (-1,-1), 6),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        # CBI highlight bar
+        cbi_bar = Table(
+            [[
+                Paragraph(
+                    f"<b>INDEKS BAHAYA API (CBI): "
+                    f"<font color='{weather_info['cbi_color']}'>"
+                    f"{weather_info['cbi_level']} ({weather_info['cbi_value']:.2f})"
+                    f"</font></b>",
+                    ParagraphStyle("CbiBar", parent=bold_body_style, fontSize=10, leading=13),
+                )
+            ]],
+            colWidths=[CONTENT_W],
+        )
+        cbi_bar.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#fff7ed")),
+            ('BOX',     (0, 0), (-1, -1), 2, colors.HexColor(weather_info["cbi_color"])),
+            ('PADDING', (0, 0), (-1, -1), 8),
+            ('VALIGN',  (0, 0), (-1, -1), 'MIDDLE'),
         ]))
-        story.append(weather_table)
-        story.append(Spacer(1, 8))
+        story.append(cbi_bar)
+        story.append(Spacer(1, 6))
 
-    # Section 3: Detailed Hotspot Table
-    story.append(Paragraph(f"Daftar Deteksi Titik Panas Aktif ({len(hotspots)} Titik)", section_heading))
-    
-    # Columns: No, Tanggal, Satelit, Kepercayaan, Kecerahan, FRP, Lat/Lon
-    h_headers = ["No", "Tanggal (WIB)", "Satelit", "Kategori", "Bright (K)", "FRP (MW)", "Koordinat"]
-    h_rows = [[Paragraph(f"<b>{x}</b>", ParagraphStyle("Hdr", parent=bold_body_style, textColor=c_white)) for x in h_headers]]
-    
+        # 3-column weather grid
+        col_w3 = (CONTENT_W - 2 * 6) / 3
+
+        def _wc(label: str, value: str) -> Table:
+            t = Table(
+                [[Paragraph(label, muted_style)], [Paragraph(f"<b>{value}</b>", bold_sm_style)]],
+                colWidths=[col_w3],
+            )
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), c_light),
+                ('BOX', (0, 0), (-1, -1), 0.5, c_border),
+                ('PADDING', (0, 0), (-1, -1), 6),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ]))
+            return t
+
+        row1 = [
+            _wc("Suhu Udara",       f"{weather_info['temperature']:.1f} °C"),
+            _wc("Kelembapan",       f"{weather_info['humidity']:.0f}% RH"),
+            _wc("Curah Hujan",      f"{weather_info['precipitation']:.1f} mm/jam"),
+        ]
+        row2 = [
+            _wc("Kecepatan Angin",  f"{weather_info['wind_speed']:.1f} m/s"),
+            _wc("Hembusan Maks",    f"{weather_info['wind_gusts']:.1f} m/s"),
+            _wc("Arah Angin",       f"{weather_info['wind_dir']:.0f}°"),
+        ]
+        row3 = [
+            _wc("Kelembapan Gambut", f"{weather_info['soil_moisture_status']} ({weather_info['soil_moisture']*100:.1f}%)"),
+            _wc("Polusi PM2.5",     f"{weather_info['pm2_5']:.1f} µg/m³"),
+            _wc("Kualitas Udara",   f"AQI {weather_info['aqi']}"),
+        ]
+
+        for row in [row1, row2, row3]:
+            t = Table([row], colWidths=[col_w3] * 3)
+            t.setStyle(TableStyle([
+                ('PADDING', (0, 0), (-1, -1), 3),
+                ('VALIGN',  (0, 0), (-1, -1), 'TOP'),
+            ]))
+            story.append(t)
+            story.append(Spacer(1, 4))
+    else:
+        story.append(Paragraph("Data cuaca tidak tersedia saat laporan dicetak.", muted_style))
+
+    story.append(Spacer(1, 10))
+
+    # ── Section: Peta Spasial + Distribusi Satelit ───────────────────────────
+    story.append(_section_header_bar(
+        "03 · PETA SEBARAN SPASIAL & DISTRIBUSI SATELIT",
+        "Visualisasi posisi hotspot pada peta dan proporsi deteksi tiap satelit",
+        c_secondary, CONTENT_W,
+    ))
+    story.append(Spacer(1, 6))
+
+    map_w   = int(CONTENT_W * 0.60)
+    chart_w = int(CONTENT_W - map_w - 6)
+
+    map_drawing  = create_spatial_map_drawing(hotspots, layers_info, width=map_w, height=200)
+    sat_drawing  = create_pie_chart(hotspots, width=chart_w, height=200)
+
+    vis_table = Table([[map_drawing, sat_drawing]], colWidths=[map_w, chart_w])
+    vis_table.setStyle(TableStyle([
+        ('ALIGN',   (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN',  (0, 0), (-1, -1), 'TOP'),
+        ('PADDING', (0, 0), (-1, -1), 3),
+    ]))
+    story.append(vis_table)
+    story.append(PageBreak())
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # PAGE 3 — Analisis Confidence, FRP & Tren Harian
+    # ═══════════════════════════════════════════════════════════════════════
+
+    story.append(_section_header_bar(
+        "04 · ANALISIS DISTRIBUSI CONFIDENCE & INTENSITAS FRP",
+        "Distribusi kategori kepercayaan deteksi dan Fire Radiative Power semua hotspot",
+        c_primary, CONTENT_W,
+    ))
+    story.append(Spacer(1, 6))
+
+    half_w = int((CONTENT_W - 6) / 2)
+
+    conf_data_pts = [
+        ("Tinggi", conf_counts["Tinggi"], "#ef4444"),
+        ("Sedang", conf_counts["Sedang"], "#f59e0b"),
+        ("Rendah", conf_counts["Rendah"], "#3b82f6"),
+    ]
+    frp_data_pts = [
+        ("Tinggi", frp_counts["Tinggi"], "#ef4444"),
+        ("Sedang", frp_counts["Sedang"], "#f97316"),
+        ("Rendah", frp_counts["Rendah"], "#22c55e"),
+    ]
+    conf_chart = create_bar_chart_drawing(conf_data_pts, "DISTRIBUSI CONFIDENCE", width=half_w, height=120)
+    frp_chart  = create_bar_chart_drawing(frp_data_pts,  "DISTRIBUSI INTENSITAS FRP", width=half_w, height=120)
+
+    chart_pair = Table([[conf_chart, frp_chart]], colWidths=[half_w, half_w])
+    chart_pair.setStyle(TableStyle([
+        ('PADDING', (0, 0), (-1, -1), 3),
+        ('VALIGN',  (0, 0), (-1, -1), 'TOP'),
+    ]))
+    story.append(chart_pair)
+    story.append(Spacer(1, 10))
+
+    # ── Section: Tren Harian ─────────────────────────────────────────────────
+    story.append(_section_header_bar(
+        "05 · TREN HARIAN VOLUME & FIRE RADIATIVE POWER",
+        "Perkembangan jumlah hotspot dan total FRP tiap hari dalam periode laporan",
+        c_secondary, CONTENT_W,
+    ))
+    story.append(Spacer(1, 6))
+
+    vol_chart = create_daily_volume_trend_chart(hotspots, width=int(CONTENT_W), height=105)
+    frp_trend = create_daily_frp_trend_chart(hotspots,    width=int(CONTENT_W), height=105)
+    story.append(vol_chart)
+    story.append(Spacer(1, 6))
+    story.append(frp_trend)
+    story.append(PageBreak())
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # PAGE 4 — Tabel Detail Seluruh Hotspot
+    # ═══════════════════════════════════════════════════════════════════════
+
+    story.append(_section_header_bar(
+        f"06 · REKAMAN LENGKAP TITIK PANAS AKTIF  ({total_hs} titik)",
+        "Seluruh data observasi hotspot: satelit, kepercayaan, kecerahan, FRP, siang/malam, dan koordinat",
+        c_primary, CONTENT_W,
+    ))
+    story.append(Spacer(1, 6))
+
+    # Full columns: No | Tanggal | Satelit | Siang/Malam | Kepercayaan | Kat.Conf | Bright(K) | FRP(MW) | Kat.FRP | Koordinat
+    # Widths must sum to CONTENT_W = 523.27
+    h_col_widths = [20, 78, 54, 36, 50, 40, 40, 38, 40, 127.27]
+    h_headers = ["No", "Tanggal (WIB)", "Satelit", "D/N", "Kepercayaan", "Kat.Conf", "Bright (K)", "FRP (MW)", "Kat.FRP", "Koordinat"]
+
+    h_rows = [[Paragraph(f"<b>{x}</b>", tbl_hdr_style) for x in h_headers]]
+
     for idx, h in enumerate(hotspots):
-        formatted_time = _get_wib_date_str(h.get("detected_at", ""))
-        frp_val = float(h.get("frp", 0) or 0)
-        frp_cat = "Tinggi" if frp_val > 30 else ("Sedang" if frp_val >= 10 else "Rendah")
-        
+        detected_at = h.get("detected_at", "")
+        try:
+            dt = datetime.fromisoformat(detected_at.replace("Z", "+00:00"))
+            date_display = dt.astimezone(wib_tz).strftime("%d-%m-%Y %H:%M")
+        except Exception:
+            date_display = str(detected_at)[:16]
+
+        conf_cat = _get_conf_cat(h)
+        frp_cat  = _get_frp_cat(h)
+
+        raw_conf = h.get("confidence")
+        try:
+            conf_display = f"{int(str(raw_conf))}%"
+        except (ValueError, TypeError):
+            conf_display = conf_cat
+
+        frp_val = h.get("frp", "-")
+        try:
+            frp_display = f"{float(frp_val):.2f}"
+        except (ValueError, TypeError):
+            frp_display = str(frp_val)
+
+        daynight = str(h.get("daynight", h.get("day_night", ""))).strip().upper() or "-"
+
+        # Row color by FRP category
         row = [
-            Paragraph(str(idx + 1), body_style),
-            Paragraph(formatted_time, body_style),
-            Paragraph(h.get("source", "N/A"), body_style),
-            Paragraph(frp_cat, bold_body_style),
-            Paragraph(str(h.get("brightness", "-")), body_style),
-            Paragraph(str(h.get("frp", "-")), body_style),
-            Paragraph(f"{h.get('latitude', 0.0):.4f}, {h.get('longitude', 0.0):.4f}", body_style)
+            Paragraph(str(idx + 1), tbl_body_style),
+            Paragraph(date_display, tbl_body_style),
+            Paragraph(h.get("source", "N/A"), tbl_body_style),
+            Paragraph(daynight, tbl_body_style),
+            Paragraph(conf_display, tbl_body_style),
+            Paragraph(conf_cat, tbl_body_bold if conf_cat == "Tinggi" else tbl_body_style),
+            Paragraph(str(h.get("brightness", "-")), tbl_body_style),
+            Paragraph(frp_display, tbl_body_style),
+            Paragraph(frp_cat, tbl_body_bold if frp_cat == "Tinggi" else tbl_body_style),
+            Paragraph(f"{h.get('latitude', 0.0):.4f},\n{h.get('longitude', 0.0):.4f}", tbl_body_style),
         ]
         h_rows.append(row)
-        
-    t_style = [
-        ('BACKGROUND', (0,0), (-1,0), c_primary),
-        ('GRID', (0,0), (-1,-1), 0.5, c_border),
-        ('PADDING', (0,0), (-1,-1), 4),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+
+    t_styles = [
+        ('BACKGROUND', (0, 0), (-1, 0), c_primary),
+        ('GRID',    (0, 0), (-1, -1), 0.4, c_border),
+        ('PADDING', (0, 0), (-1, -1), 3),
+        ('VALIGN',  (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN',   (0, 0), (0, -1),  'CENTER'),   # No column centered
+        ('ALIGN',   (3, 0), (3, -1),  'CENTER'),   # D/N centered
+        ('ALIGN',   (4, 0), (8, -1),  'CENTER'),   # numeric columns centered
     ]
-    
-    # Alternating row colors for premium readability
-    for i in range(1, len(h_rows)):
-        t_style.append(('BACKGROUND', (0, i), (-1, i), c_white if i % 2 == 1 else c_light))
-        
-    h_table = Table(h_rows, colWidths=[20, 105, 55, 60, 58, 55, 170.27], repeatRows=1)
-    h_table.setStyle(TableStyle(t_style))
+    for i, h in enumerate(hotspots, start=1):
+        cat = _get_frp_cat(h)
+        if cat == "Tinggi":
+            row_bg = colors.HexColor("#fef2f2")
+        elif cat == "Sedang":
+            row_bg = colors.HexColor("#fff7ed")
+        else:
+            row_bg = c_white if i % 2 == 1 else c_light
+        t_styles.append(('BACKGROUND', (0, i), (-1, i), row_bg))
+
+    h_table = Table(h_rows, colWidths=h_col_widths, repeatRows=1)
+    h_table.setStyle(TableStyle(t_styles))
     story.append(h_table)
+    story.append(Spacer(1, 6))
+
+    # Color legend
+    legend_data = [
+        [
+            Paragraph("Keterangan warna baris:", muted_style),
+            Paragraph("■ Merah = FRP Tinggi (>30 MW)", ParagraphStyle("Leg1", parent=muted_style, textColor=colors.HexColor("#dc2626"))),
+            Paragraph("■ Oranye = FRP Sedang (10–30 MW)", ParagraphStyle("Leg2", parent=muted_style, textColor=colors.HexColor("#ea580c"))),
+            Paragraph("■ Putih/Abu = FRP Rendah (<10 MW)", muted_style),
+        ]
+    ]
+    legend_t = Table(legend_data, colWidths=[110, 130, 150, 133.27])
+    legend_t.setStyle(TableStyle([
+        ('PADDING', (0, 0), (-1, -1), 2),
+        ('VALIGN',  (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    story.append(legend_t)
     story.append(Spacer(1, 15))
 
-    # Signatures
+    # ── Signatures ───────────────────────────────────────────────────────────
     sig_data = [
-        [Paragraph("Disiapkan Oleh:", bold_body_style), Paragraph("Disetujui Oleh Pengelola Kawasan:", bold_body_style)],
-        [Spacer(1, 25), Spacer(1, 25)],
-        [Paragraph("_____________________________", body_style), Paragraph("_____________________________", body_style)]
+        [Paragraph("Disiapkan Oleh:", bold_body_style),
+         Paragraph("Disetujui Oleh Pengelola Kawasan:", bold_body_style)],
+        [Spacer(1, 28), Spacer(1, 28)],
+        [Paragraph("_____________________________", body_style),
+         Paragraph("_____________________________", body_style)],
     ]
-    sig_table = Table(sig_data, colWidths=[261, 262])
+    sig_table = Table(sig_data, colWidths=[261, 262.27])
     sig_table.setStyle(TableStyle([
-        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-        ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
-        ('PADDING', (0,0), (-1,-1), 0),
+        ('ALIGN',   (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN',  (0, 0), (-1, -1), 'BOTTOM'),
+        ('PADDING', (0, 0), (-1, -1), 0),
     ]))
-    story.append(KeepTogether([Spacer(1, 5), sig_table]))
+    story.append(KeepTogether([Spacer(1, 8), sig_table]))
 
-    # Canvas decorations
-    class PortraitNumberedCanvas(canvas.Canvas):
+    # ── Canvas decorations ────────────────────────────────────────────────────
+    class PortraitCanvas(canvas.Canvas):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self._saved_page_states = []
@@ -1650,38 +1918,37 @@ def build_agency_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_in
             self._startPage()
 
         def save(self):
-            num_pages = len(self._saved_page_states)
+            n = len(self._saved_page_states)
             for state in self._saved_page_states:
                 self.__dict__.update(state)
-                self.draw_page_decorations(num_pages)
+                self._draw_chrome(n)
                 super().showPage()
             super().save()
 
-        def draw_page_decorations(self, page_count):
+        def _draw_chrome(self, page_count: int) -> None:
             self.saveState()
-            
-            # Header
-            self.setFont("Helvetica-Bold", 8)
-            self.setFillColor(c_primary)
-            self.drawString(36, 805, f"LAPORAN DETEKSI KHUSUS LEMBAGA — {agency_name.upper()}")
-            
-            self.setFont("Helvetica", 8)
-            self.setFillColor(c_dark)
-            self.drawRightString(559, 805, f"Periode: {period_str}")
-            
+            # Header rule
             self.setStrokeColor(c_border)
             self.setLineWidth(0.75)
-            self.line(36, 795, 559, 795)
-
-            # Footer
-            self.line(36, 40, 559, 40)
-            self.setFont("Helvetica-Bold", 8)
+            self.line(36, 800, 559, 800)
+            # Header text
+            self.setFont("Helvetica-Bold", 7.5)
+            self.setFillColor(c_primary)
+            self.drawString(36, 806, f"ETA SEUNEU — {agency_name.upper()}")
+            self.setFont("Helvetica", 7.5)
+            self.setFillColor(c_muted)
+            self.drawRightString(559, 806, f"Periode: {period_str}")
+            # Footer rule
+            self.line(36, 38, 559, 38)
+            # Footer text
+            self.setFont("Helvetica-Bold", 7.5)
             self.setFillColor(c_dark)
-            self.drawString(36, 25, "ETA SEUNEU - MONITORING PERHUTANAN SOSIAL")
-            
-            self.setFont("Helvetica", 8)
-            self.drawRightString(559, 25, f"Halaman {self._pageNumber} dari {page_count}")
+            self.drawString(36, 24, "SISTEM PEMANTAUAN HOTSPOT PERHUTANAN SOSIAL")
+            self.setFont("Helvetica", 7.5)
+            self.setFillColor(c_muted)
+            self.drawCentredString(297, 24, download_date)
+            self.drawRightString(559, 24, f"Halaman {self._pageNumber} dari {page_count}")
             self.restoreState()
 
-    doc.build(story, canvasmaker=PortraitNumberedCanvas)
+    doc.build(story, canvasmaker=PortraitCanvas)
     return buffer.getvalue()
