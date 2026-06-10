@@ -302,6 +302,7 @@ def build_agency_pdf_weasyprint(
     hotspots: list[dict],
     query: HotspotQuery,
     agency_name: str,
+    hotspots_ytd: list[dict] | None = None,
 ) -> bytes:
     """
     Generate a modern WeasyPrint+Jinja2 agency PDF report.
@@ -461,11 +462,12 @@ def build_agency_pdf_weasyprint(
         for i, (src, cnt) in enumerate(sorted(sat_counts.items(), key=lambda x: -x[1]))
     ]
 
-    # ── daily stats for Section 05 ──
+    # ── daily stats for Section 05 (full YTD if available, else fall back to current filter) ──
+    _ytd_source = hotspots_ytd if hotspots_ytd is not None else hotspots
     daily_vol: Counter = Counter()
     daily_frp_sum: dict[str, float] = {}
     daily_max_frp: dict[str, float] = {}
-    for h in hotspots:
+    for h in _ytd_source:
         dt = _wib_dt(str(h.get("detected_at", "")))
         if dt:
             day = dt.strftime("%Y-%m-%d")

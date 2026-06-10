@@ -116,10 +116,27 @@ async def export_hotspots_pdf(
 
     if agency:
         from app.services.agency_pdf_service import build_agency_pdf_weasyprint
+
+        # Fetch full year-to-date hotspots for Section 05 chronology
+        ytd_start = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        ytd_end   = datetime.now(timezone.utc)
+        ytd_query = HotspotQuery(
+            start_at=ytd_start,
+            end_at=ytd_end,
+            satellites=satellites,
+            active_layers=active_layers,
+        )
+        ytd_result = await service.fetch_filtered_hotspots(ytd_query)
+        hotspots_ytd = [
+            h for h in ytd_result["hotspots"]
+            if (h.get("layer_name") or h.get("agency_name") or "") == agency
+        ]
+
         pdf_content = build_agency_pdf_weasyprint(
             hotspots=hotspots,
             query=query,
             agency_name=agency,
+            hotspots_ytd=hotspots_ytd,
         )
     else:
         from app.services.pdf_export_service import build_pdf_report
