@@ -26,11 +26,13 @@ type SidebarNavProps = {
 function NavButton({
   active,
   children,
-  onClick
+  onClick,
+  alert
 }: {
   active: boolean;
   children: string;
   onClick: () => void;
+  alert?: React.ReactNode;
 }) {
   return (
     <button
@@ -39,7 +41,8 @@ function NavButton({
       className={`side-nav-link${active ? " side-nav-link--active" : ""}`}
     >
       <span className="side-nav-mark" aria-hidden="true" />
-      <span>{children}</span>
+      <span>{typeof children === "string" ? children.trim() : children}</span>
+      {alert}
     </button>
   );
 }
@@ -85,14 +88,10 @@ export function SidebarNav({
         <NavButton active={activeView === "matrix"} onClick={() => onChangeView("matrix")}>
           Matriks Data
         </NavButton>
-        <button
-          type="button"
+        <NavButton 
+          active={activeView === "monitoring"} 
           onClick={() => onChangeView("monitoring")}
-          className={`side-nav-link${activeView === "monitoring" ? " side-nav-link--active" : ""}`}
-        >
-          <span className="side-nav-mark" aria-hidden="true" />
-          <span>Pemantauan</span>
-          {monitoringSignal !== "normal" ? (
+          alert={monitoringSignal !== "normal" ? (
             <span
               className={`side-nav-alert side-nav-alert--${
                 monitoringSignal === "critical" ? "critical" : "incident"
@@ -101,15 +100,12 @@ export function SidebarNav({
               PERINGATAN
             </span>
           ) : null}
-        </button>
-        <button
-          type="button"
-          onClick={() => onChangeView("settings")}
-          className={`side-nav-link${activeView === "settings" ? " side-nav-link--active" : ""}`}
         >
-          <span className="side-nav-mark" aria-hidden="true" />
-          <span>Pengaturan</span>
-        </button>
+          Pemantauan
+        </NavButton>
+        <NavButton active={activeView === "settings"} onClick={() => onChangeView("settings")}>
+          Pengaturan
+        </NavButton>
       </nav>
 
       <div className="side-footer" style={{ padding: '0.75rem', fontSize: '0.75rem', overflowX: 'hidden' }}>

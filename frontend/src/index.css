@@ -148,7 +148,7 @@ body {
 }
 
 .side-nav-label {
-  margin: 0 0 0.15rem;
+  margin: 0 0 0.5rem 0.95rem;
   color: rgba(209, 213, 219, 0.48);
   font-size: 0.68rem;
   font-weight: 700;
@@ -162,7 +162,8 @@ body {
   justify-content: flex-start;
   gap: 12px;
   width: 100%;
-  padding: 0.85rem 0.95rem;
+  height: 44px;
+  padding: 0 0.95rem;
   border-radius: 0.5rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.02);
@@ -170,7 +171,6 @@ body {
   cursor: pointer;
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.72rem;
-  line-height: 1;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
@@ -224,10 +224,11 @@ body {
   border-radius: 0.125rem;
   background: currentColor;
   flex-shrink: 0;
+  transform: translateY(-1.5px);
 }
 
 .side-nav-link > span {
-  line-height: 1;
+  /* Line-height removed to allow natural vertical alignment */
 }
 
 .side-nav-link .side-nav-alert {
