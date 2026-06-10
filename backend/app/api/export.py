@@ -37,6 +37,7 @@ async def export_hotspots(
     province: str | None = None,
     wilker: str | None = None,
     confidence: str | None = None,
+    agency: str | None = None,
 ) -> Response:
     service = HotspotService()
     result = await service.fetch_filtered_hotspots(
@@ -57,6 +58,8 @@ async def export_hotspots(
         ]
     if confidence:
         hotspots = [h for h in hotspots if _get_frp_category(h) == confidence]
+    if agency:
+        hotspots = [h for h in hotspots if h.get("agency_name") == agency]
 
     return Response(
         content=build_excel_file(hotspots),
@@ -76,6 +79,7 @@ async def export_hotspots_pdf(
     province: str | None = None,
     wilker: str | None = None,
     confidence: str | None = None,
+    agency: str | None = None,
 ) -> Response:
     service = HotspotService()
     query = HotspotQuery(
@@ -96,6 +100,8 @@ async def export_hotspots_pdf(
         ]
     if confidence:
         hotspots = [h for h in hotspots if _get_frp_category(h) == confidence]
+    if agency:
+        hotspots = [h for h in hotspots if h.get("agency_name") == agency]
 
     layers_info = service.layer_service.spatial_layers_for_ids(active_layers)
     
@@ -109,7 +115,7 @@ async def export_hotspots_pdf(
     return Response(
         content=pdf_content,
         media_type="application/pdf",
-        headers={"Content-Disposition": "attachment; filename=eta-seuneu-hotspots-report.pdf"},
+        headers={"Content-Disposition": f"attachment; filename=eta-seuneu-hotspots-report.pdf"},
     )
 
 

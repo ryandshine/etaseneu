@@ -27,7 +27,7 @@ type HotspotMatrixProps = {
   geojsonStatus: GeoJsonStatusResponse | null;
   onExport: (filters: { province?: string; wilker?: string; confidence?: string }) => void;
   isExporting: boolean;
-  onExportPdf: (filters: { province?: string; wilker?: string; confidence?: string }) => void;
+  onExportPdf: (filters: { province?: string; wilker?: string; confidence?: string; agency?: string }) => void;
   isExportingPdf: boolean;
   startDate: string;
   endDate: string;
@@ -1518,14 +1518,28 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
               onClick={() => setSelectedHotspot(null)}
             />
             <aside className="matrix-drawer glass-panel">
-              <div className="matrix-drawer__header">
-                <div>
-                  <p className="panel-eyebrow">Laporan deteksi spesifik</p>
-                  <h3>{selectedHotspot.agencyName || selectedHotspot.layerName}</h3>
+              <div className="matrix-drawer__header" style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'stretch' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <p className="panel-eyebrow">Laporan deteksi spesifik</p>
+                    <h3>{selectedHotspot.agencyName || selectedHotspot.layerName}</h3>
+                  </div>
+                  <button type="button" className="matrix-inline-action" onClick={() => setSelectedHotspot(null)}>
+                    Close
+                  </button>
                 </div>
-                <button type="button" className="matrix-inline-action" onClick={() => setSelectedHotspot(null)}>
-                  Close
-                </button>
+                <div style={{ marginTop: '4px' }}>
+                  <button
+                    type="button"
+                    className="matrix-btn matrix-btn--primary"
+                    onClick={() => onExportPdf({ agency: selectedHotspot.agencyName || selectedHotspot.layerName })}
+                    disabled={isExportingPdf}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', padding: '6px 12px', width: '100%', justifyContent: 'center' }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    {isExportingPdf ? "Mengunduh PDF..." : "Unduh Laporan Lembaga (PDF)"}
+                  </button>
+                </div>
               </div>
 
               <div className="matrix-drawer__body">

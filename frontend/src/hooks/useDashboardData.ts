@@ -627,7 +627,7 @@ export function useDashboardData(activeView: "map" | "matrix" | "monitoring" | "
     }
   }
 
-  async function exportPdf(filters?: { province?: string; wilker?: string; confidence?: string }) {
+  async function exportPdf(filters?: { province?: string; wilker?: string; confidence?: string; agency?: string }) {
     setIsExportingPdf(true);
     setExportError(null);
 
@@ -636,7 +636,8 @@ export function useDashboardData(activeView: "map" | "matrix" | "monitoring" | "
         ...queryParams,
         ...(filters?.province ? { province: filters.province } : {}),
         ...(filters?.wilker ? { wilker: filters.wilker } : {}),
-        ...(filters?.confidence ? { confidence: filters.confidence } : {})
+        ...(filters?.confidence ? { confidence: filters.confidence } : {}),
+        ...(filters?.agency ? { agency: filters.agency } : {})
       };
       const response = await fetch(withQuery(`${api.baseUrl}/export.pdf`, params), {
         headers: {
@@ -653,7 +654,9 @@ export function useDashboardData(activeView: "map" | "matrix" | "monitoring" | "
       const anchor = document.createElement("a");
 
       anchor.href = objectUrl;
-      anchor.download = "eta-seuneu-hotspots-report.pdf";
+      anchor.download = filters?.agency 
+        ? `eta-seuneu-laporan-${filters.agency.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`
+        : "eta-seuneu-hotspots-report.pdf";
       document.body.append(anchor);
       anchor.click();
       anchor.remove();
