@@ -325,6 +325,8 @@ body {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   cursor: pointer;
+  margin: 0 !important;
+  box-sizing: border-box !important;
 }
 
 .side-sync-actions {
