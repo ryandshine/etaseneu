@@ -522,7 +522,7 @@ body {
   position: absolute;
   top: 1rem;
   left: 1rem;
-  width: min(19rem, calc(100% - 2rem));
+  width: min(22rem, calc(100% - 2rem));
   z-index: 1000;
   overflow-x: hidden;
 }
