@@ -73,6 +73,7 @@ import { Maximize, Minimize, Menu, X } from "lucide-react";
 export default function App() {
   const [selectedProvince, setSelectedProvince] = useState<string>("");
   const [showWind, setShowWind] = useState(false);
+  const [weatherOverlay, setWeatherOverlay] = useState<"temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null>(null);
   const [activeView, setActiveView] = useState<"map" | "matrix" | "monitoring" | "settings">("map");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
@@ -427,6 +428,7 @@ export default function App() {
                 layers={layers}
                 selectedProvince={selectedProvince}
                 showWind={showWind}
+                weatherOverlay={weatherOverlay}
               />
             </Suspense>
 
@@ -458,6 +460,8 @@ export default function App() {
                                 provinceOptions={provinceOptions}
                                 showWind={showWind}
                                 onToggleWind={() => setShowWind(w => !w)}
+                                weatherOverlay={weatherOverlay}
+                                onWeatherOverlayChange={setWeatherOverlay}
                               />
                             </aside>
                 

@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { WindLayer } from "./WindLayer";
+import { WeatherOverlay } from "./WeatherOverlay";
 import {
   CircleMarker,
   GeoJSON,
@@ -46,6 +47,7 @@ type HotspotMapProps = {
   layers: LayerRecord[];
   selectedProvince?: string;
   showWind?: boolean;
+  weatherOverlay?: "temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null;
 };
 
 function sourceColor(source: string) {
@@ -226,7 +228,124 @@ function formatMetadataValue(value?: string) {
   return value && value.trim() ? value : "Tidak tersedia";
 }
 
-export function HotspotMap({ hotspots, layers, selectedProvince, showWind }: HotspotMapProps) {
+type SpotWeather = {
+  current: {
+    temperature: number;
+    humidity: number;
+    precipitation: number;
+    wind_speed: number;
+    wind_direction: number;
+    wind_gusts: number;
+    soil_moisture: number;
+    soil_moisture_status: string;
+    soil_moisture_color: string;
+    weather_code: number;
+    fire_danger: {
+      value: number;
+      level: string;
+      color: string;
+    };
+  };
+  air_quality: {
+    pm2_5: number;
+    pm10: number;
+    carbon_monoxide: number;
+    aqi: number;
+  };
+};
+
+function HotspotWeatherPopup({ lat, lon }: { lat: number; lon: number }) {
+  const [data, setData] = useState<SpotWeather | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(false);
+
+    fetch(`/api/weather/spot?lat=${lat}&lon=${lon}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed");
+        return res.json() as Promise<SpotWeather>;
+      })
+      .then((payload) => {
+        if (active) {
+          setData(payload);
+        }
+      })
+      .catch(() => {
+        if (active) setError(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [lat, lon]);
+
+  if (loading) {
+    return (
+      <div className="weather-popup-loader" style={{ fontSize: '11px', color: '#94a3b8', padding: '4px 0' }}>
+        <span>⚡ Memuat data cuaca & kualitas udara...</span>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="weather-popup-error" style={{ fontSize: '11px', color: '#ef4444', padding: '4px 0' }}>
+        ⚠️ Gagal memuat info cuaca Open-Meteo.
+      </div>
+    );
+  }
+
+  return (
+    <div className="weather-popup-content" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: '8px', paddingTop: '8px' }}>
+      <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#facc15', marginBottom: '6px' }}>Cuaca & Kualitas Udara Lokal</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 8px', fontSize: '11px' }}>
+        <div>
+          <span style={{ color: '#94a3b8' }}>Suhu: </span>
+          <strong>{data.current.temperature.toFixed(1)} °C</strong>
+        </div>
+        <div>
+          <span style={{ color: '#94a3b8' }}>RH: </span>
+          <strong>{data.current.humidity.toFixed(0)}%</strong>
+        </div>
+        <div>
+          <span style={{ color: '#94a3b8' }}>Hujan: </span>
+          <strong>{data.current.precipitation.toFixed(1)} mm</strong>
+        </div>
+        <div>
+          <span style={{ color: '#94a3b8' }}>Angin: </span>
+          <strong>{data.current.wind_speed.toFixed(1)} m/s</strong>
+        </div>
+        <div style={{ gridColumn: 'span 2' }}>
+          <span style={{ color: '#94a3b8' }}>Gambut: </span>
+          <strong style={{ color: data.current.soil_moisture_color }}>
+            {data.current.soil_moisture_status} ({(data.current.soil_moisture * 100).toFixed(1)}%)
+          </strong>
+        </div>
+        <div style={{ gridColumn: 'span 2' }}>
+          <span style={{ color: '#94a3b8' }}>Bahaya Api (CBI): </span>
+          <strong style={{ color: data.current.fire_danger.color }}>
+            {data.current.fire_danger.level} ({data.current.fire_danger.value})
+          </strong>
+        </div>
+        <div style={{ gridColumn: 'span 2' }}>
+          <span style={{ color: '#94a3b8' }}>Udara (AQI): </span>
+          <strong style={{ color: data.air_quality.aqi > 100 ? '#ef4444' : data.air_quality.aqi > 50 ? '#eab308' : '#22c55e' }}>
+            {data.air_quality.aqi} AQI (PM2.5: {data.air_quality.pm2_5.toFixed(1)})
+          </strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weatherOverlay }: HotspotMapProps) {
   return (
     <div className="map-frame">
       <MapContainer
@@ -244,6 +363,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind }: Hot
         <ZoomControl position="bottomleft" />
         <MapViewport hotspots={hotspots} layers={layers} selectedProvince={selectedProvince} />
         <WindLayer visible={showWind ?? false} />
+        <WeatherOverlay parameter={weatherOverlay ?? null} />
         {layers
           .filter((layer) => layer.active)
           .map((layer) => (
@@ -319,6 +439,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind }: Hot
                     <dd>{formatTimestamp(hotspot.detectedAt)}</dd>
                   </div>
                 </dl>
+                <HotspotWeatherPopup lat={hotspot.latitude} lon={hotspot.longitude} />
               </div>
             </Popup>
           </CircleMarker>

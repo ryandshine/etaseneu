@@ -32,6 +32,8 @@ type FilterPanelProps = {
   provinceOptions: string[];
   showWind: boolean;
   onToggleWind: () => void;
+  weatherOverlay?: "temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null;
+  onWeatherOverlayChange?: (val: "temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null) => void;
 };
 
 export function FilterPanel(props: FilterPanelProps) {
@@ -80,7 +82,7 @@ export function FilterPanel(props: FilterPanelProps) {
         </select>
       </section>
 
-      <section className="filter-group">
+      <section className="filter-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
         <label className="filter-checkbox-label">
           <input
             type="checkbox"
@@ -89,6 +91,22 @@ export function FilterPanel(props: FilterPanelProps) {
           />
           <span>Tampilkan Angin</span>
         </label>
+      </section>
+
+      <section className="filter-group">
+        <p className="filter-group-label">Lapisan Cuaca (Overlay)</p>
+        <select
+          value={props.weatherOverlay || ""}
+          onChange={(e) => props.onWeatherOverlayChange?.((e.target.value || null) as any)}
+          className="filter-select-input"
+        >
+          <option value="">Tidak ada (Nonaktif)</option>
+          <option value="temperature">Suhu Udara (°C)</option>
+          <option value="humidity">Kelembapan Udara (RH %)</option>
+          <option value="precipitation">Curah Hujan (mm)</option>
+          <option value="soil_moisture">Kelembapan Tanah (Gambut)</option>
+          <option value="fwi">Bahaya Kebakaran (CBI)</option>
+        </select>
       </section>
 
       <section className="filter-group">

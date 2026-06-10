@@ -8,6 +8,7 @@ from app.api.metrics import router as metrics_router
 from app.api.scheduler import router as scheduler_router
 from app.api.stats import router as stats_router
 from app.api.wind import router as wind_router
+from app.api.weather import router as weather_router
 
 
 router = APIRouter()
@@ -19,6 +20,7 @@ router.include_router(cache_router)
 router.include_router(scheduler_router)
 router.include_router(metrics_router)
 router.include_router(wind_router)
+router.include_router(weather_router)
 api_router = router
 
 
