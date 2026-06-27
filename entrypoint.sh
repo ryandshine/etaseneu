@@ -12,4 +12,4 @@ if ! ldconfig -p 2>/dev/null | grep -q "libgobject-2.0"; then
     echo "[entrypoint] Done."
 fi
 
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
