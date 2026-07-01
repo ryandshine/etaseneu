@@ -80,14 +80,20 @@ class HotspotService:
             yearly_hotspots: list[dict] = []
             for layer in active_layers:
                 for year_start, year_end in _iter_year_segments(query.start_at.date(), query.end_at.date()):
-                    yearly_hotspots.extend(
-                        await self._read_or_warm_layer_year_archive(
-                            query=query,
-                            layer=layer,
-                            year_start=year_start,
-                            year_end=year_end,
+                    try:
+                        yearly_hotspots.extend(
+                            await self._read_or_warm_layer_year_archive(
+                                query=query,
+                                layer=layer,
+                                year_start=year_start,
+                                year_end=year_end,
+                            )
                         )
-                    )
+                    except Exception as e:
+                        import logging
+                        logging.getLogger("hotspot.service").warning(
+                            "NASA fetch failed for %s %s–%s: %s", layer.name, year_start, year_end, e
+                        )
 
             filtered = _filter_unique_hotspots_by_date(
                 yearly_hotspots,
