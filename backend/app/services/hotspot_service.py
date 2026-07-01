@@ -55,7 +55,7 @@ class HotspotService:
 
         if not bypass_cache:
             cached_hotspots = self.cache_service.read(query.cache_key())
-            if cached_hotspots:
+            if cached_hotspots is not None:
                 hydrated_hotspots = self._hydrate_polygon_metadata(query, cached_hotspots)
                 cache_hit = True
 
@@ -67,14 +67,13 @@ class HotspotService:
                         sources=_query_sources(query.satellites),
                         layer_ids=query.active_layers,
                     )
-                    if db_hotspots:
+                    if db_hotspots is not None:
                         self.cache_service.write(query.cache_key(), db_hotspots)
                         hydrated_hotspots = db_hotspots
                         cache_hit = True
                 except Exception as e:
-                    print(f"DEBUG DB QUERY ERROR: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    import logging
+                    logging.getLogger("hotspot.service").warning("DB query error: %s", e)
 
         if not cache_hit:
             yearly_hotspots: list[dict] = []
