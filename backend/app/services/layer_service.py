@@ -357,7 +357,36 @@ def _preview_simplify_tolerance(feature_count: int) -> float:
 
 def _simplify_geometry(geometry: dict, tolerance: float) -> dict:
     simplified = shape(geometry).simplify(tolerance=tolerance, preserve_topology=True)
-    return mapping(simplified)
+    raw = mapping(simplified)
+    return _strip_z_and_round(raw)
+
+
+def _strip_z_and_round(geometry: dict) -> dict:
+    geom_type = geometry.get("type", "")
+    coords = geometry.get("coordinates")
+    if coords is None:
+        return geometry
+
+    def _round_ring(ring: list) -> list:
+        out = []
+        for pt in ring:
+            out.append([round(pt[0], 6), round(pt[1], 6)])
+        return out
+
+    if geom_type == "Polygon":
+        new_coords = [_round_ring(ring) for ring in coords]
+    elif geom_type == "MultiPolygon":
+        new_coords = [[_round_ring(ring) for ring in poly] for poly in coords]
+    elif geom_type in ("LineString", "MultiPoint"):
+        new_coords = _round_ring(coords)
+    elif geom_type == "MultiLineString":
+        new_coords = [_round_ring(line) for line in coords]
+    elif geom_type == "Point":
+        new_coords = [round(coords[0], 6), round(coords[1], 6)]
+    else:
+        return geometry
+
+    return {**geometry, "coordinates": new_coords}
 
 
 def _extract_agencies(payload: dict) -> list[str]:
