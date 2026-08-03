@@ -229,6 +229,30 @@ function formatMetadataValue(value?: string) {
   return value && value.trim() ? value : "Tidak tersedia";
 }
 
+const HIGH_FRP_THRESHOLD = 30;
+
+const highIntensityIconCache = new Map<string, ReturnType<typeof divIcon>>();
+
+function getHighIntensityIcon(color: string) {
+  const cached = highIntensityIconCache.get(color);
+  if (cached) {
+    return cached;
+  }
+
+  const icon = divIcon({
+    html: `<span class="hotspot-pulse-marker" style="--hotspot-pulse-color: ${color};">
+      <span class="hotspot-pulse-ring"></span>
+      <span class="hotspot-pulse-core"></span>
+    </span>`,
+    className: "",
+    iconSize: [16, 16],
+    iconAnchor: [8, 8]
+  });
+
+  highIntensityIconCache.set(color, icon);
+  return icon;
+}
+
 const rainIcon = divIcon({
   html: `
     <style>
@@ -385,6 +409,56 @@ function HotspotWeatherPopup({ lat, lon }: { lat: number; lon: number }) {
   );
 }
 
+function HotspotPopupContent({ hotspot }: { hotspot: HotspotRecord }) {
+  return (
+    <div className="popup-card">
+      <div className="popup-head">
+        <strong>{hotspot.source}</strong>
+        <span>{hotspot.satellite}</span>
+      </div>
+      <dl className="popup-grid popup-grid--tight">
+        <div>
+          <dt>Lembaga</dt>
+          <dd>{formatMetadataValue(hotspot.agencyName)}</dd>
+        </div>
+        <div>
+          <dt>Satelit</dt>
+          <dd>{hotspot.satellite}</dd>
+        </div>
+        <div>
+          <dt>Provinsi</dt>
+          <dd>{formatMetadataValue(hotspot.provinceName)}</dd>
+        </div>
+        <div>
+          <dt>Lintang</dt>
+          <dd>{hotspot.latitude.toFixed(5)}</dd>
+        </div>
+        <div>
+          <dt>Bujur</dt>
+          <dd>{hotspot.longitude.toFixed(5)}</dd>
+        </div>
+        <div>
+          <dt>Kecerahan</dt>
+          <dd>{formatNumber(hotspot.brightness)}</dd>
+        </div>
+        <div>
+          <dt>FRP</dt>
+          <dd>{formatNumber(hotspot.frp ?? null)}</dd>
+        </div>
+        <div>
+          <dt>Intensitas FRP</dt>
+          <dd>{hotspot.frp ? (hotspot.frp > HIGH_FRP_THRESHOLD ? 'Tinggi' : hotspot.frp >= 10 ? 'Sedang' : 'Rendah') : 'Rendah'}</dd>
+        </div>
+        <div>
+          <dt>Terdeteksi</dt>
+          <dd>{formatTimestamp(hotspot.detectedAt)}</dd>
+        </div>
+      </dl>
+      <HotspotWeatherPopup lat={hotspot.latitude} lon={hotspot.longitude} />
+    </div>
+  );
+}
+
 export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weatherOverlay }: HotspotMapProps) {
   const [rainyCoords, setRainyCoords] = useState<{ lat: number; lon: number; precipitation: number; label: string }[]>([]);
 
@@ -500,67 +574,35 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
               }}
             />
           ))}
-        {hotspots.map((hotspot) => (
-          <CircleMarker
-            key={hotspot.id}
-            center={[hotspot.latitude, hotspot.longitude]}
-            radius={7}
-            pathOptions={{
-              color: "#1b120d",
-              weight: 2,
-              fillColor: sourceColor(hotspot.source),
-              fillOpacity: 0.98
-            }}
-          >
-            <Popup>
-              <div className="popup-card">
-                <div className="popup-head">
-                  <strong>{hotspot.source}</strong>
-                  <span>{hotspot.satellite}</span>
-                </div>
-                <dl className="popup-grid popup-grid--tight">
-                  <div>
-                    <dt>Lembaga</dt>
-                    <dd>{formatMetadataValue(hotspot.agencyName)}</dd>
-                  </div>
-                  <div>
-                    <dt>Satelit</dt>
-                    <dd>{hotspot.satellite}</dd>
-                  </div>
-                  <div>
-                    <dt>Provinsi</dt>
-                    <dd>{formatMetadataValue(hotspot.provinceName)}</dd>
-                  </div>
-                  <div>
-                    <dt>Lintang</dt>
-                    <dd>{hotspot.latitude.toFixed(5)}</dd>
-                  </div>
-                  <div>
-                    <dt>Bujur</dt>
-                    <dd>{hotspot.longitude.toFixed(5)}</dd>
-                  </div>
-                  <div>
-                    <dt>Kecerahan</dt>
-                    <dd>{formatNumber(hotspot.brightness)}</dd>
-                  </div>
-                  <div>
-                    <dt>FRP</dt>
-                    <dd>{formatNumber(hotspot.frp ?? null)}</dd>
-                  </div>
-                  <div>
-                    <dt>Intensitas FRP</dt>
-                    <dd>{hotspot.frp ? (hotspot.frp > 30 ? 'Tinggi' : hotspot.frp >= 10 ? 'Sedang' : 'Rendah') : 'Rendah'}</dd>
-                  </div>
-                  <div>
-                    <dt>Terdeteksi</dt>
-                    <dd>{formatTimestamp(hotspot.detectedAt)}</dd>
-                  </div>
-                </dl>
-                <HotspotWeatherPopup lat={hotspot.latitude} lon={hotspot.longitude} />
-              </div>
-            </Popup>
-          </CircleMarker>
-        ))}
+        {hotspots.map((hotspot) =>
+          (hotspot.frp ?? 0) > HIGH_FRP_THRESHOLD ? (
+            <Marker
+              key={hotspot.id}
+              position={[hotspot.latitude, hotspot.longitude]}
+              icon={getHighIntensityIcon(sourceColor(hotspot.source))}
+            >
+              <Popup>
+                <HotspotPopupContent hotspot={hotspot} />
+              </Popup>
+            </Marker>
+          ) : (
+            <CircleMarker
+              key={hotspot.id}
+              center={[hotspot.latitude, hotspot.longitude]}
+              radius={7}
+              pathOptions={{
+                color: "#1b120d",
+                weight: 2,
+                fillColor: sourceColor(hotspot.source),
+                fillOpacity: 0.98
+              }}
+            >
+              <Popup>
+                <HotspotPopupContent hotspot={hotspot} />
+              </Popup>
+            </CircleMarker>
+          )
+        )}
       </MapContainer>
     </div>
   );

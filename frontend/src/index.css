@@ -490,6 +490,24 @@ body {
   min-width: 0;
   position: relative;
   overflow: hidden;
+  animation: stage-fade-in 220ms ease-out;
+}
+
+@keyframes stage-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-stage {
+    animation: none;
+  }
 }
 
 .workspace-stage--map {
@@ -511,6 +529,52 @@ body {
   width: 100%;
   height: 100%;
   background: #111317;
+}
+
+.map-frame .leaflet-control-zoom {
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 0.5rem !important;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+}
+
+.map-frame .leaflet-control-zoom a {
+  background: rgba(19, 21, 26, 0.92) !important;
+  color: #f5efe6 !important;
+  border: none !important;
+  backdrop-filter: blur(8px);
+}
+
+.map-frame .leaflet-control-zoom a:not(.leaflet-disabled):hover {
+  background: rgba(255, 78, 0, 0.18) !important;
+  color: #ffffff !important;
+}
+
+.map-frame .leaflet-control-zoom-in {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.map-frame .leaflet-control-zoom a.leaflet-disabled {
+  background: rgba(19, 21, 26, 0.6) !important;
+  color: rgba(245, 239, 230, 0.35) !important;
+}
+
+.panels-toggle-layer {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.panels-toggle-layer--hidden {
+  opacity: 0;
+  transform: translateY(6px) scale(0.99);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panels-toggle-layer {
+    transition: none;
+  }
 }
 
 .control-overlay {
@@ -4477,6 +4541,49 @@ body {
 .leaflet-popup-tip {
   background: #fff1df;
   color: #1b0f0a;
+}
+
+.hotspot-pulse-marker {
+  position: relative;
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.hotspot-pulse-ring,
+.hotspot-pulse-core {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.hotspot-pulse-core {
+  background: var(--hotspot-pulse-color, #ef4444);
+  border: 2px solid #1b120d;
+  box-shadow: 0 0 8px var(--hotspot-pulse-color, #ef4444);
+}
+
+.hotspot-pulse-ring {
+  border: 2px solid var(--hotspot-pulse-color, #ef4444);
+  animation: hotspot-pulse-ring 1.8s ease-out infinite;
+}
+
+@keyframes hotspot-pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hotspot-pulse-ring {
+    animation: none;
+    opacity: 0.35;
+  }
 }
 
 .layer-tooltip {

@@ -68,4 +68,14 @@ describe("buildTimeRange - Calendar Preset Filters & Custom Ranges in WIB", () =
     expect(range.endAt.toISOString()).toBe("2026-05-15T17:00:00.000Z");
     expect(range.label).toBe("2026-05-10 to 2026-05-15");
   });
+
+  it("should not throw and should fall back to a valid date when the custom range is incomplete or malformed", () => {
+    expect(() => buildTimeRange("custom", "", "2026-05-15", 0)).not.toThrow();
+    expect(() => buildTimeRange("custom", "2026-05-10", "", 0)).not.toThrow();
+    expect(() => buildTimeRange("custom", "2026-13-40", "2026-05-15", 0)).not.toThrow();
+
+    const range = buildTimeRange("custom", "", "2026-05-15", 0);
+    expect(Number.isNaN(range.startAt.getTime())).toBe(false);
+    expect(() => range.startAt.toISOString()).not.toThrow();
+  });
 });

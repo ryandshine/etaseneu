@@ -117,8 +117,26 @@ function formatSyncTimestamp(value: string | null | undefined): string {
   return `${day} ${month} ${hour}:${minute} WIB`;
 }
 
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidCalendarDate(year: number, month: number, day: number): boolean {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
 function getWibDate(dateStr: string, dayOffset: number): Date {
   const [year, month, day] = dateStr.split("-").map(Number);
+
+  if (!ISO_DATE_PATTERN.test(dateStr) || !isValidCalendarDate(year, month, day)) {
+    // Falls back to "today" so an incomplete/invalid date (e.g. mid-edit in the
+    // custom range input) never produces an Invalid Date that crashes toISOString().
+    return getWibDate(getTodayWIB(), dayOffset);
+  }
+
   return new Date(Date.UTC(year, month - 1, day + dayOffset - 1, 17, 0, 0, 0));
 }
 

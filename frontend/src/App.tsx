@@ -432,8 +432,10 @@ export default function App() {
               />
             </Suspense>
 
-            {showPanels && (
-              <>
+            <div
+              className={`panels-toggle-layer${showPanels ? "" : " panels-toggle-layer--hidden"}`}
+              aria-hidden={!showPanels}
+            >
                 {/* Mobile Filter Toggle Button */}
                 <button
                   className="mobile-filter-btn"
@@ -548,10 +550,9 @@ export default function App() {
                     )}
                   </article>
                 </aside>
-              </>
-            )}
-            
-            <button 
+            </div>
+
+            <button
               onClick={() => setShowPanels(p => !p)} 
               title={showPanels ? "Sembunyikan Panel" : "Tampilkan Panel"}
               style={{
@@ -623,27 +624,29 @@ export default function App() {
             </Suspense>
           </section>
         ) : (
-          <Suspense fallback={<ViewLoader label="Memuat pemantauan..." />}>
-            <MonitoringPanel
-              metrics={schedulerMetrics}
-              hotspots={hotspots}
-              layers={layers}
-              onManualSync={() => void manualSync()}
-              onPrewarmHistory={() => void prewarmHistory()}
-              manualSyncBusy={isTriggeringManualSync}
-              prewarmBusy={isPrewarming}
-              autoRefreshActive
-              refreshing={isRefreshingScheduler}
-              signalChangeNotice={signalChangeNotice}
-              audioMuted={audioMuted}
-              onToggleAudioMuted={() => setAudioMuted((current) => !current)}
-              alertVolume={alertVolume}
-              onToggleAlertVolume={() =>
-                setAlertVolume((current) => (current === "normal" ? "low" : "normal"))
-              }
-              onDismissSignalChangeNotice={() => setSignalChangeNotice(null)}
-            />
-          </Suspense>
+          <section aria-label="Monitoring workspace" className="workspace-stage workspace-stage--monitoring">
+            <Suspense fallback={<ViewLoader label="Memuat pemantauan..." />}>
+              <MonitoringPanel
+                metrics={schedulerMetrics}
+                hotspots={hotspots}
+                layers={layers}
+                onManualSync={() => void manualSync()}
+                onPrewarmHistory={() => void prewarmHistory()}
+                manualSyncBusy={isTriggeringManualSync}
+                prewarmBusy={isPrewarming}
+                autoRefreshActive
+                refreshing={isRefreshingScheduler}
+                signalChangeNotice={signalChangeNotice}
+                audioMuted={audioMuted}
+                onToggleAudioMuted={() => setAudioMuted((current) => !current)}
+                alertVolume={alertVolume}
+                onToggleAlertVolume={() =>
+                  setAlertVolume((current) => (current === "normal" ? "low" : "normal"))
+                }
+                onDismissSignalChangeNotice={() => setSignalChangeNotice(null)}
+              />
+            </Suspense>
+          </section>
         )}
       </main>
 
