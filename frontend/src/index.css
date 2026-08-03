@@ -560,6 +560,8 @@ body {
 }
 
 .panels-toggle-layer {
+  position: relative;
+  z-index: 1000;
   opacity: 1;
   transform: translateY(0) scale(1);
   transition: opacity 220ms ease, transform 220ms ease;
@@ -4530,6 +4532,10 @@ body {
   align-items: center;
   justify-content: center;
   margin: 0 !important;
+  /* Leaflet's own CSS sets text-indent: 1px on .leaflet-control-zoom-in/out as a
+     centering hack for its default text-align:center layout; that shifts the
+     glyph off-center now that we center with flexbox instead. */
+  text-indent: 0;
 }
 
 .leaflet-touch .leaflet-bar a {
