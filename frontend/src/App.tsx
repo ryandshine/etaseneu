@@ -91,6 +91,9 @@ export default function App() {
     return () => window.removeEventListener("popstate", syncFromUrl);
   }, []);
   const [showPanels, setShowPanels] = useState(true);
+  // Di mobile panel statistik disajikan sebagai sheet yang dibuka lewat tombol
+  // ringkas; di desktop state ini tidak berpengaruh (panelnya selalu tampil).
+  const [statsOpen, setStatsOpen] = useState(false);
   const {
     endDate,
     exportDashboard,
@@ -419,7 +422,21 @@ export default function App() {
               aria-hidden={!showPanels}
             >
                 
-                            <aside className="control-overlay control-overlay--top-right panel panel--stats" style={{ maxHeight: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
+                <button
+                  type="button"
+                  className="stats-sheet-toggle"
+                  onClick={() => setStatsOpen((open) => !open)}
+                  aria-expanded={statsOpen}
+                  aria-controls="panel-statistik-hotspot"
+                >
+                  {statsOpen ? "Tutup" : `${(selectedWilker ? visibleHotspots.length : stats.hotspotCount).toLocaleString()} hotspot`}
+                </button>
+
+                <aside
+                  id="panel-statistik-hotspot"
+                  className={`control-overlay control-overlay--top-right panel panel--stats${statsOpen ? " mobile-open" : ""}`}
+                  style={{ maxHeight: '100%', overflowY: 'auto', overflowX: 'hidden' }}
+                >
                   <article className="metric-card" style={{ padding: '0.65rem 0.75rem' }}>
                     <p className="metric-label" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.3rem', fontSize: '0.72rem' }}>
                       Titik Panas (FRP)
