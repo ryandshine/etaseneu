@@ -2,15 +2,37 @@ import { describe, expect, it } from "vitest";
 import { buildTimeRange } from "../hooks/useDashboardData";
 
 describe("buildTimeRange - Calendar Preset Filters & Custom Ranges in WIB", () => {
-  it("should represent Hari Ini (1 full calendar day) of the selected date in WIB", () => {
+  it("should represent 24 Jam as the full calendar day when the selected date is already in the past", () => {
     const selectedDate = "2026-05-30";
-    const range = buildTimeRange("24h", "2026-05-29", selectedDate, 0);
+    const now = new Date("2026-08-09T00:49:00.000Z");
+    const range = buildTimeRange("24h", "2026-05-29", selectedDate, 0, now);
 
     // 2026-05-30 00:00:00 WIB -> 2026-05-29 17:00:00 UTC
     expect(range.startAt.toISOString()).toBe("2026-05-29T17:00:00.000Z");
     // 2026-05-31 00:00:00 WIB -> 2026-05-30 17:00:00 UTC
     expect(range.endAt.toISOString()).toBe("2026-05-30T17:00:00.000Z");
-    expect(range.label).toBe("Hari ini");
+    expect(range.label).toBe("24 jam terakhir");
+  });
+
+  it("should roll 24 Jam back from the current hour when the selected date is today", () => {
+    // 2026-08-09 00:49 WIB -> 2026-08-08 17:49 UTC. Hari kalender WIB baru
+    // berjalan 49 menit, sehingga jendela "hari ini" yang lama akan kosong.
+    const now = new Date("2026-08-08T17:49:00.000Z");
+    const range = buildTimeRange("24h", "2026-08-08", "2026-08-09", 0, now);
+
+    // Dibulatkan ke bawah ke jam penuh, lalu mundur 24 jam.
+    expect(range.endAt.toISOString()).toBe("2026-08-08T17:00:00.000Z");
+    expect(range.startAt.toISOString()).toBe("2026-08-07T17:00:00.000Z");
+  });
+
+  it("should keep the 24 Jam window stable across clock ticks within the same hour", () => {
+    // Cache key backend memuat start_at/end_at persis; jendela yang bergeser
+    // tiap menit akan membuat cache tidak pernah kena.
+    const first = buildTimeRange("24h", "2026-08-08", "2026-08-09", 0, new Date("2026-08-08T17:05:00.000Z"));
+    const second = buildTimeRange("24h", "2026-08-08", "2026-08-09", 1, new Date("2026-08-08T17:58:00.000Z"));
+
+    expect(first.startAt.toISOString()).toBe(second.startAt.toISOString());
+    expect(first.endAt.toISOString()).toBe(second.endAt.toISOString());
   });
 
   it("should represent 48 Jam (2 full calendar days ending on selected date) in WIB", () => {

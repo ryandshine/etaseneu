@@ -140,12 +140,27 @@ function getWibDate(dateStr: string, dayOffset: number): Date {
   return new Date(Date.UTC(year, month - 1, day + dayOffset - 1, 17, 0, 0, 0));
 }
 
+const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * Dibulatkan ke bawah ke jam penuh supaya cache key backend (yang menyertakan
+ * start_at/end_at persis) stabil minimal satu jam. Tanpa ini, jendela yang
+ * berakhir di "sekarang" menghasilkan key baru setiap clockTick (60 detik)
+ * sehingga cache tidak pernah kena.
+ */
+function floorToHour(date: Date): Date {
+  return new Date(Math.floor(date.getTime() / HOUR_MS) * HOUR_MS);
+}
+
 export function buildTimeRange(
   timePreset: TimePreset,
   customStartDate: string,
   customEndDate: string,
   clockTick: number,
+  now: Date = new Date(),
 ): TimeRange {
+  // clockTick tidak dipakai langsung; keberadaannya memaksa useMemo menghitung
+  // ulang tiap menit supaya jendela 24 jam ikut bergeser.
   void clockTick;
 
   if (timePreset === "custom") {
@@ -158,8 +173,26 @@ export function buildTimeRange(
     };
   }
 
+  if (timePreset === "24h") {
+    // Sebelumnya preset ini berarti "hari ini" secara kalender WIB (00:00 hari
+    // ini s.d. 00:00 besok). Karena data NASA FIRMS tertinggal beberapa jam,
+    // jendela itu kosong setiap lewat tengah malam WIB sampai data pertama
+    // hari itu masuk -- peta tampil kosong padahal sistem sehat.
+    //
+    // Sekarang jendelanya 24 jam yang berakhir di akhir tanggal acuan, tapi
+    // tidak pernah melewati "sekarang". Untuk tanggal lampau hasilnya tetap
+    // persis satu hari kalender (perilaku lama dipertahankan), sedangkan untuk
+    // hari ini jendelanya bergulir mundur 24 jam dari jam berjalan.
+    const anchorEnd = getWibDate(customEndDate, 1);
+    const endAt = anchorEnd.getTime() <= now.getTime() ? anchorEnd : floorToHour(now);
+    return {
+      startAt: new Date(endAt.getTime() - 24 * HOUR_MS),
+      endAt,
+      label: "24 jam terakhir"
+    };
+  }
+
   const presetOffset = {
-    "24h": { days: 0, label: "Hari ini" },
     "48h": { days: -1, label: "48 jam terakhir" },
     "3d": { days: -2, label: "3 hari terakhir" },
     "7d": { days: -6, label: "7 hari terakhir" },
