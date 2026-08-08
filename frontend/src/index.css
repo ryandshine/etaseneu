@@ -557,15 +557,6 @@ body {
   gap: 1rem;
 }
 
-.control-overlay--top-left {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  width: min(22rem, calc(100% - 2rem));
-  z-index: 1000;
-  overflow-x: hidden;
-}
-
 .control-overlay--bottom-left {
   position: absolute;
   left: 1rem;
@@ -3701,6 +3692,14 @@ body {
   overflow-x: hidden;
 }
 
+/* Anak grid punya min-width: auto, jadi menolak menyusut di bawah lebar
+   min-content isinya. Di sidebar sempit hal ini membuat baris preset waktu
+   melebar melampaui panel (372px di dalam wadah 325px) sehingga "3 Hari" dan
+   "Custom" terpotong. */
+.panel--filters > * {
+  min-width: 0;
+}
+
 .filter-panel-header {
   display: flex;
   align-items: center;
@@ -3746,9 +3745,12 @@ body {
   padding: 0 0.05rem;
 }
 
+/* minmax(0, 1fr), bukan 1fr: item grid punya min-width otomatis sebesar
+   kontennya, sehingga di sidebar sempit label seperti "3 Hari" dan "Custom"
+   terpotong keluar kolom alih-alih menyusut. */
 .filter-preset-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.45rem;
   margin-bottom: 0.5rem;
 }
@@ -4753,7 +4755,10 @@ a + a {
     width: 85vw;
     max-width: 340px;
     height: 100vh;
-    z-index: 1000;
+    /* Di atas overlay peta: .panels-toggle-layer dan tombol "Sembunyikan UI"
+       sama-sama z-index 1000 dan menang karena lebih akhir di DOM, sehingga
+       kontrol peta menimpa isi drawer. */
+    z-index: 1300;
     transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     will-change: left;
     background: rgba(15, 23, 42, 0.95);
@@ -4766,6 +4771,12 @@ a + a {
 
   .side-rail.mobile-open {
     left: 0;
+  }
+
+  /* Tombol hamburger/X melayang di pojok kiri atas layar; beri ruang supaya
+     tidak menutupi nama aplikasi saat drawer terbuka. */
+  .side-brand {
+    padding-left: 4.75rem;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -4789,7 +4800,8 @@ a + a {
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 0.5rem;
     cursor: pointer;
-    z-index: 999;
+    /* Di atas drawer supaya tombol X tetap terjangkau saat menu terbuka. */
+    z-index: 1400;
     color: #f3f4f6;
     transition: all 0.2s ease;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
@@ -4809,7 +4821,7 @@ a + a {
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.5);
-    z-index: 500;
+    z-index: 1200;
     display: none;
   }
 
@@ -4828,56 +4840,22 @@ a + a {
     height: 100vh;
   }
 
-  /* Filter Panel: Drawer Bottom */
-  .control-overlay--top-left {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    top: auto;
-    width: 100%;
-    max-width: 100%;
-    max-height: 75vh;
-    border-radius: 1.5rem 1.5rem 0 0;
-    z-index: 800;
-    transform: translateY(100%);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow-y: auto;
-    will-change: transform;
-    background: rgba(9, 11, 14, 0.98);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-bottom: none;
-    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
-    padding: 1.5rem 1.5rem 2rem;
-  }
-
-  .control-overlay--top-left::before {
-    content: '';
-    position: absolute;
-    top: 8px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 36px;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 2px;
-  }
-
-  .control-overlay--top-left.mobile-open {
-    transform: translateY(0);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .control-overlay--top-left {
-      transition: none;
-    }
+  /* Di layar kecil sidebar sudah berupa drawer yang menggulir utuh
+     (.side-rail: height 100vh + overflow-y auto). Menahan .side-scroll pada
+     flex:1 hanya menyisakan jendela sempit ~400px untuk filter sementara blok
+     status sinkronisasi memakan sisanya, sehingga Provinsi/Wilker/rentang
+     praktis tidak terjangkau. Di sini semuanya dibiarkan mengalir dalam satu
+     gulungan. */
+  .side-scroll {
+    flex: none;
+    min-height: auto;
+    overflow: visible;
   }
 
   .panel--filters {
     padding: 1rem;
-    max-height: calc(70vh - 2rem);
-    overflow-y: auto;
+    max-height: none;
+    overflow: visible;
   }
 
   /* Stats Panel: Hidden on Mobile, Show as Tab */
@@ -5099,11 +5077,6 @@ a + a {
     padding: 0.4rem 0.5rem;
     font-size: 0.65rem;
     margin-top: 0.35rem;
-  }
-
-  /* Equalize overlay panel widths for symmetry */
-  .control-overlay--top-left {
-    width: min(22rem, calc(100% - 2rem));
   }
 
   .control-overlay--top-right {
