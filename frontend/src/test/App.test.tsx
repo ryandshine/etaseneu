@@ -275,6 +275,53 @@ describe("App", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("restores the matrix view from the URL on load", async () => {
+    window.history.replaceState({}, "", "/?view=matrix");
+    render(<App />);
+
+    await act(async () => {
+      await vi.dynamicImportSettled();
+    });
+
+    expect(screen.getByText("Matriks Intersep")).toBeInTheDocument();
+  });
+
+  it("does not restore the password-gated settings view from the URL", async () => {
+    // Gerbangnya berjalan di sisi klien, jadi memulihkan view ini dari tautan
+    // sama saja menyediakan jalan pintas melewatinya.
+    window.history.replaceState({}, "", "/?view=settings");
+    render(<App />);
+
+    await act(async () => {
+      await vi.dynamicImportSettled();
+    });
+
+    expect(await screen.findByTestId("leaflet-map")).toBeInTheDocument();
+  });
+
+  it("writes the active view to the URL when navigating", async () => {
+    render(<App />);
+
+    await act(async () => {
+      await vi.dynamicImportSettled();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /matriks data/i }));
+    await act(async () => {
+      await vi.dynamicImportSettled();
+    });
+
+    expect(window.location.search).toBe("?view=matrix");
+
+    fireEvent.click(screen.getByRole("button", { name: /live map/i }));
+    await act(async () => {
+      await vi.dynamicImportSettled();
+    });
+
+    expect(window.location.search).toBe("");
   });
 
   it("renders the frontend shell heading", async () => {

@@ -24,6 +24,26 @@ function isSchedulerFailureStatus(status?: string | null): boolean {
   return status === "failure" || status === "failed";
 }
 
+type AppView = "map" | "matrix" | "settings";
+
+/**
+ * View aktif disimpan di query string supaya refresh dan tombol back tidak
+ * selalu melempar pengguna kembali ke Live Map, dan tautan ke Matriks Data
+ * bisa dibagikan.
+ *
+ * "settings" sengaja TIDAK ikut dipulihkan dari URL. Gerbangnya berjalan di
+ * sisi klien, jadi memulihkannya dari tautan sama saja menyediakan jalan
+ * pintas melewati gerbang itu.
+ */
+function readViewFromUrl(): AppView {
+  if (typeof window === "undefined") {
+    return "map";
+  }
+  return new URLSearchParams(window.location.search).get("view") === "matrix"
+    ? "matrix"
+    : "map";
+}
+
 function ViewLoader({ label }: { label: string }) {
   return (
     <div className="view-loader" role="status" aria-live="polite">
@@ -39,9 +59,9 @@ export default function App() {
   const [selectedWilker, setSelectedWilker] = useState<string>("");
   const [showWind, setShowWind] = useState(false);
   const [weatherOverlay, setWeatherOverlay] = useState<"temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null>(null);
-  const [activeView, setActiveView] = useState<"map" | "matrix" | "settings">("map");
+  const [activeView, setActiveView] = useState<AppView>(readViewFromUrl);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const handleViewChange = (view: "map" | "matrix" | "settings") => {
+  const handleViewChange = (view: AppView) => {
     if (view === "settings") {
       const password = prompt("Masukkan password untuk mengakses Pengaturan:");
       if (password !== "admin@5150") {
@@ -50,7 +70,26 @@ export default function App() {
       }
     }
     setActiveView(view);
+
+    // Pengaturan tidak ditulis ke URL supaya tautannya tidak bisa dipakai
+    // melewati gerbang password di atas.
+    const params = new URLSearchParams(window.location.search);
+    if (view === "matrix") {
+      params.set("view", "matrix");
+    } else {
+      params.delete("view");
+    }
+    const query = params.toString();
+    window.history.pushState({}, "", query ? `?${query}` : window.location.pathname);
   };
+
+  // Tombol back/forward browser mengubah URL tanpa memuat ulang halaman, jadi
+  // state view harus ikut disesuaikan sendiri.
+  useEffect(() => {
+    const syncFromUrl = () => setActiveView(readViewFromUrl());
+    window.addEventListener("popstate", syncFromUrl);
+    return () => window.removeEventListener("popstate", syncFromUrl);
+  }, []);
   const [showPanels, setShowPanels] = useState(true);
   const {
     endDate,

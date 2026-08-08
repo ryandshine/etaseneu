@@ -320,6 +320,10 @@ describe("Hotspot map integration", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    // View aktif kini tersimpan di URL, dan jsdom mempertahankan history antar
+    // test dalam satu berkas. Tanpa reset ini, test yang berpindah ke Matriks
+    // Data membuat test berikutnya ikut mulai di view tersebut.
+    window.history.replaceState({}, "", "/");
   });
 
   it("renders hotspot map content and downloads the export file", async () => {
