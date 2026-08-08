@@ -118,7 +118,6 @@ export default function App() {
     timePreset,
     timeRange,
     setTimePreset,
-    toggleLayer,
     toggleSatellite,
     updateDate,
     initialLoading,
@@ -380,10 +379,8 @@ export default function App() {
         mobileOpen={mobileMenuOpen}
         filterSlot={activeView === "map" ? (
           <FilterPanel
-            layers={layers}
             selectedSatellites={selectedSatellites}
             timePreset={timePreset}
-            onToggleLayer={toggleLayer}
             onToggleSatellite={toggleSatellite}
             onTimePresetChange={setTimePreset}
             onDateChange={updateDate}

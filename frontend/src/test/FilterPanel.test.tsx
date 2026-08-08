@@ -6,34 +6,12 @@ import { FilterPanel } from "../components/FilterPanel";
 
 describe("FilterPanel", () => {
   it("renders time presets, province and wilker filters", () => {
-    const onToggle = vi.fn();
     const onTimePresetChange = vi.fn();
 
     render(
       <FilterPanel
-        layers={[
-          {
-            id: "sample_area",
-            name: "sample_area",
-            label: "LPHD Nyuai Peningun",
-            active: true,
-            color: "#1d4ed8",
-            bounds: {
-              min_lat: -7,
-              min_lon: 107,
-              max_lat: -6,
-              max_lon: 108
-            },
-            geojson: {
-              type: "FeatureCollection",
-              features: []
-            },
-            feature_count: 1
-          }
-        ]}
         selectedSatellites={["MODIS"]}
         timePreset="24h"
-        onToggleLayer={onToggle}
         onToggleSatellite={() => {}}
         onTimePresetChange={onTimePresetChange}
         onDateChange={() => {}}

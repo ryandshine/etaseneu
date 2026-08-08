@@ -612,14 +612,6 @@ export function useDashboardData(activeView: "map" | "matrix" | "settings" = "ma
     [remoteStats.by_layer],
   );
 
-  function toggleLayer(id: string) {
-    setLayers((currentLayers) =>
-      currentLayers.map((layer) =>
-        layer.id === id ? { ...layer, active: !layer.active } : layer,
-      ),
-    );
-  }
-
   function toggleSatellite(value: string) {
     setSelectedSatellites((currentSatellites) => {
       if (currentSatellites.includes(value)) {
@@ -777,7 +769,6 @@ export function useDashboardData(activeView: "map" | "matrix" | "settings" = "ma
     timePreset,
     timeRange,
     setTimePreset,
-    toggleLayer,
     toggleSatellite,
     updateDate,
     manualSync,

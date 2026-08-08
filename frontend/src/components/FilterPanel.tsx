@@ -1,27 +1,13 @@
 import { useState } from "react";
 
-import type { LayerBounds } from "../types/api";
 import { SATELLITE_OPTIONS } from "../constants/satellites";
 import { TIME_PRESET_OPTIONS, type TimePreset } from "../constants/time-windows";
 
-type LayerItem = {
-  id: string;
-  name: string;
-  label: string;
-  active: boolean;
-  color: string;
-  bounds: LayerBounds;
-  geojson: Record<string, unknown>;
-  feature_count: number;
-};
-
 type FilterPanelProps = {
-  layers: LayerItem[];
   selectedSatellites: string[];
   timePreset: TimePreset;
   startDate: string;
   endDate: string;
-  onToggleLayer: (id: string) => void;
   onToggleSatellite: (value: string) => void;
   onTimePresetChange: (value: TimePreset) => void;
   onDateChange: (field: "startDate" | "endDate", value: string) => void;
