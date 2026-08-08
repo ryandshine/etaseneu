@@ -205,3 +205,37 @@ def test_hotspots_endpoint_returns_422_for_invalid_dates(monkeypatch) -> None:
         assert body["detail"]
     finally:
         get_settings.cache_clear()
+
+
+def test_map_view_includes_wilker_for_filter_but_not_full_metadata() -> None:
+    """Filter Wilker di panel peta bergantung pada field ini.
+
+    Sebelumnya payload view=map membuang polygon_metadata seluruhnya, sehingga
+    daftar pilihan Wilker selalu kosong dan dropdown-nya tidak berfungsi.
+    """
+    from app.api.hotspots import _to_map_hotspot
+
+    trimmed = _to_map_hotspot({
+        "id": 1,
+        "source": "MODIS",
+        "latitude": -1.7,
+        "longitude": 103.9,
+        "agency_name": "KOPERASI X",
+        "province_name": "Jambi",
+        "polygon_metadata": {
+            "WILKER_BPS": "Balai PS Banjarbaru",
+            "NAMA_DESA": "Sungai Baru",
+            "NO_SK": "SK.123/2020",
+        },
+    })
+
+    assert trimmed["polygon_metadata"] == {"WILKER_BPS": "Balai PS Banjarbaru"}
+    # Field lain tetap dibuang supaya payload peta tidak membengkak.
+    assert "NAMA_DESA" not in trimmed["polygon_metadata"]
+
+
+def test_map_view_omits_metadata_when_wilker_missing() -> None:
+    from app.api.hotspots import _to_map_hotspot
+
+    assert "polygon_metadata" not in _to_map_hotspot({"id": 2})
+    assert "polygon_metadata" not in _to_map_hotspot({"id": 3, "polygon_metadata": {"NO_SK": "x"}})

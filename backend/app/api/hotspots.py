@@ -60,7 +60,17 @@ def _normalize_datetime(value: datetime) -> datetime:
 
 
 def _to_map_hotspot(hotspot: dict[str, object]) -> dict[str, object]:
-    return {
+    """Payload ringkas untuk peta.
+
+    Sengaja tidak memuat polygon_metadata utuh (puluhan field per titik) supaya
+    respons peta tetap kecil. WILKER_BPS tetap disertakan karena filter Wilker
+    di panel peta memerlukannya: tanpa ini daftar pilihannya selalu kosong dan
+    dropdown-nya terlihat rusak.
+    """
+    metadata = hotspot.get("polygon_metadata") or {}
+    wilker = metadata.get("WILKER_BPS") if isinstance(metadata, dict) else None
+
+    payload: dict[str, object] = {
         "id": hotspot.get("id"),
         "source": hotspot.get("source"),
         "satellite": hotspot.get("satellite"),
@@ -72,3 +82,10 @@ def _to_map_hotspot(hotspot: dict[str, object]) -> dict[str, object]:
         "agency_name": hotspot.get("agency_name"),
         "province_name": hotspot.get("province_name"),
     }
+
+    # Key-nya sama sekali tidak dikirim kalau Wilker tidak diketahui, supaya
+    # payload tetap seminimal sebelumnya untuk titik tanpa metadata.
+    if wilker:
+        payload["polygon_metadata"] = {"WILKER_BPS": wilker}
+
+    return payload

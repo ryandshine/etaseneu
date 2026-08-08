@@ -3882,6 +3882,12 @@ body {
   cursor: not-allowed;
 }
 
+.filter-date-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
 .filter-group + .filter-group {
   padding-top: 0.75rem;
   margin-top: 0.25rem;
@@ -4769,7 +4775,9 @@ a + a {
     backdrop-filter: blur(10px);
     border-right: 1px solid rgba(255, 255, 255, 0.08);
     overflow-y: auto;
-    padding-top: 1rem;
+    /* Tanpa padding-top: celah di atas brand yang sticky membuat isi drawer
+       mengintip di atasnya saat digulir. Jarak atasnya kini disediakan oleh
+       .side-brand sendiri. */
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
   }
 
@@ -4777,10 +4785,35 @@ a + a {
     left: 0;
   }
 
-  /* Tombol hamburger/X melayang di pojok kiri atas layar; beri ruang supaya
-     tidak menutupi nama aplikasi saat drawer terbuka. */
+  /* Tombol hamburger/X melayang tetap di pojok kiri atas layar, sementara isi
+     drawer menggulir di bawahnya -- tanpa ini tombolnya menimpa kontrol mana
+     pun yang kebetulan lewat, mis. dropdown Provinsi. Brand dibuat menempel di
+     atas dan diberi latar solid, jadi satu-satunya yang pernah berada di bawah
+     tombol adalah brand itu sendiri. */
   .side-brand {
+    position: sticky;
+    top: 0;
+    z-index: 3;
     padding-left: 4.75rem;
+    background: #0f172a;
+  }
+
+  /* Jarak antar grup filter: gap panel (1rem) menumpuk dengan padding/margin
+     pemisah, menyisakan rongga besar di layar sempit. */
+  .panel--filters {
+    gap: 0.55rem;
+  }
+
+  .filter-group + .filter-group {
+    padding-top: 0.5rem;
+    margin-top: 0;
+  }
+
+  /* Drawer hanya ~300px setelah padding; dua kolom membuat input tanggal
+     native terpotong jadi "08/09/20" karena lebar minimumnya tidak bisa
+     ditekan (font-size dikunci 16px oleh aturan anti-auto-zoom iOS). */
+  .filter-date-grid {
+    grid-template-columns: 1fr;
   }
 
   @media (prefers-reduced-motion: reduce) {

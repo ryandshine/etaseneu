@@ -119,7 +119,7 @@ export function FilterPanel(props: FilterPanelProps) {
 
       <section className="filter-group">
         <p className="filter-group-label">Rentang kustom</p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+        <div className="filter-date-grid">
           <label className="field">
             <span>Dari</span>
             <input
