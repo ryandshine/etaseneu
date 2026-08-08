@@ -55,7 +55,16 @@ class HotspotService:
 
         if not bypass_cache:
             cached_hotspots = self.cache_service.read(query.cache_key())
-            if cached_hotspots is not None:
+            # Cache KOSONG sengaja tidak dihitung sebagai hit selama Postgres
+            # masih bisa ditanya. Hasil kosong yang sempat tersimpan -- mis.
+            # jendela "hari ini" yang diminta sebelum data satelit hari itu
+            # masuk -- akan terus disajikan sampai TTL 24 jam habis, sehingga
+            # filter 48 Jam/7 Hari menampilkan 0 titik padahal datanya ada di
+            # database (terjadi di produksi 9 Agu 2026).
+            #
+            # Kalau Postgres mati, cache kosong tetap dihormati supaya tidak
+            # memicu penarikan ulang ke NASA setiap permintaan.
+            if cached_hotspots is not None and (cached_hotspots or not self.postgres_store.enabled):
                 hydrated_hotspots = self._hydrate_polygon_metadata(query, cached_hotspots)
                 cache_hit = True
 
@@ -67,7 +76,12 @@ class HotspotService:
                         sources=_query_sources(query.satellites),
                         layer_ids=query.active_layers,
                     )
-                    if db_hotspots is not None:
+                    # Sama seperti cache: hasil DB yang kosong bukan jawaban
+                    # final. Rentang yang belum pernah disinkron akan kosong di
+                    # Postgres padahal arsip tahunan/NASA punya datanya, dan
+                    # menghentikan alur di sini membuat jendela itu selamanya
+                    # menampilkan 0 titik.
+                    if db_hotspots:
                         self.cache_service.write(query.cache_key(), db_hotspots)
                         hydrated_hotspots = db_hotspots
                         cache_hit = True
