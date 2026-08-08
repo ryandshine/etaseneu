@@ -176,6 +176,7 @@ export function SidebarNav({
             onClick={onManualSync}
             disabled={manualSyncBusy}
             aria-busy={manualSyncBusy}
+            aria-label="Sync hotspot manual"
             style={{ flex: '1 1 48%', minHeight: '44px', fontSize: '0.75rem', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}
           >
             <span className="sync-button-label">
@@ -193,6 +194,7 @@ export function SidebarNav({
             onClick={onPrewarmHistory}
             disabled={prewarmBusy}
             aria-busy={prewarmBusy}
+            aria-label="Prewarm histori tahunan"
             style={{ flex: '1 1 48%', minHeight: '44px', fontSize: '0.75rem', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}
           >
             <span className="sync-button-label">

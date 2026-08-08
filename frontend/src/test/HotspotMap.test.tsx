@@ -285,6 +285,16 @@ describe("Hotspot map integration", () => {
         });
       }
 
+      // HotspotMap memanggil cek hujan per marker saat popup disiapkan.
+      // Endpoint ini ditambahkan setelah test dibuat, dan tanpa stub di sini
+      // mock melempar error sehingga render peta ikut gagal.
+      if (url.startsWith("/api/weather/rain-check")) {
+        return new Response(JSON.stringify({ raining: false }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
       throw new Error(`Unexpected fetch: ${url}`);
     });
 
@@ -317,8 +327,8 @@ describe("Hotspot map integration", () => {
 
     // Wait for dashboard content to appear (rendered only after isInitLoaded)
     expect(await screen.findByTestId("leaflet-map", {}, { timeout: 5000 })).toBeInTheDocument();
-    expect((await screen.findAllByText("Filter temporal", {}, { timeout: 5000 })).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("Hotspot beririsan")).toBeInTheDocument();
+    expect((await screen.findAllByText("Filter Waktu", {}, { timeout: 5000 })).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Hotspot beririsan/)).toBeInTheDocument();
     expect(screen.getAllByText("Areal Perhutanan Sosial").length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("Kecerahan").length).toBeGreaterThanOrEqual(3);
     expect(screen.getAllByText("Satelit").length).toBeGreaterThanOrEqual(3);

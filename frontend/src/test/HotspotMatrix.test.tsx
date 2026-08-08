@@ -73,7 +73,10 @@ describe("HotspotMatrix", () => {
     );
 
     expect(screen.getByText("Matriks Intersep")).toBeInTheDocument();
-    expect(screen.getByText("Rentang Tanggal")).toBeInTheDocument();
+    // Rentang tanggal kini dua input berlabel "Dari"/"Ke", bukan satu label
+    // tunggal "Rentang Tanggal".
+    expect(screen.getByText("Dari")).toBeInTheDocument();
+    expect(screen.getByText("Ke")).toBeInTheDocument();
     expect(screen.getByText("Wilker Filter")).toBeInTheDocument();
     expect(screen.getByText("Provinsi Filter")).toBeInTheDocument();
     expect(screen.getByText("Confidence")).toBeInTheDocument();
