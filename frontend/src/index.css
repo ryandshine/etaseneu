@@ -98,10 +98,16 @@ body {
   overflow: hidden;
 }
 
+/* Dibatasi setinggi layar supaya .side-scroll punya batas untuk menyusut.
+   Induknya (.app-frame) memakai min-height, jadi tanpa batas ini sidebar ikut
+   tumbuh mengikuti isi filter dan blok status sinkronisasi di bawah terdorong
+   keluar layar -- sementara .app-frame { overflow: hidden } membuatnya tidak
+   bisa digulir sama sekali. */
 .side-rail {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  max-height: 100vh;
   overflow-x: hidden;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(19, 21, 26, 0.96);
@@ -141,6 +147,34 @@ body {
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.68rem;
   text-transform: uppercase;
+}
+
+/* Area tengah sidebar (navigasi + filter). `min-height: 0` wajib: tanpa itu
+   flex item menolak menyusut di bawah tinggi kontennya, sehingga blok status
+   sinkronisasi di bawah akan terdorong keluar layar alih-alih memunculkan
+   scrollbar di sini. */
+.side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+
+.side-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.side-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+}
+
+/* Padding horizontal diserahkan ke .panel--filters (1rem) supaya tidak dobel. */
+.side-filter {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 0.25rem;
 }
 
 .side-nav {
@@ -487,12 +521,23 @@ body {
   color: rgba(245, 239, 230, 0.35) !important;
 }
 
+/* Membentang penuh di atas peta supaya tinggi persen milik panel anaknya
+   punya acuan. Sebelumnya `position: relative` tanpa tinggi membuat kotak ini
+   setinggi 0, sehingga `max-height: 100%` pada kartu statistik ikut jadi 0 dan
+   kartunya terpotong tinggal segaris. Lapisannya sendiri tembus klik; hanya
+   panel di dalamnya yang menerima interaksi, agar peta tetap bisa digeser. */
 .panels-toggle-layer {
-  position: relative;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
   z-index: 1000;
   opacity: 1;
   transform: translateY(0) scale(1);
   transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.panels-toggle-layer > * {
+  pointer-events: auto;
 }
 
 .panels-toggle-layer--hidden {
@@ -4835,32 +4880,6 @@ a + a {
     overflow-y: auto;
   }
 
-  /* Mobile Filter Floating Button */
-  .mobile-filter-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: fixed;
-    bottom: 1.25rem;
-    right: 1.25rem;
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    background: rgba(15, 23, 42, 0.7);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(249, 115, 22, 0.4);
-    color: #f59e0b;
-    cursor: pointer;
-    z-index: 700;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-    transition: all 0.2s ease;
-  }
-
-  .mobile-filter-btn:active {
-    transform: scale(0.92);
-    background: rgba(249, 115, 22, 0.15);
-  }
-
   /* Stats Panel: Hidden on Mobile, Show as Tab */
   .control-overlay--top-right {
     display: none;
@@ -4994,17 +5013,20 @@ a + a {
   }
 }
 
-/* Base: hide mobile-only elements by default (overridden in mobile media query) */
-.mobile-hamburger,
-.mobile-filter-btn {
-  display: none;
+/* Disembunyikan mulai lebar tablet ke atas; di bawah 640px sidebar bersifat
+   off-canvas sehingga tombol ini satu-satunya jalan membukanya.
+   Sebelumnya aturan ini ditulis TANPA media query dan berada SETELAH blok
+   max-width: 639px, sehingga kekhususannya sama tapi urutannya menang --
+   akibatnya tombol hamburger tidak pernah muncul di layar kecil sama sekali. */
+@media (min-width: 640px) {
+  .mobile-hamburger {
+    display: none;
+  }
 }
 
 /* Desktop: 1024px+ */
 @media (min-width: 1024px) {
-  .mobile-hamburger,
-  .mobile-overlay,
-  .mobile-filter-btn {
+  .mobile-overlay {
     display: none;
   }
 

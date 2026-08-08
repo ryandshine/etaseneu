@@ -3,7 +3,6 @@ import { useState } from "react";
 import type { LayerBounds } from "../types/api";
 import { SATELLITE_OPTIONS } from "../constants/satellites";
 import { TIME_PRESET_OPTIONS, type TimePreset } from "../constants/time-windows";
-import { LayerList } from "./LayerList";
 
 type LayerItem = {
   id: string;
@@ -30,6 +29,9 @@ type FilterPanelProps = {
   selectedProvince: string;
   onProvinceChange: (province: string) => void;
   provinceOptions: string[];
+  selectedWilker: string;
+  onWilkerChange: (wilker: string) => void;
+  wilkerOptions: string[];
   showWind: boolean;
   onToggleWind: () => void;
   weatherOverlay?: "temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null;
@@ -39,8 +41,12 @@ type FilterPanelProps = {
 export function FilterPanel(props: FilterPanelProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  // Tanpa kelas `panel`/`glass-panel`: panel ini kini menyatu di dalam sidebar,
+  // sehingga bingkai dan bayangan panel melayang justru membuat kartu di dalam
+  // kartu. Penggulirannya diserahkan ke .side-scroll agar tidak ada dua area
+  // gulir bersarang.
   return (
-    <aside aria-label="Filters" className="panel panel--filters glass-panel" style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 2rem)' }}>
+    <aside aria-label="Filters" className="panel--filters">
       <div className="filter-panel-header">
         <span className="filter-panel-title">Filter Waktu</span>
         <span className="filter-panel-badge">AKTIF</span>
@@ -77,6 +83,22 @@ export function FilterPanel(props: FilterPanelProps) {
           {props.provinceOptions.map((province) => (
             <option key={province} value={province}>
               {province}
+            </option>
+          ))}
+        </select>
+      </section>
+
+      <section className="filter-group">
+        <p className="filter-group-label">Wilker (Balai PS)</p>
+        <select
+          value={props.selectedWilker}
+          onChange={(e) => props.onWilkerChange(e.target.value)}
+          className="filter-select-input"
+        >
+          <option value="">Semua Wilker</option>
+          {props.wilkerOptions.map((wilker) => (
+            <option key={wilker} value={wilker}>
+              {wilker}
             </option>
           ))}
         </select>

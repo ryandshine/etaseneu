@@ -20,6 +20,12 @@ type SidebarNavProps = {
   dataAgeLabel: string;
   hasLatestHotspot: boolean;
   mobileOpen?: boolean;
+  /**
+   * Panel filter peta. Dirender sebagai slot, bukan diimpor langsung, supaya
+   * seluruh state filter tetap tinggal di App dan SidebarNav tidak ikut
+   * bergantung pada tipe-tipe filter.
+   */
+  filterSlot?: React.ReactNode;
 };
 
 function NavButton({
@@ -64,7 +70,8 @@ export function SidebarNav({
   latestHotspotTimeLabel,
   dataAgeLabel,
   hasLatestHotspot,
-  mobileOpen
+  mobileOpen,
+  filterSlot
 }: SidebarNavProps) {
   return (
     <aside className={`side-rail${mobileOpen ? " mobile-open" : ""}`}>
@@ -75,18 +82,25 @@ export function SidebarNav({
         </div>
       </div>
 
-      <nav className="side-nav" aria-label="Utama">
-        <p className="side-nav-label">Navigasi</p>
-        <NavButton active={activeView === "map"} onClick={() => onChangeView("map")}>
-          LIVE MAP
-        </NavButton>
-        <NavButton active={activeView === "matrix"} onClick={() => onChangeView("matrix")}>
-          Matriks Data
-        </NavButton>
-        <NavButton active={activeView === "settings"} onClick={() => onChangeView("settings")}>
-          Pengaturan
-        </NavButton>
-      </nav>
+      {/* Navigasi dan filter berbagi satu area yang bisa digulir, sementara
+          brand di atas dan status sinkronisasi di bawah tetap diam. Tanpa ini
+          filter yang panjang akan mendorong blok status keluar layar. */}
+      <div className="side-scroll">
+        <nav className="side-nav" aria-label="Utama">
+          <p className="side-nav-label">Navigasi</p>
+          <NavButton active={activeView === "map"} onClick={() => onChangeView("map")}>
+            LIVE MAP
+          </NavButton>
+          <NavButton active={activeView === "matrix"} onClick={() => onChangeView("matrix")}>
+            Matriks Data
+          </NavButton>
+          <NavButton active={activeView === "settings"} onClick={() => onChangeView("settings")}>
+            Pengaturan
+          </NavButton>
+        </nav>
+
+        {filterSlot ? <div className="side-filter">{filterSlot}</div> : null}
+      </div>
 
       <div className="side-footer" style={{ padding: '0.75rem', fontSize: '0.75rem', overflowX: 'hidden' }}>
         <div className="side-footer-block" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>

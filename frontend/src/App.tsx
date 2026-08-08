@@ -36,11 +36,11 @@ import { Maximize, Minimize, Menu, X } from "lucide-react";
 
 export default function App() {
   const [selectedProvince, setSelectedProvince] = useState<string>("");
+  const [selectedWilker, setSelectedWilker] = useState<string>("");
   const [showWind, setShowWind] = useState(false);
   const [weatherOverlay, setWeatherOverlay] = useState<"temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null>(null);
   const [activeView, setActiveView] = useState<"map" | "matrix" | "settings">("map");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const handleViewChange = (view: "map" | "matrix" | "settings") => {
     if (view === "settings") {
       const password = prompt("Masukkan password untuk mengakses Pengaturan:");
@@ -93,11 +93,36 @@ export default function App() {
     return Array.from(new Set(provinces)).sort();
   }, [hotspots]);
 
+  // Wilker (wilayah kerja Balai PS) hanya tersedia lewat polygon_metadata,
+  // tidak ada kolom khususnya seperti provinceName.
+  const wilkerOptions = useMemo(() => {
+    const wilkers = hotspots
+      .map((h) => h.polygonMetadata?.WILKER_BPS)
+      .filter((w): w is string => Boolean(w && w.trim() !== ""));
+    return Array.from(new Set(wilkers)).sort();
+  }, [hotspots]);
+
   useEffect(() => {
     if (selectedProvince && !provinceOptions.includes(selectedProvince)) {
       setSelectedProvince("");
     }
   }, [provinceOptions, selectedProvince]);
+
+  // Pilihan yang tidak lagi ada di data (mis. setelah rentang waktu diubah)
+  // direset supaya peta tidak diam-diam menyaring habis semua titik.
+  useEffect(() => {
+    if (selectedWilker && !wilkerOptions.includes(selectedWilker)) {
+      setSelectedWilker("");
+    }
+  }, [wilkerOptions, selectedWilker]);
+
+  const visibleHotspots = useMemo(
+    () =>
+      selectedWilker
+        ? hotspots.filter((h) => h.polygonMetadata?.WILKER_BPS === selectedWilker)
+        : hotspots,
+    [hotspots, selectedWilker],
+  );
 
   const historyYear = timeRange.endAt.getUTCFullYear() || parseInt(getTodayWIB().slice(0, 4), 10);
   const syncLabel = storageStatus?.database_enabled ? "database online" : "fallback file";
@@ -106,7 +131,7 @@ export default function App() {
   const dynamicConfidenceStats = useMemo(() => {
     const stats: Record<string, { tinggi: number, sedang: number, rendah: number, total: number }> = {};
 
-    hotspots.forEach((h) => {
+    visibleHotspots.forEach((h) => {
       let satKey = (h.source || h.satellite || "Unknown").trim().toUpperCase();
       
       let formattedSat = satKey;
@@ -134,7 +159,7 @@ export default function App() {
     });
 
     return stats;
-  }, [hotspots]);
+  }, [visibleHotspots]);
 
   const satelliteRows = useMemo(() => {
     return Object.entries(dynamicConfidenceStats).sort(([a], [b]) => a.localeCompare(b));
@@ -314,6 +339,30 @@ export default function App() {
         dataAgeLabel={dataAgeLabel}
         hasLatestHotspot={!!latestHotspot}
         mobileOpen={mobileMenuOpen}
+        filterSlot={activeView === "map" ? (
+          <FilterPanel
+            layers={layers}
+            selectedSatellites={selectedSatellites}
+            timePreset={timePreset}
+            onToggleLayer={toggleLayer}
+            onToggleSatellite={toggleSatellite}
+            onTimePresetChange={setTimePreset}
+            onDateChange={updateDate}
+            startDate={startDate}
+            endDate={endDate}
+            hotspotCount={selectedWilker ? visibleHotspots.length : stats.hotspotCount}
+            selectedProvince={selectedProvince}
+            onProvinceChange={setSelectedProvince}
+            provinceOptions={provinceOptions}
+            selectedWilker={selectedWilker}
+            onWilkerChange={setSelectedWilker}
+            wilkerOptions={wilkerOptions}
+            showWind={showWind}
+            onToggleWind={() => setShowWind(w => !w)}
+            weatherOverlay={weatherOverlay}
+            onWeatherOverlayChange={setWeatherOverlay}
+          />
+        ) : null}
       />
 
       <main className="workspace">
@@ -321,7 +370,7 @@ export default function App() {
           <section aria-label="Dashboard workspace" className="workspace-stage workspace-stage--map">
             <Suspense fallback={<ViewLoader label="Memuat tampilan peta..." />}>
               <HotspotMap
-                hotspots={hotspots}
+                hotspots={visibleHotspots}
                 layers={layers}
                 selectedProvince={selectedProvince}
                 showWind={showWind}
@@ -333,36 +382,6 @@ export default function App() {
               className={`panels-toggle-layer${showPanels ? "" : " panels-toggle-layer--hidden"}`}
               aria-hidden={!showPanels}
             >
-                {/* Mobile Filter Toggle Button */}
-                <button
-                  className="mobile-filter-btn"
-                  onClick={() => setMobileFilterOpen(!mobileFilterOpen)}
-                  aria-label="Toggle filter panel"
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-                </button>
-
-                <aside className={`control-overlay control-overlay--top-left${mobileFilterOpen ? ' mobile-open' : ''}`}>
-                              <FilterPanel
-                                layers={layers}
-                                selectedSatellites={selectedSatellites}
-                                timePreset={timePreset}
-                                onToggleLayer={toggleLayer}
-                                onToggleSatellite={toggleSatellite}
-                                onTimePresetChange={setTimePreset}
-                                onDateChange={updateDate}
-                                startDate={startDate}
-                                endDate={endDate}
-                                hotspotCount={stats.hotspotCount}
-                                selectedProvince={selectedProvince}
-                                onProvinceChange={setSelectedProvince}
-                                provinceOptions={provinceOptions}
-                                showWind={showWind}
-                                onToggleWind={() => setShowWind(w => !w)}
-                                weatherOverlay={weatherOverlay}
-                                onWeatherOverlayChange={setWeatherOverlay}
-                              />
-                            </aside>
                 
                             <aside className="control-overlay control-overlay--top-right panel panel--stats" style={{ maxHeight: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
                   <article className="metric-card" style={{ padding: '0.65rem 0.75rem' }}>

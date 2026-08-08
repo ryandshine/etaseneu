@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { FilterPanel } from "../components/FilterPanel";
 
 describe("FilterPanel", () => {
-  it("calls layer toggle handler", () => {
+  it("renders time presets, province and wilker filters", () => {
     const onToggle = vi.fn();
     const onTimePresetChange = vi.fn();
 
@@ -43,18 +43,23 @@ describe("FilterPanel", () => {
         selectedProvince=""
         onProvinceChange={() => {}}
         provinceOptions={[]}
+        selectedWilker=""
+        onWilkerChange={() => {}}
+        wilkerOptions={["Balai PS Banjarbaru"]}
         showWind={false}
         onToggleWind={() => {}}
       />,
     );
 
-    expect(screen.getByRole("button", { name: /hari ini/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /24 jam/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /custom/i }));
     expect(onTimePresetChange).toHaveBeenCalledWith("custom");
     fireEvent.click(screen.getByRole("button", { name: /tampilkan satelit/i }));
     expect(screen.getByLabelText("Dari")).toBeDisabled();
     expect(screen.getByLabelText("Ke")).toBeDisabled();
-    fireEvent.click(screen.getByLabelText(/nyuai peningun/i));
-    expect(onToggle).toHaveBeenCalledWith("sample_area");
+    // Daftar lapisan spasial tidak lagi dirender FilterPanel (hanya ada satu
+    // layer, PS_FEB_26), jadi yang diuji di sini kontrol yang benar-benar tampil.
+    expect(screen.getByText("Wilker (Balai PS)")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Balai PS Banjarbaru" })).toBeInTheDocument();
   });
 });
