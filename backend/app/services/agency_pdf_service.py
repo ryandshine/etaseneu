@@ -15,6 +15,10 @@ import httpx
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.models.query import HotspotQuery
+from app.services.hotspot_categories import (
+    confidence_category as _conf_cat,
+    frp_category as _frp_cat,
+)
 
 logger = logging.getLogger("hotspot.agency_pdf")
 
@@ -22,25 +26,6 @@ TEMPLATE_DIR = Path(__file__).parent.parent / "templates"
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
-
-def _conf_cat(h: dict) -> str:
-    conf = str(h.get("confidence", "")).strip().lower()
-    if conf in ("h", "high"):        return "Tinggi"
-    if conf in ("n", "nominal", "medium"): return "Sedang"
-    if conf in ("l", "low"):         return "Rendah"
-    try:
-        v = int(conf)
-        return "Tinggi" if v > 80 else "Sedang" if v >= 30 else "Rendah"
-    except ValueError:
-        return "Rendah"
-
-
-def _frp_cat(h: dict) -> str:
-    try:
-        v = float(h.get("frp") or 0)
-        return "Tinggi" if v > 30 else "Sedang" if v >= 10 else "Rendah"
-    except (ValueError, TypeError):
-        return "Rendah"
 
 
 def _conf_display(h: dict) -> str:

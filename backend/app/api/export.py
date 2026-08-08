@@ -5,25 +5,11 @@ from fastapi.responses import Response
 
 from app.models.query import HotspotQuery
 from app.services.export_service import build_excel_file
+from app.services.hotspot_categories import frp_category as _get_frp_category
 from app.services.hotspot_service import HotspotService
 
 
 router = APIRouter()
-
-
-def _get_frp_category(hotspot: dict) -> str:
-    frp = hotspot.get("frp")
-    try:
-        val = float(frp) if frp is not None else 0.0
-    except ValueError:
-        val = 0.0
-        
-    if val > 30:
-        return "Tinggi"
-    elif val >= 10:
-        return "Sedang"
-    else:
-        return "Rendah"
 
 
 @router.get("/export.xlsx")
