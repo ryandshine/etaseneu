@@ -103,9 +103,11 @@ async def export_hotspots_pdf(
     if agency:
         from app.services.agency_pdf_service import build_agency_pdf_weasyprint
 
-        # Fetch full year-to-date hotspots for Section 05 chronology
-        ytd_start = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        # Fetch full year-to-date hotspots for Section 05 chronology.
+        # Tahun diambil dari waktu berjalan -- sebelumnya 2026 ditulis tetap,
+        # sehingga tahun berikutnya laporan tetap mulai dari 1 Januari 2026.
         ytd_end   = datetime.now(timezone.utc)
+        ytd_start = datetime(ytd_end.year, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         ytd_query = HotspotQuery(
             start_at=ytd_start,
             end_at=ytd_end,

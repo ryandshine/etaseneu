@@ -19,6 +19,7 @@ from reportlab.graphics.shapes import Drawing, Rect, Circle, Line, String as DSt
 from reportlab.graphics.charts.piecharts import Pie
 
 from app.models.query import HotspotQuery
+from app.services.polygon_fields import sk_number
 
 logger = logging.getLogger("hotspot.pdf_export")
 
@@ -31,7 +32,11 @@ COLOR_NEUTRAL_LIGHT = colors.HexColor("#f3f4f6")# Light grey
 COLOR_BORDER = colors.HexColor("#e5e7eb")       # Border grey
 COLOR_WHITE = colors.HexColor("#ffffff")
 
-HOTSPOT_TABLE_COL_WIDTHS = [30, 180, 80, 115, 65, 65, 40, 55, 55, 84]
+# Kolom Conf dilebarkan supaya muat "Sedang (28%)": kategori selalu tampil,
+# nilai mentahnya tetap ikut kalau satelitnya memberi angka. Kolom No. SK juga
+# ditambahkan. Total lebar dijaga tetap 769pt (lebar area cetak A4 lanskap),
+# jadi penambahan diambil dari kolom lain yang masih longgar.
+HOTSPOT_TABLE_COL_WIDTHS = [30, 136, 110, 68, 92, 56, 56, 62, 46, 46, 67]
 
 
 def _get_wib_date_str(detected_at: str) -> str:
@@ -517,10 +522,26 @@ def create_pie_chart(hotspots: list[dict], width=210, height=135) -> Drawing:
 
 
 def get_ranked_wilkers(hotspots: list[dict]) -> list[tuple[str, int]]:
+    """Peringkat per BALAI PS (wilayah kerja), sesuai field WILKER_BPS.
+
+    Sebelumnya fungsi ini mendahulukan `layer_name` -- yaitu nama lembaga/KPS --
+    sehingga tabel yang berjudul "Balai Pengelola" justru menampilkan ratusan
+    lembaga, dan bertentangan dengan ringkasan spasial di halaman berikutnya
+    yang menghitung jumlah balai dari WILKER_BPS.
+    """
     counts = Counter()
     for hotspot in hotspots:
-        wilker = hotspot.get("layer_name") or hotspot.get("polygon_metadata", {}).get("WILKER_BPS") or "Belum Ditugaskan"
+        wilker = hotspot.get("polygon_metadata", {}).get("WILKER_BPS") or "Belum Ditugaskan"
         counts[wilker] += 1
+    return counts.most_common()
+
+
+def get_ranked_lembaga(hotspots: list[dict]) -> list[tuple[str, int]]:
+    """Peringkat per LEMBAGA/KPS (nama pemegang izin perhutanan sosial)."""
+    counts = Counter()
+    for hotspot in hotspots:
+        lembaga = hotspot.get("layer_name") or hotspot.get("agency_name") or "Tidak Diketahui"
+        counts[lembaga] += 1
     return counts.most_common()
 
 
@@ -582,16 +603,19 @@ def create_balai_ranking_table(
     tbl_header_style,
     body_style,
     bold_body_style,
+    ranked: list[tuple[str, int]] | None = None,
+    name_header: str = "Balai Pengelola",
 ) -> "Table":
     """
-    Builds a full ReportLab Table of ALL affected balai sorted by hotspot count.
+    Builds a full ReportLab Table of ALL affected rows sorted by hotspot count.
     Grows vertically to fit all rows — no limit.
     """
-    ranked = get_ranked_wilkers(hotspots)
+    if ranked is None:
+        ranked = get_ranked_wilkers(hotspots)
 
     header = [
         Paragraph("#", tbl_header_style),
-        Paragraph("Balai Pengelola", tbl_header_style),
+        Paragraph(name_header, tbl_header_style),
         Paragraph("Titik Panas", tbl_header_style),
         Paragraph("%", tbl_header_style),
     ]
@@ -606,7 +630,10 @@ def create_balai_ranking_table(
             Paragraph(pct, body_style),
         ])
 
-    tbl = Table(rows, colWidths=[30, None, 65, 45])
+    # repeatRows=1 supaya header kolom ikut tercetak di tiap halaman lanjutan --
+    # daftar lembaga bisa memanjang belasan halaman dan tanpa ini pembaca
+    # kehilangan konteks kolom setelah halaman pertama.
+    tbl = Table(rows, colWidths=[30, None, 65, 45], repeatRows=1)
     row_bg = [colors.HexColor("#fff1f2"), COLOR_NEUTRAL_LIGHT]
     tbl.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), COLOR_SECONDARY),
@@ -829,11 +856,12 @@ def create_detailed_hotspot_rows(hotspots: list[dict]) -> list[list[str]]:
     headers = [
         "No",
         "Wilayah Lembaga",
+        "No. SK",
         "Satelit / Sumber",
         "Tanggal Deteksi",
         "Lintang (Lat)",
         "Bujur (Lon)",
-        "Conf",
+        "Confidence",
         "Bright (K)",
         "FRP (MW)",
         "Kategori FRP",
@@ -850,11 +878,13 @@ def create_detailed_hotspot_rows(hotspots: list[dict]) -> list[list[str]]:
         except Exception:
             date_display = str(detected_at)
 
+        # Kategori selalu ditampilkan supaya satu kolom tidak campur dua format:
+        # MODIS memberi confidence berupa persentase, VIIRS berupa kode huruf.
+        # Sebelumnya baris MODIS tampil "28%" sementara baris VIIRS "Sedang".
         conf_cat = _get_conf_cat(hs)
         raw_conf = hs.get("confidence")
         try:
-            val = int(str(raw_conf))
-            conf_display = f"{val}%"
+            conf_display = f"{conf_cat} ({int(str(raw_conf))}%)"
         except (ValueError, TypeError):
             conf_display = conf_cat
 
@@ -869,6 +899,7 @@ def create_detailed_hotspot_rows(hotspots: list[dict]) -> list[list[str]]:
         rows.append([
             str(idx),
             str(hs.get("layer_name", "Tidak Ada")),
+            sk_number(hs) or "-",
             str(hs.get("source", "N/A")),
             date_display,
             f"{float(hs.get('latitude', 0)):.5f}",
@@ -880,7 +911,7 @@ def create_detailed_hotspot_rows(hotspots: list[dict]) -> list[list[str]]:
         ])
 
     if not hotspots:
-        rows.append(["Tidak ada titik panas terdeteksi pada periode ini", "", "", "", "", "", "", "", "", ""])
+        rows.append(["Tidak ada titik panas terdeteksi pada periode ini", *[""] * (len(headers) - 1)])
 
     return rows
 
@@ -1022,7 +1053,7 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
     exec_summary_text = (
         "<b>Ringkasan Eksekutif:</b> Pemantauan titik panas (hotspot) dilakukan untuk mendukung mitigasi kebakaran "
         f"hutan dan lahan pada periode <b>{period_str}</b>. Hasil analisis spasial mendeteksi sebanyak <b>{len(hotspots)} "
-        f"titik panas</b> yang tersebar di wilayah konsesi Perhutanan Sosial. Data dihimpun secara real-time dari "
+        f"titik panas</b> yang tersebar di wilayah Kelompok Perhutanan Sosial (KPS). Data dihimpun secara real-time dari "
         "NASA FIRMS dan disinkronkan secara otomatis untuk mendukung respon cepat di lapangan."
     )
     
@@ -1061,22 +1092,48 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
     story.append(kpi_table)
     story.append(Spacer(1, 12))
 
-    # ------------------ SECTION 2B: SELURUH LEMBAGA TERDAMPAK ------------------
-    story.append(Paragraph("Sebaran Hotspot per Balai Pengelola", section_heading))
+    # ------------------ SECTION 2B: SEBARAN PER BALAI PS ------------------
+    # Dipecah jadi dua tabel: rekap per Balai PS (wilayah kerja, belasan baris)
+    # lalu rincian per lembaga/KPS. Sebelumnya keduanya tercampur dalam satu
+    # tabel berjudul "Balai Pengelola" yang isinya justru ratusan lembaga.
+    story.append(Paragraph("Sebaran Hotspot per Balai Pengelola (Wilayah Kerja)", section_heading))
     story.append(Paragraph(
-        "Seluruh balai pengelola kawasan yang terdampak titik panas dalam periode ini, "
+        "Rekapitulasi titik panas per Balai Perhutanan Sosial selaku wilayah kerja pembinaan, "
         "diurutkan berdasarkan jumlah titik panas terbanyak.",
         body_style
     ))
     story.append(Spacer(1, 6))
 
-    all_ranked = get_ranked_wilkers(hotspots)
-    if all_ranked:
-        balai_tbl = create_balai_ranking_table(hotspots, tbl_header_style, body_style, bold_body_style)
-        story.append(balai_tbl)
+    ranked_balai = get_ranked_wilkers(hotspots)
+    if ranked_balai:
+        story.append(create_balai_ranking_table(
+            hotspots, tbl_header_style, body_style, bold_body_style,
+            ranked=ranked_balai, name_header="Balai Pengelola (Wilker BPS)",
+        ))
     else:
         story.append(Paragraph("Tidak ada data titik panas untuk periode ini.", body_style))
-        
+
+    story.append(Spacer(1, 15))
+    story.append(PageBreak())
+
+    # ------------------ SECTION 2C: SELURUH LEMBAGA TERDAMPAK ------------------
+    story.append(Paragraph("Sebaran Hotspot per Lembaga (KPS)", section_heading))
+    story.append(Paragraph(
+        "Seluruh lembaga pemegang izin perhutanan sosial yang wilayahnya terdampak titik panas "
+        "pada periode ini, diurutkan berdasarkan jumlah titik panas terbanyak.",
+        body_style
+    ))
+    story.append(Spacer(1, 6))
+
+    ranked_lembaga = get_ranked_lembaga(hotspots)
+    if ranked_lembaga:
+        story.append(create_balai_ranking_table(
+            hotspots, tbl_header_style, body_style, bold_body_style,
+            ranked=ranked_lembaga, name_header="Lembaga (KPS)",
+        ))
+    else:
+        story.append(Paragraph("Tidak ada data titik panas untuk periode ini.", body_style))
+
     story.append(Spacer(1, 15))
     story.append(PageBreak())
 
@@ -1119,7 +1176,7 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
         [Paragraph("<b>RINGKASAN SPASIAL</b>", ParagraphStyle("SpHeader", parent=body_style, fontName="Helvetica-Bold", fontSize=8, textColor=COLOR_PRIMARY, spaceAfter=4))],
         [Paragraph(f"Provinsi Terdampak: <b>{count_prov}</b>", body_style)],
         [Paragraph(f"Balai Terdampak: <b>{count_balai}</b>", body_style)],
-        [Paragraph(f"Hotspot Terbanyak:<br/><b>{top_wilker_str}</b>", body_style)]
+        [Paragraph(f"Lembaga Terbanyak:<br/><b>{top_wilker_str}</b>", body_style)]
     ]
     summary_box = Table(summary_data, colWidths=[210])
     summary_box.setStyle(TableStyle([
@@ -1291,7 +1348,10 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
         [Paragraph("Disiapkan Oleh:", bold_body_style), Paragraph("Disetujui Oleh:", bold_body_style)],
         [Spacer(1, 20), Spacer(1, 20)],
         [Paragraph("_____________________________", body_style),
-         Paragraph("_____________________________", body_style)]
+         Paragraph("_____________________________", body_style)],
+        # Baris nama/NIP: sebelumnya hanya ada garis kosong tanpa penanda,
+        # sehingga tidak jelas apa yang harus diisi saat dokumen dicetak.
+        [Paragraph("Nama &amp; NIP", body_style), Paragraph("Nama &amp; NIP", body_style)],
     ]
     sig_table = Table(sig_data, colWidths=[385, 384])
     sig_table.setStyle(TableStyle([

@@ -46,6 +46,8 @@ def test_build_excel_file_writes_headers_and_row_values() -> None:
     assert [cell.value for cell in sheet[1]] == [
         "No",
         "Nama Wilayah",
+        "No. SK",
+        "Tgl SK",
         "Balai PS",
         "Provinsi",
         "Kabupaten",
@@ -66,6 +68,8 @@ def test_build_excel_file_writes_headers_and_row_values() -> None:
     assert [cell.value for cell in sheet[2]] == [
         1,
         "sample_area",
+        None,
+        None,
         "Tanpa Balai",
         "Tanpa Provinsi",
         None,
@@ -190,3 +194,34 @@ def test_build_excel_file_handles_empty_hotspots() -> None:
 
     assert workbook.sheetnames == ["Data Hotspot", "Dashboard"]
     assert workbook["Dashboard"]["A5"].value == 0
+
+
+def test_sk_number_collapses_duplicate_lines_from_source_shapefile() -> None:
+    from app.services.polygon_fields import sk_number
+
+    # 14 polygon di sumber menuliskan nomor yang sama dua kali dipisah CRLF.
+    duplicated = {"polygon_metadata": {"NO_SK": "607/EKBANG/2016\r\n607/EKBANG/2016"}}
+    assert sk_number(duplicated) == "607/EKBANG/2016"
+
+
+def test_sk_number_keeps_genuinely_different_decree_numbers() -> None:
+    from app.services.polygon_fields import sk_number
+
+    multi = {"polygon_metadata": {"NO_SK": "343 Tahun 2010\n351 Tahun 2010"}}
+    assert sk_number(multi) == "343 Tahun 2010 351 Tahun 2010"
+
+
+def test_sk_number_is_blank_when_source_has_no_decree() -> None:
+    from app.services.polygon_fields import sk_number
+
+    assert sk_number({"polygon_metadata": {}}) == ""
+    assert sk_number({}) == ""
+
+
+def test_export_rows_include_sk_columns() -> None:
+    from app.services.export_service import build_export_rows
+
+    rows = build_export_rows(_sample_hotspots())
+
+    assert "No. SK" in rows[0]
+    assert "Tgl SK" in rows[0]

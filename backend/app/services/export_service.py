@@ -12,6 +12,7 @@ from app.services.hotspot_categories import (
     confidence_category,
     frp_category,
 )
+from app.services.polygon_fields import polygon_field, sk_date, sk_number
 
 
 WIB = timezone(timedelta(hours=7))
@@ -22,6 +23,8 @@ EXPORT_HEADERS = [
     # Balai PS & Provinsi disisipkan setelah "Nama Wilayah" -- posisi kolom
     # sebelumnya (No, Nama Wilayah) sengaja dipertahankan supaya konsumen lama
     # yang membaca dua kolom pertama tidak ikut bergeser.
+    "No. SK",
+    "Tgl SK",
     "Balai PS",
     "Provinsi",
     "Kabupaten",
@@ -62,29 +65,15 @@ def _wib_datetime(detected_at: object) -> datetime | None:
     return parsed.astimezone(WIB)
 
 
-def _polygon_field(hotspot: dict, *keys: str) -> str:
-    """Ambil field pertama yang terisi dari polygon_metadata.
-
-    polygon_metadata berasal dari properti shapefile KLHK, dan nama fieldnya
-    tidak selalu seragam antar layer -- karena itu menerima beberapa kandidat.
-    """
-    metadata = hotspot.get("polygon_metadata") or {}
-    for key in keys:
-        value = metadata.get(key)
-        if value not in (None, ""):
-            return str(value)
-    return ""
-
-
 def _balai_ps(hotspot: dict) -> str:
-    return _polygon_field(hotspot, "WILKER_BPS") or "Tanpa Balai"
+    return polygon_field(hotspot, "WILKER_BPS") or "Tanpa Balai"
 
 
 def _provinsi(hotspot: dict) -> str:
     direct = hotspot.get("province_name")
     if direct not in (None, ""):
         return str(direct)
-    return _polygon_field(hotspot, "NAMA_PROV", "NAMA_PROVINSI", "PROVINSI") or "Tanpa Provinsi"
+    return polygon_field(hotspot, "NAMA_PROV", "NAMA_PROVINSI", "PROVINSI") or "Tanpa Provinsi"
 
 
 def build_export_rows(hotspots: list[dict]) -> list[dict]:
@@ -99,9 +88,11 @@ def build_export_rows(hotspots: list[dict]) -> list[dict]:
             {
                 "No": index,
                 "Nama Wilayah": hotspot.get("layer_name", ""),
+                "No. SK": sk_number(hotspot),
+                "Tgl SK": sk_date(hotspot),
                 "Balai PS": _balai_ps(hotspot),
                 "Provinsi": _provinsi(hotspot),
-                "Kabupaten": _polygon_field(hotspot, "NAMA_KAB"),
+                "Kabupaten": polygon_field(hotspot, "NAMA_KAB"),
                 "Satelit": hotspot.get("source", ""),
                 "Tanggal Deteksi": detected_at_wib,
                 "Latitude": hotspot.get("latitude", ""),
@@ -171,7 +162,7 @@ def _write_data_sheet(sheet, rows: list[dict]) -> None:
         cell.alignment = Alignment(vertical="center", horizontal="left")
     sheet.row_dimensions[1].height = 22
 
-    widths = [5, 34, 22, 20, 18, 15, 20, 12, 12, 12, 12, 10, 12]
+    widths = [5, 34, 40, 12, 22, 20, 18, 15, 20, 12, 12, 12, 12, 10, 12]
     for index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
 
