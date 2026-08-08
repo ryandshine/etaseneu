@@ -1,6 +1,6 @@
 type SidebarNavProps = {
-  activeView: "map" | "matrix" | "monitoring" | "settings";
-  onChangeView: (view: "map" | "matrix" | "monitoring" | "settings") => void;
+  activeView: "map" | "matrix" | "settings";
+  onChangeView: (view: "map" | "matrix" | "settings") => void;
   onManualSync: () => void;
   onPrewarmHistory: () => void;
   syncLabel: string;
@@ -8,7 +8,6 @@ type SidebarNavProps = {
   lastSyncLabel: string;
   manualSyncBusy: boolean;
   prewarmBusy: boolean;
-  monitoringSignal: "normal" | "incident" | "critical";
   healthStatus: "normal" | "warning" | "error";
   healthLabel: string;
   schedulerStatusLabel: string;
@@ -26,13 +25,11 @@ type SidebarNavProps = {
 function NavButton({
   active,
   children,
-  onClick,
-  alert
+  onClick
 }: {
   active: boolean;
   children: string;
   onClick: () => void;
-  alert?: React.ReactNode;
 }) {
   return (
     <button
@@ -42,7 +39,6 @@ function NavButton({
     >
       <span className="side-nav-mark" aria-hidden="true" />
       <span>{typeof children === "string" ? children.trim() : children}</span>
-      {alert}
     </button>
   );
 }
@@ -57,7 +53,6 @@ export function SidebarNav({
   lastSyncLabel,
   manualSyncBusy,
   prewarmBusy,
-  monitoringSignal,
   healthStatus,
   healthLabel,
   schedulerStatusLabel,
@@ -87,21 +82,6 @@ export function SidebarNav({
         </NavButton>
         <NavButton active={activeView === "matrix"} onClick={() => onChangeView("matrix")}>
           Matriks Data
-        </NavButton>
-        <NavButton 
-          active={activeView === "monitoring"} 
-          onClick={() => onChangeView("monitoring")}
-          alert={monitoringSignal !== "normal" ? (
-            <span
-              className={`side-nav-alert side-nav-alert--${
-                monitoringSignal === "critical" ? "critical" : "incident"
-              }`}
-            >
-              PERINGATAN
-            </span>
-          ) : null}
-        >
-          Pemantauan
         </NavButton>
         <NavButton active={activeView === "settings"} onClick={() => onChangeView("settings")}>
           Pengaturan

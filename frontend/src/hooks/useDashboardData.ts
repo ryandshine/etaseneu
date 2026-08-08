@@ -240,7 +240,7 @@ function withQuery(
   return queryString ? `${path}?${queryString}` : path;
 }
 
-export function useDashboardData(activeView: "map" | "matrix" | "monitoring" | "settings" = "map") {
+export function useDashboardData(activeView: "map" | "matrix" | "settings" = "map") {
   const today = getCurrentDateWIB();
   const [layers, setLayers] = useState<DashboardLayer[]>([]);
   const [hotspots, setHotspots] = useState<DashboardHotspot[]>([]);
@@ -276,7 +276,7 @@ export function useDashboardData(activeView: "map" | "matrix" | "monitoring" | "
   });
   const [isInitLoaded, setIsInitLoaded] = useState(false);
   const hasStartedInitialLoadRef = useRef(false);
-  const hotspotView: "map" | "full" = (activeView === "matrix" || activeView === "monitoring") ? "full" : "map";
+  const hotspotView: "map" | "full" = activeView === "matrix" ? "full" : "map";
 
   const handleLoadingFadeEnd = useCallback(() => {
     // Called by onTransitionEnd on the overlay (visual cleanup only)

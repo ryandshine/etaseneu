@@ -23,34 +23,10 @@ vi.mock("react-leaflet", () => ({
 
 describe("App", () => {
   const fetchMock = vi.fn<typeof fetch>();
-  const audioContextMock = vi.fn();
   let schedulerMetricsCallCount = 0;
 
   beforeEach(() => {
     schedulerMetricsCallCount = 0;
-    const oscillator = {
-      type: "sine",
-      frequency: { setValueAtTime: vi.fn() },
-      connect: vi.fn(),
-      start: vi.fn(),
-      stop: vi.fn()
-    };
-    const gainNode = {
-      gain: {
-        setValueAtTime: vi.fn(),
-        exponentialRampToValueAtTime: vi.fn()
-      },
-      connect: vi.fn()
-    };
-
-    audioContextMock.mockImplementation(() => ({
-      currentTime: 0,
-      destination: {},
-      createOscillator: () => oscillator,
-      createGain: () => gainNode,
-      close: vi.fn()
-    }));
-    vi.stubGlobal("AudioContext", audioContextMock);
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
 
@@ -306,7 +282,9 @@ describe("App", () => {
 
     expect(screen.getAllByText("ETAseneu").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("button", { name: /matriks data/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /pemantauan/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /pengaturan/i })).toBeInTheDocument();
+    // Menu Pemantauan sudah dihapus -- pastikan tidak muncul lagi.
+    expect(screen.queryByRole("button", { name: /pemantauan/i })).not.toBeInTheDocument();
     expect(await screen.findByTestId("leaflet-map")).toBeInTheDocument();
     expect(await screen.findByText(/database online/i)).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(/tampilkan angin/i));
@@ -325,32 +303,6 @@ describe("App", () => {
     expect(
       fetchMock.mock.calls.some(([input]) => String(input).includes("/api/hotspots?") && String(input).includes("view=map"))
     ).toBe(true);
-  });
-
-  it("switches to monitoring view without reusing map content", async () => {
-    vi.useFakeTimers();
-    render(<App />);
-
-    fireEvent.click(screen.getByRole("button", { name: /pemantauan/i }));
-    await act(async () => {
-      await vi.dynamicImportSettled();
-    });
-
-    expect(screen.getByText("Pemantauan Insiden")).toBeInTheDocument();
-    expect(screen.getByText("Denyut Scheduler")).toBeInTheDocument();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000);
-    });
-    await Promise.resolve();
-
-    expect(screen.getByText("Hotspot Baru")).toBeInTheDocument();
-    expect(screen.getByText("Auto-refresh aktif setiap 60 detik")).toBeInTheDocument();
-    expect(screen.getByText("Ambang batas terlampaui")).toBeInTheDocument();
-    expect(screen.queryByTestId("leaflet-map")).not.toBeInTheDocument();
-    expect(screen.queryByText("Matriks Intersep")).not.toBeInTheDocument();
-
-    vi.useRealTimers();
   });
 
   it("upgrades hotspot payload to full view when switching to matrix", async () => {
@@ -372,33 +324,6 @@ describe("App", () => {
           && !String(input).includes("view=map"),
       ),
     ).toBe(true);
-  });
-
-  it("polls scheduler metrics while monitoring view is active", async () => {
-    vi.useFakeTimers();
-    render(<App />);
-
-    fireEvent.click(screen.getByRole("button", { name: /pemantauan/i }));
-    await act(async () => {
-      await vi.dynamicImportSettled();
-    });
-    expect(screen.getByText("Pemantauan Insiden")).toBeInTheDocument();
-
-    const schedulerCallsBefore = fetchMock.mock.calls.filter(
-      ([input]) => String(input) === "/api/scheduler/metrics",
-    ).length;
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000);
-    });
-    await Promise.resolve();
-
-    const schedulerCallsAfter = fetchMock.mock.calls.filter(
-      ([input]) => String(input) === "/api/scheduler/metrics",
-    ).length;
-    expect(schedulerCallsAfter).toBeGreaterThan(schedulerCallsBefore);
-
-    vi.useRealTimers();
   });
 
   it("keeps the initial loading overlay hidden during background refresh", async () => {
@@ -436,80 +361,6 @@ describe("App", () => {
     expect(container.querySelector(".loading-screen-overlay")).not.toBeInTheDocument();
 
     unmount();
-  });
-
-  it("shows sidebar alert badge and escalation notice after metrics change", async () => {
-    vi.useFakeTimers();
-    render(<App />);
-
-    await act(async () => {
-      await vi.dynamicImportSettled();
-    });
-
-    expect(screen.queryByText("PERINGATAN")).not.toBeInTheDocument();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000);
-      await vi.dynamicImportSettled();
-    });
-    await Promise.resolve();
-
-    expect(screen.getAllByText("PERINGATAN").length).toBeGreaterThan(0);
-
-    fireEvent.click(screen.getByRole("button", { name: /pemantauan/i }));
-    await act(async () => {
-      await vi.dynamicImportSettled();
-    });
-    expect(screen.getByText("Status berubah: Peringatan kritis")).toBeInTheDocument();
-
-    vi.useRealTimers();
-  });
-
-  it("lets operator mute alert sound in monitoring view", async () => {
-    vi.useFakeTimers();
-    render(<App />);
-
-    fireEvent.click(screen.getByRole("button", { name: /pemantauan/i }));
-    await act(async () => {
-      await vi.dynamicImportSettled();
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /bisukan suara peringatan/i }));
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000);
-    });
-    await Promise.resolve();
-
-    expect(screen.getByRole("button", { name: /bunyikan suara peringatan/i })).toBeInTheDocument();
-    expect(audioContextMock).not.toHaveBeenCalled();
-
-    vi.useRealTimers();
-  });
-
-  it("lets operator dismiss status change notice and adjust alert volume", async () => {
-    vi.useFakeTimers();
-    render(<App />);
-
-    fireEvent.click(screen.getByRole("button", { name: /pemantauan/i }));
-    await act(async () => {
-      await vi.dynamicImportSettled();
-    });
-    expect(screen.getByRole("button", { name: /volume peringatan normal/i })).toBeInTheDocument();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000);
-    });
-    await Promise.resolve();
-
-    expect(screen.getByText("Status berubah: Peringatan kritis")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /dismiss status change/i }));
-    expect(screen.queryByText("Status berubah: Peringatan kritis")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /volume peringatan normal/i }));
-    expect(screen.getByRole("button", { name: /volume peringatan low/i })).toBeInTheDocument();
-
-    vi.useRealTimers();
   });
 
   it("separates manual sync from prewarm history actions", async () => {

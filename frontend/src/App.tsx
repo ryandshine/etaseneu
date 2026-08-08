@@ -15,11 +15,6 @@ const HotspotMatrix = lazy(async () => {
   return { default: module.HotspotMatrix };
 });
 
-const MonitoringPanel = lazy(async () => {
-  const module = await import("./components/MonitoringPanel");
-  return { default: module.MonitoringPanel };
-});
-
 const SettingsPanel = lazy(async () => {
   const module = await import("./components/SettingsPanel");
   return { default: module.SettingsPanel };
@@ -27,37 +22,6 @@ const SettingsPanel = lazy(async () => {
 
 function isSchedulerFailureStatus(status?: string | null): boolean {
   return status === "failure" || status === "failed";
-}
-
-function deriveMonitoringSignal(
-  metrics: {
-    last_sync_status?: string;
-    consecutive_failures?: number;
-    new_hotspot_over_threshold?: boolean;
-    has_new_hotspot?: boolean;
-  } | null,
-): "normal" | "incident" | "critical" {
-  if (!metrics) {
-    return "normal";
-  }
-
-  if ((metrics.consecutive_failures ?? 0) > 1) {
-    return "critical";
-  }
-
-  if (metrics.new_hotspot_over_threshold) {
-    return "critical";
-  }
-
-  if (isSchedulerFailureStatus(metrics.last_sync_status) || (metrics.consecutive_failures ?? 0) === 1) {
-    return "incident";
-  }
-
-  if (metrics.has_new_hotspot) {
-    return "incident";
-  }
-
-  return "normal";
 }
 
 function ViewLoader({ label }: { label: string }) {
@@ -74,10 +38,10 @@ export default function App() {
   const [selectedProvince, setSelectedProvince] = useState<string>("");
   const [showWind, setShowWind] = useState(false);
   const [weatherOverlay, setWeatherOverlay] = useState<"temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null>(null);
-  const [activeView, setActiveView] = useState<"map" | "matrix" | "monitoring" | "settings">("map");
+  const [activeView, setActiveView] = useState<"map" | "matrix" | "settings">("map");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
-  const handleViewChange = (view: "map" | "matrix" | "monitoring" | "settings") => {
+  const handleViewChange = (view: "map" | "matrix" | "settings") => {
     if (view === "settings") {
       const password = prompt("Masukkan password untuk mengakses Pengaturan:");
       if (password !== "admin@5150") {
@@ -87,9 +51,6 @@ export default function App() {
     }
     setActiveView(view);
   };
-  const [signalChangeNotice, setSignalChangeNotice] = useState<string | null>(null);
-  const [audioMuted, setAudioMuted] = useState(false);
-  const [alertVolume, setAlertVolume] = useState<"normal" | "low">("normal");
   const [showPanels, setShowPanels] = useState(true);
   const {
     endDate,
@@ -138,72 +99,9 @@ export default function App() {
     }
   }, [provinceOptions, selectedProvince]);
 
-  const monitoringSignal = useMemo(
-    () => deriveMonitoringSignal(schedulerMetrics),
-    [schedulerMetrics],
-  );
-  const previousSignalRef = useRef<"normal" | "incident" | "critical">("normal");
-  const soundSignalRef = useRef<"normal" | "incident" | "critical">("normal");
   const historyYear = timeRange.endAt.getUTCFullYear() || parseInt(getTodayWIB().slice(0, 4), 10);
   const syncLabel = storageStatus?.database_enabled ? "database online" : "fallback file";
   const syncStatusLabel = storageStatus?.last_hotspot_sync_at ? "success" : "waiting";
-
-  useEffect(() => {
-    const previousSignal = previousSignalRef.current;
-    previousSignalRef.current = monitoringSignal;
-
-    if (monitoringSignal === previousSignal || monitoringSignal === "normal") {
-      return;
-    }
-
-    const escalationMap = {
-      incident: "Status berubah: Sinyal insiden baru",
-      critical: "Status berubah: Peringatan kritis"
-    } as const;
-
-    setSignalChangeNotice(escalationMap[monitoringSignal]);
-    const timer = window.setTimeout(() => {
-      setSignalChangeNotice(null);
-    }, 8000);
-
-    return () => window.clearTimeout(timer);
-  }, [monitoringSignal]);
-
-  useEffect(() => {
-    const previousSignal = soundSignalRef.current;
-    soundSignalRef.current = monitoringSignal;
-
-    if (activeView !== "monitoring" || audioMuted) {
-      return;
-    }
-
-    if (monitoringSignal === previousSignal || monitoringSignal === "normal") {
-      return;
-    }
-
-    const AudioContextCtor = window.AudioContext;
-    if (!AudioContextCtor) {
-      return;
-    }
-
-    const audioContext = new AudioContextCtor();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    const toneFrequency = monitoringSignal === "critical" ? 880 : 640;
-    const peakGain = alertVolume === "low" ? 0.035 : 0.08;
-
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(toneFrequency, audioContext.currentTime);
-    gainNode.gain.setValueAtTime(0.0001, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(peakGain, audioContext.currentTime + 0.01);
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.24);
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.25);
-    void audioContext.close();
-  }, [activeView, alertVolume, audioMuted, monitoringSignal]);
 
   const dynamicConfidenceStats = useMemo(() => {
     const stats: Record<string, { tinggi: number, sedang: number, rendah: number, total: number }> = {};
@@ -404,7 +302,6 @@ export default function App() {
         lastSyncLabel={lastHotspotSyncLabel}
         manualSyncBusy={isTriggeringManualSync}
         prewarmBusy={isPrewarming}
-        monitoringSignal={monitoringSignal}
         healthStatus={healthStatus}
         healthLabel={healthLabel}
         schedulerStatusLabel={schedulerStatusInfo.label}
@@ -617,34 +514,10 @@ export default function App() {
               />
             </Suspense>
           </section>
-        ) : activeView === "settings" ? (
+        ) : (
           <section aria-label="Settings workspace" className="workspace-stage">
             <Suspense fallback={<ViewLoader label="Memuat pengaturan..." />}>
               <SettingsPanel onRefreshLayers={() => void retryInitialLoad()} />
-            </Suspense>
-          </section>
-        ) : (
-          <section aria-label="Monitoring workspace" className="workspace-stage workspace-stage--monitoring">
-            <Suspense fallback={<ViewLoader label="Memuat pemantauan..." />}>
-              <MonitoringPanel
-                metrics={schedulerMetrics}
-                hotspots={hotspots}
-                layers={layers}
-                onManualSync={() => void manualSync()}
-                onPrewarmHistory={() => void prewarmHistory()}
-                manualSyncBusy={isTriggeringManualSync}
-                prewarmBusy={isPrewarming}
-                autoRefreshActive
-                refreshing={isRefreshingScheduler}
-                signalChangeNotice={signalChangeNotice}
-                audioMuted={audioMuted}
-                onToggleAudioMuted={() => setAudioMuted((current) => !current)}
-                alertVolume={alertVolume}
-                onToggleAlertVolume={() =>
-                  setAlertVolume((current) => (current === "normal" ? "low" : "normal"))
-                }
-                onDismissSignalChangeNotice={() => setSignalChangeNotice(null)}
-              />
             </Suspense>
           </section>
         )}
