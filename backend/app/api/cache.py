@@ -10,8 +10,22 @@ router = APIRouter()
 
 
 @router.post("/cache/refresh")
-async def refresh_cache() -> dict[str, str]:
-    return {"status": "queued"}
+async def refresh_cache() -> dict[str, object]:
+    """Buang seluruh cache hasil query hotspot (entri database + file).
+
+    Sebelumnya endpoint ini hanya mengembalikan {"status": "queued"} tanpa
+    melakukan apa pun, sehingga tidak ada cara memaksa pembacaan ulang saat
+    cache memuat hasil yang sudah tidak benar. Kejadian 9 Agu 2026: jendela
+    waktu yang sempat kosong ikut tersimpan dan terus disajikan selama TTL 24
+    jam, membuat filter 48 Jam dan 7 Hari menampilkan 0 titik padahal datanya
+    ada; cache-nya akhirnya harus dibersihkan lewat SQL manual.
+
+    Arsip tahunan (history/*) TIDAK ikut dibuang supaya pembersihan ini tidak
+    memicu penarikan ulang ke NASA FIRMS.
+    """
+    service = HotspotService()
+    removed = service.cache_service.clear_query_cache()
+    return {"status": "cleared", "removed": removed}
 
 
 @router.get("/geojson/status")

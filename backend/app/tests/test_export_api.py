@@ -134,13 +134,25 @@ def test_export_endpoint_accepts_datetime_window(monkeypatch) -> None:
         get_settings.cache_clear()
 
 
-def test_cache_refresh_endpoint_returns_queued_status() -> None:
+def test_cache_refresh_endpoint_clears_query_cache(monkeypatch) -> None:
     import json
+
+    from app.services.cache_service import CacheService
+
+    cleared = {"count": 0}
+
+    def fake_clear(self) -> int:
+        cleared["count"] += 1
+        return 7
+
+    monkeypatch.setattr(CacheService, "clear_query_cache", fake_clear)
 
     status, body = asyncio.run(_request_cache_refresh())
 
     assert status == 200
-    assert json.loads(body.decode("utf-8")) == {"status": "queued"}
+    # Dulu endpoint ini hanya membalas {"status": "queued"} tanpa aksi apa pun.
+    assert json.loads(body.decode("utf-8")) == {"status": "cleared", "removed": 7}
+    assert cleared["count"] == 1
 
 
 async def _request_export_pdf(query_string: bytes) -> tuple[int, list[dict]]:
