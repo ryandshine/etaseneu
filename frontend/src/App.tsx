@@ -522,32 +522,15 @@ export default function App() {
             </div>
 
             <button
-              onClick={() => setShowPanels(p => !p)} 
+              type="button"
+              className="ui-toggle-btn"
+              onClick={() => setShowPanels(p => !p)}
               title={showPanels ? "Sembunyikan Panel" : "Tampilkan Panel"}
-              style={{
-                position: 'absolute',
-                bottom: '30px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                zIndex: 1000,
-                background: 'rgba(15, 23, 42, 0.7)',
-                backdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                color: '#fff',
-                padding: '8px 16px',
-                borderRadius: '9999px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                cursor: 'pointer',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                transition: 'all 0.2s',
-                fontSize: '0.875rem',
-                fontWeight: '500'
-              }}
             >
               {showPanels ? <Minimize size={16} /> : <Maximize size={16} />}
-              {showPanels ? "Sembunyikan UI" : "Tampilkan UI"}
+              <span className="ui-toggle-btn-label">
+                {showPanels ? "Sembunyikan UI" : "Tampilkan UI"}
+              </span>
             </button>
 
             {loadError ? <p className="toast-error">{loadError}</p> : null}

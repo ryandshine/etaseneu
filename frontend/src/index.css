@@ -526,6 +526,30 @@ body {
    setinggi 0, sehingga `max-height: 100%` pada kartu statistik ikut jadi 0 dan
    kartunya terpotong tinggal segaris. Lapisannya sendiri tembus klik; hanya
    panel di dalamnya yang menerima interaksi, agar peta tetap bisa digeser. */
+/* Tombol sembunyikan/tampilkan panel di atas peta. Sebelumnya style inline;
+   dipindah ke kelas supaya posisinya bisa ditata ulang di layar sempit. */
+.ui-toggle-btn {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s;
+}
+
 .panels-toggle-layer {
   position: absolute;
   inset: 0;
@@ -4937,13 +4961,41 @@ a + a {
     background: rgba(255, 255, 255, 0.22);
   }
 
+  /* Jalur bawah peta ditempati empat hal sekaligus: kontrol zoom Leaflet,
+     tombol sembunyikan UI, pil statistik, dan bar atribusi -- masing-masing
+     diposisikan sendiri tanpa saling tahu, sehingga saling menimpa dan makin
+     parah di layar sempit (pada 320px keempatnya bertabrakan). Semuanya kini
+     diangkat di atas bar atribusi dan ditumpuk vertikal, jadi lebarnya tidak
+     lagi menentukan apakah bertabrakan. */
+  .leaflet-control-attribution {
+    font-size: 0.6rem;
+  }
+
+  .ui-toggle-btn {
+    bottom: 2.1rem;
+    left: auto;
+    right: 0.75rem;
+    transform: none;
+    padding: 8px 12px;
+  }
+
+  /* Teksnya disembunyikan di layar sempit; ikonnya sudah cukup dan ini
+     memberi ruang supaya tidak berebut lebar dengan pil statistik. */
+  .ui-toggle-btn-label {
+    display: none;
+  }
+
+  .leaflet-control-zoom {
+    margin-bottom: 2.1rem !important;
+  }
+
   .stats-sheet-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     position: fixed;
-    right: 1rem;
-    bottom: 1.1rem;
+    right: 4rem;
+    bottom: 2.1rem;
     min-height: 44px;
     padding: 0 1rem;
     border-radius: 999px;
