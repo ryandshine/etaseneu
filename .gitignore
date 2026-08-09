@@ -9,3 +9,7 @@ backend/.pytest_cache/
 frontend/node_modules/
 frontend/dist/
 *.geojson
+
+# Artefak run Playwright/tooling: ditulis ulang tiap kali dijalankan, bukan
+# sumber kebenaran apa pun. Sebelumnya ter-track dan bikin `git status` kotor.
+output/
