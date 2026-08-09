@@ -3584,6 +3584,126 @@ body {
   outline-offset: -2px;
 }
 
+/* ---- Daftar deteksi di dalam drawer ----------------------------------
+   Kelasnya sendiri, bukan .matrix-table, supaya tidak ikut terkena aturan
+   kartu Buku Besar yang grid area-nya khusus kolom di sana.
+   Dibatasi tingginya supaya bagian "Sinyal akuisisi" di bawahnya tetap
+   terjangkau -- daftar ini bisa berisi puluhan titik untuk satu lembaga. */
+.detect-list {
+  margin-top: 0.5rem;
+  max-height: 15rem;
+  overflow: auto;
+  /* Tanpa bingkai sendiri: tiap deteksi sudah jadi kartu berbingkai, jadi
+     bingkai pembungkus hanya menghasilkan kotak di dalam kotak. */
+}
+
+/* Tampilan kartu dipakai di SEMUA lebar layar, bukan hanya mobile. Drawer ini
+   panel samping selebar ~460px di layar apa pun, dan lima kolom tidak pernah
+   muat di situ: kolom Lat/Lon terpotong dan "VIIRS NOAA-20" pecah jadi tiga
+   baris. Satu tampilan berarti satu perilaku untuk dirawat. */
+.detect-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.detect-table thead {
+  display: none;
+}
+
+.detect-table tbody tr {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "waktu   kelas"
+    "satelit frp"
+    "koord   koord";
+  gap: 0.2rem 0.5rem;
+  align-items: center;
+  margin: 0.4rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.025);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.detect-table tbody td {
+  display: block;
+  padding: 0;
+  border: none;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 0.68rem;
+}
+
+.detect-row {
+  cursor: pointer;
+}
+
+.detect-row:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.detect-row:focus-visible {
+  outline: 2px solid rgba(255, 140, 66, 0.7);
+  outline-offset: 2px;
+}
+
+/* Kekhususannya harus menandingi `.detect-table tbody tr` (0,1,2); ditulis
+   sebagai `.detect-row--active` saja (0,1,0) aturan ini kalah dan penanda
+   baris terpilih tidak pernah muncul. */
+.detect-table tbody tr.detect-row--active {
+  border-color: rgba(255, 140, 66, 0.55);
+  background: rgba(255, 140, 66, 0.12);
+}
+
+.detect-table .dt-waktu {
+  grid-area: waktu;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: rgba(245, 239, 230, 0.94);
+}
+
+.detect-row--active .dt-waktu {
+  color: #ff8c42;
+  font-weight: 700;
+}
+
+.detect-table .dt-kelas {
+  grid-area: kelas;
+  justify-self: end;
+}
+
+.detect-table .dt-satelit {
+  grid-area: satelit;
+  color: rgba(209, 213, 219, 0.6);
+}
+
+.detect-table .dt-frp {
+  grid-area: frp;
+  justify-self: end;
+  color: rgba(209, 213, 219, 0.6);
+}
+
+.detect-table .dt-koord {
+  grid-area: koord;
+  font-size: 0.64rem;
+  color: rgba(209, 213, 219, 0.45);
+}
+
+.dt-waktu,
+.dt-frp,
+.dt-koord {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.detect-table .confidence-pill {
+  min-height: 0;
+  padding: 0.14rem 0.42rem;
+  font-size: 0.58rem;
+}
+
 .matrix-row-selected {
   background: rgba(255, 140, 66, 0.08);
 }
@@ -5222,11 +5342,11 @@ a + a {
      secara visual daripada urutan DOM-nya. Keduanya tetap di dalam kartu yang
      sama dan berdampingan dengan field yang berkaitan, jadi urutan bacanya
      tetap masuk akal bagi pembaca layar. */
-  .matrix-table thead {
+  .matrix-ledger .matrix-table thead {
     display: none;
   }
 
-  .matrix-table tbody tr {
+  .matrix-ledger .matrix-table tbody tr {
     display: grid;
     grid-template-columns: 1.4rem minmax(0, 1fr) auto;
     grid-template-areas:
@@ -5243,12 +5363,12 @@ a + a {
     background: rgba(255, 255, 255, 0.025);
   }
 
-  .matrix-table tbody tr:focus-visible {
+  .matrix-ledger .matrix-table tbody tr:focus-visible {
     outline: 2px solid rgba(255, 140, 66, 0.7);
     outline-offset: 2px;
   }
 
-  .matrix-table tbody td {
+  .matrix-ledger .matrix-table tbody td {
     display: block;
     padding: 0;
     border: none;
@@ -5258,11 +5378,11 @@ a + a {
   }
 
   /* Label diambil alih tata letak; teks "LABEL" per baris tidak lagi dicetak. */
-  .matrix-table tbody td::before {
+  .matrix-ledger .matrix-table tbody td::before {
     content: none;
   }
 
-  .matrix-table .td-no {
+  .matrix-ledger .matrix-table .td-no {
     grid-area: num;
     align-self: start;
     padding-top: 0.1rem;
@@ -5271,7 +5391,7 @@ a + a {
     font-variant-numeric: tabular-nums;
   }
 
-  .matrix-table .td-kps {
+  .matrix-ledger .matrix-table .td-kps {
     grid-area: kps;
   }
 
@@ -5279,7 +5399,7 @@ a + a {
      min-content jadi selebar satu huruf, sehingga grid menyusutkan kolom
      nama habis-habisan dan "LPHD KALIBANDUNG" terpenggal jadi
      "KALIBANDU / NG" padahal ruangnya masih cukup. */
-  .matrix-table .td-kps strong {
+  .matrix-ledger .matrix-table .td-kps strong {
     font-size: 0.86rem;
     font-weight: 700;
     line-height: 1.25;
@@ -5287,23 +5407,23 @@ a + a {
     overflow-wrap: break-word;
   }
 
-  .matrix-table .td-kps__sub {
+  .matrix-ledger .matrix-table .td-kps__sub {
     font-size: 0.66rem;
     color: rgba(209, 213, 219, 0.45);
   }
 
-  .matrix-table .td-jumlah {
+  .matrix-ledger .matrix-table .td-jumlah {
     grid-area: jumlah;
     justify-self: end;
   }
 
-  .matrix-table .td-balai {
+  .matrix-ledger .matrix-table .td-balai {
     grid-area: balai;
     color: rgba(209, 213, 219, 0.66);
     overflow-wrap: break-word;
   }
 
-  .matrix-table .td-prov {
+  .matrix-ledger .matrix-table .td-prov {
     grid-area: prov;
     justify-self: end;
     color: rgba(209, 213, 219, 0.66);
@@ -5312,14 +5432,14 @@ a + a {
 
   /* Keduanya berformat tetap dan pendek; dibiarkan membungkus akan memecah
      "09-08-2026 11:17 WIB" jadi dua baris di tengah nilai. */
-  .matrix-table .td-waktu {
+  .matrix-ledger .matrix-table .td-waktu {
     grid-area: waktu;
     color: rgba(209, 213, 219, 0.55);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 
-  .matrix-table .td-koord {
+  .matrix-ledger .matrix-table .td-koord {
     grid-area: koord;
     justify-self: end;
     color: rgba(209, 213, 219, 0.55);
@@ -5328,14 +5448,14 @@ a + a {
   }
 
   /* "Rendah" sendirian tidak jelas ukuran apa, jadi pill FRP diberi awalan. */
-  .matrix-table .td-frp {
+  .matrix-ledger .matrix-table .td-frp {
     grid-area: frp;
     display: flex;
     align-items: center;
     gap: 0.35rem;
   }
 
-  .matrix-table .td-frp::before {
+  .matrix-ledger .matrix-table .td-frp::before {
     content: "FRP";
     color: rgba(209, 213, 219, 0.4);
     font-size: 0.6rem;
@@ -5343,24 +5463,24 @@ a + a {
     letter-spacing: 0.1em;
   }
 
-  .matrix-table .td-satelit {
+  .matrix-ledger .matrix-table .td-satelit {
     grid-area: satelit;
     justify-self: end;
   }
 
-  .matrix-table .td-satelit .matrix-satellite {
+  .matrix-ledger .matrix-table .td-satelit .matrix-satellite {
     display: flex;
     align-items: baseline;
     gap: 0.3rem;
   }
 
-  .matrix-table .td-satelit strong {
+  .matrix-ledger .matrix-table .td-satelit strong {
     font-size: 0.68rem;
     font-weight: 600;
     color: rgba(209, 213, 219, 0.7);
   }
 
-  .matrix-table .td-satelit__sub {
+  .matrix-ledger .matrix-table .td-satelit__sub {
     font-size: 0.62rem;
     color: rgba(209, 213, 219, 0.4);
   }
@@ -5402,22 +5522,22 @@ a + a {
      asal font dikecilkan sedikit. Ini lebih baik daripada menumpuk jadi
      delapan baris, yang mengembalikan kartu ke tinggi semula. */
   @media (max-width: 380px) {
-    .matrix-table tbody tr {
+    .matrix-ledger .matrix-table tbody tr {
       grid-template-columns: 1.1rem minmax(0, 1fr) auto;
       gap: 0.25rem 0.4rem;
       padding: 0.6rem;
     }
 
-    .matrix-table tbody td {
+    .matrix-ledger .matrix-table tbody td {
       font-size: 0.66rem;
     }
 
-    .matrix-table .td-kps strong {
+    .matrix-ledger .matrix-table .td-kps strong {
       font-size: 0.79rem;
     }
 
-    .matrix-table .td-satelit__sub,
-    .matrix-table .td-kps__sub {
+    .matrix-ledger .matrix-table .td-satelit__sub,
+    .matrix-ledger .matrix-table .td-kps__sub {
       display: none;
     }
   }
@@ -5426,7 +5546,7 @@ a + a {
      karena keduanya nowrap yang terjadi bukan membungkus melainkan
      terpotong. Keduanya diberi barisnya sendiri. */
   @media (max-width: 340px) {
-    .matrix-table tbody tr {
+    .matrix-ledger .matrix-table tbody tr {
       grid-template-areas:
         "num kps   jumlah"
         "num balai prov"
@@ -5435,10 +5555,43 @@ a + a {
         "num frp   satelit";
     }
 
-    .matrix-table .td-koord {
+    .matrix-ledger .matrix-table .td-koord {
       justify-self: start;
     }
   }
+
+  /* Judul kartu detail: dua teks berdampingan tidak muat di drawer selebar
+     ~300px, dan karena flex tidak membungkus keduanya saling menghimpit.
+     Jarak hurufnya juga dikurangi -- 0.14em pada teks kapital memakan
+     banyak ruang di layar sempit. */
+  .matrix-detail-card__head {
+    flex-wrap: wrap;
+    gap: 0.15rem 0.6rem;
+  }
+
+  .matrix-detail-card__head span,
+  .matrix-detail-card__head strong {
+    letter-spacing: 0.08em;
+  }
+
+  /* Tampilan kartunya sudah jadi dasar untuk semua lebar (lihat blok
+     .detect-* di atas); di sini hanya ukurannya yang disesuaikan. */
+  .detect-list {
+    max-height: 18rem;
+  }
+
+  .detect-table tbody td {
+    font-size: 0.7rem;
+  }
+
+  .detect-table .dt-waktu {
+    font-size: 0.76rem;
+  }
+
+  .detect-table .dt-koord {
+    font-size: 0.66rem;
+  }
+
 
   /* Responsive Charts: Stack Vertically */
   .matrix-ledger {

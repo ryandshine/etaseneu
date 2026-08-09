@@ -1535,51 +1535,63 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                 <section className="matrix-detail-card">
                   <div className="matrix-detail-card__head">
                     <span>Daftar Deteksi Hotspot ({selectedLembagaHotspots.length} titik)</span>
-                    <strong>Klik baris untuk melihat info di bawah</strong>
+                    <strong>Ketuk untuk detail</strong>
                   </div>
-                  <div className="matrix-table-wrap" style={{ marginTop: '8px' }}>
-                    <div className="matrix-scroll" style={{ maxHeight: '180px', overflowY: 'auto' }}>
-                      <table className="matrix-table" style={{ fontSize: '11.5px', width: '100%', tableLayout: 'fixed' }}>
-                        <thead>
-                          <tr>
-                            <th style={{ padding: '6px 4px', width: '32%' }}>Tanggal</th>
-                            <th style={{ padding: '6px 4px', width: '18%' }}>Satelit</th>
-                            <th style={{ padding: '6px 4px', width: '18%' }}>Kepercayaan</th>
-                            <th style={{ padding: '6px 4px', width: '14%' }}>FRP</th>
-                            <th style={{ padding: '6px 4px', width: '18%' }}>Lat/Lon</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedLembagaHotspots.map((h) => {
-                            const statusLabel = getStatusLabel(h);
-                            const statusTone = getStatusTone(statusLabel);
-                            const isHSelected = selectedHotspot.id === h.id;
-                            const formattedDate = formatTimestamp(h.detectedAt).split(',')[0]; // simplify date
-                            return (
-                              <tr
-                                key={h.id}
-                                style={{ cursor: 'pointer', backgroundColor: isHSelected ? 'rgba(255,140,66,0.15)' : 'transparent' }}
-                                onClick={() => setSelectedHotspot(h)}
+                  {/* Tabel ini TIDAK memakai kelas .matrix-table. Kelas itu di
+                      layar kecil diubah jadi kartu dengan grid area khusus
+                      kolom Buku Besar (num/kps/balai/...); kolom di sini
+                      berbeda, sehingga selnya jatuh ke penempatan otomatis dan
+                      tampil acak. Tabel ini punya tampilan kartunya sendiri. */}
+                  <div className="detect-list">
+                    <table className="detect-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">Tanggal</th>
+                          <th scope="col">Satelit</th>
+                          <th scope="col">Kelas FRP</th>
+                          <th scope="col">FRP</th>
+                          <th scope="col">Lat/Lon</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedLembagaHotspots.map((h) => {
+                          const isHSelected = selectedHotspot.id === h.id;
+                          return (
+                            <tr
+                              key={h.id}
+                              className={isHSelected ? "detect-row detect-row--active" : "detect-row"}
+                              onClick={() => setSelectedHotspot(h)}
+                              role="button"
+                              tabIndex={0}
+                              aria-current={isHSelected || undefined}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  setSelectedHotspot(h);
+                                }
+                              }}
+                            >
+                              <td className="dt-waktu">{formatTimestamp(h.detectedAt)}</td>
+                              <td className="dt-satelit">{h.source}</td>
+                              <td className="dt-kelas">
+                                <span className={`confidence-pill confidence-pill--${getFrpCategory(h) === 'Tinggi' ? 'high' : getFrpCategory(h) === 'Sedang' ? 'nominal' : 'low'}`}>
+                                  {normalizeFrpCategoryLabel(h)}
+                                </span>
+                              </td>
+                              {/* Tanpa satuan, angka ini menempel ke koordinat
+                                  di sebelahnya dan terbaca sebagai satu nilai. */}
+                              <td className="dt-frp">{formatNumber(h.frp)} MW</td>
+                              <td
+                                className="dt-koord"
+                                title={`${h.latitude.toFixed(4)}, ${h.longitude.toFixed(4)}`}
                               >
-                                <td style={{ padding: '6px 4px', color: isHSelected ? '#ff8c42' : 'inherit', fontWeight: isHSelected ? 'bold' : 'normal', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {formattedDate}
-                                </td>
-                                <td style={{ padding: '6px 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.source}</td>
-                                <td style={{ padding: '6px 4px' }}>
-                                  <span className={`confidence-pill confidence-pill--${getFrpCategory(h) === 'Tinggi' ? 'high' : getFrpCategory(h) === 'Sedang' ? 'nominal' : 'low'}`} style={{ padding: '2px 4px', fontSize: '9px', display: 'inline-block' }}>
-                                    {normalizeFrpCategoryLabel(h)}
-                                  </span>
-                                </td>
-                                <td style={{ padding: '6px 4px' }}>{formatNumber(h.frp)}</td>
-                                <td style={{ padding: '6px 4px', fontSize: '10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${h.latitude.toFixed(4)}, ${h.longitude.toFixed(4)}`}>
-                                  {h.latitude.toFixed(2)}, {h.longitude.toFixed(2)}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                                {h.latitude.toFixed(3)}, {h.longitude.toFixed(3)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 </section>
 
