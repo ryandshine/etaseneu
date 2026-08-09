@@ -1311,113 +1311,72 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
             </div>
           ) : (
             <>
-              <div style={{ padding: '1rem', marginBottom: '0.75rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: '0.75rem', padding: '0.875rem 1.125rem', minHeight: '48px', flexWrap: 'wrap', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)' }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: '#9ca3af', flexShrink: 0 }}>
-                    <circle cx="11" cy="11" r="8" />
-                    <path d="m21 21-4.35-4.35" />
-                  </svg>
-                  <input
-                    type="text"
-                    placeholder="Cari KPS, Balai PS, Provinsi, Kabupaten"
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        setSearchQuery(searchInput);
-                        setCurrentPage(1);
-                      } else if (e.key === 'Escape') {
-                        setSearchInput("");
-                        setSearchQuery("");
-                        setCurrentPage(1);
-                      }
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: 0,
-                      fontSize: '0.95rem',
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#f3f4f6',
-                      outline: 'none',
-                      fontFamily: 'inherit'
-                    }}
-                  />
-                  {searchInput && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSearchInput("");
-                        setSearchQuery("");
-                        setCurrentPage(1);
-                      }}
-                      style={{
-                        minHeight: '44px',
-                        minWidth: '44px',
-                        fontSize: '1.1rem',
-                        padding: '0.5rem',
-                        cursor: 'pointer',
-                        background: 'rgba(255,255,255,0.08)',
-                        border: '1px solid rgba(255,255,255,0.12)',
-                        color: '#d1d5db',
-                        borderRadius: '0.375rem',
-                        flexShrink: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.2s ease'
-                      }}
-                      title="Clear search"
-                    >
-                      ✕
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
+              {/* Style dipindah ke CSS (.ledger-search*): sebelumnya inline,
+                  sehingga media query mobile tidak bisa memadatkannya tanpa
+                  !important dan bar ini memakan 170px tinggi di layar kecil. */}
+              <div className="ledger-search">
+                <svg className="ledger-search__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.35-4.35" />
+                </svg>
+                <input
+                  type="text"
+                  className="ledger-search__input"
+                  aria-label="Cari hotspot"
+                  placeholder="Cari KPS, Balai PS…"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
                       setSearchQuery(searchInput);
                       setCurrentPage(1);
+                    } else if (e.key === 'Escape') {
+                      setSearchInput("");
+                      setSearchQuery("");
+                      setCurrentPage(1);
+                    }
+                  }}
+                />
+                {searchInput && (
+                  <button
+                    type="button"
+                    className="ledger-search__clear"
+                    onClick={() => {
+                      setSearchInput("");
+                      setSearchQuery("");
+                      setCurrentPage(1);
                     }}
-                    style={{
-                      minHeight: '48px',
-                      minWidth: '48px',
-                      padding: '0.75rem 1.25rem',
-                      fontSize: '0.85rem',
-                      fontWeight: '600',
-                      background: 'rgba(249, 115, 22, 0.15)',
-                      border: '1px solid rgba(249, 115, 22, 0.4)',
-                      color: '#f59e0b',
-                      borderRadius: '0.5rem',
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      flexShrink: 0,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.2s ease',
-                      boxShadow: '0 2px 6px rgba(245, 158, 11, 0.1)'
-                    }}
+                    aria-label="Bersihkan pencarian"
+                    title="Bersihkan pencarian"
                   >
-                    Cari
+                    ✕
                   </button>
-                </div>
+                )}
+                <button
+                  type="button"
+                  className="ledger-search__submit"
+                  onClick={() => {
+                    setSearchQuery(searchInput);
+                    setCurrentPage(1);
+                  }}
+                >
+                  Cari
+                </button>
               </div>
               <div className="matrix-table-wrap">
               <div className="matrix-scroll">
                 <table className="matrix-table">
                   <thead>
                     <tr>
-                      <th style={{ width: '4%', textAlign: 'center' }}>No.</th>
-                      <th>KPS</th>
-                      <th>Balai PS</th>
-                      <th>Jumlah Hotspot</th>
-                      <th>Most Recent Detected</th>
-                      <th>Lat / Lon</th>
-                      <th>Provinsi</th>
-                      <th>FRP Conf %</th>
-                      <th>Satelit</th>
+                      <th className="th-no" scope="col">No.</th>
+                      <th scope="col">KPS</th>
+                      <th scope="col">Balai PS</th>
+                      <th scope="col">Jumlah</th>
+                      <th scope="col">Terdeteksi</th>
+                      <th scope="col">Lat / Lon</th>
+                      <th scope="col">Provinsi</th>
+                      <th scope="col">FRP</th>
+                      <th scope="col">Satelit</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1442,41 +1401,43 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                             }
                           }}
                         >
-                          <td style={{ textAlign: 'center', fontSize: '0.85rem', color: '#9ca3af', fontWeight: '500' }}>
+                          <td className="td-no" data-label="No.">
                             {rowNumber}
                           </td>
-                          <td>
+                          <td className="td-kps" data-label="KPS">
                             <div className="matrix-satellite">
                               <strong>{group.key}</strong>
                               {group.key !== hotspot.layerName && (
-                                <span style={{ opacity: 0.65 }}>{hotspot.layerName}</span>
+                                <span className="td-kps__sub">{hotspot.layerName}</span>
                               )}
                             </div>
                           </td>
-                          <td>
-                            <span style={{ fontSize: '0.85rem', color: '#d1d5db' }}>
-                              {group.wilker || '-'}
+                          <td className="td-balai" data-label="Balai PS">
+                            {group.wilker || '-'}
+                          </td>
+                          <td className="td-jumlah" data-label="Jumlah">
+                            <span className="matrix-id-badge matrix-id-badge--count">
+                              {group.count} titik
                             </span>
                           </td>
-                          <td>
-                            <span className="matrix-id-badge" style={{ backgroundColor: '#ff8c4224', color: '#ffb86b' }}>
-                              {group.count} point{group.count > 1 ? "s" : ""}
-                            </span>
-                          </td>
-                          <td>{formatTimestamp(hotspot.detectedAt)}</td>
-                          <td>
+                          <td className="td-waktu" data-label="Terdeteksi">{formatTimestamp(hotspot.detectedAt)}</td>
+                          <td className="td-koord" data-label="Lat/Lon">
                             {hotspot.latitude.toFixed(3)}, {hotspot.longitude.toFixed(3)}
                           </td>
-                          <td>{formatMetadataValue(hotspot.provinceName || hotspot.polygonMetadata.NAMA_PROV)}</td>
-                          <td>
+                          <td className="td-prov" data-label="Provinsi">{formatMetadataValue(hotspot.provinceName || hotspot.polygonMetadata.NAMA_PROV)}</td>
+                          <td className="td-frp" data-label="FRP">
                             <span className={`confidence-pill confidence-pill--${getFrpCategory(hotspot) === 'Tinggi' ? 'high' : getFrpCategory(hotspot) === 'Sedang' ? 'nominal' : 'low'}`}>
                               {normalizeFrpCategoryLabel(hotspot)}
                             </span>
                           </td>
-                          <td>
+                          {/* source dan satellite sebelumnya dua elemen tanpa pemisah;
+                              di mode kartu keduanya menyatu jadi "VIIRS NOAA-21N21". */}
+                          <td className="td-satelit" data-label="Satelit">
                             <div className="matrix-satellite">
                               <strong>{hotspot.source}</strong>
-                              <span>{hotspot.satellite}</span>
+                              {hotspot.satellite && hotspot.satellite !== hotspot.source && (
+                                <span className="td-satelit__sub">{hotspot.satellite}</span>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1485,25 +1446,29 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                   </tbody>
                 </table>
               </div>
-              <div className="matrix-footer" style={{ padding: '1rem' }}>
-                <span style={{ fontSize: '0.85rem' }}>{groupedRows.length} lembaga ditemukan ({filteredHotspots.length} total titik hotspot)</span>
-                <div className="matrix-pagination" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'center', marginTop: '0.75rem' }}>
+              <div className="matrix-footer">
+                <span className="matrix-footer__count">
+                  {groupedRows.length} lembaga ({filteredHotspots.length} titik)
+                </span>
+                <div className="matrix-pagination">
                   <button
+                    type="button"
                     className="matrix-page-btn"
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    style={{ minHeight: '44px', minWidth: '44px', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    aria-label="Halaman sebelumnya"
                   >
                     ‹
                   </button>
-                  <span className="matrix-page-info" style={{ fontSize: '0.85rem', margin: '0 0.5rem' }}>
+                  <span className="matrix-page-info">
                     Halaman {currentPage} / {Math.max(1, Math.ceil(groupedRows.length / PAGE_SIZE))}
                   </span>
                   <button
+                    type="button"
                     className="matrix-page-btn"
                     onClick={() => setCurrentPage((p) => Math.min(Math.ceil(groupedRows.length / PAGE_SIZE), p + 1))}
                     disabled={currentPage >= Math.ceil(groupedRows.length / PAGE_SIZE)}
-                    style={{ minHeight: '44px', minWidth: '44px', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    aria-label="Halaman berikutnya"
                   >
                     ›
                   </button>

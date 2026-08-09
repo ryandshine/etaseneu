@@ -3000,6 +3000,17 @@ body {
   gap: 1rem;
 }
 
+/* Anak grid/flex bawaannya min-width:auto, jadi menolak menyusut di bawah
+   min-content-nya. Akibatnya di layar 360px seluruh isi Buku Besar bertahan
+   di 359px dan menonjol keluar induknya yang cuma 326px -- tidak terlihat
+   sebagai scrollbar karena body memakai overflow-x:hidden, jadi tepi
+   kanannya terpotong diam-diam. min-width:0 milik .matrix-ledger sendiri
+   tidak cukup; yang perlu dilepas adalah milik anak-anaknya. */
+.matrix-ledger > *,
+.matrix-table-wrap > * {
+  min-width: 0;
+}
+
 .matrix-ledger--split {
   flex-basis: min(100%, calc(100% - 31rem));
 }
@@ -3236,6 +3247,91 @@ body {
   display: none;
 }
 
+/* ---- Bar pencarian Buku Besar ----------------------------------------
+   Satu baris: ikon, input, tombol. Sebelumnya seluruh gayanya ditulis
+   inline dengan flex-wrap, sehingga di layar sempit tombol "Cari" turun ke
+   baris kedua dan bar ini setinggi 170px hanya untuk satu field -- dan
+   karena inline, media query tidak bisa memperbaikinya tanpa !important. */
+.ledger-search {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.7rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.55rem;
+  background: rgba(15, 23, 42, 0.4);
+  transition: border-color 0.15s ease;
+}
+
+.ledger-search:focus-within {
+  border-color: rgba(255, 140, 66, 0.5);
+}
+
+.ledger-search__icon {
+  flex: 0 0 auto;
+  color: rgba(209, 213, 219, 0.45);
+}
+
+.ledger-search__input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0;
+  border: none;
+  background: transparent;
+  color: #f3f4f6;
+  font-family: inherit;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.ledger-search__input::placeholder {
+  color: rgba(209, 213, 219, 0.38);
+}
+
+.ledger-search__clear,
+.ledger-search__submit {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.ledger-search__clear {
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(209, 213, 219, 0.8);
+  font-size: 0.8rem;
+}
+
+.ledger-search__clear:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f3f4f6;
+}
+
+.ledger-search__submit {
+  min-height: 1.9rem;
+  padding: 0 0.9rem;
+  border: 1px solid rgba(255, 140, 66, 0.42);
+  background: rgba(255, 140, 66, 0.14);
+  color: #ffb86b;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ledger-search__submit:hover {
+  background: rgba(255, 140, 66, 0.24);
+  border-color: rgba(255, 140, 66, 0.7);
+}
+
 .matrix-table-wrap {
   display: grid;
   gap: 0.55rem;
@@ -3439,8 +3535,53 @@ body {
   vertical-align: top;
 }
 
+/* Dirapatkan khusus tabel Buku Besar (bukan tabel di drawer, yang fontnya
+   sudah 11.5px dan punya padding sendiri). Baris 79px terlalu longgar untuk
+   tabel yang tugasnya dipindai cepat. */
+.matrix-ledger .matrix-table tbody td {
+  padding: 0.5rem 0.85rem;
+  vertical-align: middle;
+}
+
+.matrix-ledger .matrix-table thead th {
+  padding: 0.6rem 0.85rem;
+}
+
+.matrix-ledger .matrix-table .th-no,
+.matrix-ledger .matrix-table .td-no {
+  width: 3rem;
+  text-align: center;
+  color: rgba(209, 213, 219, 0.5);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Nilai berformat tetap: tanpa ini tata letak tabel otomatis mempersempit
+   kolomnya dan memecah nilai di tengah -- "09-08-2026 11:17 / WIB",
+   "-7.712, / 131.001", dan badge "2 / TITIK". */
+.matrix-ledger .matrix-table .td-waktu,
+.matrix-ledger .matrix-table .td-koord,
+.matrix-ledger .matrix-table .td-jumlah {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.matrix-id-badge {
+  white-space: nowrap;
+}
+
 .matrix-table tbody tr:hover {
   background: rgba(255, 255, 255, 0.03);
+}
+
+/* Barisnya role="button" dan tabbable, jadi butuh penanda fokus yang terlihat
+   di semua lebar layar -- bukan hanya di mode kartu. */
+.matrix-ledger .matrix-table tbody tr {
+  cursor: pointer;
+}
+
+.matrix-ledger .matrix-table tbody tr:focus-visible {
+  outline: 2px solid rgba(255, 140, 66, 0.7);
+  outline-offset: -2px;
 }
 
 .matrix-row-selected {
@@ -4662,10 +4803,10 @@ a + a {
     padding: 1.25rem !important;
   }
 
-  .matrix-table-wrap,
-  .matrix-scroll {
-    padding: 1rem !important;
-  }
+  /* Sengaja TIDAK diberi padding. Dulu keduanya dipadding 1rem sekaligus,
+     menumpuk di atas padding .matrix-ledger, sehingga lebar isi tabel tinggal
+     285px dari viewport 412px -- 127px habis untuk padding bertingkat saja.
+     Padding kini dimiliki satu pihak: .matrix-ledger. */
 
   .filter-group {
     padding-bottom: 1.25rem !important;
@@ -4686,20 +4827,11 @@ a + a {
     border-radius: 0.75rem !important;
   }
 
-  .matrix-table tbody tr {
-    background: rgba(255, 255, 255, 0.03) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 0.5rem !important;
-    padding: 1.25rem !important;
-    margin-bottom: 1rem !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
-  }
-
-  .matrix-table td {
-    padding: 0.75rem 0 !important;
-    min-height: 48px !important;
-    align-items: center !important;
-  }
+  /* Tampilan kartu baris didefinisikan sekali saja di blok "Buku Besar:
+     tabel -> kartu" di bawah. Sebelumnya diatur di sini juga dengan
+     !important (padding 1.25rem + min-height 48px per sel), yang memaksa
+     tiap kartu setinggi 507px: sembilan sel diberi bobot visual sama besar
+     sehingga satu baris data menghabiskan lebih dari setengah layar. */
 
   /* Better Form Styling */
   input[type="text"],
@@ -4750,12 +4882,15 @@ a + a {
     border-radius: 0.75rem !important;
   }
 
-  /* Badge & Status Styling */
+  /* Badge & Status Styling. Ukurannya ditahan di bawah nama KPS (0.86rem)
+     supaya jumlah titik jadi penyerta, bukan saingan judul kartu. */
   .matrix-id-badge {
-    padding: 0.4rem 0.75rem !important;
-    border-radius: 0.375rem !important;
-    font-size: 0.8rem !important;
-    font-weight: 500 !important;
+    min-height: 0;
+    padding: 0.22rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
   }
 
   /* Navigation Polish */
@@ -5073,64 +5208,236 @@ a + a {
     padding: 0.65rem 0.7rem;
   }
 
-  /* Responsive Table -> Card View on Mobile */
+  /* ---- Buku Besar: tabel -> kartu ----------------------------------
+     Pendekatan lama menjadikan tiap sel satu baris "LABEL ......... nilai"
+     setinggi 44px. Sembilan sel berarti kartu setinggi 507px untuk SATU
+     baris data, jadi kurang dari dua baris muat di layar 915px, dan tidak
+     ada yang menonjol karena semua field berbobot sama.
+
+     Sekarang kartunya memakai grid area sehingga tiap field dapat porsi
+     sesuai kepentingannya: nama KPS memimpin, sisanya jadi baris pendukung
+     yang padat. Nomor baris jadi selokan kiri, seperti daftar bernomor.
+
+     Catatan urutan baca: grid menempatkan "jumlah" dan "provinsi" lebih awal
+     secara visual daripada urutan DOM-nya. Keduanya tetap di dalam kartu yang
+     sama dan berdampingan dengan field yang berkaitan, jadi urutan bacanya
+     tetap masuk akal bagi pembaca layar. */
   .matrix-table thead {
     display: none;
   }
 
   .matrix-table tbody tr {
-    display: block;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 0.5rem;
-    margin-bottom: 1rem;
-    padding: 1rem;
-    background: rgba(255, 255, 255, 0.02);
-  }
-
-  .matrix-table td {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 1.4rem minmax(0, 1fr) auto;
+    grid-template-areas:
+      "num kps   jumlah"
+      "num balai prov"
+      "num waktu koord"
+      "num frp   satelit";
+    gap: 0.28rem 0.5rem;
     align-items: center;
-    padding: 0.5rem 0;
+    margin-bottom: 0.6rem;
+    padding: 0.7rem 0.8rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.6rem;
+    background: rgba(255, 255, 255, 0.025);
+  }
+
+  .matrix-table tbody tr:focus-visible {
+    outline: 2px solid rgba(255, 140, 66, 0.7);
+    outline-offset: 2px;
+  }
+
+  .matrix-table tbody td {
+    display: block;
+    padding: 0;
     border: none;
-    min-height: 44px;
+    min-height: 0;
+    font-size: 0.72rem;
+    line-height: 1.35;
   }
 
-  .matrix-table td::before {
-    content: attr(data-label);
+  /* Label diambil alih tata letak; teks "LABEL" per baris tidak lagi dicetak. */
+  .matrix-table tbody td::before {
+    content: none;
+  }
+
+  .matrix-table .td-no {
+    grid-area: num;
+    align-self: start;
+    padding-top: 0.1rem;
+    color: rgba(209, 213, 219, 0.4);
+    font-size: 0.66rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .matrix-table .td-kps {
+    grid-area: kps;
+  }
+
+  /* break-word, BUKAN anywhere. `anywhere` ikut mengecilkan sumbangan
+     min-content jadi selebar satu huruf, sehingga grid menyusutkan kolom
+     nama habis-habisan dan "LPHD KALIBANDUNG" terpenggal jadi
+     "KALIBANDU / NG" padahal ruangnya masih cukup. */
+  .matrix-table .td-kps strong {
+    font-size: 0.86rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: rgba(245, 239, 230, 0.96);
+    overflow-wrap: break-word;
+  }
+
+  .matrix-table .td-kps__sub {
+    font-size: 0.66rem;
+    color: rgba(209, 213, 219, 0.45);
+  }
+
+  .matrix-table .td-jumlah {
+    grid-area: jumlah;
+    justify-self: end;
+  }
+
+  .matrix-table .td-balai {
+    grid-area: balai;
+    color: rgba(209, 213, 219, 0.66);
+    overflow-wrap: break-word;
+  }
+
+  .matrix-table .td-prov {
+    grid-area: prov;
+    justify-self: end;
+    color: rgba(209, 213, 219, 0.66);
+    text-align: right;
+  }
+
+  /* Keduanya berformat tetap dan pendek; dibiarkan membungkus akan memecah
+     "09-08-2026 11:17 WIB" jadi dua baris di tengah nilai. */
+  .matrix-table .td-waktu {
+    grid-area: waktu;
+    color: rgba(209, 213, 219, 0.55);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .matrix-table .td-koord {
+    grid-area: koord;
+    justify-self: end;
+    color: rgba(209, 213, 219, 0.55);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* "Rendah" sendirian tidak jelas ukuran apa, jadi pill FRP diberi awalan. */
+  .matrix-table .td-frp {
+    grid-area: frp;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .matrix-table .td-frp::before {
+    content: "FRP";
+    color: rgba(209, 213, 219, 0.4);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+  }
+
+  .matrix-table .td-satelit {
+    grid-area: satelit;
+    justify-self: end;
+  }
+
+  .matrix-table .td-satelit .matrix-satellite {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3rem;
+  }
+
+  .matrix-table .td-satelit strong {
+    font-size: 0.68rem;
     font-weight: 600;
-    color: #9ca3af;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    color: rgba(209, 213, 219, 0.7);
   }
 
-  .matrix-table td:first-child::before {
-    content: "No.";
+  .matrix-table .td-satelit__sub {
+    font-size: 0.62rem;
+    color: rgba(209, 213, 219, 0.4);
   }
-  .matrix-table td:nth-child(2)::before {
-    content: "KPS";
+
+  /* Footer: hitungan di kiri, penomoran halaman di kanan, tetap satu baris.
+     Sebelumnya paginasi diberi marginTop inline dan menumpuk ke bawah
+     sehingga footer setinggi 137px. */
+  .matrix-footer {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.7rem 0 0.2rem;
+    letter-spacing: 0.08em;
   }
-  .matrix-table td:nth-child(3)::before {
-    content: "Balai PS";
+
+  .matrix-footer__count {
+    flex: 1 1 auto;
+    font-size: 0.62rem;
   }
-  .matrix-table td:nth-child(4)::before {
-    content: "Jumlah";
+
+  .matrix-pagination {
+    flex: 0 0 auto;
+    margin-left: auto;
   }
-  .matrix-table td:nth-child(5)::before {
-    content: "Detected";
+
+  /* Target sentuh 44px. Ukuran ini dulu dipaksa lewat style inline; setelah
+     inline-nya dilepas, dasarnya 1.75rem (28px) dan terlalu kecil untuk jari. */
+  .matrix-page-btn {
+    width: 2.75rem;
+    height: 2.75rem;
+    font-size: 1.15rem;
   }
-  .matrix-table td:nth-child(6)::before {
-    content: "Lat/Lon";
+
+  .matrix-page-info {
+    font-size: 0.66rem;
+    white-space: nowrap;
   }
-  .matrix-table td:nth-child(7)::before {
-    content: "Provinsi";
+
+  /* Layar sangat sempit (360px dan ke bawah): pasangan kiri-kanan masih muat
+     asal font dikecilkan sedikit. Ini lebih baik daripada menumpuk jadi
+     delapan baris, yang mengembalikan kartu ke tinggi semula. */
+  @media (max-width: 380px) {
+    .matrix-table tbody tr {
+      grid-template-columns: 1.1rem minmax(0, 1fr) auto;
+      gap: 0.25rem 0.4rem;
+      padding: 0.6rem;
+    }
+
+    .matrix-table tbody td {
+      font-size: 0.66rem;
+    }
+
+    .matrix-table .td-kps strong {
+      font-size: 0.79rem;
+    }
+
+    .matrix-table .td-satelit__sub,
+    .matrix-table .td-kps__sub {
+      display: none;
+    }
   }
-  .matrix-table td:nth-child(8)::before {
-    content: "FRP %";
-  }
-  .matrix-table td:nth-child(9)::before {
-    content: "Satelit";
+
+  /* 320px: waktu (127px) dan koordinat tidak lagi muat berdampingan, dan
+     karena keduanya nowrap yang terjadi bukan membungkus melainkan
+     terpotong. Keduanya diberi barisnya sendiri. */
+  @media (max-width: 340px) {
+    .matrix-table tbody tr {
+      grid-template-areas:
+        "num kps   jumlah"
+        "num balai prov"
+        "num waktu waktu"
+        "num koord koord"
+        "num frp   satelit";
+    }
+
+    .matrix-table .td-koord {
+      justify-self: start;
+    }
   }
 
   /* Responsive Charts: Stack Vertically */
@@ -5154,12 +5461,23 @@ a + a {
     padding: 1rem;
   }
 
+  /* Pembungkus tabel tidak lagi memberi padding maupun bingkai sendiri: di
+     mode kartu, tiap kartu sudah punya bingkainya. Bingkai pembungkus hanya
+     menghasilkan kotak di dalam kotak. */
   .matrix-table-wrap {
-    padding: 1rem;
+    padding: 0;
+    border: none;
+    background: none;
+    border-radius: 0;
   }
 
+  /* Tanpa max-height. Sebelumnya isi setinggi 10469px dijejalkan ke kotak
+     515px, sehingga pengguna harus menggulir di dalam gulungan halaman --
+     di layar sentuh gerakan itu gampang tersangkut ke gulungan yang salah.
+     Sekarang daftar mengalir dan halamanlah yang digulir. */
   .matrix-scroll {
-    max-height: calc(100vh - 400px);
+    max-height: none;
+    overflow: visible;
   }
 
   /* Search Bar: Full Width */
