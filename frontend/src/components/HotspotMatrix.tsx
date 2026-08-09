@@ -617,7 +617,7 @@ function renderCompactCard(title: string, data: any[], total: number, activeLabe
   const domCategory = [...data].sort((a, b) => b.value - a.value)[0];
   
   return (
-    <section className="matrix-chart-card glass-panel" style={{ display: 'flex', flexDirection: 'column', padding: '1.25rem', height: 'auto', minHeight: 'unset' }}>
+    <section className="matrix-chart-card glass-panel" style={{ display: 'flex', flexDirection: 'column', height: 'auto', minHeight: 'unset' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
         <div>
           <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#fff', marginBottom: '0.25rem' }}>{title}</h3>
@@ -1031,8 +1031,11 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
       ]
     : [];
 
+  // Tanpa kelas `panel`: section ini mengisi seluruh stage, jadi border,
+  // bayangan, dan padding sebuah panel hanya menambah satu lapis bingkai yang
+  // membuat setiap kartu di dalamnya jadi kartu-di-dalam-kartu.
   return (
-    <section className="panel panel--matrix matrix-shell">
+    <section className="panel--matrix matrix-shell">
       <div className="matrix-header-bar glass-panel">
         <div className="matrix-header-copy">
           <p className="panel-eyebrow">Log Riwayat Irisan Hotspot</p>

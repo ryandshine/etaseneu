@@ -5037,6 +5037,31 @@ a + a {
     padding-left: 3.6rem;
   }
 
+  /* Tiap seksi Matriks adalah kartu berbingkai dengan padding sendiri, lalu
+     dijarakkan lagi 1rem antar kartu -- di layar sempit chrome-nya saja sudah
+     memakan puluhan piksel per seksi sebelum satu pun data terbaca. */
+  .panel--matrix {
+    gap: 0.55rem;
+  }
+
+  .matrix-header-bar {
+    padding: 0.7rem 0.8rem;
+    gap: 0.5rem;
+  }
+
+  .matrix-chart-card {
+    padding: 0.8rem;
+  }
+
+  /* Label di atas tiap kontrol; empat field berarti empat jarak label. */
+  .matrix-field {
+    gap: 0.2rem;
+  }
+
+  .matrix-ledger {
+    padding: 0.8rem;
+  }
+
   /* Toolbar tetap satu kolom. Dua kolom sempat dicoba untuk memangkas tinggi,
      tapi input tanggal dan select native terpotong ("08/08/20", "Semua
      wilke"): lebar per kolom hanya ~139px sementara kontrolnya dipaksa
