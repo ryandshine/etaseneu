@@ -166,7 +166,9 @@ export default function App() {
   );
 
   const historyYear = timeRange.endAt.getUTCFullYear() || parseInt(getTodayWIB().slice(0, 4), 10);
-  const syncLabel = storageStatus?.database_enabled ? "database online" : "fallback file";
+  // Label barisnya sudah "Database", jadi kata itu tidak perlu diulang di
+  // nilainya -- di kolom sempit teksnya malah terpotong jadi "database onl".
+  const syncLabel = storageStatus?.database_enabled ? "online" : "fallback file";
   const syncStatusLabel = storageStatus?.last_hotspot_sync_at ? "success" : "waiting";
 
   const dynamicConfidenceStats = useMemo(() => {

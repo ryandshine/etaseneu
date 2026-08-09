@@ -333,7 +333,8 @@ describe("App", () => {
     // Menu Pemantauan sudah dihapus -- pastikan tidak muncul lagi.
     expect(screen.queryByRole("button", { name: /pemantauan/i })).not.toBeInTheDocument();
     expect(await screen.findByTestId("leaflet-map")).toBeInTheDocument();
-    expect(await screen.findByText(/database online/i)).toBeInTheDocument();
+    // Nilainya kini cukup "online"; kata "database" sudah jadi labelnya.
+    expect(await screen.findByText(/^online$/i)).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(/tampilkan angin/i));
     expect(screen.queryByText(/angin:/i)).not.toBeInTheDocument();
     expect(screen.getAllByText("Sinkronisasi NASA").length).toBeGreaterThanOrEqual(1);

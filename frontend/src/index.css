@@ -126,7 +126,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.875rem;
-  padding: 1.15rem 1rem;
+  padding: 0.8rem 1rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -186,10 +186,14 @@ body {
   margin-top: 0.25rem;
 }
 
+/* Dipadatkan: sidebar ini menampung navigasi, seluruh filter peta, dan blok
+   status sinkronisasi sekaligus. Sebelumnya nav memakai 212px untuk tiga
+   tombol (132px di antaranya tombol itu sendiri) sehingga area filter yang
+   terlihat tinggal sempit. */
 .side-nav {
   display: grid;
-  gap: 0.5rem;
-  padding: 1rem 1rem;
+  gap: 0.35rem;
+  padding: 0.6rem 0.75rem;
 }
 
 .side-nav-label {
@@ -4835,12 +4839,14 @@ a + a {
 
   /* Jarak antar grup filter: gap panel (1rem) menumpuk dengan padding/margin
      pemisah, menyisakan rongga besar di layar sempit. */
+  /* Celah antar grup sebelumnya 25px x 5 = 125px murni pemisah, padahal garis
+     pembatasnya sendiri sudah cukup menandai batas. */
   .panel--filters {
-    gap: 0.55rem;
+    gap: 0.3rem;
   }
 
   .filter-group + .filter-group {
-    padding-top: 0.5rem;
+    padding-top: 0.3rem;
     margin-top: 0;
   }
 

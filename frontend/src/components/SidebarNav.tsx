@@ -87,7 +87,6 @@ export function SidebarNav({
           filter yang panjang akan mendorong blok status keluar layar. */}
       <div className="side-scroll">
         <nav className="side-nav" aria-label="Utama">
-          <p className="side-nav-label">Navigasi</p>
           <NavButton active={activeView === "map"} onClick={() => onChangeView("map")}>
             LIVE MAP
           </NavButton>
@@ -129,7 +128,7 @@ export function SidebarNav({
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.22rem', color: '#9ca3af', fontSize: '0.68rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: '0.7rem', rowGap: '0.18rem', color: '#9ca3af', fontSize: '0.68rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem' }}>
               <span style={{ flexShrink: 0 }}>Scheduler</span>
               <strong style={{ color: schedulerStatusColor, backgroundColor: schedulerStatusBg, padding: '0.05rem 0.2rem', borderRadius: '3px', fontSize: '0.62rem', flexShrink: 0 }}>
@@ -160,11 +159,11 @@ export function SidebarNav({
             <span style={{ fontSize: '0.6rem', color: '#6b7280' }}>NEXT SYNC</span>
             <div style={{ color: '#fff', fontSize: '0.63rem', marginTop: '0.1rem', wordBreak: 'break-word', lineHeight: 1.3 }}>{nextScheduledSyncLabel}</div>
           </div>
-          <div style={{ gridColumn: '1 / -1' }}>
+          <div>
             <span style={{ fontSize: '0.6rem', color: '#6b7280' }}>HOTSPOT TERBARU</span>
             <div style={{ color: '#fff', fontSize: '0.63rem', marginTop: '0.1rem', wordBreak: 'break-word', lineHeight: 1.3 }}>{latestHotspotTimeLabel}</div>
           </div>
-          <div style={{ gridColumn: '1 / -1' }}>
+          <div>
             <span style={{ fontSize: '0.6rem', color: '#6b7280' }}>USIA DATA</span>
             <div style={{ color: hasLatestHotspot ? '#fff' : '#6b7280', fontSize: '0.63rem', marginTop: '0.1rem', wordBreak: 'break-word', lineHeight: 1.3 }}>{dataAgeLabel}</div>
           </div>
