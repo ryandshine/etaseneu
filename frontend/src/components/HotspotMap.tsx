@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { LocateFixed } from "lucide-react";
 import { WindLayer } from "./WindLayer";
 import { WeatherOverlay } from "./WeatherOverlay";
 import {
+  Circle,
   CircleMarker,
   GeoJSON,
   MapContainer,
@@ -253,6 +255,87 @@ function getHighIntensityIcon(color: string) {
   return icon;
 }
 
+const userLocationIcon = divIcon({
+  html: `<span class="user-location-marker">
+    <span class="user-location-pulse"></span>
+    <span class="user-location-core"></span>
+  </span>`,
+  className: "",
+  iconSize: [18, 18],
+  iconAnchor: [9, 9]
+});
+
+function geolocationErrorMessage(error: GeolocationPositionError): string {
+  switch (error.code) {
+    case error.PERMISSION_DENIED:
+      return "Izin lokasi ditolak. Aktifkan izin lokasi untuk situs ini di pengaturan browser.";
+    case error.POSITION_UNAVAILABLE:
+      return "Lokasi tidak tersedia saat ini. Coba lagi di area dengan sinyal GPS lebih baik.";
+    case error.TIMEOUT:
+      return "Waktu permintaan lokasi habis. Coba lagi.";
+    default:
+      return "Gagal mengambil lokasi Anda.";
+  }
+}
+
+type UserLocationFix = { lat: number; lon: number; accuracy: number };
+
+function useUserLocationWatch(active: boolean) {
+  const [position, setPosition] = useState<UserLocationFix | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!active) {
+      setPosition(null);
+      setError(null);
+      return;
+    }
+
+    if (!("geolocation" in navigator)) {
+      setError("Geolocation tidak didukung oleh perangkat/browser ini.");
+      return;
+    }
+
+    setError(null);
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        setError(null);
+        setPosition({
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          accuracy: pos.coords.accuracy
+        });
+      },
+      (err) => {
+        setError(geolocationErrorMessage(err));
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [active]);
+
+  return { position, error, loading: active && !position && !error };
+}
+
+// Memusatkan peta ke lokasi user sekali saat titik GPS pertama datang, bukan
+// setiap update posisi -- supaya user tetap bebas menggeser peta sementara
+// penanda lokasinya terus bergerak mengikuti GPS di latar belakang.
+function UserLocationRecenter({ lat, lon }: { lat: number; lon: number }) {
+  const map = useMap();
+  const hasCenteredRef = useRef(false);
+
+  useEffect(() => {
+    if (hasCenteredRef.current) {
+      return;
+    }
+    hasCenteredRef.current = true;
+    map.setView([lat, lon], Math.max(map.getZoom(), 13));
+  }, [lat, lon, map]);
+
+  return null;
+}
+
 const rainIcon = divIcon({
   html: `
     <style>
@@ -461,6 +544,8 @@ function HotspotPopupContent({ hotspot }: { hotspot: HotspotRecord }) {
 
 export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weatherOverlay }: HotspotMapProps) {
   const [rainyCoords, setRainyCoords] = useState<{ lat: number; lon: number; precipitation: number; label: string }[]>([]);
+  const [showUserLocation, setShowUserLocation] = useState(false);
+  const userLocation = useUserLocationWatch(showUserLocation);
 
   useEffect(() => {
     const activeLayers = layers.filter(l => l.active);
@@ -526,6 +611,19 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
         <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#facc15" }} />VIIRS</div>
         <div className="map-legend-row"><span className="map-legend-dot map-legend-dot--pulse" />FRP tinggi (&gt;30MW)</div>
       </div>
+
+      <button
+        type="button"
+        className={`locate-btn${showUserLocation ? " locate-btn--active" : ""}${userLocation.loading ? " locate-btn--loading" : ""}`}
+        onClick={() => setShowUserLocation((current) => !current)}
+        title={showUserLocation ? "Sembunyikan lokasi saya" : "Tampilkan lokasi saya"}
+        aria-pressed={showUserLocation}
+        aria-label="Lokasi saya"
+      >
+        <LocateFixed size={16} />
+      </button>
+      {userLocation.error ? <p className="locate-error-toast">{userLocation.error}</p> : null}
+
       <MapContainer
         center={[-2.5, 118]}
         zoom={5}
@@ -542,6 +640,31 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
         <MapViewport hotspots={hotspots} layers={layers} selectedProvince={selectedProvince} />
         <WindLayer visible={showWind ?? false} />
         <WeatherOverlay parameter={weatherOverlay ?? null} />
+        {showUserLocation && userLocation.position ? (
+          <>
+            <UserLocationRecenter lat={userLocation.position.lat} lon={userLocation.position.lon} />
+            <Circle
+              center={[userLocation.position.lat, userLocation.position.lon]}
+              radius={userLocation.position.accuracy}
+              interactive={false}
+              pathOptions={{ color: "#38bdf8", weight: 1, fillColor: "#38bdf8", fillOpacity: 0.12 }}
+            />
+            <Marker
+              position={[userLocation.position.lat, userLocation.position.lon]}
+              icon={userLocationIcon}
+              zIndexOffset={1000}
+            >
+              <Popup>
+                <div style={{ fontSize: "12px", fontFamily: "sans-serif" }}>
+                  <strong style={{ color: "#38bdf8" }}>Lokasi Anda</strong>
+                  <div style={{ marginTop: "4px" }}>
+                    Akurasi: <strong>±{Math.round(userLocation.position.accuracy)} m</strong>
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          </>
+        ) : null}
         {rainyCoords.map((coord, idx) => (
           <Marker
             key={`rain-${idx}`}
