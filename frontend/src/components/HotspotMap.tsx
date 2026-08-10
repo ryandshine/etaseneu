@@ -584,6 +584,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
   const [showUserLocation, setShowUserLocation] = useState(false);
   const userLocation = useUserLocationWatch(showUserLocation);
   const userWeatherAnchor = useThrottledWeatherAnchor(userLocation.position);
+  const [mapStyle, setMapStyle] = useState<"dark" | "satellite">("dark");
 
   useEffect(() => {
     const activeLayers = layers.filter(l => l.active);
@@ -662,6 +663,25 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
       </button>
       {userLocation.error ? <p className="locate-error-toast">{userLocation.error}</p> : null}
 
+      <div className="basemap-switcher" role="group" aria-label="Gaya peta">
+        <button
+          type="button"
+          className={mapStyle === "dark" ? "basemap-switcher-btn--active" : ""}
+          onClick={() => setMapStyle("dark")}
+          aria-pressed={mapStyle === "dark"}
+        >
+          Peta
+        </button>
+        <button
+          type="button"
+          className={mapStyle === "satellite" ? "basemap-switcher-btn--active" : ""}
+          onClick={() => setMapStyle("satellite")}
+          aria-pressed={mapStyle === "satellite"}
+        >
+          Satelit
+        </button>
+      </div>
+
       <MapContainer
         center={[-2.5, 118]}
         zoom={5}
@@ -670,10 +690,27 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
         zoomControl={false}
         style={{ height: "100%", width: "100%" }}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        />
+        {mapStyle === "satellite" ? (
+          <>
+            <TileLayer
+              attribution="Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={19}
+            />
+            {/* Citra satelit polos tidak ada nama tempat/jalan; layer referensi
+                Esri ini ditumpuk di atasnya supaya tetap terbaca, mirip mode
+                satelit Google Maps. */}
+            <TileLayer
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={19}
+            />
+          </>
+        ) : (
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          />
+        )}
         <ZoomControl position="bottomleft" />
         <MapViewport hotspots={hotspots} layers={layers} selectedProvince={selectedProvince} />
         <WindLayer visible={showWind ?? false} />

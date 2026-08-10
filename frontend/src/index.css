@@ -643,6 +643,51 @@ body {
   line-height: 1.4;
 }
 
+/* Ganti gaya peta (line-style gelap vs citra satelit asli) -- posisinya di
+   sebelah .locate-btn karena baris atas peta kosong di desktop, dan supaya
+   tidak menumpuk dengan panel statistik di kanan atas atau kontrol
+   zoom/legenda yang sudah padat di kiri bawah. */
+.basemap-switcher {
+  position: absolute;
+  top: 1rem;
+  left: 4.25rem;
+  z-index: 1000;
+  display: flex;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.basemap-switcher button {
+  height: 34px;
+  padding: 0 0.7rem;
+  border: none;
+  background: rgba(19, 21, 26, 0.92);
+  color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.basemap-switcher button + button {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.basemap-switcher button:hover {
+  background: rgba(255, 78, 0, 0.18);
+  color: #fff;
+}
+
+.basemap-switcher-btn--active {
+  background: rgba(255, 142, 66, 0.18) !important;
+  color: #ff8c42 !important;
+}
+
 .user-location-marker {
   position: relative;
   display: block;
@@ -5568,6 +5613,18 @@ a + a {
     left: 1rem;
     right: 1rem;
     max-width: none;
+  }
+
+  /* Tetap di baris atas yang sama (bukan ditumpuk ke bawah) supaya tidak
+     bentrok dengan .locate-error-toast full-width yang muncul di top:68px. */
+  .basemap-switcher {
+    top: 16px;
+    left: 124px;
+  }
+
+  .basemap-switcher button {
+    height: 44px;
+    padding: 0 0.6rem;
   }
 
   .stats-sheet-toggle {
