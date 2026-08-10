@@ -656,6 +656,8 @@ export default function App() {
                 startDate={startDate}
                 endDate={endDate}
                 dateRangeLabel={timeRange.label}
+                timePreset={timePreset}
+                onTimePresetChange={setTimePreset}
                 onOpenKpsDetail={openKpsDetail}
               />
             </Suspense>

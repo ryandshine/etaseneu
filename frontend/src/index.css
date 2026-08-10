@@ -3046,6 +3046,11 @@ body {
   border-color: rgba(255, 140, 66, 0.5);
 }
 
+.matrix-field input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .matrix-field select option {
   background: #1e2128;
   color: #e8e0d5;

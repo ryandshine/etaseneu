@@ -69,12 +69,15 @@ describe("HotspotMatrix", () => {
         startDate="2026-05-27"
         endDate="2026-05-28"
         dateRangeLabel="Hari ini"
+        timePreset="24h"
+        onTimePresetChange={() => undefined}
       />
     );
 
     expect(screen.getByText("Matriks Intersep")).toBeInTheDocument();
     // Rentang tanggal kini dua input berlabel "Dari"/"Ke", bukan satu label
     // tunggal "Rentang Tanggal".
+    expect(screen.getByText("Filter Waktu")).toBeInTheDocument();
     expect(screen.getByText("Dari")).toBeInTheDocument();
     expect(screen.getByText("Ke")).toBeInTheDocument();
     expect(screen.getByText("Wilker Filter")).toBeInTheDocument();

@@ -4,6 +4,7 @@ import { Flame, MapPinned } from "lucide-react";
 
 import type { GeoJsonStatusResponse } from "../types/api";
 import { getTodayWIB } from "../lib/date";
+import { TIME_PRESET_OPTIONS, type TimePreset } from "../constants/time-windows";
 
 type MatrixHotspot = {
   id: string;
@@ -33,6 +34,8 @@ type HotspotMatrixProps = {
   endDate: string;
   dateRangeLabel: string;
   onDateChange: (field: "startDate" | "endDate", value: string) => void;
+  timePreset: TimePreset;
+  onTimePresetChange: (value: TimePreset) => void;
   /**
    * Buka halaman detail KPS (polygon SHP utuh + info) di luar panel geser
    * bawaan tabel ini. Opsional supaya HotspotMatrix tetap bisa dites/dipakai
@@ -816,6 +819,8 @@ export function HotspotMatrix({
   startDate,
   endDate,
   dateRangeLabel,
+  timePreset,
+  onTimePresetChange,
   onOpenKpsDetail
 }: HotspotMatrixProps) {
   const CustomTooltip = ({ active, payload }: any) => {
@@ -1089,10 +1094,25 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
 
       <div className="matrix-toolbar glass-panel">
         <label className="matrix-field">
+          <span>Filter Waktu</span>
+          <select
+            value={timePreset}
+            onChange={(event) => onTimePresetChange(event.currentTarget.value as TimePreset)}
+          >
+            {TIME_PRESET_OPTIONS.map((preset) => (
+              <option key={preset.value} value={preset.value}>
+                {preset.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="matrix-field">
           <span>Dari</span>
           <input
             type="date"
             value={startDate}
+            disabled={timePreset !== "custom"}
             onChange={(event) => onDateChange("startDate", event.currentTarget.value)}
           />
         </label>
@@ -1102,6 +1122,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
           <input
             type="date"
             value={endDate}
+            disabled={timePreset !== "custom"}
             onChange={(event) => onDateChange("endDate", event.currentTarget.value)}
           />
         </label>
