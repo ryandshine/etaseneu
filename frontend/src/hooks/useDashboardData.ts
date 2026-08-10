@@ -240,7 +240,7 @@ function withQuery(
   return queryString ? `${path}?${queryString}` : path;
 }
 
-export function useDashboardData(activeView: "map" | "matrix" | "settings" = "map") {
+export function useDashboardData(activeView: "map" | "matrix" | "settings" | "kps" = "map") {
   const today = getCurrentDateWIB();
   const [layers, setLayers] = useState<DashboardLayer[]>([]);
   const [hotspots, setHotspots] = useState<DashboardHotspot[]>([]);
@@ -276,7 +276,10 @@ export function useDashboardData(activeView: "map" | "matrix" | "settings" = "ma
   });
   const [isInitLoaded, setIsInitLoaded] = useState(false);
   const hasStartedInitialLoadRef = useRef(false);
-  const hotspotView: "map" | "full" = activeView === "matrix" ? "full" : "map";
+  // "kps" (halaman detail satu KPS) butuh dataset penuh juga -- perlu
+  // menyaring semua hotspot milik satu polygon, bukan cuma yang masuk viewport
+  // peta ringkas.
+  const hotspotView: "map" | "full" = activeView === "matrix" || activeView === "kps" ? "full" : "map";
 
   const handleLoadingFadeEnd = useCallback(() => {
     // Called by onTransitionEnd on the overlay (visual cleanup only)

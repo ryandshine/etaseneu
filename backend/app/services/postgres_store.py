@@ -1149,6 +1149,62 @@ class PostgresStore:
 
         return summaries
 
+    def read_polygon_detail(self, polygon_metadata_id: int) -> dict[str, object] | None:
+        """Ambil satu polygon (geometry + atribut) buat halaman detail KPS --
+        beda dari read_polygon_hotspot_summary yang query banyak sekaligus
+        untuk agregat, ini query satu baris by primary key."""
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        id,
+                        layer_key,
+                        feature_key,
+                        lembaga,
+                        nama_prov,
+                        nama_kab,
+                        nama_kec,
+                        nama_desa,
+                        skema,
+                        no_sk,
+                        tgl_sk,
+                        status,
+                        wilker_bps,
+                        ps_id,
+                        luas_final,
+                        jml_kk,
+                        ST_AsGeoJSON(geometry)::json AS geometry_json
+                    FROM polygon_metadata
+                    WHERE id = %s AND is_active = TRUE
+                    """,
+                    (polygon_metadata_id,),
+                )
+                row = cur.fetchone()
+
+        if row is None:
+            return None
+
+        return {
+            "id": int(row["id"]),
+            "layer_key": row["layer_key"],
+            "feature_key": row["feature_key"],
+            "lembaga": row.get("lembaga"),
+            "nama_prov": row.get("nama_prov"),
+            "nama_kab": row.get("nama_kab"),
+            "nama_kec": row.get("nama_kec"),
+            "nama_desa": row.get("nama_desa"),
+            "skema": row.get("skema"),
+            "no_sk": row.get("no_sk"),
+            "tgl_sk": row.get("tgl_sk"),
+            "status": row.get("status"),
+            "wilker_bps": row.get("wilker_bps"),
+            "ps_id": row.get("ps_id"),
+            "luas_final": row.get("luas_final"),
+            "jml_kk": row.get("jml_kk"),
+            "geometry": _safe_json(row.get("geometry_json"), {}),
+        }
+
     def storage_status(self) -> dict[str, object]:
         if not self.enabled:
             return {

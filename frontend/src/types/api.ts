@@ -27,6 +27,26 @@ export interface LayerListResponse {
   layers: LayerFeature[];
 }
 
+export interface PolygonDetail {
+  id: number;
+  layer_key: string;
+  feature_key: string;
+  lembaga: string | null;
+  nama_prov: string | null;
+  nama_kab: string | null;
+  nama_kec: string | null;
+  nama_desa: string | null;
+  skema: string | null;
+  no_sk: string | null;
+  tgl_sk: string | null;
+  status: string | null;
+  wilker_bps: string | null;
+  ps_id: string | null;
+  luas_final: string | null;
+  jml_kk: string | null;
+  geometry: Record<string, unknown>;
+}
+
 export interface HotspotQueryParams {
   start_at: string;
   end_at: string;

@@ -1,5 +1,8 @@
 type SidebarNavProps = {
-  activeView: "map" | "matrix" | "settings";
+  // "kps" (detail satu KPS dibuka dari Buku Besar) bukan tujuan navigasi
+  // sidebar, tapi activeView tetap perlu menerimanya supaya perbandingan
+  // "active" di bawah tidak salah tipe saat halaman itu sedang tampil.
+  activeView: "map" | "matrix" | "settings" | "kps";
   onChangeView: (view: "map" | "matrix" | "settings") => void;
   onManualSync: () => void;
   onPrewarmHistory: () => void;

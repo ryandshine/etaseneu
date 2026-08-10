@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer, AreaChart, Area, Cell, LabelList } from "recharts";
-import { Flame } from "lucide-react";
+import { Flame, MapPinned } from "lucide-react";
 
 import type { GeoJsonStatusResponse } from "../types/api";
 import { getTodayWIB } from "../lib/date";
@@ -33,6 +33,12 @@ type HotspotMatrixProps = {
   endDate: string;
   dateRangeLabel: string;
   onDateChange: (field: "startDate" | "endDate", value: string) => void;
+  /**
+   * Buka halaman detail KPS (polygon SHP utuh + info) di luar panel geser
+   * bawaan tabel ini. Opsional supaya HotspotMatrix tetap bisa dites/dipakai
+   * tanpa fitur navigasi App.
+   */
+  onOpenKpsDetail?: (polygonId: number) => void;
 };
 
 type QuerySection = {
@@ -809,7 +815,8 @@ export function HotspotMatrix({
   onDateChange,
   startDate,
   endDate,
-  dateRangeLabel
+  dateRangeLabel,
+  onOpenKpsDetail
 }: HotspotMatrixProps) {
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -1386,6 +1393,9 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                       const statusTone = getStatusTone(statusLabel);
                       const isSelected = selectedHotspot && formatMetadataValue(selectedHotspot.polygonMetadata.LEMBAGA || selectedHotspot.agencyName) === group.key;
                       const rowNumber = (currentPage - 1) * PAGE_SIZE + index + 1;
+                      const polygonIdRaw = hotspot.polygonMetadata.polygon_metadata_id;
+                      const polygonId = polygonIdRaw ? Number(polygonIdRaw) : NaN;
+                      const hasPolygonDetail = onOpenKpsDetail && Number.isFinite(polygonId);
 
                       return (
                         <tr
@@ -1411,6 +1421,20 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                                 <span className="td-kps__sub">{hotspot.layerName}</span>
                               )}
                             </div>
+                            {hasPolygonDetail && (
+                              <button
+                                type="button"
+                                className="kps-detail-link"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onOpenKpsDetail?.(polygonId);
+                                }}
+                                title="Lihat polygon SHP & detail KPS"
+                              >
+                                <MapPinned size={12} />
+                                Lihat Polygon
+                              </button>
+                            )}
                           </td>
                           <td className="td-balai" data-label="Balai PS">
                             {group.wilker || '-'}
