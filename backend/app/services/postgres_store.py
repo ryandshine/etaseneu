@@ -1152,7 +1152,15 @@ class PostgresStore:
     def read_polygon_detail(self, polygon_metadata_id: int) -> dict[str, object] | None:
         """Ambil satu polygon (geometry + atribut) buat halaman detail KPS --
         beda dari read_polygon_hotspot_summary yang query banyak sekaligus
-        untuk agregat, ini query satu baris by primary key."""
+        untuk agregat, ini query satu baris by primary key.
+
+        Geometry-nya disederhanakan (ST_SimplifyPreserveTopology) sebelum
+        dikirim: beberapa polygon di dataset asli punya puluhan ribu titik
+        koordinat (batas administratif detail), dan mengirim itu mentah-mentah
+        membuat render peta di HP nge-hang/gagal diam-diam. Toleransi
+        0.0001 derajat (~11m) jauh di bawah presisi visual yang kelihatan
+        setelah peta di-fit ke batas polygon ini.
+        """
         with self.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -1174,7 +1182,7 @@ class PostgresStore:
                         ps_id,
                         luas_final,
                         jml_kk,
-                        ST_AsGeoJSON(geometry)::json AS geometry_json
+                        ST_AsGeoJSON(COALESCE(ST_SimplifyPreserveTopology(geometry, 0.0001), geometry))::json AS geometry_json
                     FROM polygon_metadata
                     WHERE id = %s AND is_active = TRUE
                     """,
