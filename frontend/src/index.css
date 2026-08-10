@@ -502,12 +502,14 @@ body {
   background: transparent;
 }
 
+/* Sengaja TANPA height:100%/min-height:0 (yang dulu dipakai supaya
+   .kps-detail-info punya scroll internal sendiri) -- sekarang seluruh
+   halaman ini satu alur scroll milik .workspace-stage--kps, bukan
+   panel-panel dengan scrollbar sendiri-sendiri yang bertumpuk. */
 .kps-detail {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-  height: 100%;
-  min-height: 0;
 }
 
 .kps-detail-header {
@@ -549,13 +551,31 @@ body {
   display: grid;
   grid-template-columns: 20rem minmax(0, 1fr);
   gap: 1rem;
-  flex: 1;
-  min-height: 28rem;
+  min-height: 24rem;
 }
 
 .kps-detail-info {
-  overflow-y: auto;
   padding: 1rem;
+}
+
+.kps-detail-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.kps-detail-title-row .matrix-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.kps-detail-sections {
+  display: grid;
+  gap: 0.85rem;
 }
 
 .kps-detail-fields {
@@ -3373,10 +3393,6 @@ body {
   min-width: 0;
 }
 
-.matrix-ledger--split {
-  flex-basis: min(100%, calc(100% - 31rem));
-}
-
 .matrix-ledger-head {
   display: flex;
   align-items: flex-start;
@@ -3425,39 +3441,6 @@ body {
 .matrix-row-card--selected {
   border-color: rgba(255, 140, 66, 0.28);
   box-shadow: 0 0 0 1px rgba(255, 140, 66, 0.14) inset, 0 18px 48px rgba(0, 0, 0, 0.22);
-}
-
-.matrix-drawer {
-  flex: 0 0 min(30rem, 100%);
-  width: min(30rem, 100%);
-  position: sticky;
-  top: 1rem;
-  max-height: calc(100vh - 2rem);
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  overflow: hidden;
-  border-radius: 0.125rem;
-}
-
-.matrix-drawer__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.matrix-drawer__header h3 {
-  margin: 0.15rem 0 0;
-  font-size: 1.02rem;
-}
-
-.matrix-drawer__body {
-  overflow: auto;
-  padding: 1rem;
-  display: grid;
-  gap: 0.85rem;
 }
 
 .matrix-detail-card {
@@ -3603,10 +3586,6 @@ body {
   display: grid;
   place-items: center;
   border-radius: 0.125rem;
-}
-
-.matrix-drawer-shroud {
-  display: none;
 }
 
 /* ---- Bar pencarian Buku Besar ----------------------------------------
@@ -3785,30 +3764,6 @@ body {
     flex-direction: column;
   }
 
-  .matrix-ledger--split {
-    flex-basis: auto;
-  }
-
-  .matrix-drawer {
-    position: fixed;
-    top: 0;
-    right: 0;
-    width: min(88vw, 28rem);
-    max-height: 100vh;
-    height: 100vh;
-    z-index: 50;
-    border-radius: 0;
-  }
-
-  .matrix-drawer-shroud {
-    display: block;
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.58);
-    backdrop-filter: blur(2px);
-    z-index: 40;
-  }
-
   .matrix-toolbar {
     grid-template-columns: 1fr;
   }
@@ -3953,9 +3908,10 @@ body {
    terjangkau -- daftar ini bisa berisi puluhan titik untuk satu lembaga. */
 .detect-list {
   margin-top: 0.5rem;
-  max-height: 15rem;
-  overflow: auto;
-  /* Tanpa bingkai sendiri: tiap deteksi sudah jadi kartu berbingkai, jadi
+  /* Sengaja TANPA max-height/overflow sendiri -- dulu ini scroll bertingkat
+     di dalam drawer yang sudah scroll sendiri. Sekarang mengalir sebagai
+     bagian dari satu scroll halaman KpsDetailView.
+     Tanpa bingkai sendiri: tiap deteksi sudah jadi kartu berbingkai, jadi
      bingkai pembungkus hanya menghasilkan kotak di dalam kotak. */
 }
 
@@ -4095,28 +4051,6 @@ body {
 .matrix-satellite span {
   color: rgba(209, 213, 219, 0.52);
   font-size: 0.7rem;
-}
-
-.kps-detail-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  margin-top: 0.35rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 0.3rem;
-  border: 1px solid rgba(255, 142, 66, 0.3);
-  background: rgba(255, 142, 66, 0.08);
-  color: #ff8c42;
-  font-family: "Plus Jakarta Sans", sans-serif;
-  font-size: 0.64rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 150ms ease, color 150ms ease;
-}
-
-.kps-detail-link:hover {
-  background: rgba(255, 142, 66, 0.18);
-  color: #ffb36b;
 }
 
 .confidence-pill {
@@ -6130,12 +6064,6 @@ a + a {
   .matrix-detail-card__head span,
   .matrix-detail-card__head strong {
     letter-spacing: 0.08em;
-  }
-
-  /* Tampilan kartunya sudah jadi dasar untuk semua lebar (lihat blok
-     .detect-* di atas); di sini hanya ukurannya yang disesuaikan. */
-  .detect-list {
-    max-height: 18rem;
   }
 
   .detect-table tbody td {

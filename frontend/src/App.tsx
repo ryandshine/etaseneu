@@ -36,8 +36,14 @@ type AppView = "map" | "matrix" | "settings" | "kps";
  * View aktif disimpan di query string supaya refresh dan tombol back tidak
  * selalu melempar pengguna kembali ke Live Map, dan tautan ke Matriks Data
  * bisa dibagikan. "kps" (detail satu KPS dari Buku Besar) juga ikut
- * dipulihkan dari URL selama polygonId-nya ada, jadi tautan ke satu KPS bisa
+ * dipulihkan dari URL selama nama KPS-nya ada, jadi tautan ke satu KPS bisa
  * dibagikan juga.
+ *
+ * Identifier-nya nama KPS (LEMBAGA/agencyName), bukan polygon_metadata_id --
+ * tidak semua KPS punya polygon yang sudah ke-link (spatial join bisa
+ * tertinggal), tapi nama KPS selalu ada di setiap baris Buku Besar. Halaman
+ * detailnya sendiri yang mencari polygon_metadata_id dari hotspot manapun
+ * di grup itu yang sudah ke-link.
  *
  * "settings" sengaja TIDAK ikut dipulihkan dari URL. Gerbangnya berjalan di
  * sisi klien, jadi memulihkannya dari tautan sama saja menyediakan jalan
@@ -52,19 +58,18 @@ function readViewFromUrl(): AppView {
   if (view === "matrix") {
     return "matrix";
   }
-  if (view === "kps" && params.get("polygonId")) {
+  if (view === "kps" && params.get("kps")) {
     return "kps";
   }
   return "map";
 }
 
-function readKpsPolygonIdFromUrl(): number | null {
+function readKpsAgencyFromUrl(): string | null {
   if (typeof window === "undefined") {
     return null;
   }
-  const raw = new URLSearchParams(window.location.search).get("polygonId");
-  const parsed = raw ? Number(raw) : NaN;
-  return Number.isFinite(parsed) ? parsed : null;
+  // URLSearchParams.get() sudah mendekode persen-encoding sendiri.
+  return new URLSearchParams(window.location.search).get("kps");
 }
 
 function ViewLoader({ label }: { label: string }) {
@@ -83,7 +88,7 @@ export default function App() {
   const [showWind, setShowWind] = useState(false);
   const [weatherOverlay, setWeatherOverlay] = useState<"temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null>(null);
   const [activeView, setActiveView] = useState<AppView>(readViewFromUrl);
-  const [kpsPolygonId, setKpsPolygonId] = useState<number | null>(readKpsPolygonIdFromUrl);
+  const [kpsAgency, setKpsAgency] = useState<string | null>(readKpsAgencyFromUrl);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [passwordGateOpen, setPasswordGateOpen] = useState(false);
   const [passwordGateError, setPasswordGateError] = useState<string | null>(null);
@@ -91,13 +96,13 @@ export default function App() {
   const commitViewChange = (view: AppView) => {
     setActiveView(view);
     if (view !== "kps") {
-      setKpsPolygonId(null);
+      setKpsAgency(null);
     }
 
     // Pengaturan tidak ditulis ke URL supaya tautannya tidak bisa dipakai
     // melewati gerbang password di atas.
     const params = new URLSearchParams(window.location.search);
-    params.delete("polygonId");
+    params.delete("kps");
     if (view === "matrix") {
       params.set("view", "matrix");
     } else {
@@ -117,14 +122,14 @@ export default function App() {
   };
 
   // Dipicu dari klik baris KPS di Buku Besar -- beda dari commitViewChange
-  // karena butuh menulis polygonId juga ke URL supaya tautan halaman detail
+  // karena butuh menulis nama KPS juga ke URL supaya tautan halaman detail
   // ini bisa dibagikan/di-bookmark.
-  const openKpsDetail = (polygonId: number) => {
-    setKpsPolygonId(polygonId);
+  const openKpsDetail = (agency: string) => {
+    setKpsAgency(agency);
     setActiveView("kps");
     const params = new URLSearchParams(window.location.search);
     params.set("view", "kps");
-    params.set("polygonId", String(polygonId));
+    params.set("kps", agency);
     window.history.pushState({}, "", `?${params.toString()}`);
   };
 
@@ -147,7 +152,7 @@ export default function App() {
   useEffect(() => {
     const syncFromUrl = () => {
       setActiveView(readViewFromUrl());
-      setKpsPolygonId(readKpsPolygonIdFromUrl());
+      setKpsAgency(readKpsAgencyFromUrl());
     };
     window.addEventListener("popstate", syncFromUrl);
     return () => window.removeEventListener("popstate", syncFromUrl);
@@ -665,11 +670,13 @@ export default function App() {
         ) : activeView === "kps" ? (
           <section aria-label="Detail KPS workspace" className="workspace-stage workspace-stage--kps">
             <Suspense fallback={<ViewLoader label="Memuat detail KPS..." />}>
-              {kpsPolygonId !== null ? (
+              {kpsAgency !== null ? (
                 <KpsDetailView
-                  polygonId={kpsPolygonId}
+                  agency={kpsAgency}
                   hotspots={hotspots}
                   onClose={() => commitViewChange("matrix")}
+                  onExportPdf={(filters) => void exportPdf(filters)}
+                  isExportingPdf={isExportingPdf}
                 />
               ) : null}
             </Suspense>

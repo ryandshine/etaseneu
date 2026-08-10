@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { HotspotMatrix } from "../components/HotspotMatrix";
 
@@ -86,13 +86,33 @@ describe("HotspotMatrix", () => {
 
     expect(screen.getByText("Baris Hotspot")).toBeInTheDocument();
     expect(screen.getByText("KPS")).toBeInTheDocument();
+  });
+
+  it("opens the dedicated KPS detail page instead of an inline drawer when a row is clicked", () => {
+    const onOpenKpsDetail = vi.fn();
+    render(
+      <HotspotMatrix
+        hotspots={[hotspot]}
+        geojsonStatus={null}
+        onExport={() => undefined}
+        isExporting={false}
+        onExportPdf={() => undefined}
+        isExportingPdf={false}
+        onDateChange={() => undefined}
+        startDate="2026-05-27"
+        endDate="2026-05-28"
+        dateRangeLabel="Hari ini"
+        timePreset="24h"
+        onTimePresetChange={() => undefined}
+        onOpenKpsDetail={onOpenKpsDetail}
+      />
+    );
 
     fireEvent.click(screen.getByText("28-05-2026 07:10 WIB"));
 
-    expect(screen.getByText("Laporan deteksi spesifik")).toBeInTheDocument();
-    expect(screen.getByText("Segmen lokasi")).toBeInTheDocument();
-    expect(screen.getByText("Sinyal akuisisi")).toBeInTheDocument();
-    expect(screen.getByText("Grafik data intensitas")).toBeInTheDocument();
-    expect(screen.getAllByText("PS 33").length).toBeGreaterThanOrEqual(1);
+    expect(onOpenKpsDetail).toHaveBeenCalledWith("LPHD Demo");
+    // Panel geser lama tidak boleh ada lagi -- kontennya sudah pindah ke
+    // halaman KpsDetailView tersendiri.
+    expect(screen.queryByText("Laporan deteksi spesifik")).not.toBeInTheDocument();
   });
 });

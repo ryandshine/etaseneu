@@ -1,15 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
 import { CircleMarker, GeoJSON, MapContainer, Popup, TileLayer, useMap } from "react-leaflet";
 import { geoJSON as buildLeafletGeoJSON } from "leaflet";
 
 import type { DashboardHotspot } from "../hooks/useDashboardData";
 import type { PolygonDetail } from "../types/api";
+import { WeatherConditionCard } from "./WeatherConditionCard";
+import {
+  buildComparison,
+  formatMetadataValue,
+  formatNumber,
+  formatTimestamp,
+  getFrpCategory,
+  getStatusLabel,
+  normalizeFrpCategoryLabel
+} from "../lib/hotspotDisplay";
 
 type KpsDetailViewProps = {
-  polygonId: number;
+  agency: string;
   hotspots: DashboardHotspot[];
   onClose: () => void;
+  onExportPdf: (filters: { agency?: string }) => void;
+  isExportingPdf: boolean;
 };
 
 function sourceColor(source: string): string {
@@ -59,12 +71,45 @@ const INFO_FIELDS: Array<[label: string, key: keyof PolygonDetail]> = [
   ["Jumlah KK", "jml_kk"]
 ];
 
-export function KpsDetailView({ polygonId, hotspots, onClose }: KpsDetailViewProps) {
+export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExportingPdf }: KpsDetailViewProps) {
+  // Semua titik hotspot milik KPS ini sudah tersedia dari dataset yang sama
+  // dipakai Buku Besar -- tidak perlu endpoint tambahan, tinggal disaring
+  // pakai nama KPS (LEMBAGA/agencyName), yang selalu ada di tiap baris
+  // (beda dari polygon_metadata_id yang bisa saja belum ke-link).
+  const kpsHotspots = useMemo(
+    () =>
+      hotspots
+        .filter((hotspot) => formatMetadataValue(hotspot.polygonMetadata.LEMBAGA || hotspot.agencyName) === agency)
+        .sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime()),
+    [hotspots, agency]
+  );
+
+  // Cari ID polygon dari hotspot MANAPUN di grup ini yang sudah ke-link --
+  // bukan cuma yang terbaru, supaya satu-dua titik yang belum sempat
+  // ke-spatial-join tidak bikin seluruh halaman kehilangan polygon-nya.
+  const polygonId = useMemo(() => {
+    for (const hotspot of kpsHotspots) {
+      const raw = hotspot.polygonMetadata.polygon_metadata_id;
+      const parsed = raw ? Number(raw) : NaN;
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    return null;
+  }, [kpsHotspots]);
+
   const [detail, setDetail] = useState<PolygonDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(polygonId !== null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (polygonId === null) {
+      setDetail(null);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     let active = true;
     setLoading(true);
     setError(null);
@@ -102,14 +147,6 @@ export function KpsDetailView({ polygonId, hotspots, onClose }: KpsDetailViewPro
     };
   }, [polygonId]);
 
-  // Titik hotspot milik KPS ini sudah tersedia dari dataset yang sama dipakai
-  // Buku Besar -- tidak perlu endpoint tambahan, tinggal disaring pakai ID
-  // polygon yang sama.
-  const kpsHotspots = useMemo(
-    () => hotspots.filter((hotspot) => hotspot.polygonMetadata.polygon_metadata_id === String(polygonId)),
-    [hotspots, polygonId]
-  );
-
   const stats = useMemo(() => {
     let tinggi = 0;
     let sedang = 0;
@@ -131,6 +168,19 @@ export function KpsDetailView({ polygonId, hotspots, onClose }: KpsDetailViewPro
     return { total: kpsHotspots.length, tinggi, sedang, rendah, satellites: Array.from(satellites) };
   }, [kpsHotspots]);
 
+  // Deteksi yang sedang ditelaah di bawah -- default ke yang paling baru,
+  // tapi user bisa ketuk baris lain di "Daftar Deteksi Hotspot".
+  const [selectedDetectionId, setSelectedDetectionId] = useState<string | null>(null);
+  const selectedDetection = useMemo(
+    () => kpsHotspots.find((hotspot) => hotspot.id === selectedDetectionId) ?? kpsHotspots[0] ?? null,
+    [kpsHotspots, selectedDetectionId]
+  );
+
+  const comparison = useMemo(
+    () => buildComparison(hotspots, selectedDetection),
+    [hotspots, selectedDetection]
+  );
+
   return (
     <div className="kps-detail">
       <header className="kps-detail-header">
@@ -138,9 +188,18 @@ export function KpsDetailView({ polygonId, hotspots, onClose }: KpsDetailViewPro
           <ArrowLeft size={16} />
           Kembali ke Matriks Data
         </button>
-        <h2 className="kps-detail-title">
-          {detail?.lembaga || (loading ? "Memuat..." : "Detail KPS")}
-        </h2>
+        <div className="kps-detail-title-row">
+          <h2 className="kps-detail-title">{detail?.lembaga || agency}</h2>
+          <button
+            type="button"
+            className="matrix-btn matrix-btn--primary"
+            onClick={() => onExportPdf({ agency })}
+            disabled={isExportingPdf}
+          >
+            <Download size={14} />
+            {isExportingPdf ? "Mengunduh PDF..." : "Unduh Laporan Lembaga (PDF)"}
+          </button>
+        </div>
       </header>
 
       {error ? <p className="toast-error toast-error--inline">{error}</p> : null}
@@ -150,46 +209,46 @@ export function KpsDetailView({ polygonId, hotspots, onClose }: KpsDetailViewPro
           {loading ? (
             <p className="help-copy">Memuat informasi KPS...</p>
           ) : detail ? (
-            <>
-              <dl className="kps-detail-fields">
-                {INFO_FIELDS.map(([label, key]) => {
-                  const value = detail[key];
-                  if (!value) {
-                    return null;
-                  }
-                  return (
-                    <div key={key}>
-                      <dt>{label}</dt>
-                      <dd>{String(value)}</dd>
-                    </div>
-                  );
-                })}
-              </dl>
-
-              <div className="kps-detail-stats">
-                <div className="control-metric">
-                  <span>Total hotspot terpantau:</span>
-                  <strong>{stats.total}</strong>
-                </div>
-                {stats.total > 0 && (
-                  <div className="kps-detail-frp-breakdown">
-                    <div>
-                      <span style={{ color: "#ef4444" }}>■</span> Tinggi <strong>{stats.tinggi}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: "#f59e0b" }}>■</span> Sedang <strong>{stats.sedang}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: "#3b82f6" }}>■</span> Rendah <strong>{stats.rendah}</strong>
-                    </div>
+            <dl className="kps-detail-fields">
+              {INFO_FIELDS.map(([label, key]) => {
+                const value = detail[key];
+                if (!value) {
+                  return null;
+                }
+                return (
+                  <div key={key}>
+                    <dt>{label}</dt>
+                    <dd>{String(value)}</dd>
                   </div>
-                )}
-                {stats.satellites.length > 0 && (
-                  <p className="help-copy">Satelit: {stats.satellites.join(", ")}</p>
-                )}
+                );
+              })}
+            </dl>
+          ) : (
+            <p className="help-copy">Polygon KPS ini belum terhubung ke data spasial.</p>
+          )}
+
+          <div className="kps-detail-stats">
+            <div className="control-metric">
+              <span>Total hotspot terpantau:</span>
+              <strong>{stats.total}</strong>
+            </div>
+            {stats.total > 0 && (
+              <div className="kps-detail-frp-breakdown">
+                <div>
+                  <span style={{ color: "#ef4444" }}>■</span> Tinggi <strong>{stats.tinggi}</strong>
+                </div>
+                <div>
+                  <span style={{ color: "#f59e0b" }}>■</span> Sedang <strong>{stats.sedang}</strong>
+                </div>
+                <div>
+                  <span style={{ color: "#3b82f6" }}>■</span> Rendah <strong>{stats.rendah}</strong>
+                </div>
               </div>
-            </>
-          ) : null}
+            )}
+            {stats.satellites.length > 0 && (
+              <p className="help-copy">Satelit: {stats.satellites.join(", ")}</p>
+            )}
+          </div>
         </aside>
 
         <div className="kps-detail-map">
@@ -218,6 +277,7 @@ export function KpsDetailView({ polygonId, hotspots, onClose }: KpsDetailViewPro
                   fillColor: sourceColor(hotspot.source),
                   fillOpacity: 0.95
                 }}
+                eventHandlers={{ click: () => setSelectedDetectionId(hotspot.id) }}
               >
                 <Popup>
                   <div style={{ fontSize: "12px", fontFamily: "sans-serif" }}>
@@ -231,6 +291,153 @@ export function KpsDetailView({ polygonId, hotspots, onClose }: KpsDetailViewPro
           </MapContainer>
         </div>
       </div>
+
+      {/* Konten di bawah ini mengalir dalam scroll satu halaman (bukan
+          panel geser terpisah dengan scroll sendiri) -- lihat catatan
+          "Eliminasi Nested Scroll" di HotspotMatrix.tsx. */}
+      {selectedDetection && (
+        <div className="kps-detail-sections">
+          <section className="matrix-detail-card">
+            <div className="matrix-detail-card__head">
+              <span>Segmen Lokasi</span>
+              <strong>{getStatusLabel(selectedDetection)}</strong>
+            </div>
+            <div className="matrix-detail-grid matrix-detail-grid--two">
+              <div className="matrix-detail-item">
+                <span>Sumber</span>
+                <strong>{formatMetadataValue(selectedDetection.source)}</strong>
+              </div>
+              <div className="matrix-detail-item">
+                <span>Satelit</span>
+                <strong>{formatMetadataValue(selectedDetection.satellite)}</strong>
+              </div>
+              <div className="matrix-detail-item">
+                <span>Siang/Malam</span>
+                <strong>{formatMetadataValue(selectedDetection.daynight)}</strong>
+              </div>
+              <div className="matrix-detail-item">
+                <span>Terdeteksi</span>
+                <strong>{formatTimestamp(selectedDetection.detectedAt)}</strong>
+              </div>
+            </div>
+            <div className="matrix-code-block">
+              <p className="matrix-code-block__label">Koordinat</p>
+              <strong>
+                {selectedDetection.latitude.toFixed(5)}, {selectedDetection.longitude.toFixed(5)}
+              </strong>
+            </div>
+          </section>
+
+          <section className="matrix-detail-card">
+            <div className="matrix-detail-card__head">
+              <span>Daftar Deteksi Hotspot ({kpsHotspots.length} titik)</span>
+              <strong>Ketuk untuk detail</strong>
+            </div>
+            <div className="detect-list">
+              <table className="detect-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Tanggal</th>
+                    <th scope="col">Satelit</th>
+                    <th scope="col">Kelas FRP</th>
+                    <th scope="col">FRP</th>
+                    <th scope="col">Lat/Lon</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {kpsHotspots.map((hotspot) => {
+                    const isActive = selectedDetection.id === hotspot.id;
+                    return (
+                      <tr
+                        key={hotspot.id}
+                        className={isActive ? "detect-row detect-row--active" : "detect-row"}
+                        onClick={() => setSelectedDetectionId(hotspot.id)}
+                        role="button"
+                        tabIndex={0}
+                        aria-current={isActive || undefined}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setSelectedDetectionId(hotspot.id);
+                          }
+                        }}
+                      >
+                        <td className="dt-waktu">{formatTimestamp(hotspot.detectedAt)}</td>
+                        <td className="dt-satelit">{hotspot.source}</td>
+                        <td className="dt-kelas">
+                          <span
+                            className={`confidence-pill confidence-pill--${
+                              getFrpCategory(hotspot) === "Tinggi" ? "high" : getFrpCategory(hotspot) === "Sedang" ? "nominal" : "low"
+                            }`}
+                          >
+                            {normalizeFrpCategoryLabel(hotspot)}
+                          </span>
+                        </td>
+                        <td className="dt-frp">{formatNumber(hotspot.frp)} MW</td>
+                        <td className="dt-koord" title={`${hotspot.latitude.toFixed(4)}, ${hotspot.longitude.toFixed(4)}`}>
+                          {hotspot.latitude.toFixed(3)}, {hotspot.longitude.toFixed(3)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <WeatherConditionCard lat={selectedDetection.latitude} lon={selectedDetection.longitude} />
+
+          <section className="matrix-detail-card">
+            <div className="matrix-detail-card__head">
+              <span>Grafik Data Intensitas</span>
+              <strong>Terpilih vs populasi</strong>
+            </div>
+            <div className="matrix-comparison-block">
+              <div className="matrix-comparison-head">
+                <span>Perbandingan FRP (MW)</span>
+                <strong>{formatNumber(selectedDetection.frp)}</strong>
+              </div>
+              <div className="matrix-comparison-list">
+                {comparison.frp.map((item) => {
+                  const max = Math.max(...comparison.frp.map((entry) => entry.value), 1);
+                  const width = `${Math.max((item.value / max) * 100, item.value > 0 ? 12 : 0)}%`;
+                  return (
+                    <div key={item.label} className="matrix-comparison-row">
+                      <span>{item.label}</span>
+                      <div className="matrix-bar-track matrix-bar-track--mini">
+                        <span className="matrix-bar-fill" style={{ width, background: item.color }} />
+                      </div>
+                      <strong>{item.value}</strong>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="matrix-comparison-block">
+              <div className="matrix-comparison-head">
+                <span>Perbandingan Kecerahan (K)</span>
+                <strong>{formatNumber(selectedDetection.brightness)}</strong>
+              </div>
+              <div className="matrix-comparison-list">
+                {comparison.brightness.map((item) => {
+                  const max = Math.max(...comparison.brightness.map((entry) => entry.value), 1);
+                  const width = `${Math.max((item.value / max) * 100, item.value > 0 ? 12 : 0)}%`;
+                  return (
+                    <div key={item.label} className="matrix-comparison-row">
+                      <span>{item.label}</span>
+                      <div className="matrix-bar-track matrix-bar-track--mini">
+                        <span className="matrix-bar-fill" style={{ width, background: item.color }} />
+                      </div>
+                      <strong>{item.value}</strong>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

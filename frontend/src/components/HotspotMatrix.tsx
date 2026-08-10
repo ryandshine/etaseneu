@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer, AreaChart, Area, Cell, LabelList } from "recharts";
-import { Flame, MapPinned } from "lucide-react";
 
 import type { GeoJsonStatusResponse } from "../types/api";
 import { getTodayWIB } from "../lib/date";
 import { TIME_PRESET_OPTIONS, type TimePreset } from "../constants/time-windows";
+import {
+  formatMetadataValue,
+  formatNumber,
+  formatTimestamp,
+  getFrpCategory,
+  normalizeFrpCategoryLabel
+} from "../lib/hotspotDisplay";
 
 type MatrixHotspot = {
   id: string;
@@ -37,16 +43,12 @@ type HotspotMatrixProps = {
   timePreset: TimePreset;
   onTimePresetChange: (value: TimePreset) => void;
   /**
-   * Buka halaman detail KPS (polygon SHP utuh + info) di luar panel geser
-   * bawaan tabel ini. Opsional supaya HotspotMatrix tetap bisa dites/dipakai
-   * tanpa fitur navigasi App.
+   * Buka halaman detail KPS (polygon SHP + laporan deteksi lengkap) --
+   * dulu ini panel geser sempit di sisi kanan, sekarang halaman tersendiri
+   * supaya tidak ada scroll bertingkat. Opsional supaya HotspotMatrix tetap
+   * bisa dites/dipakai tanpa fitur navigasi App.
    */
-  onOpenKpsDetail?: (polygonId: number) => void;
-};
-
-type QuerySection = {
-  title: string;
-  items: Array<[string, string]>;
+  onOpenKpsDetail?: (agency: string) => void;
 };
 
 type ChartItem = {
@@ -146,40 +148,6 @@ function getWibDateParts(value: string) {
   };
 }
 
-function formatTimestamp(value: string) {
-  const parsed = parseDateTime(value);
-  if (!parsed) {
-    return "Tidak Diketahui";
-  }
-
-  try {
-    const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Jakarta",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false
-    });
-    const parts = formatter.formatToParts(parsed);
-    const year = parts.find(p => p.type === "year")?.value ?? "";
-    const month = parts.find(p => p.type === "month")?.value ?? "";
-    const day = parts.find(p => p.type === "day")?.value ?? "";
-    const hour = parts.find(p => p.type === "hour")?.value ?? "";
-    const minute = parts.find(p => p.type === "minute")?.value ?? "";
-    return `${day}-${month}-${year} ${hour}:${minute} WIB`;
-  } catch (e) {
-    const wibTime = new Date(parsed.getTime() + 7 * 60 * 60 * 1000);
-    const day = String(wibTime.getUTCDate()).padStart(2, '0');
-    const month = String(wibTime.getUTCMonth() + 1).padStart(2, '0');
-    const year = wibTime.getUTCFullYear();
-    const hour = String(wibTime.getUTCHours()).padStart(2, '0');
-    const minute = String(wibTime.getUTCMinutes()).padStart(2, '0');
-    return `${day}-${month}-${year} ${hour}:${minute} WIB`;
-  }
-}
-
 function formatDateLabel(value: string) {
   const parsed = parseDateTime(value);
   if (!parsed) {
@@ -191,18 +159,6 @@ function formatDateLabel(value: string) {
     day: "2-digit",
     month: "short"
   }).format(parsed);
-}
-
-function formatNumber(value: number | null, digits = 2) {
-  if (value === null || Number.isNaN(value)) {
-    return "Tidak Tersedia";
-  }
-
-  return value.toFixed(digits);
-}
-
-function formatMetadataValue(value?: string) {
-  return value && value.trim() ? value : "-";
 }
 
 function formatJakartaTimestamp(value?: string | null) {
@@ -245,87 +201,6 @@ function getLatestRegistrySync(status: GeoJsonStatusResponse | null): string {
 
   timestamps.sort();
   return formatJakartaTimestamp(timestamps[timestamps.length - 1]);
-}
-
-function getFrpCategory(hotspot: MatrixHotspot) {
-  const frp = hotspot.frp ?? 0;
-  if (frp > 30) return "Tinggi";
-  if (frp >= 10) return "Sedang";
-  return "Rendah";
-}
-
-function normalizeFrpCategoryLabel(hotspot: MatrixHotspot) {
-  return getFrpCategory(hotspot);
-}
-
-function getStatusLabel(hotspot: MatrixHotspot) {
-  const metadata = hotspot.polygonMetadata ?? {};
-  return formatMetadataValue(metadata.Status) || getFrpCategory(hotspot);
-}
-
-function getStatusTone(statusLabel: string) {
-  const normalized = statusLabel.toLowerCase();
-
-  if (
-    normalized.includes("33") ||
-    normalized.includes("active") ||
-    normalized.includes("matched") ||
-    normalized.includes("ready")
-  ) {
-    return "accent";
-  }
-
-  if (normalized.includes("low") || normalized.includes("inactive") || normalized.includes("missing")) {
-    return "soft";
-  }
-
-  return "warm";
-}
-
-function buildQuerySections(hotspot: MatrixHotspot): QuerySection[] {
-  const metadata = hotspot.polygonMetadata ?? {};
-  return [
-    {
-      title: "Hotspot",
-      items: [
-        ["Sumber", formatMetadataValue(hotspot.source)],
-        ["Satelit", formatMetadataValue(hotspot.satellite)],
-        ["Siang/Malam", formatMetadataValue(hotspot.daynight)],
-        ["Kecerahan", formatNumber(hotspot.brightness)],
-        ["FRP", formatNumber(hotspot.frp)],
-        ["Kategori FRP", getFrpCategory(hotspot)],
-        ["Lintang", hotspot.latitude.toFixed(5)],
-        ["Bujur", hotspot.longitude.toFixed(5)],
-        ["Terdeteksi", formatTimestamp(hotspot.detectedAt)]
-      ]
-    },
-    {
-      title: "Lokasi",
-      items: [
-        ["NAMA_PROV", formatMetadataValue(hotspot.provinceName || metadata.NAMA_PROV)],
-        ["NAMA_KAB", formatMetadataValue(metadata.NAMA_KAB)],
-        ["NAMA_KEC", formatMetadataValue(metadata.NAMA_KEC)],
-        ["NAMA_DESA", formatMetadataValue(metadata.NAMA_DESA)],
-        ["WILKER_BPS", formatMetadataValue(metadata.WILKER_BPS)]
-      ]
-    },
-    {
-      title: "Poligon",
-      items: [
-        ["LEMBAGA", formatMetadataValue(metadata.LEMBAGA || hotspot.agencyName)],
-        ["SKEMA", formatMetadataValue(metadata.SKEMA)],
-        ["Status", formatMetadataValue(metadata.Status)],
-        ["OBJECTID_1", formatMetadataValue(metadata.OBJECTID_1)],
-        ["PS_ID", formatMetadataValue(metadata.PS_ID)],
-        ["KODE_PROV", formatMetadataValue(metadata.KODE_PROV)],
-        ["KODE_KAB", formatMetadataValue(metadata.KODE_KAB)],
-        ["NO_SK", formatMetadataValue(metadata.NO_SK)],
-        ["TGL_SK", formatMetadataValue(metadata.TGL_SK)],
-        ["LuasFinal", formatMetadataValue(metadata.LuasFinal)],
-        ["Jml_KK", formatMetadataValue(metadata.Jml_KK)]
-      ]
-    }
-  ];
 }
 
 function buildFrpDistribution(hotspots: MatrixHotspot[]): ChartItem[] {
@@ -417,29 +292,6 @@ function buildYearOverYear(hotspots: MatrixHotspot[]) {
   }));
 
   return { years: selectedYears, countSeries, frpSeries };
-}
-
-function buildComparison(hotspots: MatrixHotspot[], selectedHotspot: MatrixHotspot | null) {
-  const totalFrp = hotspots.reduce((sum, hotspot) => sum + (hotspot.frp ?? 0), 0);
-  const totalBrightness = hotspots.reduce((sum, hotspot) => sum + (hotspot.brightness ?? 0), 0);
-  const count = hotspots.length || 1;
-  const maxFrp = hotspots.reduce((max, hotspot) => Math.max(max, hotspot.frp ?? 0), 0);
-  const maxBrightness = hotspots.reduce((max, hotspot) => Math.max(max, hotspot.brightness ?? 0), 0);
-  const selectedFrp = selectedHotspot?.frp ?? 0;
-  const selectedBrightness = selectedHotspot?.brightness ?? 0;
-
-  return {
-    frp: [
-      { label: "Rata-rata Global", value: Math.round((totalFrp / count) * 10) / 10, color: "rgba(255,255,255,0.15)" },
-      { label: "Kebakaran Terpilih", value: Math.round(selectedFrp * 10) / 10, color: "rgba(245, 158, 11, 0.6)" },
-      { label: "Maksimum Global", value: Math.round(maxFrp * 10) / 10, color: "rgba(239, 68, 68, 0.45)" }
-    ],
-    brightness: [
-      { label: "Rata-rata Global", value: Math.round((totalBrightness / count) * 10) / 10, color: "rgba(255,255,255,0.15)" },
-      { label: "Kebakaran Terpilih", value: Math.round(selectedBrightness * 10) / 10, color: "rgba(20, 184, 166, 0.6)" },
-      { label: "Maksimum Global", value: Math.round(maxBrightness * 10) / 10, color: "rgba(239, 68, 68, 0.45)" }
-    ]
-  };
 }
 
 function MatrixField({
@@ -674,140 +526,6 @@ function renderCompactCard(title: string, data: any[], total: number, activeLabe
   );
 }
 
-type DrawerWeather = {
-  current: {
-    temperature: number;
-    humidity: number;
-    precipitation: number;
-    wind_speed: number;
-    wind_direction: number;
-    wind_gusts: number;
-    soil_moisture: number;
-    soil_moisture_status: string;
-    soil_moisture_color: string;
-    weather_code: number;
-    fire_danger: {
-      value: number;
-      level: string;
-      color: string;
-    };
-  };
-  air_quality: {
-    pm2_5: number;
-    pm10: number;
-    carbon_monoxide: number;
-    aqi: number;
-  };
-};
-
-function DrawerWeatherSection({ lat, lon }: { lat: number; lon: number }) {
-  const [data, setData] = useState<DrawerWeather | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError(false);
-
-    fetch(`/api/weather/spot?lat=${lat}&lon=${lon}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed");
-        return res.json() as Promise<DrawerWeather>;
-      })
-      .then((payload) => {
-        if (active) {
-          setData(payload);
-        }
-      })
-      .catch(() => {
-        if (active) setError(true);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [lat, lon]);
-
-  if (loading) {
-    return (
-      <section className="matrix-detail-card">
-        <div className="matrix-detail-card__head">
-          <span>Kondisi Cuaca & Kualitas Udara</span>
-          <strong>Memuat...</strong>
-        </div>
-        <div style={{ padding: "12px", color: "#94a3b8", fontSize: "11px" }}>
-          ⚡ Memuat data cuaca dan kualitas udara Open-Meteo...
-        </div>
-      </section>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <section className="matrix-detail-card">
-        <div className="matrix-detail-card__head">
-          <span>Kondisi Cuaca & Kualitas Udara</span>
-          <strong style={{ color: "#ef4444" }}>Error</strong>
-        </div>
-        <div style={{ padding: "12px", color: "#ef4444", fontSize: "11px" }}>
-          ⚠️ Gagal mengambil data cuaca dari Open-Meteo.
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className="matrix-detail-card">
-      <div className="matrix-detail-card__head">
-        <span>Kondisi Cuaca & Kualitas Udara</span>
-        <strong style={{ color: data.current.fire_danger.color }}>CBI: {data.current.fire_danger.level}</strong>
-      </div>
-      <div className="matrix-detail-grid matrix-detail-grid--two">
-        <div className="matrix-detail-item">
-          <span>Suhu Udara</span>
-          <strong>{data.current.temperature.toFixed(1)} °C</strong>
-        </div>
-        <div className="matrix-detail-item">
-          <span>Kelembapan Udara</span>
-          <strong>{data.current.humidity.toFixed(0)}% RH</strong>
-        </div>
-        <div className="matrix-detail-item">
-          <span>Curah Hujan</span>
-          <strong>{data.current.precipitation.toFixed(1)} mm</strong>
-        </div>
-        <div className="matrix-detail-item">
-          <span>Kecepatan Angin</span>
-          <strong>{data.current.wind_speed.toFixed(1)} m/s</strong>
-        </div>
-        <div className="matrix-detail-item">
-          <span>Arah Angin</span>
-          <strong>{data.current.wind_direction.toFixed(0)}°</strong>
-        </div>
-        <div className="matrix-detail-item">
-          <span>Hembusan Angin</span>
-          <strong>{data.current.wind_gusts.toFixed(1)} m/s</strong>
-        </div>
-        <div className="matrix-detail-item">
-          <span>Kekeringan Gambut</span>
-          <strong style={{ color: data.current.soil_moisture_color }}>
-            {data.current.soil_moisture_status} ({(data.current.soil_moisture * 100).toFixed(1)}%)
-          </strong>
-        </div>
-        <div className="matrix-detail-item">
-          <span>Polusi Udara (AQI)</span>
-          <strong style={{ color: data.air_quality.aqi > 100 ? "#ef4444" : data.air_quality.aqi > 50 ? "#eab308" : "#22c55e" }}>
-            {data.air_quality.aqi} AQI (PM2.5: {data.air_quality.pm2_5.toFixed(1)})
-          </strong>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 export function HotspotMatrix({
   hotspots,
   geojsonStatus,
@@ -868,7 +586,6 @@ export function HotspotMatrix({
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedHotspot, setSelectedHotspot] = useState<MatrixHotspot | null>(null);
   const [showAnalytics, setShowAnalytics] = useState(true);
   const [yoyMetric, setYoyMetric] = useState<"count" | "frp">("count");
   const [currentPage, setCurrentPage] = useState(1);
@@ -979,14 +696,6 @@ export function HotspotMatrix({
     setCurrentPage(1);
   }, [wilkerFilter, provinceFilter, activeFrpCategory, groupedRows.length]);
 
-  const selectedLembagaHotspots = useMemo(() => {
-    if (!selectedHotspot) return [];
-    const targetOwner = formatMetadataValue(selectedHotspot.polygonMetadata.LEMBAGA || selectedHotspot.agencyName);
-    return filteredHotspots.filter(
-      (h) => formatMetadataValue(h.polygonMetadata.LEMBAGA || h.agencyName) === targetOwner
-    ).sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime());
-  }, [selectedHotspot, filteredHotspots]);
-
     const confidenceDistribution = useMemo(() => buildConfidenceDistribution(filteredHotspots), [filteredHotspots]);
 const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [filteredHotspots]);
   const topWilker = useMemo(() => buildTopWilker(filteredHotspots), [filteredHotspots]);
@@ -1005,43 +714,10 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
   const dailyTrend = useMemo(() => buildDailyTrend(filteredHotspots, trendGroupBy), [filteredHotspots, trendGroupBy]);
   const dailyFrpTrend = useMemo(() => buildDailyFrpTrend(filteredHotspots, trendGroupBy), [filteredHotspots, trendGroupBy]);
   const yoy = useMemo(() => buildYearOverYear(filteredHotspots), [filteredHotspots]);
-  const comparison = useMemo(
-    () => buildComparison(filteredHotspots, selectedHotspot),
-    [filteredHotspots, selectedHotspot],
-  );
-
-  const selectedSummary = useMemo(() => {
-    if (!selectedHotspot) {
-      return null;
-    }
-
-    return {
-      owner: formatMetadataValue(selectedHotspot.polygonMetadata.LEMBAGA || selectedHotspot.agencyName),
-      province: formatMetadataValue(selectedHotspot.provinceName || selectedHotspot.polygonMetadata.NAMA_PROV),
-      source: formatMetadataValue(selectedHotspot.source),
-      satellite: formatMetadataValue(selectedHotspot.satellite),
-      daynight: formatMetadataValue(selectedHotspot.daynight),
-      detected: formatTimestamp(selectedHotspot.detectedAt),
-      status: formatMetadataValue(getStatusLabel(selectedHotspot))
-    };
-  }, [selectedHotspot]);
-
-  const selectedSections = useMemo(() => (selectedHotspot ? buildQuerySections(selectedHotspot) : []), [selectedHotspot]);
 
   const handleSelectFrpCategory = (label: string | null) => {
     setActiveFrpCategory((current) => (current === label ? null : label));
   };
-
-  const detailRows = selectedHotspot
-    ? [
-        ["Pemilik", selectedSummary?.owner ?? "-"],
-        ["Provinsi", selectedSummary?.province ?? "-"],
-        ["Sumber", selectedSummary?.source ?? "-"],
-        ["Satelit", selectedSummary?.satellite ?? "-"],
-        ["Siang/Malam", selectedSummary?.daynight ?? "-"],
-        ["Terdeteksi", selectedSummary?.detected ?? "-"]
-      ]
-    : [];
 
   // Tanpa kelas `panel`: section ini mengisi seluruh stage, jadi border,
   // bayangan, dan padding sebuah panel hanya menambah satu lapis bingkai yang
@@ -1248,7 +924,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
       ) : null}
 
       <div className="matrix-workbench">
-        <section className={`matrix-ledger glass-panel${selectedHotspot ? " matrix-ledger--split" : ""}`}>
+        <section className="matrix-ledger glass-panel">
           <div className="matrix-ledger-head">
             <div>
               <p className="panel-eyebrow">Buku Besar</p>
@@ -1410,25 +1086,18 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                   <tbody>
                     {groupedRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((group, index) => {
                       const hotspot = group.representativeHotspot;
-                      const statusLabel = getStatusLabel(hotspot);
-                      const statusTone = getStatusTone(statusLabel);
-                      const isSelected = selectedHotspot && formatMetadataValue(selectedHotspot.polygonMetadata.LEMBAGA || selectedHotspot.agencyName) === group.key;
                       const rowNumber = (currentPage - 1) * PAGE_SIZE + index + 1;
-                      const polygonIdRaw = hotspot.polygonMetadata.polygon_metadata_id;
-                      const polygonId = polygonIdRaw ? Number(polygonIdRaw) : NaN;
-                      const hasPolygonDetail = onOpenKpsDetail && Number.isFinite(polygonId);
 
                       return (
                         <tr
                           key={group.key}
-                          className={isSelected ? "matrix-row-selected" : undefined}
-                          onClick={() => setSelectedHotspot(hotspot)}
+                          onClick={() => onOpenKpsDetail?.(group.key)}
                           role="button"
                           tabIndex={0}
                           onKeyDown={(event) => {
                             if (event.key === "Enter" || event.key === " ") {
                               event.preventDefault();
-                              setSelectedHotspot(hotspot);
+                              onOpenKpsDetail?.(group.key);
                             }
                           }}
                         >
@@ -1442,20 +1111,6 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                                 <span className="td-kps__sub">{hotspot.layerName}</span>
                               )}
                             </div>
-                            {hasPolygonDetail && (
-                              <button
-                                type="button"
-                                className="kps-detail-link"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  onOpenKpsDetail?.(polygonId);
-                                }}
-                                title="Lihat polygon SHP & detail KPS"
-                              >
-                                <MapPinned size={12} />
-                                Lihat Polygon
-                              </button>
-                            )}
                           </td>
                           <td className="td-balai" data-label="Balai PS">
                             {group.wilker || '-'}
@@ -1524,227 +1179,10 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
           )}
         </section>
 
-        {selectedHotspot ? (
-          <>
-            <div
-              className="matrix-drawer-shroud"
-              onClick={() => setSelectedHotspot(null)}
-            />
-            <aside className="matrix-drawer glass-panel">
-              <div className="matrix-drawer__header" style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'stretch' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <p className="panel-eyebrow">Laporan deteksi spesifik</p>
-                    <h3>{selectedHotspot.agencyName || selectedHotspot.layerName}</h3>
-                  </div>
-                  <button type="button" className="matrix-inline-action" onClick={() => setSelectedHotspot(null)}>
-                    Close
-                  </button>
-                </div>
-                <div style={{ marginTop: '4px' }}>
-                  <button
-                    type="button"
-                    className="matrix-btn matrix-btn--primary"
-                    onClick={() => onExportPdf({ agency: selectedHotspot.agencyName || selectedHotspot.layerName })}
-                    disabled={isExportingPdf}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', padding: '6px 12px', width: '100%', justifyContent: 'center' }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    {isExportingPdf ? "Mengunduh PDF..." : "Unduh Laporan Lembaga (PDF)"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="matrix-drawer__body">
-                <section className="matrix-detail-card">
-                  <div className="matrix-detail-card__head">
-                    <span>Segmen lokasi</span>
-                    <strong>{selectedSummary?.status ?? "-"}</strong>
-                  </div>
-                  <div className="matrix-detail-grid">
-                    {detailRows.map(([label, value]) => (
-                      <div key={label} className="matrix-detail-item">
-                        <span>{label}</span>
-                        <strong>{value}</strong>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="matrix-code-block">
-                    <p className="matrix-code-block__label">Koordinat</p>
-                    <strong>
-                      {selectedHotspot.latitude.toFixed(5)}, {selectedHotspot.longitude.toFixed(5)}
-                    </strong>
-                  </div>
-                </section>
-
-                <section className="matrix-detail-card">
-                  <div className="matrix-detail-card__head">
-                    <span>Daftar Deteksi Hotspot ({selectedLembagaHotspots.length} titik)</span>
-                    <strong>Ketuk untuk detail</strong>
-                  </div>
-                  {/* Tabel ini TIDAK memakai kelas .matrix-table. Kelas itu di
-                      layar kecil diubah jadi kartu dengan grid area khusus
-                      kolom Buku Besar (num/kps/balai/...); kolom di sini
-                      berbeda, sehingga selnya jatuh ke penempatan otomatis dan
-                      tampil acak. Tabel ini punya tampilan kartunya sendiri. */}
-                  <div className="detect-list">
-                    <table className="detect-table">
-                      <thead>
-                        <tr>
-                          <th scope="col">Tanggal</th>
-                          <th scope="col">Satelit</th>
-                          <th scope="col">Kelas FRP</th>
-                          <th scope="col">FRP</th>
-                          <th scope="col">Lat/Lon</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedLembagaHotspots.map((h) => {
-                          const isHSelected = selectedHotspot.id === h.id;
-                          return (
-                            <tr
-                              key={h.id}
-                              className={isHSelected ? "detect-row detect-row--active" : "detect-row"}
-                              onClick={() => setSelectedHotspot(h)}
-                              role="button"
-                              tabIndex={0}
-                              aria-current={isHSelected || undefined}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                  event.preventDefault();
-                                  setSelectedHotspot(h);
-                                }
-                              }}
-                            >
-                              <td className="dt-waktu">{formatTimestamp(h.detectedAt)}</td>
-                              <td className="dt-satelit">{h.source}</td>
-                              <td className="dt-kelas">
-                                <span className={`confidence-pill confidence-pill--${getFrpCategory(h) === 'Tinggi' ? 'high' : getFrpCategory(h) === 'Sedang' ? 'nominal' : 'low'}`}>
-                                  {normalizeFrpCategoryLabel(h)}
-                                </span>
-                              </td>
-                              {/* Tanpa satuan, angka ini menempel ke koordinat
-                                  di sebelahnya dan terbaca sebagai satu nilai. */}
-                              <td className="dt-frp">{formatNumber(h.frp)} MW</td>
-                              <td
-                                className="dt-koord"
-                                title={`${h.latitude.toFixed(4)}, ${h.longitude.toFixed(4)}`}
-                              >
-                                {h.latitude.toFixed(3)}, {h.longitude.toFixed(3)}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-
-                <section className="matrix-detail-card">
-                  <div className="matrix-detail-card__head">
-                    <span>Sinyal akuisisi</span>
-                    <strong>{normalizeFrpCategoryLabel(selectedHotspot)}</strong>
-                  </div>
-                  <div className="matrix-detail-grid matrix-detail-grid--two">
-                    <div className="matrix-detail-item">
-                      <span>Satelit</span>
-                      <strong>{selectedHotspot.satellite}</strong>
-                    </div>
-                    <div className="matrix-detail-item">
-                      <span>Sumber</span>
-                      <strong>{selectedHotspot.source}</strong>
-                    </div>
-                    <div className="matrix-detail-item">
-                      <span>Brightness</span>
-                      <strong>{formatNumber(selectedHotspot.brightness)}</strong>
-                    </div>
-                    <div className="matrix-detail-item">
-                      <span>FRP</span>
-                      <strong>{formatNumber(selectedHotspot.frp)}</strong>
-                    </div>
-                    <div className="matrix-detail-item">
-                      <span>Siang/Malam</span>
-                      <strong>{formatMetadataValue(selectedHotspot.daynight)}</strong>
-                    </div>
-                    <div className="matrix-detail-item">
-                      <span>Terdeteksi</span>
-                      <strong>{formatTimestamp(selectedHotspot.detectedAt)}</strong>
-                    </div>
-                  </div>
-                </section>
-
-                <DrawerWeatherSection lat={selectedHotspot.latitude} lon={selectedHotspot.longitude} />
-
-                <section className="matrix-detail-card">
-                  <div className="matrix-detail-card__head">
-                    <span>Grafik data intensitas</span>
-                    <strong>Terpilih vs populasi</strong>
-                  </div>
-                  <div className="matrix-comparison-block">
-                    <div className="matrix-comparison-head">
-                      <span>Perbandingan FRP (MW)</span>
-                      <strong>{formatNumber(selectedHotspot.frp)}</strong>
-                    </div>
-                    <div className="matrix-comparison-list">
-                      {comparison.frp.map((item) => {
-                        const max = Math.max(...comparison.frp.map((entry) => entry.value), 1);
-                        const width = `${Math.max((item.value / max) * 100, item.value > 0 ? 12 : 0)}%`;
-                        return (
-                          <div key={item.label} className="matrix-comparison-row">
-                            <span>{item.label}</span>
-                            <div className="matrix-bar-track matrix-bar-track--mini">
-                              <span className="matrix-bar-fill" style={{ width, background: item.color }} />
-                            </div>
-                            <strong>{item.value}</strong>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="matrix-comparison-block">
-                    <div className="matrix-comparison-head">
-                      <span>Perbandingan Kecerahan (K)</span>
-                      <strong>{formatNumber(selectedHotspot.brightness)}</strong>
-                    </div>
-                    <div className="matrix-comparison-list">
-                      {comparison.brightness.map((item) => {
-                        const max = Math.max(...comparison.brightness.map((entry) => entry.value), 1);
-                        const width = `${Math.max((item.value / max) * 100, item.value > 0 ? 12 : 0)}%`;
-                        return (
-                          <div key={item.label} className="matrix-comparison-row">
-                            <span>{item.label}</span>
-                            <div className="matrix-bar-track matrix-bar-track--mini">
-                              <span className="matrix-bar-fill" style={{ width, background: item.color }} />
-                            </div>
-                            <strong>{item.value}</strong>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </section>
-
-                {selectedSections.map((section) => (
-                  <section key={section.title} className="matrix-detail-card">
-                    <div className="matrix-detail-card__head">
-                      <span>{section.title}</span>
-                      <strong>{section.items.length} kolom</strong>
-                    </div>
-                    <div className="matrix-detail-grid matrix-detail-grid--compact">
-                      {section.items.map(([label, value]) => (
-                        <div key={label} className="matrix-detail-item">
-                          <span>{label}</span>
-                          <strong>{value}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            </aside>
-          </>
-        ) : null}
+        {/* Panel "Laporan Deteksi Spesifik" sekarang jadi bagian dari halaman
+            detail KPS (lihat KpsDetailView.tsx) -- dulu di sini sebagai
+            drawer sempit dengan scroll bertingkat (drawer di dalam halaman
+            yang sudah scroll sendiri). */}
       </div>
 
       <div className="matrix-footer">
