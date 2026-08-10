@@ -535,6 +535,48 @@ body {
   color: rgba(245, 239, 230, 0.35) !important;
 }
 
+.map-legend {
+  position: absolute;
+  left: 1rem;
+  bottom: 6.5rem;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(19, 21, 26, 0.92);
+  backdrop-filter: blur(8px);
+}
+
+.map-legend-title {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.map-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.72rem;
+  color: #f5efe6;
+}
+
+.map-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.map-legend-dot--pulse {
+  background: #ef4444;
+  box-shadow: 0 0 6px #ef4444;
+}
+
 /* Membentang penuh di atas peta supaya tinggi persen milik panel anaknya
    punya acuan. Sebelumnya `position: relative` tanpa tinggi membuat kotak ini
    setinggi 0, sehingga `max-height: 100%` pada kartu statistik ikut jadi 0 dan
@@ -613,6 +655,57 @@ body {
   right: 1rem;
   width: min(18rem, calc(100% - 2rem));
   z-index: 1000;
+}
+
+.stats-panel-close {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.stats-panel-close:hover {
+  background: rgba(255, 78, 0, 0.18);
+  color: #fff;
+}
+
+.stats-panel-reopen {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.9rem;
+  min-height: 38px;
+  border-radius: 9999px;
+  border: 1px solid rgba(249, 115, 22, 0.45);
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(8px);
+  color: #f8b26a;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Panel statistik hanya bisa ditutup lewat header × di layar lebar; di
+   mobile penutupannya tetap lewat tombol sheet ("Tutup") supaya tidak ada
+   dua kontrol yang bertentangan untuk hal yang sama. */
+@media (max-width: 639px) {
+  .stats-panel-close,
+  .stats-panel-reopen {
+    display: none;
+  }
 }
 
 .control-overlay--bottom-right {
@@ -2210,26 +2303,6 @@ body {
   border-radius: 999px;
   background: currentColor;
   box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08), 0 0 12px currentColor;
-}
-
-.advanced-toggle {
-  justify-self: start;
-  border: 0;
-  padding: 0.5rem 0;
-  background: transparent;
-  color: #ff8c42;
-  font-family: "Plus Jakarta Sans", sans-serif;
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: color 150ms ease;
-  margin-top: 0.25rem;
-}
-
-.advanced-toggle:hover {
-  color: #ffb36b;
 }
 
 .panel--matrix {
@@ -4829,6 +4902,94 @@ body {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
+.password-gate-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(5, 6, 8, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.password-gate-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  width: min(22rem, 100%);
+  padding: 1.5rem;
+}
+
+.password-gate-title {
+  margin: 0;
+  color: #f5efe6;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.password-gate-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f5efe6;
+  font-size: 0.9rem;
+  font-family: "Plus Jakarta Sans", sans-serif;
+}
+
+.password-gate-input:focus {
+  outline: none;
+  border-color: rgba(255, 142, 66, 0.6);
+  box-shadow: 0 0 0 3px rgba(255, 142, 66, 0.15);
+}
+
+.password-gate-error {
+  margin: 0;
+  color: #fecaca;
+  font-size: 0.78rem;
+}
+
+.password-gate-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+}
+
+.password-gate-cancel,
+.password-gate-confirm {
+  flex: 1 1 50%;
+  min-height: 44px;
+  border-radius: 0.5rem;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 150ms ease;
+}
+
+.password-gate-cancel {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f5efe6;
+}
+
+.password-gate-confirm {
+  border: 1px solid rgba(255, 78, 0, 0.4);
+  background: linear-gradient(135deg, #ff8a3d 0%, #ff4e00 100%);
+  color: #0b0c10;
+}
+
+.password-gate-cancel:hover,
+.password-gate-confirm:hover {
+  filter: brightness(1.08);
+}
+
 /* ============================================
    MOBILE OPTIMIZATION - Touch Targets & Responsive
    ============================================ */
@@ -5112,6 +5273,17 @@ a + a {
     grid-template-columns: 1fr;
   }
 
+  /* Label filter (Preset waktu, Provinsi, Satelit, dst) dan label tanggal
+     kustom kurang kontras di layar kecil dengan cahaya sekitar terang --
+     dinaikkan dari opacity ~0.5 ke ~0.62-0.65. */
+  .filter-group-label {
+    color: rgba(255, 255, 255, 0.65);
+  }
+
+  .field > span {
+    color: rgba(255, 255, 255, 0.62);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .side-rail {
       transition: none;
@@ -5245,7 +5417,10 @@ a + a {
   }
 
   .ui-toggle-btn {
-    bottom: 2.1rem;
+    /* calc(), bukan cuma env(): base clearance 2.1rem tetap dipertahankan di
+       perangkat tanpa home indicator, dan bertambah pada perangkat yang
+       punya (mis. iPhone tanpa tombol Home) supaya pil ini tidak tertutup. */
+    bottom: calc(2.1rem + env(safe-area-inset-bottom));
     left: auto;
     right: 0.75rem;
     transform: none;
@@ -5262,13 +5437,20 @@ a + a {
     margin-bottom: 2.1rem !important;
   }
 
+  /* Legenda warna hotspot dirancang untuk sidebar peta desktop yang lega;
+     di layar sempit ruangnya sudah diperebutkan kontrol zoom, tombol UI, dan
+     pil statistik, jadi legenda disembunyikan di sini. */
+  .map-legend {
+    display: none;
+  }
+
   .stats-sheet-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     position: fixed;
     right: 4rem;
-    bottom: 2.1rem;
+    bottom: calc(2.1rem + env(safe-area-inset-bottom));
     min-height: 44px;
     padding: 0 1rem;
     border-radius: 999px;

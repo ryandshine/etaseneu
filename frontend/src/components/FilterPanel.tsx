@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 import { SATELLITE_OPTIONS } from "../constants/satellites";
 import { TIME_PRESET_OPTIONS, type TimePreset } from "../constants/time-windows";
 
@@ -25,8 +23,6 @@ type FilterPanelProps = {
 };
 
 export function FilterPanel(props: FilterPanelProps) {
-  const [showAdvanced, setShowAdvanced] = useState(false);
-
   // Tanpa kelas `panel`/`glass-panel`: panel ini kini menyatu di dalam sidebar,
   // sehingga bingkai dan bayangan panel melayang justru membuat kartu di dalam
   // kartu. Penggulirannya diserahkan ke .side-scroll agar tidak ada dua area
@@ -118,6 +114,26 @@ export function FilterPanel(props: FilterPanelProps) {
       </section>
 
       <section className="filter-group">
+        <p className="filter-group-label">Satelit</p>
+        <div className="chip-list">
+          {SATELLITE_OPTIONS.map((satellite) => {
+            const isActive = props.selectedSatellites.includes(satellite.value);
+            return (
+              <label key={satellite.value} className={`chip${isActive ? " chip--active" : ""}`}>
+                <input
+                  type="checkbox"
+                  aria-label={satellite.label}
+                  checked={isActive}
+                  onChange={() => props.onToggleSatellite(satellite.value)}
+                />
+                <span>{satellite.label}</span>
+              </label>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="filter-group">
         <p className="filter-group-label">Rentang kustom</p>
         <div className="filter-date-grid">
           <label className="field">
@@ -147,38 +163,6 @@ export function FilterPanel(props: FilterPanelProps) {
         </div>
         {props.timePreset === "custom" && <p className="help-copy">Tanggal manual aktif.</p>}
       </section>
-
-      <button
-        type="button"
-        className="advanced-toggle"
-        onClick={() => setShowAdvanced((current) => !current)}
-      >
-        {showAdvanced ? "Sembunyikan filter lanjutan" : "Tampilkan satelit"}
-      </button>
-
-      {showAdvanced ? (
-        <>
-          <section className="filter-group">
-            <h3>Satelit</h3>
-            <div className="chip-list">
-              {SATELLITE_OPTIONS.map((satellite) => {
-                const isActive = props.selectedSatellites.includes(satellite.value);
-                return (
-                  <label key={satellite.value} className={`chip${isActive ? " chip--active" : ""}`}>
-                    <input
-                      type="checkbox"
-                      aria-label={satellite.label}
-                      checked={isActive}
-                      onChange={() => props.onToggleSatellite(satellite.value)}
-                    />
-                    <span>{satellite.label}</span>
-                  </label>
-                );
-              })}
-            </div>
-          </section>
-        </>
-      ) : null}
     </aside>
   );
 }

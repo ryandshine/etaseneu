@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 
 import { FilterPanel } from "./components/FilterPanel";
+import { PasswordGateModal } from "./components/PasswordGateModal";
 import { SidebarNav } from "./components/SidebarNav";
 import { useDashboardData } from "./hooks/useDashboardData";
 import { getTodayWIB, formatDateTimeWIB } from "./lib/date";
@@ -61,14 +62,10 @@ export default function App() {
   const [weatherOverlay, setWeatherOverlay] = useState<"temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null>(null);
   const [activeView, setActiveView] = useState<AppView>(readViewFromUrl);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const handleViewChange = (view: AppView) => {
-    if (view === "settings") {
-      const password = prompt("Masukkan password untuk mengakses Pengaturan:");
-      if (password !== "admin@5150") {
-        alert("Password salah!");
-        return;
-      }
-    }
+  const [passwordGateOpen, setPasswordGateOpen] = useState(false);
+  const [passwordGateError, setPasswordGateError] = useState<string | null>(null);
+
+  const commitViewChange = (view: AppView) => {
     setActiveView(view);
 
     // Pengaturan tidak ditulis ke URL supaya tautannya tidak bisa dipakai
@@ -83,6 +80,29 @@ export default function App() {
     window.history.pushState({}, "", query ? `?${query}` : window.location.pathname);
   };
 
+  const handleViewChange = (view: AppView) => {
+    if (view === "settings") {
+      setPasswordGateError(null);
+      setPasswordGateOpen(true);
+      return;
+    }
+    commitViewChange(view);
+  };
+
+  const handlePasswordGateSubmit = (password: string) => {
+    if (password !== "admin@5150") {
+      setPasswordGateError("Password salah!");
+      return;
+    }
+    setPasswordGateOpen(false);
+    commitViewChange("settings");
+  };
+
+  const handlePasswordGateCancel = () => {
+    setPasswordGateOpen(false);
+    setPasswordGateError(null);
+  };
+
   // Tombol back/forward browser mengubah URL tanpa memuat ulang halaman, jadi
   // state view harus ikut disesuaikan sendiri.
   useEffect(() => {
@@ -94,6 +114,9 @@ export default function App() {
   // Di mobile panel statistik disajikan sebagai sheet yang dibuka lewat tombol
   // ringkas; di desktop state ini tidak berpengaruh (panelnya selalu tampil).
   const [statsOpen, setStatsOpen] = useState(false);
+  // Terpisah dari statsOpen (yang hanya berarti di mobile): ini mengontrol
+  // apakah panel statistik desktop ditutup lewat tombol × di headernya.
+  const [statsPanelClosed, setStatsPanelClosed] = useState(false);
   const {
     endDate,
     exportDashboard,
@@ -434,16 +457,27 @@ export default function App() {
                   {statsOpen ? "Tutup" : `${(selectedWilker ? visibleHotspots.length : stats.hotspotCount).toLocaleString()} hotspot`}
                 </button>
 
+                {!statsPanelClosed && (
                 <aside
                   id="panel-statistik-hotspot"
                   className={`control-overlay control-overlay--top-right panel panel--stats${statsOpen ? " mobile-open" : ""}`}
                   style={{ maxHeight: '100%', overflowY: 'auto', overflowX: 'hidden' }}
                 >
                   <article className="metric-card" style={{ padding: '0.65rem 0.75rem' }}>
-                    <p className="metric-label" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.3rem', fontSize: '0.72rem' }}>
-                      Titik Panas (FRP)
-                      <span title="Kategori Intensitas Panas (FRP)&#10;&#10;Tinggi: > 30 MW&#10;Sedang: 10–30 MW&#10;Rendah: < 10 MW&#10;&#10;FRP (Fire Radiative Power) menunjukkan tingkat energi panas yang dipancarkan oleh hotspot yang terdeteksi satelit." style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '13px', height: '13px', borderRadius: '50%', border: '1px solid currentColor', fontSize: '9px', flexShrink: 0 }}>i</span>
-                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem', marginBottom: '0.3rem' }}>
+                      <p className="metric-label" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0, fontSize: '0.72rem' }}>
+                        Titik Panas (FRP)
+                        <span title="Kategori Intensitas Panas (FRP)&#10;&#10;Tinggi: > 30 MW&#10;Sedang: 10–30 MW&#10;Rendah: < 10 MW&#10;&#10;FRP (Fire Radiative Power) menunjukkan tingkat energi panas yang dipancarkan oleh hotspot yang terdeteksi satelit." style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '13px', height: '13px', borderRadius: '50%', border: '1px solid currentColor', fontSize: '9px', flexShrink: 0 }}>i</span>
+                      </p>
+                      <button
+                        type="button"
+                        className="stats-panel-close"
+                        onClick={() => setStatsPanelClosed(true)}
+                        aria-label="Tutup panel statistik"
+                      >
+                        ×
+                      </button>
+                    </div>
 
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
                       <strong className="metric-value" style={{ lineHeight: 1, fontSize: '2rem' }}>{stats.hotspotCount.toLocaleString()}</strong>
@@ -521,6 +555,18 @@ export default function App() {
                     )}
                   </article>
                 </aside>
+                )}
+
+                {statsPanelClosed && (
+                  <button
+                    type="button"
+                    className="stats-panel-reopen"
+                    onClick={() => setStatsPanelClosed(false)}
+                    aria-label="Tampilkan panel statistik"
+                  >
+                    {(selectedWilker ? visibleHotspots.length : stats.hotspotCount).toLocaleString()} hotspot
+                  </button>
+                )}
             </div>
 
             <button
@@ -579,6 +625,13 @@ export default function App() {
           </section>
         )}
       </main>
+
+      <PasswordGateModal
+        open={passwordGateOpen}
+        error={passwordGateError}
+        onSubmit={handlePasswordGateSubmit}
+        onCancel={handlePasswordGateCancel}
+      />
 
       {initialLoading.error && (
         <div className="loading-screen-overlay">

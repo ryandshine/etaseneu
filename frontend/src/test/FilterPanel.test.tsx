@@ -32,7 +32,8 @@ describe("FilterPanel", () => {
     expect(screen.getByRole("button", { name: /24 jam/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /custom/i }));
     expect(onTimePresetChange).toHaveBeenCalledWith("custom");
-    fireEvent.click(screen.getByRole("button", { name: /tampilkan satelit/i }));
+    // Filter satelit sekarang langsung terlihat, tanpa toggle "lanjutan".
+    expect(screen.getByText("Satelit")).toBeInTheDocument();
     expect(screen.getByLabelText("Dari")).toBeDisabled();
     expect(screen.getByLabelText("Ke")).toBeDisabled();
     // Daftar lapisan spasial tidak lagi dirender FilterPanel (hanya ada satu

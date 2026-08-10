@@ -520,6 +520,12 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
 
   return (
     <div className="map-frame">
+      <div className="map-legend">
+        <span className="map-legend-title">Legenda</span>
+        <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#ff8c42" }} />MODIS</div>
+        <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#facc15" }} />VIIRS</div>
+        <div className="map-legend-row"><span className="map-legend-dot map-legend-dot--pulse" />FRP tinggi (&gt;30MW)</div>
+      </div>
       <MapContainer
         center={[-2.5, 118]}
         zoom={5}
