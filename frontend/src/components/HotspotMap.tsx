@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { LocateFixed } from "lucide-react";
+import { Check, Copy, ExternalLink, LocateFixed } from "lucide-react";
 import { WindLayer } from "./WindLayer";
 import { WeatherOverlay } from "./WeatherOverlay";
 import {
@@ -438,6 +438,43 @@ type SpotWeather = {
   };
 };
 
+// Dipakai di popup hotspot maupun popup lokasi user -- salin koordinat ke
+// clipboard, atau buka titik yang sama di Google Maps (tautan biasa ke situs
+// mereka, bukan hotlink tile, jadi tidak melanggar ToS Google Maps).
+function CoordinateActions({ lat, lon }: { lat: number; lon: number }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    const text = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Beberapa browser/webview lama tidak dukung Clipboard API dan tidak
+      // ada fallback yang bermakna selain minta user salin manual.
+    }
+  };
+
+  return (
+    <div className="coord-actions">
+      <button type="button" className="coord-action-btn" onClick={() => void handleCopy()}>
+        {copied ? <Check size={12} /> : <Copy size={12} />}
+        {copied ? "Disalin!" : "Salin koordinat"}
+      </button>
+      <a
+        href={`https://www.google.com/maps?q=${lat},${lon}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="coord-action-btn"
+      >
+        <ExternalLink size={12} />
+        Google Maps
+      </a>
+    </div>
+  );
+}
+
 function HotspotWeatherPopup({ lat, lon }: { lat: number; lon: number }) {
   const [data, setData] = useState<SpotWeather | null>(null);
   const [loading, setLoading] = useState(true);
@@ -574,6 +611,7 @@ function HotspotPopupContent({ hotspot }: { hotspot: HotspotRecord }) {
           <dd>{formatTimestamp(hotspot.detectedAt)}</dd>
         </div>
       </dl>
+      <CoordinateActions lat={hotspot.latitude} lon={hotspot.longitude} />
       <HotspotWeatherPopup lat={hotspot.latitude} lon={hotspot.longitude} />
     </div>
   );
@@ -733,9 +771,13 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
                 <div style={{ fontSize: "12px", fontFamily: "sans-serif" }}>
                   <strong style={{ color: "#38bdf8" }}>Lokasi Anda</strong>
                   <div style={{ marginTop: "4px" }}>
+                    {userLocation.position.lat.toFixed(5)}, {userLocation.position.lon.toFixed(5)}
+                  </div>
+                  <div style={{ marginTop: "2px" }}>
                     Akurasi: <strong>±{Math.round(userLocation.position.accuracy)} m</strong>
                   </div>
                 </div>
+                <CoordinateActions lat={userLocation.position.lat} lon={userLocation.position.lon} />
                 {userWeatherAnchor ? (
                   <HotspotWeatherPopup lat={userWeatherAnchor.lat} lon={userWeatherAnchor.lon} />
                 ) : null}

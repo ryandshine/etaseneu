@@ -4804,6 +4804,37 @@ body {
   font-size: 0.74rem;
 }
 
+.coord-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(27, 15, 10, 0.1);
+}
+
+.coord-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: 0.3rem;
+  border: 1px solid rgba(27, 15, 10, 0.15);
+  background: rgba(27, 15, 10, 0.04);
+  color: #1b0f0a;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.coord-action-btn:hover {
+  background: rgba(255, 107, 0, 0.12);
+  border-color: rgba(255, 107, 0, 0.35);
+  color: #b94800;
+}
+
 .panel--legend {
   margin-top: 0;
   padding: 0.8rem;
