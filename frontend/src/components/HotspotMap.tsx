@@ -318,6 +318,43 @@ function useUserLocationWatch(active: boolean) {
   return { position, error, loading: active && !position && !error };
 }
 
+const USER_WEATHER_REFETCH_METERS = 500;
+
+function distanceMeters(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
+  const earthRadiusMeters = 6371000;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLon = ((b.lon - a.lon) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * earthRadiusMeters * Math.asin(Math.sqrt(h));
+}
+
+// GPS watchPosition mengirim titik baru tiap beberapa detik meski user diam
+// di tempat (jitter beberapa meter). Cuaca/AQI dianchor ke titik yang cuma
+// bergeser kalau lokasinya benar-benar berpindah signifikan, supaya popup
+// cuaca di marker lokasi user tidak memanggil /api/weather/spot berkali-kali
+// untuk pergeseran yang tidak berarti.
+function useThrottledWeatherAnchor(position: UserLocationFix | null) {
+  const [anchor, setAnchor] = useState<{ lat: number; lon: number } | null>(null);
+
+  useEffect(() => {
+    if (!position) {
+      setAnchor(null);
+      return;
+    }
+    setAnchor((current) => {
+      if (!current || distanceMeters(current, position) > USER_WEATHER_REFETCH_METERS) {
+        return { lat: position.lat, lon: position.lon };
+      }
+      return current;
+    });
+  }, [position]);
+
+  return anchor;
+}
+
 // Memusatkan peta ke lokasi user sekali saat titik GPS pertama datang, bukan
 // setiap update posisi -- supaya user tetap bebas menggeser peta sementara
 // penanda lokasinya terus bergerak mengikuti GPS di latar belakang.
@@ -546,6 +583,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
   const [rainyCoords, setRainyCoords] = useState<{ lat: number; lon: number; precipitation: number; label: string }[]>([]);
   const [showUserLocation, setShowUserLocation] = useState(false);
   const userLocation = useUserLocationWatch(showUserLocation);
+  const userWeatherAnchor = useThrottledWeatherAnchor(userLocation.position);
 
   useEffect(() => {
     const activeLayers = layers.filter(l => l.active);
@@ -661,6 +699,9 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
                     Akurasi: <strong>±{Math.round(userLocation.position.accuracy)} m</strong>
                   </div>
                 </div>
+                {userWeatherAnchor ? (
+                  <HotspotWeatherPopup lat={userWeatherAnchor.lat} lon={userWeatherAnchor.lon} />
+                ) : null}
               </Popup>
             </Marker>
           </>
