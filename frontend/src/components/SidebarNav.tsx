@@ -1,3 +1,16 @@
+// "loading" dipisahkan dari "warning" dengan sengaja: selama data status
+// belum tiba kita belum tahu kondisinya, dan menampilkannya sebagai
+// peringatan bikin user mengira sistem bermasalah padahal cuma belum
+// selesai memuat.
+type HealthStatus = "loading" | "normal" | "warning" | "error";
+
+const HEALTH_BADGE: Record<HealthStatus, { color: string; bg: string; label: string }> = {
+  loading: { color: "#9ca3af", bg: "rgba(156,163,175,0.15)", label: "..." },
+  normal: { color: "#10b981", bg: "rgba(16,185,129,0.15)", label: "OK" },
+  warning: { color: "#f59e0b", bg: "rgba(245,158,11,0.15)", label: "LATE" },
+  error: { color: "#ef4444", bg: "rgba(239,68,68,0.15)", label: "ERR" }
+};
+
 type SidebarNavProps = {
   // "kps" (detail satu KPS dibuka dari Buku Besar) bukan tujuan navigasi
   // sidebar, tapi activeView tetap perlu menerimanya supaya perbandingan
@@ -11,7 +24,7 @@ type SidebarNavProps = {
   lastSyncLabel: string;
   manualSyncBusy: boolean;
   prewarmBusy: boolean;
-  healthStatus: "normal" | "warning" | "error";
+  healthStatus: HealthStatus;
   healthLabel: string;
   schedulerStatusLabel: string;
   schedulerStatusColor: string;
@@ -116,17 +129,17 @@ export function SidebarNav({
                 i
               </span>
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0, padding: '0.15rem 0.5rem', borderRadius: '999px', backgroundColor: healthStatus === 'normal' ? 'rgba(16,185,129,0.15)' : healthStatus === 'warning' ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0, padding: '0.15rem 0.5rem', borderRadius: '999px', backgroundColor: HEALTH_BADGE[healthStatus].bg }}>
               <span style={{
                 width: '6px',
                 height: '6px',
                 borderRadius: '50%',
                 flexShrink: 0,
-                backgroundColor: healthStatus === 'normal' ? '#10b981' : healthStatus === 'warning' ? '#f59e0b' : '#ef4444',
-                boxShadow: `0 0 6px ${healthStatus === 'normal' ? '#10b981' : healthStatus === 'warning' ? '#f59e0b' : '#ef4444'}`
+                backgroundColor: HEALTH_BADGE[healthStatus].color,
+                boxShadow: `0 0 6px ${HEALTH_BADGE[healthStatus].color}`
               }} />
-              <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: healthStatus === 'normal' ? '#10b981' : healthStatus === 'warning' ? '#f59e0b' : '#ef4444' }}>
-                {healthStatus === 'normal' ? 'OK' : healthStatus === 'warning' ? 'LATE' : 'ERR'}
+              <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: HEALTH_BADGE[healthStatus].color }}>
+                {HEALTH_BADGE[healthStatus].label}
               </span>
             </div>
           </div>

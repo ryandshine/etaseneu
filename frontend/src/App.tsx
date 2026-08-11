@@ -259,10 +259,26 @@ export default function App() {
   );
 
   const historyYear = timeRange.endAt.getUTCFullYear() || parseInt(getTodayWIB().slice(0, 4), 10);
+  // storageStatus & schedulerMetrics baru terisi setelah request awal selesai.
+  // Selama masih null kita BELUM TAHU kondisinya. Menampilkan tebakan buruk
+  // ("fallback file", "Nonaktif", "never") di fase ini bikin user mengira
+  // sistem bermasalah padahal cuma belum selesai memuat -- jadi fase ini
+  // harus punya tampilannya sendiri, bukan menumpang cabang else.
+  const isStorageLoading = !storageStatus;
+  const isSchedulerLoading = !schedulerMetrics;
+
   // Label barisnya sudah "Database", jadi kata itu tidak perlu diulang di
   // nilainya -- di kolom sempit teksnya malah terpotong jadi "database onl".
-  const syncLabel = storageStatus?.database_enabled ? "online" : "fallback file";
-  const syncStatusLabel = storageStatus?.last_hotspot_sync_at ? "success" : "waiting";
+  const syncLabel = isStorageLoading
+    ? "memuat..."
+    : storageStatus.database_enabled
+      ? "online"
+      : "fallback file";
+  const syncStatusLabel = isStorageLoading
+    ? "memuat"
+    : storageStatus.last_hotspot_sync_at
+      ? "success"
+      : "waiting";
 
   const dynamicConfidenceStats = useMemo(() => {
     const stats: Record<string, { tinggi: number, sedang: number, rendah: number, total: number }> = {};
@@ -336,10 +352,13 @@ export default function App() {
   const intervalMs = (schedulerMetrics?.interval_hours || 3) * 60 * 60 * 1000;
   const nowMs = new Date().getTime();
 
-  let healthStatus: "normal" | "warning" | "error" = "normal";
+  let healthStatus: "loading" | "normal" | "warning" | "error" = "normal";
   let healthLabel = "Sinkronisasi Normal";
 
-  if (!schedulerMetrics || !schedulerMetrics.scheduler_enabled) {
+  if (isSchedulerLoading) {
+    healthStatus = "loading";
+    healthLabel = "Memuat status...";
+  } else if (!schedulerMetrics.scheduler_enabled) {
     healthStatus = "warning";
     healthLabel = "Scheduler Nonaktif";
   } else if ((schedulerMetrics.consecutive_failures ?? 0) > 1) {
@@ -363,6 +382,11 @@ export default function App() {
   }
 
   const syncTodayRatio = useMemo(() => {
+    // Tanpa penjaga ini rasionya dihitung dari jadwal default dan tampil
+    // sebagai angka meyakinkan (mis. "4 / 8") padahal belum ada datanya.
+    if (!schedulerMetrics) {
+      return "-";
+    }
     const scheduleHours = schedulerMetrics?.schedule_hours || [0, 3, 6, 9, 12, 15, 18, 21];
     const totalSlots = scheduleHours.length;
     let currentWibHour = 0;
@@ -395,7 +419,10 @@ export default function App() {
   }, [schedulerMetrics]);
 
   const schedulerStatusInfo = useMemo(() => {
-    if (!schedulerMetrics || !schedulerMetrics.scheduler_enabled) {
+    if (!schedulerMetrics) {
+      return { label: "Memuat...", color: "#9ca3af", bg: "rgba(156, 163, 175, 0.15)" };
+    }
+    if (!schedulerMetrics.scheduler_enabled) {
       return { label: "Nonaktif", color: "#6b7280", bg: "rgba(107, 114, 128, 0.15)" };
     }
     if ((schedulerMetrics.consecutive_failures ?? 0) > 1) {
@@ -460,7 +487,7 @@ export default function App() {
         onPrewarmHistory={() => void prewarmHistory()}
         syncLabel={syncLabel}
         syncStatusLabel={syncStatusLabel}
-        lastSyncLabel={lastHotspotSyncLabel}
+        lastSyncLabel={isStorageLoading ? "memuat..." : lastHotspotSyncLabel}
         manualSyncBusy={isTriggeringManualSync}
         prewarmBusy={isPrewarming}
         healthStatus={healthStatus}
@@ -469,8 +496,8 @@ export default function App() {
         schedulerStatusColor={schedulerStatusInfo.color}
         schedulerStatusBg={schedulerStatusInfo.bg}
         syncTodayRatio={syncTodayRatio}
-        syncInterval={schedulerMetrics?.interval_hours ? `${schedulerMetrics.interval_hours} Jam` : '3 Jam'}
-        nextScheduledSyncLabel={formatDateTimeWIB(schedulerMetrics?.next_scheduled_sync_at) || 'Belum Dijadwalkan'}
+        syncInterval={isSchedulerLoading ? '-' : schedulerMetrics.interval_hours ? `${schedulerMetrics.interval_hours} Jam` : '3 Jam'}
+        nextScheduledSyncLabel={isSchedulerLoading ? '-' : formatDateTimeWIB(schedulerMetrics.next_scheduled_sync_at) || 'Belum Dijadwalkan'}
         latestHotspotTimeLabel={latestHotspotTimeLabel}
         dataAgeLabel={dataAgeLabel}
         hasLatestHotspot={!!latestHotspot}

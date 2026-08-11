@@ -286,6 +286,34 @@ describe("App", () => {
     window.history.replaceState({}, "", "/");
   });
 
+  it("shows a loading state instead of a false 'fallback file' status while status data is in flight", async () => {
+    // Fase "belum tiba" dulu ditampilkan memakai cabang else yang sama dengan
+    // kondisi buruk, jadi panel sempat menyatakan database fallback dan
+    // scheduler nonaktif padahal keduanya sehat -- cuma requestnya belum
+    // selesai. Request status sengaja digantung di sini supaya fase itu bisa
+    // diperiksa.
+    const neverResolves = new Promise<Response>(() => {});
+    const baseImplementation = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => {
+      const url = String(input);
+      if (url === "/api/storage/status" || url === "/api/scheduler/metrics") {
+        return neverResolves;
+      }
+      return baseImplementation(input, init);
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      await vi.dynamicImportSettled();
+    });
+
+    expect(screen.getAllByText("memuat...").length).toBeGreaterThan(0);
+    expect(screen.queryByText("fallback file")).not.toBeInTheDocument();
+    expect(screen.queryByText("Nonaktif")).not.toBeInTheDocument();
+    expect(screen.queryByText("never")).not.toBeInTheDocument();
+  });
+
   it("restores the matrix view from the URL on load", async () => {
     window.history.replaceState({}, "", "/?view=matrix");
     render(<App />);
