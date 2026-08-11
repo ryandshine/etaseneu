@@ -190,9 +190,12 @@ export interface ApiClient {
   getHotspots: (params: HotspotQueryParams) => Promise<HotspotCollectionResponse>;
   getStats: (params: HotspotQueryParams) => Promise<StatsResponse>;
   getHistoryStatus: (params: HotspotQueryParams & { year: number }) => Promise<HistoryStatusResponse>;
-  prewarmHistory: (params: HotspotQueryParams & { year: number }) => Promise<HistoryStatusResponse>;
+  prewarmHistory: (
+    params: HotspotQueryParams & { year: number },
+    adminKey?: string | null
+  ) => Promise<HistoryStatusResponse>;
   getGeojsonStatus: () => Promise<GeoJsonStatusResponse>;
   getStorageStatus: () => Promise<StorageStatusResponse>;
   getSchedulerMetrics: () => Promise<SchedulerMetricsResponse>;
-  triggerManualSync: () => Promise<ManualSyncResponse>;
+  triggerManualSync: (adminKey?: string | null) => Promise<ManualSyncResponse>;
 }

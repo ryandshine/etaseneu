@@ -27,8 +27,16 @@ describe("App", () => {
 
   beforeEach(() => {
     schedulerMetricsCallCount = 0;
-    fetchMock.mockImplementation(async (input) => {
+    fetchMock.mockImplementation(async (input, init) => {
       const url = String(input);
+
+      if (url === "/api/auth/verify") {
+        const headers = new Headers(init?.headers);
+        const key = headers.get("X-Admin-Key");
+        return key === "correct-admin-key"
+          ? new Response(JSON.stringify({ ok: true }), { status: 200 })
+          : new Response(JSON.stringify({ detail: "Admin key tidak valid." }), { status: 401 });
+      }
 
       if (url === "/api/layers?view=preview") {
         return new Response(JSON.stringify({
@@ -433,5 +441,39 @@ describe("App", () => {
     expect(
       fetchMock.mock.calls.some(([input]) => String(input).includes("/api/cache/history/prewarm"))
     ).toBe(true);
+  });
+
+  it("verifies the settings password against the backend instead of a hardcoded string", async () => {
+    render(<App />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /pengaturan/i }));
+    });
+
+    const passwordInput = screen.getByLabelText("Password");
+    const submitButton = screen.getByRole("button", { name: /lanjut/i });
+
+    await act(async () => {
+      fireEvent.change(passwordInput, { target: { value: "wrong-guess" } });
+      fireEvent.click(submitButton);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      fetchMock.mock.calls.some(([input]) => String(input) === "/api/auth/verify")
+    ).toBe(true);
+    expect(await screen.findByText("Password salah!")).toBeInTheDocument();
+    // Belum masuk ke Pengaturan -- gerbangnya menolak dengan benar.
+    expect(screen.queryByText("Unggah Berkas GeoJSON Baru")).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.change(passwordInput, { target: { value: "correct-admin-key" } });
+      fireEvent.click(screen.getByRole("button", { name: /lanjut/i }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText("Unggah Berkas GeoJSON Baru")).toBeInTheDocument();
   });
 });

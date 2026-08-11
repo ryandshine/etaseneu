@@ -412,10 +412,19 @@ async def get_rain_check(
         return []
 
     settings = get_settings()
+    raw_parts = [p for p in coords.split(";") if p.strip()]
+    # Pemakaian nyata (cek hujan di pusat tiap layer aktif) tidak pernah
+    # butuh lebih dari segelintir titik. Batas ini jaga-jaga supaya query
+    # dengan ribuan koordinat tidak membebani Open-Meteo & server ini.
+    max_points = 20
+    if len(raw_parts) > max_points:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Terlalu banyak koordinat (maks {max_points}).",
+        )
+
     points = []
-    for p in coords.split(";"):
-        if not p.strip():
-            continue
+    for p in raw_parts:
         try:
             lat_str, lon_str = p.split(",")
             points.append((float(lat_str), float(lon_str)))

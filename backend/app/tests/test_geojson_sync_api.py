@@ -42,9 +42,11 @@ async def _request_geojson_status() -> tuple[int, dict]:
 
 
 async def _request_geojson_refresh() -> tuple[int, dict]:
+    from app.core.auth import require_admin_key
     from app.main import create_app
 
     app = create_app()
+    app.dependency_overrides[require_admin_key] = lambda: None
     messages: list[dict] = []
     request_sent = False
 
@@ -149,8 +151,10 @@ def test_geojson_upload_endpoint(monkeypatch, tmp_path) -> None:
 
     # Mock refresh_geojson to prevent actual database sync during test
     monkeypatch.setattr(HotspotService, "refresh_geojson", lambda self: {"files_scanned": 1})
-    
+
     app = create_app()
+    from app.core.auth import require_admin_key
+    app.dependency_overrides[require_admin_key] = lambda: None
     client = TestClient(app)
 
     # Mock the HotspotService init to use the temporary path for shape files

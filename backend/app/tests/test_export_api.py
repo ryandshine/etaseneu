@@ -38,9 +38,13 @@ async def _request_export(query_string: bytes) -> tuple[int, list[dict]]:
 
 
 async def _request_cache_refresh() -> tuple[int, bytes]:
+    from app.core.auth import require_admin_key
     from app.main import create_app
 
     app = create_app()
+    # Endpoint admin sekarang butuh X-Admin-Key; test ini menguji perilaku
+    # cache-nya, bukan gerbang autentikasinya, jadi dependency-nya di-override.
+    app.dependency_overrides[require_admin_key] = lambda: None
     messages: list[dict] = []
     request_sent = False
 

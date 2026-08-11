@@ -3,9 +3,10 @@ import type { GeoJsonStatusResponse } from "../types/api";
 
 type SettingsPanelProps = {
   onRefreshLayers: () => void;
+  adminKey: string | null;
 };
 
-export function SettingsPanel({ onRefreshLayers }: SettingsPanelProps) {
+export function SettingsPanel({ onRefreshLayers, adminKey }: SettingsPanelProps) {
   const [registryStatus, setRegistryStatus] = useState<GeoJsonStatusResponse | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -142,6 +143,9 @@ export function SettingsPanel({ onRefreshLayers }: SettingsPanelProps) {
     });
 
     xhr.open("POST", "/api/geojson/upload");
+    if (adminKey) {
+      xhr.setRequestHeader("X-Admin-Key", adminKey);
+    }
     xhr.send(formData);
   };
 

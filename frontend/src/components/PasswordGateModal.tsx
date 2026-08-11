@@ -3,14 +3,15 @@ import { useEffect, useState } from "react";
 type PasswordGateModalProps = {
   open: boolean;
   error: string | null;
+  verifying?: boolean;
   onSubmit: (password: string) => void;
   onCancel: () => void;
 };
 
-// Pengganti window.prompt()/alert() bawaan browser. Catatan penting: password
-// yang dicocokkan tetap hardcoded di App.tsx, jadi ini bukan pengaman
-// sungguhan -- hanya menyamakan tampilan gerbang dengan desain aplikasi.
-export function PasswordGateModal({ open, error, onSubmit, onCancel }: PasswordGateModalProps) {
+// Pengganti window.prompt()/alert() bawaan browser. Password yang diketik
+// diverifikasi ke backend (POST /api/auth/verify), bukan dicocokkan ke
+// string hardcoded di sini -- lihat App.tsx.
+export function PasswordGateModal({ open, error, verifying, onSubmit, onCancel }: PasswordGateModalProps) {
   const [password, setPassword] = useState("");
 
   useEffect(() => {
@@ -43,17 +44,18 @@ export function PasswordGateModal({ open, error, onSubmit, onCancel }: PasswordG
           type="password"
           autoFocus
           value={password}
+          disabled={verifying}
           onChange={(event) => setPassword(event.currentTarget.value)}
           className="password-gate-input"
           aria-label="Password"
         />
         {error ? <p className="password-gate-error">{error}</p> : null}
         <div className="password-gate-actions">
-          <button type="button" className="password-gate-cancel" onClick={onCancel}>
+          <button type="button" className="password-gate-cancel" onClick={onCancel} disabled={verifying}>
             Batal
           </button>
-          <button type="submit" className="password-gate-confirm">
-            Lanjut
+          <button type="submit" className="password-gate-confirm" disabled={verifying}>
+            {verifying ? "Memverifikasi..." : "Lanjut"}
           </button>
         </div>
       </form>

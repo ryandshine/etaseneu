@@ -72,11 +72,16 @@ function toHistoryQueryRecord(
   };
 }
 
-async function fetchJson<T>(path: string, method = "GET"): Promise<T> {
+async function fetchJson<T>(
+  path: string,
+  method = "GET",
+  extraHeaders?: Record<string, string>
+): Promise<T> {
   const response = await fetch(path, {
     method,
     headers: {
-      Accept: "application/json"
+      Accept: "application/json",
+      ...extraHeaders
     }
   });
 
@@ -85,6 +90,10 @@ async function fetchJson<T>(path: string, method = "GET"): Promise<T> {
   }
 
   return (await response.json()) as T;
+}
+
+function adminHeaders(adminKey?: string | null): Record<string, string> {
+  return adminKey ? { "X-Admin-Key": adminKey } : {};
 }
 
 function toLayerQueryRecord(view?: "preview" | "full"): Record<string, QueryValue> | undefined {
@@ -128,14 +137,16 @@ export function createApiClient(baseUrl = "/api"): ApiClient {
       fetchJson<HistoryStatusResponse>(
         withQuery(endpoints.cacheHistoryStatus, toHistoryQueryRecord(params)),
       ),
-    prewarmHistory: (params) =>
+    prewarmHistory: (params, adminKey) =>
       fetchJson<HistoryStatusResponse>(
         withQuery(endpoints.cacheHistoryPrewarm, toHistoryQueryRecord(params)),
         "POST",
+        adminHeaders(adminKey),
       ),
     getGeojsonStatus: () => fetchJson<GeoJsonStatusResponse>(endpoints.geojsonStatus),
     getStorageStatus: () => fetchJson<StorageStatusResponse>(endpoints.storageStatus),
     getSchedulerMetrics: () => fetchJson<SchedulerMetricsResponse>(endpoints.schedulerMetrics),
-    triggerManualSync: () => fetchJson<ManualSyncResponse>(endpoints.schedulerSync, "POST")
+    triggerManualSync: (adminKey) =>
+      fetchJson<ManualSyncResponse>(endpoints.schedulerSync, "POST", adminHeaders(adminKey))
   };
 }

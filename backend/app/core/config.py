@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:5173"
     nasa_firms_api_key: str = ""
     database_url: str = ""
+    # Kosong secara default = tolak semua aksi admin (fail closed), bukan
+    # izinkan semua. Endpoint yang butuh ini lihat app/core/auth.py.
+    admin_api_key: str = ""
     shp_dir: str = "../shp"
     cache_dir: str = ".cache"
     cache_ttl_hours: int = 24

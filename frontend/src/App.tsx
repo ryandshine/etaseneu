@@ -92,6 +92,12 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [passwordGateOpen, setPasswordGateOpen] = useState(false);
   const [passwordGateError, setPasswordGateError] = useState<string | null>(null);
+  const [passwordGateVerifying, setPasswordGateVerifying] = useState(false);
+  // Disimpan di memori (bukan localStorage) selama sesi tab ini saja --
+  // dikirim sebagai header X-Admin-Key ke endpoint admin (upload geojson,
+  // sync manual, prewarm). Backend yang beneran memvalidasi, bukan cuma
+  // dicek string di JS seperti sebelumnya.
+  const [adminKey, setAdminKey] = useState<string | null>(null);
 
   const commitViewChange = (view: AppView) => {
     setActiveView(view);
@@ -133,13 +139,30 @@ export default function App() {
     window.history.pushState({}, "", `?${params.toString()}`);
   };
 
-  const handlePasswordGateSubmit = (password: string) => {
-    if (password !== "admin@5150") {
-      setPasswordGateError("Password salah!");
-      return;
+  const handlePasswordGateSubmit = async (password: string) => {
+    setPasswordGateError(null);
+    setPasswordGateVerifying(true);
+    try {
+      const response = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "X-Admin-Key": password }
+      });
+      if (response.ok) {
+        setAdminKey(password);
+        setPasswordGateOpen(false);
+        commitViewChange("settings");
+        return;
+      }
+      setPasswordGateError(
+        response.status === 503
+          ? "Admin API belum dikonfigurasi di server."
+          : "Password salah!"
+      );
+    } catch {
+      setPasswordGateError("Gagal menghubungi server. Coba lagi.");
+    } finally {
+      setPasswordGateVerifying(false);
     }
-    setPasswordGateOpen(false);
-    commitViewChange("settings");
   };
 
   const handlePasswordGateCancel = () => {
@@ -195,7 +218,7 @@ export default function App() {
     updateDate,
     initialLoading,
     retryInitialLoad
-  } = useDashboardData(activeView);
+  } = useDashboardData(activeView, adminKey);
 
   const provinceOptions = useMemo(() => {
     const provinces = hotspots
@@ -684,7 +707,7 @@ export default function App() {
         ) : (
           <section aria-label="Settings workspace" className="workspace-stage">
             <Suspense fallback={<ViewLoader label="Memuat pengaturan..." />}>
-              <SettingsPanel onRefreshLayers={() => void retryInitialLoad()} />
+              <SettingsPanel onRefreshLayers={() => void retryInitialLoad()} adminKey={adminKey} />
             </Suspense>
           </section>
         )}
@@ -693,7 +716,8 @@ export default function App() {
       <PasswordGateModal
         open={passwordGateOpen}
         error={passwordGateError}
-        onSubmit={handlePasswordGateSubmit}
+        verifying={passwordGateVerifying}
+        onSubmit={(password) => void handlePasswordGateSubmit(password)}
         onCancel={handlePasswordGateCancel}
       />
 

@@ -7,8 +7,9 @@ POST /api/scheduler/sync    — trigger manual sync sekarang
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends
 
+from app.core.auth import require_admin_key
 from app.core.config import get_settings
 from app.services import scheduler as scheduler_service
 from app.services.hotspot_service import HotspotService
@@ -50,7 +51,7 @@ async def scheduler_metrics() -> dict[str, object]:
 
 
 @router.post("/sync")
-async def trigger_manual_sync() -> dict:
+async def trigger_manual_sync(_: None = Depends(require_admin_key)) -> dict:
     """Trigger sync manual sekarang secara sinkron."""
     settings = get_settings()
 

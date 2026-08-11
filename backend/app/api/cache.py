@@ -1,8 +1,11 @@
 import asyncio
 import os
 import shutil
-from fastapi import APIRouter, Query, UploadFile, File, HTTPException
+from pathlib import Path
 
+from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException
+
+from app.core.auth import require_admin_key
 from app.services.hotspot_service import HotspotService
 
 
@@ -10,7 +13,7 @@ router = APIRouter()
 
 
 @router.post("/cache/refresh")
-async def refresh_cache() -> dict[str, object]:
+async def refresh_cache(_: None = Depends(require_admin_key)) -> dict[str, object]:
     """Buang seluruh cache hasil query hotspot (entri database + file).
 
     Sebelumnya endpoint ini hanya mengembalikan {"status": "queued"} tanpa
@@ -35,7 +38,7 @@ async def geojson_status() -> dict[str, object]:
 
 
 @router.post("/geojson/refresh")
-async def geojson_refresh() -> dict[str, object]:
+async def geojson_refresh(_: None = Depends(require_admin_key)) -> dict[str, object]:
     service = HotspotService()
     summary = service.refresh_geojson()
     service.layer_service.clear_caches()
@@ -43,9 +46,16 @@ async def geojson_refresh() -> dict[str, object]:
 
 
 @router.post("/geojson/upload")
-async def upload_geojson(file: UploadFile = File(...)) -> dict[str, object]:
-    if not file.filename.endswith(".geojson"):
+async def upload_geojson(file: UploadFile = File(...), _: None = Depends(require_admin_key)) -> dict[str, object]:
+    if not file.filename or not file.filename.endswith(".geojson"):
         raise HTTPException(status_code=400, detail="Hanya file dengan ekstensi .geojson yang diperbolehkan.")
+
+    # Path.name membuang komponen direktori apa pun (mis. "../../etc/x.geojson"
+    # -> "x.geojson") -- filename dari upload adalah input pengguna, jangan
+    # pernah dipakai langsung sebagai path tanpa ini.
+    safe_filename = Path(file.filename).name
+    if not safe_filename or safe_filename in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Nama file tidak valid.")
 
     service = HotspotService()
     shp_dir = service.layer_service.shp_dir
@@ -63,7 +73,7 @@ async def upload_geojson(file: UploadFile = File(...)) -> dict[str, object]:
         raise HTTPException(status_code=500, detail=f"Gagal membersihkan file geojson lama: {str(e)}")
 
     # 2. Write new file in chunks
-    target_path = shp_dir / file.filename
+    target_path = shp_dir / safe_filename
     try:
         with open(target_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -85,13 +95,13 @@ async def upload_geojson(file: UploadFile = File(...)) -> dict[str, object]:
 
     return {
         "status": "success",
-        "file_name": file.filename,
+        "file_name": safe_filename,
         "summary": summary
     }
 
 
 @router.post("/polygon-hotspot-summary/refresh")
-async def polygon_hotspot_summary_refresh() -> dict[str, int]:
+async def polygon_hotspot_summary_refresh(_: None = Depends(require_admin_key)) -> dict[str, int]:
     service = HotspotService()
     return service.refresh_polygon_hotspot_summaries()
 
@@ -115,6 +125,7 @@ async def cache_history_prewarm(
     year: int = Query(default=2026, ge=2000, le=2100),
     satellites: list[str] = Query(default=[]),
     active_layers: list[str] = Query(default=[]),
+    _: None = Depends(require_admin_key),
 ) -> dict[str, object]:
     service = HotspotService()
     return await asyncio.shield(

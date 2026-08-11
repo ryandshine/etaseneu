@@ -240,7 +240,10 @@ function withQuery(
   return queryString ? `${path}?${queryString}` : path;
 }
 
-export function useDashboardData(activeView: "map" | "matrix" | "settings" | "kps" = "map") {
+export function useDashboardData(
+  activeView: "map" | "matrix" | "settings" | "kps" = "map",
+  adminKey: string | null = null
+) {
   const today = getCurrentDateWIB();
   const [layers, setLayers] = useState<DashboardLayer[]>([]);
   const [hotspots, setHotspots] = useState<DashboardHotspot[]>([]);
@@ -720,10 +723,14 @@ export function useDashboardData(activeView: "map" | "matrix" | "settings" | "kp
 
     try {
       const historyYear = timeRange.endAt.getUTCFullYear() || parseInt(getTodayWIB().slice(0, 4), 10);
-      const response = await api.prewarmHistory({ ...queryParams, year: historyYear });
+      const response = await api.prewarmHistory({ ...queryParams, year: historyYear }, adminKey);
       setHistoryStatus(response);
     } catch {
-      setExportError("History prewarm is unavailable.");
+      setExportError(
+        adminKey
+          ? "History prewarm is unavailable."
+          : "Perlu masuk lewat menu Pengaturan dulu untuk memicu prewarm."
+      );
     } finally {
       setIsPrewarming(false);
     }
@@ -734,10 +741,14 @@ export function useDashboardData(activeView: "map" | "matrix" | "settings" | "kp
     setSyncError(null);
 
     try {
-      await api.triggerManualSync();
+      await api.triggerManualSync(adminKey);
       setClockTick((current) => current + 1);
     } catch {
-      setSyncError("Manual sync is unavailable.");
+      setSyncError(
+        adminKey
+          ? "Manual sync is unavailable."
+          : "Perlu masuk lewat menu Pengaturan dulu untuk memicu sync manual."
+      );
     } finally {
       setIsTriggeringManualSync(false);
     }

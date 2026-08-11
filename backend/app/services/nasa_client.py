@@ -1,10 +1,13 @@
 import csv
+import logging
 from collections.abc import Iterable
 
 import httpx
 from fastapi import HTTPException
 
 from app.core.config import get_settings
+
+logger = logging.getLogger("hotspot.nasa_client")
 
 
 class NasaFirmsClient:
@@ -19,6 +22,13 @@ class NasaFirmsClient:
             try:
                 response.raise_for_status()
             except httpx.HTTPStatusError as exc:
-                detail = response.text.strip() or "NASA FIRMS request failed."
-                raise HTTPException(status_code=502, detail=detail) from exc
+                # Body error NASA (dan pesan exception httpx) bisa meng-echo
+                # URL yang diminta -- URL itu berisi MAP_KEY NASA FIRMS di
+                # path-nya (begitu desain API mereka). Jangan pernah teruskan
+                # mentah ke response publik; log detailnya di server saja.
+                logger.error("NASA FIRMS request failed (%s): %s", response.status_code, response.text.strip())
+                raise HTTPException(
+                    status_code=502,
+                    detail="Gagal mengambil data dari NASA FIRMS. Coba lagi beberapa saat lagi.",
+                ) from exc
             return list(csv.DictReader(response.text.splitlines()))

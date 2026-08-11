@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.auth import router as auth_router
 from app.api.cache import router as cache_router
 from app.api.export import router as export_router
 from app.api.hotspots import router as hotspots_router
@@ -13,6 +14,7 @@ from app.api.weather import router as weather_router
 
 
 router = APIRouter()
+router.include_router(auth_router)
 router.include_router(layers_router)
 router.include_router(polygons_router)
 router.include_router(hotspots_router)

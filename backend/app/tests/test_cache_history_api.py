@@ -42,9 +42,11 @@ async def _request_cache_history_status() -> tuple[int, dict]:
 
 
 async def _request_cache_history_prewarm() -> tuple[int, dict]:
+    from app.core.auth import require_admin_key
     from app.main import create_app
 
     app = create_app()
+    app.dependency_overrides[require_admin_key] = lambda: None
     messages: list[dict] = []
     request_sent = False
 
@@ -120,9 +122,11 @@ async def _request_storage_status() -> tuple[int, dict]:
 
 
 async def _request_polygon_hotspot_summary_refresh() -> tuple[int, dict]:
+    from app.core.auth import require_admin_key
     from app.main import create_app
 
     app = create_app()
+    app.dependency_overrides[require_admin_key] = lambda: None
     messages: list[dict] = []
     request_sent = False
 
