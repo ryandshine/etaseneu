@@ -26,7 +26,11 @@ def protected_app(monkeypatch):
 
 def test_fails_closed_when_admin_key_not_configured(protected_app, monkeypatch):
     app, set_key = protected_app
-    monkeypatch.delenv("ADMIN_API_KEY", raising=False)
+    # Diset kosong, bukan delenv: menghapus env var saja tidak cukup karena
+    # Pydantic masih membaca backend/.env milik developer (yang biasanya
+    # berisi ADMIN_API_KEY). Env var kosong menang atas isi .env, jadi test
+    # ini menguji kode -- bukan konfigurasi lokal siapa pun yang menjalankannya.
+    monkeypatch.setenv("ADMIN_API_KEY", "")
     get_settings.cache_clear()
 
     client = TestClient(app)

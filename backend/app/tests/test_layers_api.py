@@ -3,13 +3,14 @@ import json
 from urllib.parse import urlsplit
 
 
-async def _request_layers() -> tuple[int, dict]:
+async def _request_layers(query: str = "", admin_key: str | None = None) -> tuple[int, dict]:
     from app.main import create_app
 
     app = create_app()
     messages: list[dict] = []
     request_sent = False
 
+    headers = [(b"x-admin-key", admin_key.encode("utf-8"))] if admin_key else []
     scope = {
         "type": "http",
         "asgi": {"version": "3.0"},
@@ -18,8 +19,8 @@ async def _request_layers() -> tuple[int, dict]:
         "scheme": "http",
         "path": "/api/layers",
         "raw_path": b"/api/layers",
-        "query_string": b"",
-        "headers": [],
+        "query_string": query.encode("utf-8"),
+        "headers": headers,
         "client": ("127.0.0.1", 12345),
         "server": ("testserver", 80),
     }
@@ -42,7 +43,7 @@ async def _request_layers() -> tuple[int, dict]:
     return start["status"], payload
 
 
-async def _request_layer_detail(path: str) -> tuple[int, dict]:
+async def _request_layer_detail(path: str, admin_key: str | None = None) -> tuple[int, dict]:
     from app.main import create_app
 
     app = create_app()
@@ -50,6 +51,7 @@ async def _request_layer_detail(path: str) -> tuple[int, dict]:
     request_sent = False
 
     parsed = urlsplit(path)
+    headers = [(b"x-admin-key", admin_key.encode("utf-8"))] if admin_key else []
     scope = {
         "type": "http",
         "asgi": {"version": "3.0"},
@@ -59,7 +61,7 @@ async def _request_layer_detail(path: str) -> tuple[int, dict]:
         "path": parsed.path,
         "raw_path": parsed.path.encode("utf-8"),
         "query_string": parsed.query.encode("utf-8"),
-        "headers": [],
+        "headers": headers,
         "client": ("127.0.0.1", 12345),
         "server": ("testserver", 80),
     }
@@ -87,8 +89,9 @@ def test_layers_endpoint_returns_detected_layers(monkeypatch) -> None:
 
     get_settings.cache_clear()
     monkeypatch.setenv("SHP_DIR", "app/tests/fixtures/shp")
+    monkeypatch.setenv("ADMIN_API_KEY", "kunci-rahasia")
     try:
-        status, body = asyncio.run(_request_layers())
+        status, body = asyncio.run(_request_layers(admin_key="kunci-rahasia"))
 
         assert status == 200
         assert body["count"] == 1
@@ -103,12 +106,60 @@ def test_layer_detail_endpoint_returns_preview_geometry(monkeypatch) -> None:
 
     get_settings.cache_clear()
     monkeypatch.setenv("SHP_DIR", "app/tests/fixtures/shp")
+    monkeypatch.setenv("ADMIN_API_KEY", "kunci-rahasia")
     try:
-        status, body = asyncio.run(_request_layer_detail("/api/layers/sample_area?view=preview"))
+        status, body = asyncio.run(
+            _request_layer_detail("/api/layers/sample_area?view=preview", admin_key="kunci-rahasia")
+        )
 
         assert status == 200
         assert body["id"] == "sample_area"
         assert body["geojson_mode"] == "preview"
         assert len(body["geojson"]["features"]) == 1
+    finally:
+        get_settings.cache_clear()
+
+
+def test_layers_preview_stays_public_for_the_map(monkeypatch) -> None:
+    """Peta publik memanggil ini saat halaman dibuka -- jangan sampai terkunci."""
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("SHP_DIR", "app/tests/fixtures/shp")
+    monkeypatch.setenv("ADMIN_API_KEY", "kunci-rahasia")
+    try:
+        status, body = asyncio.run(_request_layers(query="view=preview"))
+
+        assert status == 200
+        assert body["layers"][0]["geojson_mode"] == "preview"
+    finally:
+        get_settings.cache_clear()
+
+
+def test_layers_full_mode_requires_admin_key(monkeypatch) -> None:
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("SHP_DIR", "app/tests/fixtures/shp")
+    monkeypatch.setenv("ADMIN_API_KEY", "kunci-rahasia")
+    try:
+        status, _ = asyncio.run(_request_layers())
+        assert status == 401
+
+        status, _ = asyncio.run(_request_layers(admin_key="tebakan-salah"))
+        assert status == 401
+    finally:
+        get_settings.cache_clear()
+
+
+def test_layer_detail_requires_admin_key_even_in_preview_mode(monkeypatch) -> None:
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("SHP_DIR", "app/tests/fixtures/shp")
+    monkeypatch.setenv("ADMIN_API_KEY", "kunci-rahasia")
+    try:
+        status, _ = asyncio.run(_request_layer_detail("/api/layers/sample_area?view=preview"))
+        assert status == 401
     finally:
         get_settings.cache_clear()
