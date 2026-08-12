@@ -217,3 +217,42 @@ def test_geojson_sync_service_marks_missing_features_and_removed_files_inactive(
     assert sum(1 for row in sample_rows if row["is_active"]) == 1
     assert sum(1 for row in sample_rows if not row["is_active"]) == 1
     assert any(row["properties_raw"]["name"] == "Remove" and not row["is_active"] for row in sample_rows)
+
+
+def test_field_value_prefers_perhutanan_sosial_names_then_hutan_adat():
+    """Dataset Hutan Adat memakai nama kolom berbeda (NAMA_MHA, NOMOR_SK).
+    Alias tidak boleh menggeser prioritas kolom Perhutanan Sosial yang sudah ada.
+    """
+    from app.services.geojson_sync_service import _field_value
+
+    ps = {"LEMBAGA": "LPHD Contoh", "NAMA_MHA": "MHA Contoh"}
+    assert _field_value(ps, "LEMBAGA", "lembaga", "NAMA_MHA", "NAMOBJ") == "LPHD Contoh"
+
+    ha = {"NAMA_MHA": "MHA Mukim Kunyet", "NOMOR_SK": "SK.9527/2023"}
+    assert _field_value(ha, "LEMBAGA", "lembaga", "NAMA_MHA", "NAMOBJ") == "MHA Mukim Kunyet"
+    assert _field_value(ha, "NO_SK", "NOMOR_SK") == "SK.9527/2023"
+
+
+def test_hutan_adat_record_gets_a_name_and_sk():
+    """Sebelum alias ditambahkan, seluruh 175 polygon Hutan Adat masuk tanpa
+    nama -- dan nama itu dipakai sebagai identitas baris di hampir semua
+    tampilan, termasuk fitur Cek Titik."""
+    from app.services.geojson_sync_service import _field_value
+
+    properties = {
+        "NAMA_MHA": "MHA Mukim Kunyet",
+        "NOMOR_SK": "SK.9527/MENLHK-PSKL/PKTHA/PSL.1/9/2023",
+        "PROVINSI": "Aceh",
+        "KABUPATEN": "Pidie",
+        "KECAMATAN": "Padang Tiji",
+        "SKEMA": "Hutan Adat",
+        "LUAS_CYL": 1278.29857049,
+    }
+
+    assert _field_value(properties, "LEMBAGA", "lembaga", "NAMA_MHA", "NAMOBJ") == "MHA Mukim Kunyet"
+    assert _field_value(properties, "NO_SK", "NOMOR_SK").startswith("SK.9527")
+    assert _field_value(properties, "NAMA_PROV", "NAMA_PROVINSI", "PROVINSI") == "Aceh"
+    assert _field_value(properties, "NAMA_KAB", "KABUPATEN") == "Pidie"
+    assert _field_value(
+        properties, "LuasFinal", "LUASFINAL", "LUAS_FINAL", "LUAS_CYL", "LUAS_SK"
+    ).startswith("1278")

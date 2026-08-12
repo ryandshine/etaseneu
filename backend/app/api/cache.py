@@ -3,7 +3,7 @@ import os
 import shutil
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, Form, Query, UploadFile, File, HTTPException
 
 from app.core.auth import require_admin_key
 from app.services.hotspot_service import HotspotService
@@ -46,7 +46,21 @@ async def geojson_refresh(_: None = Depends(require_admin_key)) -> dict[str, obj
 
 
 @router.post("/geojson/upload")
-async def upload_geojson(file: UploadFile = File(...), _: None = Depends(require_admin_key)) -> dict[str, object]:
+async def upload_geojson(
+    file: UploadFile = File(...),
+    # Default "replace" mempertahankan perilaku lama supaya pemanggil yang sudah
+    # ada tidak berubah artinya diam-diam. Mode "add" ada karena sistem ini kini
+    # memuat lebih dari satu layer (mis. Perhutanan Sosial + Hutan Adat): tanpa
+    # mode itu, mengunggah layer kedua akan menghapus layer pertama.
+    mode: str = Form(default="replace"),
+    _: None = Depends(require_admin_key),
+) -> dict[str, object]:
+    if mode not in {"replace", "add"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Mode tidak dikenal. Gunakan 'replace' (ganti semua) atau 'add' (tambah layer).",
+        )
+
     if not file.filename or not file.filename.endswith(".geojson"):
         raise HTTPException(status_code=400, detail="Hanya file dengan ekstensi .geojson yang diperbolehkan.")
 
@@ -60,17 +74,20 @@ async def upload_geojson(file: UploadFile = File(...), _: None = Depends(require
     service = HotspotService()
     shp_dir = service.layer_service.shp_dir
 
-    # 1. Clean up old geojson files in shp_dir
-    try:
-        for old_file in shp_dir.glob("*.geojson"):
-            file_name = old_file.name
-            try:
-                service.layer_service.geojson_sync_service.postgres_store.deactivate_geojson_file_registry(file_name)
-            except Exception:
-                pass
-            os.remove(old_file)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal membersihkan file geojson lama: {str(e)}")
+    # 1. Mode "replace": bersihkan geojson lama. Mode "add": biarkan utuh,
+    #    hanya berkas dengan nama sama yang tertimpa (itu memang pembaruan
+    #    layer yang sama, bukan penghapusan layer lain).
+    if mode == "replace":
+        try:
+            for old_file in shp_dir.glob("*.geojson"):
+                file_name = old_file.name
+                try:
+                    service.layer_service.geojson_sync_service.postgres_store.deactivate_geojson_file_registry(file_name)
+                except Exception:
+                    pass
+                os.remove(old_file)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Gagal membersihkan file geojson lama: {str(e)}")
 
     # 2. Write new file in chunks
     target_path = shp_dir / safe_filename
@@ -96,6 +113,7 @@ async def upload_geojson(file: UploadFile = File(...), _: None = Depends(require
     return {
         "status": "success",
         "file_name": safe_filename,
+        "mode": mode,
         "summary": summary
     }
 

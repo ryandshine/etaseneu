@@ -143,13 +143,20 @@ class GeoJsonSyncService:
                         "layer_key": layer_key,
                         "feature_key": feature_key,
                         "feature_index": feature_index,
-                        "lembaga": _field_value(properties, "LEMBAGA", "lembaga"),
+                        # NAMA_MHA/NAMOBJ dipakai dataset Hutan Adat (KLHK
+                        # menamai kolomnya berbeda dari Perhutanan Sosial).
+                        # Tanpa alias ini seluruh polygon Hutan Adat masuk
+                        # tanpa nama, dan nama itulah yang dipakai sebagai
+                        # identitas baris di hampir semua tampilan.
+                        "lembaga": _field_value(
+                            properties, "LEMBAGA", "lembaga", "NAMA_MHA", "NAMOBJ"
+                        ),
                         "nama_prov": _field_value(properties, "NAMA_PROV", "NAMA_PROVINSI", "PROVINSI"),
                         "nama_kab": _field_value(properties, "NAMA_KAB", "KABUPATEN"),
                         "nama_kec": _field_value(properties, "NAMA_KEC", "KECAMATAN"),
                         "nama_desa": _field_value(properties, "NAMA_DESA", "DESA"),
                         "skema": _field_value(properties, "SKEMA"),
-                        "no_sk": _field_value(properties, "NO_SK"),
+                        "no_sk": _field_value(properties, "NO_SK", "NOMOR_SK"),
                         "tgl_sk": _field_value(properties, "TGL_SK"),
                         "status": _field_value(properties, "Status", "STATUS"),
                         "wilker_bps": _field_value(properties, "WILKER_BPS"),
@@ -163,7 +170,12 @@ class GeoJsonSyncService:
                         "luas_hpk": _field_value(properties, "LUAS_HPK"),
                         "luas_sk": _field_value(properties, "LUAS_SK"),
                         "luas_poli": _field_value(properties, "Luas_Poli", "LUAS_POLI"),
-                        "luas_final": _field_value(properties, "LuasFinal", "LUASFINAL", "LUAS_FINAL"),
+                        # LUAS_CYL/LUAS_SK jadi cadangan untuk dataset yang tidak
+                        # punya kolom LuasFinal (mis. Hutan Adat), supaya luas
+                        # tetap terisi alih-alih kosong di laporan.
+                        "luas_final": _field_value(
+                            properties, "LuasFinal", "LUASFINAL", "LUAS_FINAL", "LUAS_CYL", "LUAS_SK"
+                        ),
                         "jml_kk": _field_value(properties, "Jml_KK", "JML_KK"),
                         "shape_leng": _field_value(properties, "Shape_Leng", "SHAPE_LENG"),
                         "shape_area": _field_value(properties, "Shape_Area", "SHAPE_AREA"),

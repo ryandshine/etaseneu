@@ -13,6 +13,10 @@ export function SettingsPanel({ onRefreshLayers, adminKey }: SettingsPanelProps)
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: "success" | "danger" | "warn"; title: string; body: string } | null>(null);
+  // Default "add": sistem ini memuat lebih dari satu layer (Perhutanan Sosial,
+  // Hutan Adat, dst). "replace" menghapus SEMUA layer lain, jadi itu tindakan
+  // yang harus dipilih sadar, bukan yang kebetulan terjadi.
+  const [uploadMode, setUploadMode] = useState<"add" | "replace">("add");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchStatus = async () => {
@@ -90,6 +94,7 @@ export function SettingsPanel({ onRefreshLayers, adminKey }: SettingsPanelProps)
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("mode", uploadMode);
 
     xhr.upload.addEventListener("progress", (e) => {
       if (e.lengthComputable) {
@@ -177,10 +182,61 @@ export function SettingsPanel({ onRefreshLayers, adminKey }: SettingsPanelProps)
         {/* Upload Card */}
         <div style={{ background: "rgba(17, 24, 39, 0.5)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "12px", padding: "2rem" }}>
           <h2 style={{ fontSize: "1.25rem", color: "#fff", marginBottom: "0.5rem", fontWeight: "600" }}>Unggah Berkas GeoJSON Baru</h2>
-          <p style={{ color: "#9ca3af", fontSize: "0.88rem", marginBottom: "1.5rem" }}>
-            Unggah file GeoJSON baru untuk mengganti peta batasan wilayah yang ada di sistem saat ini. 
-            Proses ini akan menghapus data peta sebelumnya, memuat data koordinat baru, dan secara otomatis menjalankan intersect ulang terhadap seluruh riwayat titik hotspot NASA FIRMS yang telah terekam.
+          <p style={{ color: "#9ca3af", fontSize: "0.88rem", marginBottom: "1rem" }}>
+            Unggah berkas GeoJSON batas wilayah. Setelah tersimpan, sistem otomatis menjalankan
+            intersect ulang terhadap seluruh riwayat titik hotspot NASA FIRMS yang telah terekam.
           </p>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginBottom: "1.5rem" }}>
+            {([
+              {
+                value: "add" as const,
+                title: "Tambah layer baru",
+                body: "Layer yang sudah ada tetap utuh. Berkas dengan nama sama akan diperbarui."
+              },
+              {
+                value: "replace" as const,
+                title: "Ganti semua layer",
+                body: "Menghapus SELURUH layer yang ada, termasuk Perhutanan Sosial, lalu memuat berkas ini saja."
+              }
+            ]).map((option) => {
+              const active = uploadMode === option.value;
+              const danger = option.value === "replace";
+              return (
+                <label
+                  key={option.value}
+                  style={{
+                    display: "flex",
+                    gap: "0.65rem",
+                    alignItems: "flex-start",
+                    padding: "0.75rem 0.9rem",
+                    borderRadius: "6px",
+                    cursor: uploading ? "not-allowed" : "pointer",
+                    border: `1px solid ${active ? (danger ? "rgba(239,68,68,0.5)" : "rgba(16,185,129,0.5)") : "rgba(255,255,255,0.1)"}`,
+                    background: active ? (danger ? "rgba(239,68,68,0.07)" : "rgba(16,185,129,0.06)") : "rgba(255,255,255,0.02)"
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="upload-mode"
+                    value={option.value}
+                    checked={active}
+                    disabled={uploading}
+                    onChange={() => setUploadMode(option.value)}
+                    style={{ marginTop: "0.2rem" }}
+                  />
+                  <span>
+                    <span style={{ display: "block", color: danger && active ? "#fca5a5" : "#fff", fontWeight: 600, fontSize: "0.85rem" }}>
+                      {option.title}
+                    </span>
+                    <span style={{ display: "block", color: "#9ca3af", fontSize: "0.78rem", marginTop: "0.15rem" }}>
+                      {option.body}
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
 
           <form
             onDragEnter={handleDrag}
