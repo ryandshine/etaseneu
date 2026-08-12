@@ -68,6 +68,11 @@ describe("HotspotMatrix", () => {
         onDateChange={() => undefined}
         startDate="2026-05-27"
         endDate="2026-05-28"
+        timeRange={{
+          startAt: new Date("2026-05-27T00:00:00Z"),
+          endAt: new Date("2026-05-28T00:00:00Z"),
+          label: "Hari ini"
+        }}
         dateRangeLabel="Hari ini"
         timePreset="24h"
         onTimePresetChange={() => undefined}
@@ -101,6 +106,11 @@ describe("HotspotMatrix", () => {
         onDateChange={() => undefined}
         startDate="2026-05-27"
         endDate="2026-05-28"
+        timeRange={{
+          startAt: new Date("2026-05-27T00:00:00Z"),
+          endAt: new Date("2026-05-28T00:00:00Z"),
+          label: "Hari ini"
+        }}
         dateRangeLabel="Hari ini"
         timePreset="24h"
         onTimePresetChange={() => undefined}

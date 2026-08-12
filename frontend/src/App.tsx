@@ -710,6 +710,7 @@ export default function App() {
                 onDateChange={updateDate}
                 startDate={startDate}
                 endDate={endDate}
+                timeRange={timeRange}
                 dateRangeLabel={timeRange.label}
                 timePreset={timePreset}
                 onTimePresetChange={setTimePreset}

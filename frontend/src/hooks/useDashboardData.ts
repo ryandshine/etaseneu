@@ -44,7 +44,7 @@ type RemoteStats = {
 };
 type QueryPrimitive = string | number | boolean;
 type QueryValue = QueryPrimitive | QueryPrimitive[] | undefined;
-type TimeRange = {
+export type TimeRange = {
   startAt: Date;
   endAt: Date;
   label: string;

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer, AreaChart, Area, Cell, LabelList } from "recharts";
+import { Download } from "lucide-react";
 
-import type { GeoJsonStatusResponse } from "../types/api";
-import { getTodayWIB } from "../lib/date";
+import type { GeoJsonStatusResponse, PolygonDetail } from "../types/api";
+import { formatDateWIB, getTodayWIB } from "../lib/date";
 import { TIME_PRESET_OPTIONS, type TimePreset } from "../constants/time-windows";
+import type { TimeRange } from "../hooks/useDashboardData";
 import {
   formatMetadataValue,
   formatNumber,
@@ -29,6 +31,88 @@ type MatrixHotspot = {
   daynight: string;
 };
 
+function hotspotToGeoJsonFeature(hotspot: MatrixHotspot) {
+  return {
+    type: "Feature" as const,
+    geometry: {
+      type: "Point" as const,
+      coordinates: [hotspot.longitude, hotspot.latitude]
+    },
+    properties: {
+      id: hotspot.id,
+      detected_at: hotspot.detectedAt,
+      layer_name: hotspot.layerName,
+      agency_name: hotspot.agencyName,
+      province_name: hotspot.provinceName,
+      source: hotspot.source,
+      satellite: hotspot.satellite,
+      brightness: hotspot.brightness,
+      frp: hotspot.frp,
+      confidence: hotspot.confidence,
+      daynight: hotspot.daynight,
+      ...hotspot.polygonMetadata
+    }
+  };
+}
+
+// polygon_metadata_id bisa saja belum ke-link ke sebagian titik dalam satu
+// grup KPS (spatial join belum lengkap) -- cari dari titik manapun yang
+// sudah punya ID valid, bukan cuma yang pertama, biar boundary polygon tetap
+// bisa disertakan selama ADA satu titik yang tertaut.
+function findLinkedPolygonId(hotspots: MatrixHotspot[]): number | null {
+  for (const hotspot of hotspots) {
+    const raw = hotspot.polygonMetadata.polygon_metadata_id;
+    const parsed = raw ? Number(raw) : NaN;
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function polygonDetailToGeoJsonFeature(detail: PolygonDetail) {
+  return {
+    type: "Feature" as const,
+    geometry: detail.geometry,
+    properties: {
+      id: detail.id,
+      layer_key: detail.layer_key,
+      lembaga: detail.lembaga,
+      nama_prov: detail.nama_prov,
+      nama_kab: detail.nama_kab,
+      nama_kec: detail.nama_kec,
+      nama_desa: detail.nama_desa,
+      skema: detail.skema,
+      no_sk: detail.no_sk,
+      tgl_sk: detail.tgl_sk,
+      status: detail.status,
+      wilker_bps: detail.wilker_bps,
+      ps_id: detail.ps_id,
+      luas_final: detail.luas_final,
+      jml_kk: detail.jml_kk
+    }
+  };
+}
+
+function downloadGeoJson(featureCollection: object, filename: string) {
+  const blob = new Blob([JSON.stringify(featureCollection, null, 2)], {
+    type: "application/geo+json"
+  });
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 100);
+}
+
+function slugifyFilename(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
 type HotspotMatrixProps = {
   hotspots: MatrixHotspot[];
   geojsonStatus: GeoJsonStatusResponse | null;
@@ -38,6 +122,12 @@ type HotspotMatrixProps = {
   isExportingPdf: boolean;
   startDate: string;
   endDate: string;
+  // Sumber kebenaran rentang waktu yang benar-benar aktif -- startDate/endDate
+  // di atas cuma berarti saat timePreset "custom"; untuk preset lain (mis.
+  // "30 Hari") rentang sesungguhnya dihitung terpisah lewat buildTimeRange
+  // dan tidak pernah disinkronkan balik ke startDate/endDate. Apa pun yang
+  // butuh tanggal aktual filter (bukan cuma teks label-nya) harus pakai ini.
+  timeRange: TimeRange;
   dateRangeLabel: string;
   onDateChange: (field: "startDate" | "endDate", value: string) => void;
   timePreset: TimePreset;
@@ -536,6 +626,7 @@ export function HotspotMatrix({
   onDateChange,
   startDate,
   endDate,
+  timeRange,
   dateRangeLabel,
   timePreset,
   onTimePresetChange,
@@ -590,6 +681,8 @@ export function HotspotMatrix({
   const [yoyMetric, setYoyMetric] = useState<"count" | "frp">("count");
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 20;
+  const [downloadingKpsKey, setDownloadingKpsKey] = useState<string | null>(null);
+  const [kpsDownloadError, setKpsDownloadError] = useState<string | null>(null);
 
   // Cascading filter: Province options only show provinces that have hotspots
   // matching the current wilkerFilter (and confidence). So picking a Wilker
@@ -719,6 +812,47 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
     setActiveFrpCategory((current) => (current === label ? null : label));
   };
 
+  // Filter waktu (dan filter toolbar lain) sudah diterapkan di client lewat
+  // filteredHotspots -- itu persis apa yang ditampilkan di tabel, jadi
+  // GeoJSON-nya dibangun langsung dari situ tanpa perlu bolak-balik ke server.
+  const handleDownloadFilterGeojson = () => {
+    if (filteredHotspots.length === 0) return;
+    const featureCollection = {
+      type: "FeatureCollection" as const,
+      features: filteredHotspots.map(hotspotToGeoJsonFeature)
+    };
+    const rangeLabel = `${formatDateWIB(timeRange.startAt)}_${formatDateWIB(timeRange.endAt)}`;
+    downloadGeoJson(featureCollection, `eta-seuneu-hotspots-${rangeLabel}.geojson`);
+  };
+
+  const handleDownloadKpsGeojson = async (group: (typeof groupedRows)[number]) => {
+    setKpsDownloadError(null);
+    setDownloadingKpsKey(group.key);
+    try {
+      const features: object[] = group.hotspots.map(hotspotToGeoJsonFeature);
+      const polygonId = findLinkedPolygonId(group.hotspots);
+
+      if (polygonId !== null) {
+        const response = await fetch(`/api/polygons/${polygonId}`);
+        if (response.ok) {
+          const detail = (await response.json()) as PolygonDetail;
+          features.unshift(polygonDetailToGeoJsonFeature(detail));
+        }
+        // Kalau polygon gagal dimuat (mis. 404), titik-titik hotspot-nya
+        // tetap diunduh -- boundary-nya saja yang hilang, bukan seluruh file.
+      }
+
+      downloadGeoJson(
+        { type: "FeatureCollection" as const, features },
+        `eta-seuneu-kps-${slugifyFilename(group.key)}.geojson`
+      );
+    } catch {
+      setKpsDownloadError(`Gagal mengunduh GeoJSON untuk ${group.key}.`);
+    } finally {
+      setDownloadingKpsKey(null);
+    }
+  };
+
   // Tanpa kelas `panel`: section ini mengisi seluruh stage, jadi border,
   // bayangan, dan padding sebuah panel hanya menambah satu lapis bingkai yang
   // membuat setiap kartu di dalamnya jadi kartu-di-dalam-kartu.
@@ -765,8 +899,19 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
           >
             {isExportingPdf ? "Mengekspor..." : "Ekspor PDF"}
           </button>
+          <button
+            type="button"
+            className="matrix-header-action matrix-header-action--ghost"
+            onClick={handleDownloadFilterGeojson}
+            disabled={filteredHotspots.length === 0}
+            title="Unduh seluruh titik yang cocok dengan filter waktu & toolbar saat ini"
+          >
+            <Download size={14} />
+            Unduh GeoJSON
+          </button>
         </div>
       </div>
+      {kpsDownloadError && <p className="matrix-download-error">{kpsDownloadError}</p>}
 
       <div className="matrix-toolbar glass-panel">
         <label className="matrix-field">
@@ -1081,6 +1226,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                       <th scope="col">Provinsi</th>
                       <th scope="col">FRP</th>
                       <th scope="col">Satelit</th>
+                      <th className="th-aksi" scope="col">Aksi</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1139,6 +1285,23 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                                 <span className="td-satelit__sub">{hotspot.satellite}</span>
                               )}
                             </div>
+                          </td>
+                          <td className="td-aksi" data-label="Aksi">
+                            <button
+                              type="button"
+                              className="matrix-row-download"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleDownloadKpsGeojson(group);
+                              }}
+                              disabled={downloadingKpsKey === group.key}
+                              title={`Unduh GeoJSON untuk ${group.key}`}
+                            >
+                              <Download size={14} />
+                              {downloadingKpsKey === group.key && (
+                                <span className="matrix-row-download__label">Mengunduh...</span>
+                              )}
+                            </button>
                           </td>
                         </tr>
                       );
