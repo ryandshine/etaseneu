@@ -137,3 +137,73 @@ def test_pdf_is_generated_and_looks_like_a_pdf():
 
     assert pdf.startswith(b"%PDF")
     assert len(pdf) > 1000
+
+
+def _pdf_html(outcome, source="titik.geojson"):
+    """Ambil HTML yang dipakai membangun PDF, supaya isinya bisa diperiksa
+    tanpa harus membongkar berkas PDF biner."""
+    captured = {}
+
+    class FakeHTML:
+        def __init__(self, string):
+            captured["html"] = string
+
+        def write_pdf(self):
+            return b"%PDF-fake"
+
+    import app.services.point_report_service as module
+
+    original_import = __import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "weasyprint":
+            class Module:
+                HTML = FakeHTML
+
+            return Module
+        return original_import(name, *args, **kwargs)
+
+    import builtins
+
+    builtins.__import__ = fake_import
+    try:
+        module.build_pdf_file(outcome, source)
+    finally:
+        builtins.__import__ = original_import
+    return captured["html"]
+
+
+def test_pdf_cards_use_hotspot_wording():
+    outcome = _outcome([_inside_point(), _outside_point()])
+    html = _pdf_html(outcome)
+
+    assert "Total Hotspot" in html
+    assert "Hotspot di KPS" in html
+    assert "Hotspot di luar KPS" in html
+    assert "KPS Terdampak" in html
+    # Label lama tidak boleh tersisa.
+    assert ">Total Titik<" not in html
+    assert ">Masuk KPS<" not in html
+
+
+def test_pdf_detail_table_only_lists_points_inside_kps():
+    """Ringkasan tetap menghitung titik di luar KPS, tapi tabel rincian hanya
+    memuat yang di dalam kawasan."""
+    outcome = _outcome([_inside_point(), _outside_point(), _outside_point()])
+    html = _pdf_html(outcome)
+
+    # Hitung baris isi saja -- <thead> juga punya <tr>.
+    body = html.split("Rincian Hotspot di KPS", 1)[1].split("<tbody>", 1)[1].split("</tbody>", 1)[0]
+    assert body.count("<tr>") == 1  # hanya satu titik yang masuk KPS
+    assert "Di luar KPS" not in body
+    # Kolom Status ikut hilang karena isinya selalu sama.
+    assert "<th>Status</th>" not in html
+    # Angkanya sendiri tetap dilaporkan di kartu ringkasan.
+    assert "Hotspot di luar KPS" in html
+
+
+def test_pdf_says_so_when_nothing_falls_inside_kps():
+    outcome = _outcome([_outside_point(), _outside_point()])
+    html = _pdf_html(outcome)
+
+    assert "Tidak ada hotspot yang masuk kawasan KPS" in html

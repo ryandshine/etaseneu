@@ -310,6 +310,13 @@ def build_pdf_file(outcome: MatchOutcome, source_name: str) -> bytes:
         items = "".join(f"<li>{_escape(w)}</li>" for w in outcome.warnings)
         warnings_html = f"<div class='warn'><strong>Catatan:</strong><ul>{items}</ul></div>"
 
+    # Rincian hanya memuat hotspot yang masuk KPS -- itu yang dipakai untuk
+    # tindak lanjut. Jumlah yang di luar KPS tetap dilaporkan di kartu ringkasan
+    # supaya angkanya tidak hilang, hanya barisnya yang tidak dirinci di sini.
+    # Karena semua baris kini berstatus sama, kolom Status ikut dihapus: kolom
+    # yang isinya selalu sama hanya menambah lebar tanpa menambah informasi.
+    inside_points = [point for point in outcome.points if point.inside_kps]
+
     # Tabel rinci dibatasi supaya PDF tetap wajar dibuka; data lengkap ada di Excel.
     detail_limit = 200
     detail_rows = "".join(
@@ -317,20 +324,24 @@ def build_pdf_file(outcome: MatchOutcome, source_name: str) -> bytes:
         f"<td class='num'>{index}</td>"
         f"<td class='num'>{point.latitude:.5f}</td>"
         f"<td class='num'>{point.longitude:.5f}</td>"
-        f"<td class='{'inside' if point.inside_kps else 'outside'}'>"
-        f"{STATUS_INSIDE if point.inside_kps else STATUS_OUTSIDE}</td>"
         f"<td>{_escape((point.kps or {}).get('lembaga'))}</td>"
         f"<td>{_escape((point.kps or {}).get('wilker_bps'))}</td>"
         f"<td>{_escape((point.kps or {}).get('nama_prov'))}</td>"
         "</tr>"
-        for index, point in enumerate(outcome.points[:detail_limit], start=1)
+        for index, point in enumerate(inside_points[:detail_limit], start=1)
     )
     detail_note = (
-        f"<p class='more'>Menampilkan {detail_limit} dari {summary.total_points:,} titik. "
-        "Data lengkap tersedia di berkas Excel.</p>"
-        if summary.total_points > detail_limit
+        f"<p class='more'>Menampilkan {detail_limit} dari {len(inside_points):,} hotspot di KPS. "
+        "Data lengkap (termasuk hotspot di luar KPS) tersedia di berkas Excel.</p>"
+        if len(inside_points) > detail_limit
         else ""
     )
+    if not inside_points:
+        detail_rows = (
+            "<tr><td colspan='6' class='empty'>"
+            "Tidak ada hotspot yang masuk kawasan KPS."
+            "</td></tr>"
+        )
 
     html = f"""<!doctype html>
 <html lang="id"><head><meta charset="utf-8"><title>Laporan Pencocokan Titik</title>
@@ -353,6 +364,7 @@ def build_pdf_file(outcome: MatchOutcome, source_name: str) -> bytes:
   .outside {{ color: #B4453C; font-weight: bold; }}
   .inside {{ color: #1B3A2B; }}
   .more {{ font-size: 8pt; color: #6B726D; font-style: italic; }}
+  .empty {{ text-align: center; color: #6B726D; font-style: italic; padding: 4mm 2mm; }}
   .warn {{ border-left: 3px solid #B4453C; background: #FBF0EF; padding: 2mm 3mm; margin-bottom: 4mm; font-size: 8.5pt; }}
   .warn ul {{ margin: 1mm 0 0 4mm; padding: 0; }}
 </style></head>
@@ -361,18 +373,18 @@ def build_pdf_file(outcome: MatchOutcome, source_name: str) -> bytes:
   <p class="sub">Sumber berkas: {_escape(source_name)} ({_escape(outcome.source_format)}) &bull; Dibuat {generated} WIB</p>
   {warnings_html}
   <div class="cards">
-    <div class="card"><div class="label">Total Titik</div><div class="value">{summary.total_points:,}</div></div>
-    <div class="card"><div class="label">Masuk KPS</div><div class="value">{summary.inside_count:,}</div></div>
-    <div class="card {'alert' if summary.outside_count else ''}"><div class="label">Di Luar KPS</div><div class="value">{summary.outside_count:,}</div></div>
+    <div class="card"><div class="label">Total Hotspot</div><div class="value">{summary.total_points:,}</div></div>
+    <div class="card"><div class="label">Hotspot di KPS</div><div class="value">{summary.inside_count:,}</div></div>
+    <div class="card {'alert' if summary.outside_count else ''}"><div class="label">Hotspot di luar KPS</div><div class="value">{summary.outside_count:,}</div></div>
     <div class="card"><div class="label">KPS Terdampak</div><div class="value">{summary.distinct_kps:,}</div></div>
   </div>
-  {_summary_table_html("Titik per KPS", "KPS", summary.by_kps, summary.total_points)}
-  {_summary_table_html("Titik per Balai PS", "Balai PS", summary.by_wilker, summary.total_points)}
-  {_summary_table_html("Titik per Provinsi", "Provinsi", summary.by_province, summary.total_points)}
-  <h2>Rincian Titik</h2>
+  {_summary_table_html("Hotspot per KPS", "KPS", summary.by_kps, summary.total_points)}
+  {_summary_table_html("Hotspot per Balai PS", "Balai PS", summary.by_wilker, summary.total_points)}
+  {_summary_table_html("Hotspot per Provinsi", "Provinsi", summary.by_province, summary.total_points)}
+  <h2>Rincian Hotspot di KPS</h2>
   <table>
     <thead><tr><th class="num">No</th><th class="num">Latitude</th><th class="num">Longitude</th>
-    <th>Status</th><th>KPS</th><th>Balai PS</th><th>Provinsi</th></tr></thead>
+    <th>KPS</th><th>Balai PS</th><th>Provinsi</th></tr></thead>
     <tbody>{detail_rows}</tbody>
   </table>
   {detail_note}
