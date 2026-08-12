@@ -1213,6 +1213,44 @@ class PostgresStore:
             "geometry": _safe_json(row.get("geometry_json"), {}),
         }
 
+    def read_polygon_geometries(
+        self, polygon_ids: Sequence[int], *, tolerance: float = 0.001
+    ) -> dict[int, dict[str, object]]:
+        """Ambil geometry beberapa polygon sekaligus, untuk digambar di laporan.
+
+        Disederhanakan jauh lebih agresif (default ~110m) daripada endpoint
+        detail KPS: hasilnya dipakai sebagai peta kecil di PDF, di mana lekuk
+        batas sedetail itu tidak akan terlihat, sementara geometry mentah bisa
+        berisi puluhan ribu titik dan membuat berkasnya membengkak.
+        """
+        if not polygon_ids:
+            return {}
+
+        unique_ids = sorted({int(pid) for pid in polygon_ids})
+
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        id,
+                        ST_AsGeoJSON(
+                            COALESCE(ST_SimplifyPreserveTopology(geometry, %s), geometry)
+                        )::json AS geometry_json
+                    FROM polygon_metadata
+                    WHERE id = ANY(%s) AND is_active = TRUE
+                    """,
+                    (tolerance, unique_ids),
+                )
+                rows = cur.fetchall()
+
+        geometries: dict[int, dict[str, object]] = {}
+        for row in rows:
+            geometry = _safe_json(row.get("geometry_json"), {})
+            if isinstance(geometry, dict) and geometry:
+                geometries[int(row["id"])] = geometry
+        return geometries
+
     def match_points_to_polygons(
         self, points: Sequence[tuple[float, float]]
     ) -> list[dict[str, object] | None]:

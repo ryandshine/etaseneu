@@ -210,6 +210,61 @@ def test_pdf_detail_table_only_lists_points_inside_kps():
     assert "Hotspot di luar KPS" in html
 
 
+_SQUARE = {
+    "type": "Polygon",
+    "coordinates": [[[110.0, -2.0], [110.5, -2.0], [110.5, -1.5], [110.0, -1.5], [110.0, -2.0]]],
+}
+
+
+def _inside_point_with_polygon(polygon_id=1, lembaga="LPHD DEMO"):
+    point = _inside_point()
+    point.kps = dict(point.kps, polygon_metadata_id=polygon_id, lembaga=lembaga)
+    point.latitude, point.longitude = -1.75, 110.25
+    return point
+
+
+def test_pdf_draws_a_map_per_kps_with_polygon_and_points():
+    outcome = _outcome([_inside_point_with_polygon()])
+    outcome.polygon_geometries = {1: _SQUARE}
+    html = _pdf_html(outcome)
+
+    assert "Peta Sebaran Hotspot per KPS" in html
+    assert "<svg" in html
+    # Batas kawasan digambar sebagai polygon, hotspot sebagai lingkaran.
+    assert "<polygon points=" in html
+    assert "<circle" in html
+    assert "LPHD DEMO" in html
+
+
+def test_map_points_land_inside_the_drawn_polygon_bounds():
+    """Kalau proyeksinya salah, titik bisa tergambar di luar kotak peta --
+    lebih buruk daripada tidak ada peta sama sekali karena menyesatkan."""
+    from app.services.point_report_service import _kps_map_svg
+
+    point = _inside_point_with_polygon()
+    svg = _kps_map_svg(_SQUARE, [point], width=200, height=140)
+
+    import re
+
+    cx = float(re.search(r'<circle cx="([\d.]+)"', svg).group(1))
+    cy = float(re.search(r'cy="([\d.]+)"', svg).group(1))
+    xs = [float(v) for v in re.findall(r"(\d+\.\d+),\d+\.\d+", svg)]
+    ys = [float(v) for v in re.findall(r"\d+\.\d+,(\d+\.\d+)", svg)]
+
+    assert min(xs) <= cx <= max(xs)
+    assert min(ys) <= cy <= max(ys)
+
+
+def test_report_still_builds_when_geometry_is_unavailable():
+    """Peta hanya pelengkap -- laporan tetap harus terbit tanpa geometry."""
+    outcome = _outcome([_inside_point_with_polygon()])
+    outcome.polygon_geometries = {}
+    html = _pdf_html(outcome)
+
+    assert "Peta Sebaran Hotspot per KPS" not in html
+    assert "Rincian Hotspot di KPS" in html
+
+
 def test_pdf_says_so_when_nothing_falls_inside_kps():
     outcome = _outcome([_outside_point(), _outside_point()])
     html = _pdf_html(outcome)

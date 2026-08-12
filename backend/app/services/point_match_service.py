@@ -54,6 +54,10 @@ class MatchOutcome:
     warnings: list[str]
     skipped_features: int
     property_columns: list[str]
+    # Geometry polygon KPS yang kena, dipakai menggambar peta kecil di laporan.
+    # Kosong kalau geometry gagal diambil -- laporan tetap terbit, hanya tanpa
+    # petanya, karena angka dan tabelnya jauh lebih penting daripada gambar.
+    polygon_geometries: dict[int, dict[str, Any]] = field(default_factory=dict)
 
 
 def _rank(counter: Counter[str], limit: int | None = None) -> list[dict[str, Any]]:
@@ -138,6 +142,20 @@ def match_uploaded_points(raw: bytes, filename: str, store: Any) -> MatchOutcome
         for parsed_point, match in zip(parsed.points, matches)
     ]
 
+    polygon_ids = {
+        int(point.kps["polygon_metadata_id"])
+        for point in points
+        if point.kps and point.kps.get("polygon_metadata_id") is not None
+    }
+    polygon_geometries: dict[int, dict[str, Any]] = {}
+    if polygon_ids and hasattr(store, "read_polygon_geometries"):
+        try:
+            polygon_geometries = store.read_polygon_geometries(sorted(polygon_ids))
+        except Exception:
+            # Peta hanyalah pelengkap; kegagalan mengambil geometry tidak boleh
+            # menggagalkan seluruh analisis yang angkanya sudah benar.
+            polygon_geometries = {}
+
     return MatchOutcome(
         points=points,
         summary=_build_summary(points),
@@ -145,4 +163,5 @@ def match_uploaded_points(raw: bytes, filename: str, store: Any) -> MatchOutcome
         warnings=list(parsed.warnings),
         skipped_features=parsed.skipped_features,
         property_columns=_collect_property_columns(points),
+        polygon_geometries=polygon_geometries,
     )

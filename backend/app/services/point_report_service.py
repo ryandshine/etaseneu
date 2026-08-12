@@ -299,6 +299,157 @@ def _summary_table_html(title: str, label_header: str, data: list[dict[str, Any]
     """
 
 
+def _iter_rings(geometry: dict[str, Any]) -> list[list[tuple[float, float]]]:
+    """Ratakan Polygon/MultiPolygon jadi daftar cincin koordinat (lon, lat)."""
+    kind = geometry.get("type")
+    coordinates = geometry.get("coordinates")
+    rings: list[list[tuple[float, float]]] = []
+
+    def _add(ring: Any) -> None:
+        if not isinstance(ring, (list, tuple)):
+            return
+        points = [
+            (float(pair[0]), float(pair[1]))
+            for pair in ring
+            if isinstance(pair, (list, tuple)) and len(pair) >= 2
+        ]
+        if len(points) >= 3:
+            rings.append(points)
+
+    if kind == "Polygon" and isinstance(coordinates, (list, tuple)):
+        for ring in coordinates:
+            _add(ring)
+    elif kind == "MultiPolygon" and isinstance(coordinates, (list, tuple)):
+        for polygon in coordinates:
+            if isinstance(polygon, (list, tuple)):
+                for ring in polygon:
+                    _add(ring)
+    return rings
+
+
+def _kps_map_svg(
+    geometry: dict[str, Any],
+    points: list[Any],
+    *,
+    width: int = 190,
+    height: int = 130,
+    padding: int = 8,
+) -> str:
+    """Gambar satu KPS: batas kawasan + titik hotspot di dalamnya.
+
+    Dibuat sebagai SVG inline, bukan gambar raster, supaya tidak menambah
+    dependensi dan tetap tajam berapa pun perbesarannya saat PDF dicetak.
+    """
+    rings = _iter_rings(geometry)
+    if not rings:
+        return ""
+
+    xs = [x for ring in rings for x, _ in ring] + [p.longitude for p in points]
+    ys = [y for ring in rings for _, y in ring] + [p.latitude for p in points]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+
+    span_x = max(max_x - min_x, 1e-9)
+    span_y = max(max_y - min_y, 1e-9)
+
+    # Satu skala untuk kedua sumbu supaya bentuk kawasan tidak gepeng.
+    # Lintang dikoreksi cos(lat) supaya proporsinya mendekati jarak sebenarnya.
+    import math
+
+    mid_lat = (min_y + max_y) / 2
+    lon_scale = math.cos(math.radians(mid_lat)) or 1.0
+    scale = min((width - 2 * padding) / (span_x * lon_scale), (height - 2 * padding) / span_y)
+
+    draw_w = span_x * lon_scale * scale
+    draw_h = span_y * scale
+    offset_x = (width - draw_w) / 2
+    offset_y = (height - draw_h) / 2
+
+    def project(lon: float, lat: float) -> tuple[float, float]:
+        x = offset_x + (lon - min_x) * lon_scale * scale
+        # SVG menghitung y dari atas, lintang dari bawah -- karena itu dibalik.
+        y = offset_y + (max_y - lat) * scale
+        return x, y
+
+    paths = []
+    for ring in rings:
+        coords = " ".join(f"{px:.2f},{py:.2f}" for px, py in (project(lon, lat) for lon, lat in ring))
+        paths.append(f'<polygon points="{coords}" />')
+
+    dots = []
+    for point in points:
+        px, py = project(point.longitude, point.latitude)
+        dots.append(f'<circle cx="{px:.2f}" cy="{py:.2f}" r="2.6" />')
+
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}">'
+        f'<rect width="{width}" height="{height}" fill="#F7F9F8" stroke="#D8DEDA"/>'
+        f'<g fill="#DCE8DF" stroke="#1B3A2B" stroke-width="0.9" stroke-linejoin="round">'
+        f'{"".join(paths)}</g>'
+        f'<g fill="#E0862A" stroke="#8A4B12" stroke-width="0.6">{"".join(dots)}</g>'
+        "</svg>"
+    )
+
+
+def _kps_maps_html(outcome: MatchOutcome, limit: int = 12) -> str:
+    """Satu kartu peta per KPS, diurutkan dari yang titiknya terbanyak."""
+    if not outcome.polygon_geometries:
+        return ""
+
+    grouped: dict[int, list[Any]] = {}
+    names: dict[int, str] = {}
+    for point in outcome.points:
+        if not point.kps:
+            continue
+        polygon_id = point.kps.get("polygon_metadata_id")
+        if polygon_id is None:
+            continue
+        key = int(polygon_id)
+        grouped.setdefault(key, []).append(point)
+        names.setdefault(key, str(point.kps.get("lembaga") or "(tanpa nama)"))
+
+    ranked = sorted(grouped.items(), key=lambda kv: (-len(kv[1]), names.get(kv[0], "")))
+    cards = []
+    for polygon_id, points in ranked[:limit]:
+        geometry = outcome.polygon_geometries.get(polygon_id)
+        if not geometry:
+            continue
+        svg = _kps_map_svg(geometry, points)
+        if not svg:
+            continue
+        wilker = _escape(points[0].kps.get("wilker_bps"))
+        cards.append(
+            "<div class='mapcard'>"
+            f"{svg}"
+            f"<div class='mapcard__name'>{_escape(names.get(polygon_id, ''))}</div>"
+            f"<div class='mapcard__meta'>{wilker} &bull; {len(points)} hotspot</div>"
+            "</div>"
+        )
+
+    if not cards:
+        return ""
+
+    more = ""
+    if len(ranked) > len(cards):
+        more = (
+            f"<p class='more'>Menampilkan {len(cards)} KPS dengan hotspot terbanyak "
+            f"dari {len(ranked)} KPS terdampak.</p>"
+        )
+
+    # Bagian peta selalu dimulai di halaman baru. Kartu peta berukuran tetap dan
+    # tidak bisa dipotong, jadi kalau dibiarkan mengalir ia hampir selalu tidak
+    # muat di sisa halaman dan meninggalkan judulnya sendirian di bawah.
+    return (
+        "<div class='mapsection'>"
+        "<h2>Peta Sebaran Hotspot per KPS</h2>"
+        "<p class='more'>Area hijau = batas kawasan KPS; titik oranye = hotspot di dalamnya. "
+        "Skala tiap peta menyesuaikan luas kawasannya masing-masing.</p>"
+        f"<div class='mapgrid'>{''.join(cards)}</div>{more}"
+        "</div>"
+    )
+
+
 def build_pdf_file(outcome: MatchOutcome, source_name: str) -> bytes:
     from weasyprint import HTML
 
@@ -343,13 +494,19 @@ def build_pdf_file(outcome: MatchOutcome, source_name: str) -> bytes:
             "</td></tr>"
         )
 
+    maps_html = _kps_maps_html(outcome)
+
     html = f"""<!doctype html>
 <html lang="id"><head><meta charset="utf-8"><title>Laporan Hotspot pada Persetujuan Perhutanan Sosial</title>
 <style>
   @page {{ size: A4; margin: 16mm 14mm; }}
   body {{ font-family: "DejaVu Sans", sans-serif; color: #1B3A2B; font-size: 9pt; }}
   h1 {{ font-size: 16pt; margin: 0 0 2mm; }}
-  h2 {{ font-size: 11pt; margin: 6mm 0 2mm; border-bottom: 1px solid #D8DEDA; padding-bottom: 1mm; }}
+  /* Judul bagian ikut pindah bersama isinya; tanpa ini judul bisa tertinggal
+     sendirian di ujung halaman sementara tabel/petanya lompat ke halaman
+     berikutnya, menyisakan ruang kosong besar. */
+  h2 {{ font-size: 11pt; margin: 6mm 0 2mm; border-bottom: 1px solid #D8DEDA;
+        padding-bottom: 1mm; break-after: avoid; page-break-after: avoid; }}
   .sub {{ color: #6B726D; font-style: italic; margin: 0 0 5mm; }}
   .cards {{ display: flex; gap: 4mm; margin-bottom: 5mm; }}
   .card {{ flex: 1; border: 1px solid #D8DEDA; border-top: 3px solid #E0862A; padding: 3mm; }}
@@ -365,6 +522,18 @@ def build_pdf_file(outcome: MatchOutcome, source_name: str) -> bytes:
   .inside {{ color: #1B3A2B; }}
   .more {{ font-size: 8pt; color: #6B726D; font-style: italic; }}
   .empty {{ text-align: center; color: #6B726D; font-style: italic; padding: 4mm 2mm; }}
+  /* Sengaja inline-block, bukan flex: WeasyPrint memperlakukan kontainer flex
+     sebagai satu blok utuh yang tidak bisa dipecah, sehingga seluruh grid
+     melompat ke halaman berikutnya dan meninggalkan judulnya sendirian. */
+  .mapsection {{ break-before: page; page-break-before: always; }}
+  .mapgrid {{ margin-top: 2mm; font-size: 0; }}
+  .mapcard {{ display: inline-block; vertical-align: top; width: 52mm;
+              border: 1px solid #D8DEDA; padding: 2mm; margin: 0 2.5mm 2.5mm 0;
+              font-size: 8pt; break-inside: avoid; page-break-inside: avoid; }}
+  .mapcard svg {{ display: block; width: 100%; height: auto; }}
+  .mapcard__name {{ font-size: 7.5pt; font-weight: bold; margin-top: 1.5mm;
+                    word-wrap: break-word; }}
+  .mapcard__meta {{ font-size: 7pt; color: #6B726D; }}
   .warn {{ border-left: 3px solid #B4453C; background: #FBF0EF; padding: 2mm 3mm; margin-bottom: 4mm; font-size: 8.5pt; }}
   .warn ul {{ margin: 1mm 0 0 4mm; padding: 0; }}
 </style></head>
@@ -381,6 +550,7 @@ def build_pdf_file(outcome: MatchOutcome, source_name: str) -> bytes:
   {_summary_table_html("Hotspot per KPS", "KPS", summary.by_kps, summary.total_points)}
   {_summary_table_html("Hotspot per Balai PS", "Balai PS", summary.by_wilker, summary.total_points)}
   {_summary_table_html("Hotspot per Provinsi", "Provinsi", summary.by_province, summary.total_points)}
+  {maps_html}
   <h2>Rincian Hotspot di KPS</h2>
   <table>
     <thead><tr><th class="num">No</th><th class="num">Latitude</th><th class="num">Longitude</th>
