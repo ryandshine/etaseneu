@@ -344,7 +344,7 @@ def build_pdf_file(outcome: MatchOutcome, source_name: str) -> bytes:
         )
 
     html = f"""<!doctype html>
-<html lang="id"><head><meta charset="utf-8"><title>Laporan Pencocokan Titik</title>
+<html lang="id"><head><meta charset="utf-8"><title>Laporan Hotspot pada Persetujuan Perhutanan Sosial</title>
 <style>
   @page {{ size: A4; margin: 16mm 14mm; }}
   body {{ font-family: "DejaVu Sans", sans-serif; color: #1B3A2B; font-size: 9pt; }}
@@ -369,7 +369,7 @@ def build_pdf_file(outcome: MatchOutcome, source_name: str) -> bytes:
   .warn ul {{ margin: 1mm 0 0 4mm; padding: 0; }}
 </style></head>
 <body>
-  <h1>Laporan Pencocokan Titik ke Kawasan Perhutanan Sosial</h1>
+  <h1>Laporan Hotspot pada Persetujuan Perhutanan Sosial</h1>
   <p class="sub">Sumber berkas: {_escape(source_name)} ({_escape(outcome.source_format)}) &bull; Dibuat {generated} WIB</p>
   {warnings_html}
   <div class="cards">

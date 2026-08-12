@@ -173,6 +173,14 @@ def _pdf_html(outcome, source="titik.geojson"):
     return captured["html"]
 
 
+def test_pdf_title_uses_the_agreed_wording():
+    html = _pdf_html(_outcome([_inside_point()]))
+
+    assert "<h1>Laporan Hotspot pada Persetujuan Perhutanan Sosial</h1>" in html
+    # Judul tab/berkas ikut sama supaya tidak berbeda dari judul di halaman.
+    assert "<title>Laporan Hotspot pada Persetujuan Perhutanan Sosial</title>" in html
+
+
 def test_pdf_cards_use_hotspot_wording():
     outcome = _outcome([_inside_point(), _outside_point()])
     html = _pdf_html(outcome)
