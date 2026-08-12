@@ -15,15 +15,29 @@ from app.services.postgres_store import PostgresStore
 LAYER_COLORS = ["#1d4ed8", "#059669", "#dc2626", "#d97706", "#7c3aed"]
 
 
+# Dicocokkan berdasarkan AWALAN, bukan nama berkas persis: nama berkas dataset
+# membawa penanda versi (PS_FEB_26, HUTAN_ADAT_APR26), jadi pencocokan persis
+# berarti setiap pembaruan dataset tampil sebagai nama mentah sampai ada yang
+# ingat menambahkannya ke daftar ini.
+_LAYER_NAME_BY_PREFIX: tuple[tuple[str, str], ...] = (
+    ("PS_", "Perhutanan Sosial"),
+    ("HUTAN_ADAT", "Hutan Adat"),
+)
+
+
 def _friendly_layer_name(layer_id: str) -> str:
-    if layer_id == "PS_FEB_26":
-        return "Perhutanan Sosial"
+    upper = layer_id.upper()
+    for prefix, name in _LAYER_NAME_BY_PREFIX:
+        if upper.startswith(prefix):
+            return name
     return layer_id
 
 
 def _friendly_layer_label(layer_id: str, agencies: list[str]) -> str:
-    if layer_id == "PS_FEB_26":
-        return "Perhutanan Sosial"
+    upper = layer_id.upper()
+    for prefix, name in _LAYER_NAME_BY_PREFIX:
+        if upper.startswith(prefix):
+            return name
     return agencies[0] if agencies else layer_id
 
 

@@ -163,3 +163,20 @@ def test_layer_detail_requires_admin_key_even_in_preview_mode(monkeypatch) -> No
         assert status == 401
     finally:
         get_settings.cache_clear()
+
+
+def test_friendly_layer_name_matches_by_prefix_not_exact_filename():
+    """Nama berkas dataset membawa penanda versi (PS_FEB_26, HUTAN_ADAT_APR26).
+    Pencocokan persis berarti setiap pembaruan dataset tampil sebagai nama
+    mentah di UI sampai ada yang ingat menambahkannya ke daftar."""
+    from app.services.layer_service import _friendly_layer_label, _friendly_layer_name
+
+    assert _friendly_layer_name("PS_FEB_26") == "Perhutanan Sosial"
+    assert _friendly_layer_name("PS_MAR_27") == "Perhutanan Sosial"
+    assert _friendly_layer_name("HUTAN_ADAT_APR26") == "Hutan Adat"
+    assert _friendly_layer_name("HUTAN_ADAT_JUL26") == "Hutan Adat"
+    # Layer tak dikenal tetap memakai nama berkasnya, bukan tebakan.
+    assert _friendly_layer_name("dataset_lain") == "dataset_lain"
+
+    assert _friendly_layer_label("HUTAN_ADAT_APR26", []) == "Hutan Adat"
+    assert _friendly_layer_label("dataset_lain", ["Lembaga X"]) == "Lembaga X"
