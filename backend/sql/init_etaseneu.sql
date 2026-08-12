@@ -128,6 +128,15 @@ CREATE TABLE IF NOT EXISTS polygon_metadata (
     UNIQUE (layer_key, feature_key)
 );
 
+-- Tanpa indeks ini, mencocokkan titik ke polygon berarti sequential scan atas
+-- seluruh 7.000+ polygon untuk SETIAP titik. Untuk unggahan puluhan ribu titik
+-- (fitur cek titik kustom) itu ratusan juta uji geometri. GIST membuat PostGIS
+-- menyaring lewat bounding box dulu, jadi hanya kandidat yang benar-benar
+-- berdekatan yang diuji presisi.
+CREATE INDEX IF NOT EXISTS polygon_metadata_geometry_idx
+    ON polygon_metadata
+    USING GIST (geometry);
+
 CREATE TABLE IF NOT EXISTS hotspot_polygon_relation (
     id BIGSERIAL PRIMARY KEY,
     hotspot_observation_id BIGINT NOT NULL,

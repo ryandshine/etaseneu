@@ -241,7 +241,7 @@ function withQuery(
 }
 
 export function useDashboardData(
-  activeView: "map" | "matrix" | "settings" | "kps" = "map",
+  activeView: "map" | "matrix" | "pointmatch" | "settings" | "kps" = "map",
   adminKey: string | null = null
 ) {
   const today = getCurrentDateWIB();

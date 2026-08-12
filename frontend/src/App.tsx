@@ -21,6 +21,11 @@ const KpsDetailView = lazy(async () => {
   return { default: module.KpsDetailView };
 });
 
+const PointMatchView = lazy(async () => {
+  const module = await import("./components/PointMatchView");
+  return { default: module.PointMatchView };
+});
+
 const SettingsPanel = lazy(async () => {
   const module = await import("./components/SettingsPanel");
   return { default: module.SettingsPanel };
@@ -30,7 +35,7 @@ function isSchedulerFailureStatus(status?: string | null): boolean {
   return status === "failure" || status === "failed";
 }
 
-type AppView = "map" | "matrix" | "settings" | "kps";
+type AppView = "map" | "matrix" | "pointmatch" | "settings" | "kps";
 
 /**
  * View aktif disimpan di query string supaya refresh dan tombol back tidak
@@ -57,6 +62,9 @@ function readViewFromUrl(): AppView {
   const view = params.get("view");
   if (view === "matrix") {
     return "matrix";
+  }
+  if (view === "pointmatch") {
+    return "pointmatch";
   }
   if (view === "kps" && params.get("kps")) {
     return "kps";
@@ -109,8 +117,8 @@ export default function App() {
     // melewati gerbang password di atas.
     const params = new URLSearchParams(window.location.search);
     params.delete("kps");
-    if (view === "matrix") {
-      params.set("view", "matrix");
+    if (view === "matrix" || view === "pointmatch") {
+      params.set("view", view);
     } else {
       params.delete("view");
     }
@@ -716,6 +724,12 @@ export default function App() {
                 onTimePresetChange={setTimePreset}
                 onOpenKpsDetail={openKpsDetail}
               />
+            </Suspense>
+          </section>
+        ) : activeView === "pointmatch" ? (
+          <section aria-label="Cek titik ke KPS workspace" className="workspace-stage">
+            <Suspense fallback={<ViewLoader label="Memuat alat cek titik..." />}>
+              <PointMatchView />
             </Suspense>
           </section>
         ) : activeView === "kps" ? (

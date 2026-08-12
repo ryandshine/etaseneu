@@ -6308,3 +6308,206 @@ a + a {
 .loading-retry-button:active {
   transform: translateY(0);
 }
+/* ============================================================
+   Cek Titik ke KPS (PointMatchView)
+   Memakai token warna & bentuk yang sama dengan panel lain --
+   fitur baru, bukan bahasa desain baru.
+   ============================================================ */
+
+.pm-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 2.25rem 1.25rem;
+  margin-bottom: 1rem;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border-radius: 0.4rem;
+  color: #9ca3af;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.pm-drop:hover,
+.pm-drop--active {
+  border-color: rgba(255, 78, 0, 0.55);
+  background: rgba(255, 78, 0, 0.06);
+  color: #f5efe6;
+}
+
+.pm-drop__title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #f5efe6;
+}
+
+.pm-drop__hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  max-width: 34rem;
+}
+
+.pm-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  margin-bottom: 0.75rem;
+  border-radius: 0.25rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.pm-alert--error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.pm-alert--warn {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  color: #fcd34d;
+}
+
+.pm-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.pm-card {
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 2px solid rgba(255, 78, 0, 0.5);
+  border-radius: 0.3rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.pm-card--alert {
+  border-top-color: #ef4444;
+}
+
+.pm-card__label {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+.pm-card__value {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: #f5efe6;
+}
+
+.pm-card--alert .pm-card__value {
+  color: #fca5a5;
+}
+
+.pm-ranks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.pm-rank h3 {
+  margin: 0 0 0.6rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #f5efe6;
+}
+
+.pm-rank__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pm-rank__table td {
+  padding: 0.2rem 0;
+  font-size: 0.75rem;
+  vertical-align: middle;
+}
+
+.pm-rank__label {
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #d1d5db;
+}
+
+.pm-rank__bar {
+  width: 45%;
+  padding-left: 0.5rem !important;
+  padding-right: 0.5rem !important;
+}
+
+.pm-rank__bar span {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 78, 0, 0.85), rgba(245, 158, 11, 0.85));
+}
+
+.pm-rank__count {
+  text-align: right;
+  font-weight: 700;
+  color: #f5efe6;
+  white-space: nowrap;
+}
+
+.pm-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0;
+  font-size: 0.73rem;
+  font-style: italic;
+  color: #9ca3af;
+}
+
+.pm-status {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pm-status--outside {
+  color: #fca5a5;
+}
+
+@media (max-width: 1023px) {
+  .pm-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pm-ranks {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 639px) {
+  .pm-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pm-card__value {
+    font-size: 1.35rem;
+  }
+
+  .pm-drop {
+    padding: 1.6rem 1rem;
+  }
+}
