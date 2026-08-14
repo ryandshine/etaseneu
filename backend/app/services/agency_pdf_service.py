@@ -64,10 +64,55 @@ def _tile_to_latlon(xtile: int, ytile: int, zoom: int):
     return math.degrees(lat_rad), lon_deg
 
 
+def _polygon_rings(geometry: dict) -> list[list[tuple[float, float]]]:
+    """Ekstrak semua ring (exterior + interior/lubang) dari geometry GeoJSON
+    Polygon atau MultiPolygon sebagai list titik (lon, lat)."""
+    geom_type = geometry.get("type")
+    coords = geometry.get("coordinates") or []
+
+    if geom_type == "Polygon":
+        polygons = [coords]
+    elif geom_type == "MultiPolygon":
+        polygons = coords
+    else:
+        return []
+
+    rings: list[list[tuple[float, float]]] = []
+    for polygon in polygons:
+        for ring in polygon:
+            points = [(float(pt[0]), float(pt[1])) for pt in ring if len(pt) >= 2]
+            if len(points) >= 2:
+                rings.append(points)
+    return rings
+
+
+def _geometry_bounds(geometry: dict, *, padding_ratio: float = 0.15) -> tuple[float, float, float, float] | None:
+    """Bounding box (min_lat, max_lat, min_lon, max_lon) dari geometry, dengan
+    padding proporsional ke ukurannya sendiri -- kawasan kecil dan kawasan
+    besar sama-sama dapat ruang bernapas yang wajar di peta, tidak seperti
+    padding tetap yang bisa nyaris tak kelihatan di kawasan raksasa atau
+    berlebihan di kawasan mungil."""
+    rings = _polygon_rings(geometry)
+    if not rings:
+        return None
+
+    lons = [pt[0] for ring in rings for pt in ring]
+    lats = [pt[1] for ring in rings for pt in ring]
+    min_lon, max_lon = min(lons), max(lons)
+    min_lat, max_lat = min(lats), max(lats)
+
+    pad = max(max_lon - min_lon, max_lat - min_lat, 0.01) * padding_ratio
+    return (min_lat - pad, max_lat + pad, min_lon - pad, max_lon + pad)
+
+
 def _fetch_map_b64(hotspots: list[dict], width: int = 520, height: int = 260,
-                   force_bounds: tuple | None = None, force_zoom: int | None = None) -> str | None:
+                   force_bounds: tuple | None = None, force_zoom: int | None = None,
+                   polygon_geometry: dict | None = None) -> str | None:
     """Download a CartoDB basemap + plot hotspot dots, return base64 PNG string.
-    force_bounds=(min_lat, max_lat, min_lon, max_lon) pins the viewport."""
+    force_bounds=(min_lat, max_lat, min_lon, max_lon) pins the viewport.
+    polygon_geometry (opsional) digambar sebagai garis batas kawasan, dan --
+    jika force_bounds tidak diberikan -- juga dipakai untuk menentukan zoom
+    peta (fokus ke kawasan, bukan ke sebaran titik hotspot)."""
     try:
         from PIL import Image as PILImage, ImageDraw
     except ImportError:
@@ -76,8 +121,12 @@ def _fetch_map_b64(hotspots: list[dict], width: int = 520, height: int = 260,
     lons = [float(h["longitude"]) for h in hotspots if h.get("longitude") is not None]
     lats = [float(h["latitude"])  for h in hotspots if h.get("latitude")  is not None]
 
+    geometry_bounds = _geometry_bounds(polygon_geometry) if polygon_geometry else None
+
     if force_bounds:
         min_lat, max_lat, min_lon, max_lon = force_bounds
+    elif geometry_bounds:
+        min_lat, max_lat, min_lon, max_lon = geometry_bounds
     else:
         if not lons:
             return None
@@ -160,6 +209,27 @@ def _fetch_map_b64(hotspots: list[dict], width: int = 520, height: int = 260,
 
     cropped = stitched.crop((cx1, cy1, cx2, cy2)).resize((width, height), PILImage.Resampling.LANCZOS)
     canvas = cropped.convert("RGBA")
+
+    if polygon_geometry:
+        # PIL menulis nilai RGBA fill/outline apa adanya, tidak mem-blend
+        # alpha-nya terhadap gambar di bawah -- jadi isian "semi-transparan"
+        # yang digambar langsung ke `canvas` akan tampil solid begitu
+        # canvas.convert("RGB") membuang kanal alpha-nya nanti. Digambar
+        # dulu ke lapisan terpisah yang penuh transparan, baru
+        # di-alpha_composite ke canvas supaya benar-benar tembus pandang.
+        overlay = PILImage.new("RGBA", canvas.size, (0, 0, 0, 0))
+        overlay_draw = ImageDraw.Draw(overlay)
+        for ring in _polygon_rings(polygon_geometry):
+            pixels = [
+                (
+                    int((lon - min_lon) / (max_lon - min_lon) * width),
+                    int((1 - (lat - min_lat) / (max_lat - min_lat)) * height),
+                )
+                for lon, lat in ring
+            ]
+            overlay_draw.polygon(pixels, outline=(217, 119, 6, 255), width=2, fill=(217, 119, 6, 40))
+        canvas = PILImage.alpha_composite(canvas, overlay)
+
     draw = ImageDraw.Draw(canvas, "RGBA")
 
     for h in hotspots:
@@ -303,10 +373,17 @@ def build_agency_pdf_weasyprint(
     query: HotspotQuery,
     agency_name: str,
     hotspots_ytd: list[dict] | None = None,
+    polygon_geometry: dict | None = None,
 ) -> bytes:
     """
     Generate a modern WeasyPrint+Jinja2 agency PDF report.
     Returns raw PDF bytes.
+
+    polygon_geometry (opsional): geometry GeoJSON batas kawasan KPS ini.
+    Kalau tersedia, laporan menampilkan peta detail kedua yang di-zoom ke
+    kawasan (bukan cuma peta Indonesia yang membuat kawasan sekecil ini tak
+    kelihatan) lengkap dengan garis batasnya dan seluruh titik hotspot yang
+    masuk di dalamnya.
     """
     from weasyprint import HTML as WPhtml
 
@@ -392,6 +469,20 @@ def build_agency_pdf_weasyprint(
         )
     except Exception as e:
         logger.warning(f"Map generation error: {e}")
+
+    # ── map — peta detail kawasan (batas polygon + titik hotspot) ──
+    # Peta Indonesia di atas cuma menandai lokasi kawasan sebagai satu titik
+    # kecil -- kawasan seluas ribuan hektar pun tak kelihatan bentuknya pada
+    # skala itu. Peta ini di-zoom ke batas kawasan sendiri.
+    kps_map_b64 = None
+    if polygon_geometry:
+        try:
+            kps_map_b64 = _fetch_map_b64(
+                hotspots, width=520, height=280,
+                polygon_geometry=polygon_geometry,
+            )
+        except Exception as e:
+            logger.warning(f"KPS detail map generation error: {e}")
 
     # ── weather ──
     weather = _fetch_weather(float(avg_lat), float(avg_lon))
@@ -596,6 +687,7 @@ def build_agency_pdf_weasyprint(
         luas_hk=luas_hk,
         keliling=keliling,
         map_image_b64=map_b64,
+        kps_map_image_b64=kps_map_b64,
         weather=weather,
         cbi_color=cbi_color_map.get(cbi_level, "#64748b"),
         cbi_bg=cbi_bg_map.get(cbi_level, "#f8fafc"),

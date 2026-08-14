@@ -695,6 +695,16 @@ html, body {
     </div>
     {% endif %}
 
+    {# Zoomed KPS detail map: polygon boundary + hotspot points #}
+    {% if kps_map_image_b64 %}
+    <div class="map-box mb-2">
+      <img src="data:image/png;base64,{{ kps_map_image_b64 }}" alt="Peta Batas Kawasan dan Titik Hotspot">
+      <div class="map-caption">
+        Peta batas kawasan (garis oranye) dan titik hotspot di dalam wilayah {{ lembaga_val }}
+      </div>
+    </div>
+    {% endif %}
+
     {# Satelit distribution bar chart #}
     <div class="chart-box">
       <div class="chart-title">Proporsi Deteksi per Satelit</div>

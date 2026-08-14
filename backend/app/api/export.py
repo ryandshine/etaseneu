@@ -102,6 +102,7 @@ async def export_hotspots_pdf(
 
     if agency:
         from app.services.agency_pdf_service import build_agency_pdf_weasyprint
+        from app.services.polygon_service import get_polygon_service
 
         # Fetch full year-to-date hotspots for Section 05 chronology.
         # Tahun diambil dari waktu berjalan -- sebelumnya 2026 ditulis tetap,
@@ -120,11 +121,27 @@ async def export_hotspots_pdf(
             if (h.get("layer_name") or h.get("agency_name") or "") == agency
         ]
 
+        # Cari ID polygon dari hotspot MANAPUN yang sudah ke-link -- bukan
+        # cuma yang pertama, supaya satu-dua titik yang belum sempat
+        # ke-spatial-join tidak bikin peta kawasan hilang (pola yang sama
+        # dengan KpsDetailView.tsx di frontend).
+        polygon_geometry = None
+        for hotspot in hotspots:
+            raw_id = hotspot.get("polygon_metadata", {}).get("polygon_metadata_id")
+            polygon_metadata_id = int(raw_id) if raw_id is not None else None
+            if polygon_metadata_id is None:
+                continue
+            detail = get_polygon_service().get_polygon_detail(polygon_metadata_id)
+            if detail is not None:
+                polygon_geometry = detail.geometry
+                break
+
         pdf_content = build_agency_pdf_weasyprint(
             hotspots=hotspots,
             query=query,
             agency_name=agency,
             hotspots_ytd=hotspots_ytd,
+            polygon_geometry=polygon_geometry,
         )
     else:
         from app.services.pdf_export_service import build_pdf_report
