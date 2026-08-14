@@ -5,7 +5,6 @@ Produces a modern, CSS-styled portrait A4 PDF.
 import base64
 import logging
 import math
-import os
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
@@ -82,13 +81,21 @@ def _fetch_map_b64(hotspots: list[dict], width: int = 520, height: int = 260,
     else:
         if not lons:
             return None
-        min_lon = min(lons); max_lon = max(lons)
-        min_lat = min(lats); max_lat = max(lats)
+        min_lon = min(lons)
+        max_lon = max(lons)
+        min_lat = min(lats)
+        max_lat = max(lats)
         pad = 0.05
-        min_lon -= pad; max_lon += pad
-        min_lat -= pad; max_lat += pad
-        if max_lon - min_lon < 0.01: min_lon -= 0.05; max_lon += 0.05
-        if max_lat - min_lat < 0.01: min_lat -= 0.05; max_lat += 0.05
+        min_lon -= pad
+        max_lon += pad
+        min_lat -= pad
+        max_lat += pad
+        if max_lon - min_lon < 0.01:
+            min_lon -= 0.05
+            max_lon += 0.05
+        if max_lat - min_lat < 0.01:
+            min_lat -= 0.05
+            max_lat += 0.05
 
     if force_zoom is not None:
         zoom = force_zoom
@@ -144,8 +151,10 @@ def _fetch_map_b64(hotspots: list[dict], width: int = 520, height: int = 260,
         yf = (1.0 - math.log(math.tan(lr) + _sec(lr)) / math.pi) / 2.0 * n
         return int((yf - y_min) / (y_max + 1 - y_min) * grid_h)
 
-    cx1 = max(0, lon2x(min_lon)); cx2 = min(grid_w, lon2x(max_lon))
-    cy1 = max(0, lat2y(max_lat)); cy2 = min(grid_h, lat2y(min_lat))
+    cx1 = max(0, lon2x(min_lon))
+    cx2 = min(grid_w, lon2x(max_lon))
+    cy1 = max(0, lat2y(max_lat))
+    cy2 = min(grid_h, lat2y(min_lat))
     if cx2 - cx1 <= 0 or cy2 - cy1 <= 0:
         return None
 
@@ -155,7 +164,8 @@ def _fetch_map_b64(hotspots: list[dict], width: int = 520, height: int = 260,
 
     for h in hotspots:
         try:
-            lon = float(h["longitude"]); lat = float(h["latitude"])
+            lon = float(h["longitude"])
+            lat = float(h["latitude"])
         except (KeyError, TypeError, ValueError):
             continue
         px = int((lon - min_lon) / (max_lon - min_lon) * width)
@@ -251,11 +261,16 @@ def _fetch_weather(lat: float, lon: float) -> dict | None:
             rh_c = max(0.0, min(100.0, rh))
             cbi = max(0.0, ((110.0 - 1.37 * rh_c) - 9.01) * (10 ** (0.0444 * t)) / 124.0)
 
-            if cbi < 50:    cbi_level = "Rendah"
-            elif cbi < 75:  cbi_level = "Sedang"
-            elif cbi < 90:  cbi_level = "Tinggi"
-            elif cbi < 97.5:cbi_level = "Sangat Tinggi"
-            else:           cbi_level = "Ekstrem"
+            if cbi < 50:
+                cbi_level = "Rendah"
+            elif cbi < 75:
+                cbi_level = "Sedang"
+            elif cbi < 90:
+                cbi_level = "Tinggi"
+            elif cbi < 97.5:
+                cbi_level = "Sangat Tinggi"
+            else:
+                cbi_level = "Ekstrem"
 
             sm = float(wd.get("soil_moisture_0_to_10cm", 0) or 0)
             sm_status = ("Kering (Ekstrem)" if sm < 0.15 else "Sedang" if sm < 0.25 else "Basah (Aman)")
@@ -436,7 +451,6 @@ def build_agency_pdf_weasyprint(
         "VIIRS NOAA-20": "#0f766e", "VIIRS NOAA-21": "#0284c7",
     }
     color_pool = ["#0f766e", "#0284c7", "#dc2626", "#d97706", "#7c3aed"]
-    max_sat = max(sat_counts.values()) if sat_counts else 1
     sat_rows = [
         {
             "label": src,
@@ -476,8 +490,10 @@ def build_agency_pdf_weasyprint(
 
     def _day_color(count: int, max_c: int) -> tuple[str, str]:
         ratio = count / max_c if max_c else 0
-        if ratio >= 0.75: return "#dc2626", "badge-red"
-        if ratio >= 0.40: return "#f97316", "badge-amber"
+        if ratio >= 0.75:
+            return "#dc2626", "badge-red"
+        if ratio >= 0.40:
+            return "#f97316", "badge-amber"
         return "#16a34a", "badge-green"
 
     daily_stats = []
