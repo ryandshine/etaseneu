@@ -46,12 +46,56 @@ function FitToPolygon({ geometry }: { geometry: Record<string, unknown> }) {
       const layer = buildLeafletGeoJSON(geometry as never);
       const bounds = layer.getBounds();
       if (bounds.isValid()) {
+        // Ukuran disegarkan dulu: fitBounds menghitung zoom dari ukuran yang
+        // Leaflet KIRA dimilikinya, jadi kalau kontainer sudah tumbuh tanpa
+        // sepengetahuan Leaflet, hasil fit-nya ikut meleset.
+        map.invalidateSize({ animate: false });
         map.fitBounds(bounds, { padding: [32, 32] });
       }
     } catch {
       // Geometry tidak valid -- peta tetap di posisi default, tidak fatal.
     }
   }, [geometry, map]);
+
+  return null;
+}
+
+/**
+ * Beritahu Leaflet setiap kali kontainernya berubah ukuran.
+ *
+ * Tinggi peta di halaman ini ditentukan oleh baris grid, yang tingginya
+ * mengikuti sidebar kiri -- dan sidebar itu baru terisi setelah data detail
+ * tiba dari server. Leaflet mengukur kontainernya sekali saat inisialisasi dan
+ * tidak memantau perubahan ukuran, sehingga ia hanya menggambar ubin untuk
+ * area lama: peta tampak terpotong dengan area hitam di bawahnya.
+ *
+ * Sengaja hanya invalidateSize, tanpa fitBounds ulang, supaya posisi dan zoom
+ * yang sedang dilihat pengguna tidak tereset setiap kali ada perubahan tata
+ * letak (mis. saat jendela diubah ukurannya).
+ */
+function KeepMapSized() {
+  const map = useMap();
+
+  useEffect(() => {
+    const container = map.getContainer();
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      // Ditunda ke frame berikutnya supaya pengukuran ulang terjadi setelah
+      // browser selesai menata ulang, bukan di tengah-tengahnya.
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => map.invalidateSize({ animate: false }));
+    });
+
+    observer.observe(container);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [map]);
 
   return null;
 }
@@ -253,6 +297,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
 
         <div className="kps-detail-map">
           <MapContainer center={[-2.5, 118]} zoom={5} preferCanvas style={{ height: "100%", width: "100%" }}>
+            <KeepMapSized />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
               url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
