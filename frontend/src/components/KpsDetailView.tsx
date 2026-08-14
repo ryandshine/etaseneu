@@ -16,6 +16,8 @@ import {
   normalizeFrpCategoryLabel
 } from "../lib/hotspotDisplay";
 
+const DETECTION_PAGE_SIZE = 10;
+
 type KpsDetailViewProps = {
   agency: string;
   hotspots: DashboardHotspot[];
@@ -215,6 +217,12 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
   // Deteksi yang sedang ditelaah di bawah -- default ke yang paling baru,
   // tapi user bisa ketuk baris lain di "Daftar Deteksi Hotspot".
   const [selectedDetectionId, setSelectedDetectionId] = useState<string | null>(null);
+  const [detectionPage, setDetectionPage] = useState(1);
+  const detectionTotalPages = Math.max(1, Math.ceil(kpsHotspots.length / DETECTION_PAGE_SIZE));
+  const pagedKpsHotspots = kpsHotspots.slice(
+    (detectionPage - 1) * DETECTION_PAGE_SIZE,
+    detectionPage * DETECTION_PAGE_SIZE
+  );
   const selectedDetection = useMemo(
     () => kpsHotspots.find((hotspot) => hotspot.id === selectedDetectionId) ?? kpsHotspots[0] ?? null,
     [kpsHotspots, selectedDetectionId]
@@ -390,63 +398,6 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
             </div>
           </section>
 
-          <section className="matrix-detail-card">
-            <div className="matrix-detail-card__head">
-              <span>Daftar Deteksi Hotspot ({kpsHotspots.length} titik)</span>
-              <strong>Ketuk untuk detail</strong>
-            </div>
-            <div className="detect-list">
-              <table className="detect-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Tanggal</th>
-                    <th scope="col">Satelit</th>
-                    <th scope="col">Kelas FRP</th>
-                    <th scope="col">FRP</th>
-                    <th scope="col">Lat/Lon</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {kpsHotspots.map((hotspot) => {
-                    const isActive = selectedDetection.id === hotspot.id;
-                    return (
-                      <tr
-                        key={hotspot.id}
-                        className={isActive ? "detect-row detect-row--active" : "detect-row"}
-                        onClick={() => setSelectedDetectionId(hotspot.id)}
-                        role="button"
-                        tabIndex={0}
-                        aria-current={isActive || undefined}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            setSelectedDetectionId(hotspot.id);
-                          }
-                        }}
-                      >
-                        <td className="dt-waktu">{formatTimestamp(hotspot.detectedAt)}</td>
-                        <td className="dt-satelit">{hotspot.source}</td>
-                        <td className="dt-kelas">
-                          <span
-                            className={`confidence-pill confidence-pill--${
-                              getFrpCategory(hotspot) === "Tinggi" ? "high" : getFrpCategory(hotspot) === "Sedang" ? "nominal" : "low"
-                            }`}
-                          >
-                            {normalizeFrpCategoryLabel(hotspot)}
-                          </span>
-                        </td>
-                        <td className="dt-frp">{formatNumber(hotspot.frp)} MW</td>
-                        <td className="dt-koord" title={`${hotspot.latitude.toFixed(4)}, ${hotspot.longitude.toFixed(4)}`}>
-                          {hotspot.latitude.toFixed(3)}, {hotspot.longitude.toFixed(3)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
           <WeatherConditionCard lat={selectedDetection.latitude} lon={selectedDetection.longitude} />
 
           <section className="matrix-detail-card">
@@ -495,6 +446,89 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          </section>
+
+          <section className="matrix-detail-card">
+            <div className="matrix-detail-card__head">
+              <span>Daftar Deteksi Hotspot ({kpsHotspots.length} titik)</span>
+              <strong>Ketuk untuk detail</strong>
+            </div>
+            <div className="detect-list">
+              <table className="detect-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Tanggal</th>
+                    <th scope="col">Satelit</th>
+                    <th scope="col">Kelas FRP</th>
+                    <th scope="col">FRP</th>
+                    <th scope="col">Lat/Lon</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedKpsHotspots.map((hotspot) => {
+                    const isActive = selectedDetection.id === hotspot.id;
+                    return (
+                      <tr
+                        key={hotspot.id}
+                        className={isActive ? "detect-row detect-row--active" : "detect-row"}
+                        onClick={() => setSelectedDetectionId(hotspot.id)}
+                        role="button"
+                        tabIndex={0}
+                        aria-current={isActive || undefined}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setSelectedDetectionId(hotspot.id);
+                          }
+                        }}
+                      >
+                        <td className="dt-waktu">{formatTimestamp(hotspot.detectedAt)}</td>
+                        <td className="dt-satelit">{hotspot.source}</td>
+                        <td className="dt-kelas">
+                          <span
+                            className={`confidence-pill confidence-pill--${
+                              getFrpCategory(hotspot) === "Tinggi" ? "high" : getFrpCategory(hotspot) === "Sedang" ? "nominal" : "low"
+                            }`}
+                          >
+                            {normalizeFrpCategoryLabel(hotspot)}
+                          </span>
+                        </td>
+                        <td className="dt-frp">{formatNumber(hotspot.frp)} MW</td>
+                        <td className="dt-koord" title={`${hotspot.latitude.toFixed(4)}, ${hotspot.longitude.toFixed(4)}`}>
+                          {hotspot.latitude.toFixed(3)}, {hotspot.longitude.toFixed(3)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="matrix-footer">
+              <span className="matrix-footer__count">{kpsHotspots.length} titik</span>
+              <div className="matrix-pagination">
+                <button
+                  type="button"
+                  className="matrix-page-btn"
+                  onClick={() => setDetectionPage((page) => Math.max(1, page - 1))}
+                  disabled={detectionPage === 1}
+                  aria-label="Halaman sebelumnya"
+                >
+                  ‹
+                </button>
+                <span className="matrix-page-info">
+                  Halaman {detectionPage} / {detectionTotalPages}
+                </span>
+                <button
+                  type="button"
+                  className="matrix-page-btn"
+                  onClick={() => setDetectionPage((page) => Math.min(detectionTotalPages, page + 1))}
+                  disabled={detectionPage >= detectionTotalPages}
+                  aria-label="Halaman berikutnya"
+                >
+                  ›
+                </button>
               </div>
             </div>
           </section>
