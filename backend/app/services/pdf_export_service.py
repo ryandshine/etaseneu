@@ -1,7 +1,7 @@
 import logging
 import math
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from collections import Counter
 
@@ -893,133 +893,101 @@ def create_detailed_hotspot_rows(hotspots: list[dict]) -> list[list[str]]:
     return rows
 
 
-def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: list[dict]) -> bytes:
-    """
-    Generates a beautifully designed landscape A4 PDF report.
-
-    Laporan per-lembaga memakai jalur terpisah (lihat
-    agency_pdf_service.build_agency_pdf_weasyprint) -- fungsi ini hanya
-    untuk laporan agregat semua lembaga.
-    """
-    buffer = BytesIO()
-    
-    # margins 36pt (0.5 inch) left/right, 54pt top/bottom
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=landscape(A4),
-        leftMargin=36,
-        rightMargin=36,
-        topMargin=54,
-        bottomMargin=54
-    )
-
-    # Styles
-    styles = getSampleStyleSheet()
-    
-    # Custom styles to fit the design system
-    title_style = ParagraphStyle(
-        "ReportTitle",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=20,
-        leading=24,
-        textColor=COLOR_PRIMARY,
-        spaceAfter=4
-    )
-    
-    subtitle_style = ParagraphStyle(
-        "ReportSubtitle",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=10,
-        leading=13,
-        textColor=COLOR_SECONDARY,
-        spaceAfter=15
-    )
-
-    section_heading = ParagraphStyle(
-        "SectionHeading",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=13,
-        leading=16,
-        textColor=COLOR_PRIMARY,
-        spaceBefore=14,
-        spaceAfter=8,
-        keepWithNext=True
-    )
-
-    body_style = ParagraphStyle(
+def _build_report_styles() -> dict[str, ParagraphStyle]:
+    """Bangun seluruh ParagraphStyle yang dipakai di setiap seksi laporan agregat."""
+    base = getSampleStyleSheet()
+    body = ParagraphStyle(
         "ReportBody",
-        parent=styles["Normal"],
+        parent=base["Normal"],
         fontName="Helvetica",
         fontSize=9.5,
         textColor=COLOR_NEUTRAL_DARK,
         leading=14
     )
+    return {
+        "title": ParagraphStyle(
+            "ReportTitle",
+            parent=base["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=20,
+            leading=24,
+            textColor=COLOR_PRIMARY,
+            spaceAfter=4
+        ),
+        "subtitle": ParagraphStyle(
+            "ReportSubtitle",
+            parent=base["Normal"],
+            fontName="Helvetica",
+            fontSize=10,
+            leading=13,
+            textColor=COLOR_SECONDARY,
+            spaceAfter=15
+        ),
+        "section_heading": ParagraphStyle(
+            "SectionHeading",
+            parent=base["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=13,
+            leading=16,
+            textColor=COLOR_PRIMARY,
+            spaceBefore=14,
+            spaceAfter=8,
+            keepWithNext=True
+        ),
+        "body": body,
+        "bold_body": ParagraphStyle(
+            "ReportBodyBold",
+            parent=body,
+            fontName="Helvetica-Bold"
+        ),
+        "summary_box": ParagraphStyle(
+            "SummaryBox",
+            parent=base["Normal"],
+            fontName="Helvetica-Oblique",
+            fontSize=10,
+            textColor=colors.HexColor("#0f766e"),
+            leading=15
+        ),
+        "tbl_header": ParagraphStyle(
+            "TableHeader",
+            parent=base["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=8,
+            textColor=COLOR_WHITE
+        ),
+        "tbl_body": ParagraphStyle(
+            "TableBody",
+            parent=base["Normal"],
+            fontName="Helvetica",
+            fontSize=8,
+            textColor=COLOR_NEUTRAL_DARK
+        ),
+    }
 
-    bold_body_style = ParagraphStyle(
-        "ReportBodyBold",
-        parent=body_style,
-        fontName="Helvetica-Bold"
-    )
 
-    summary_box_style = ParagraphStyle(
-        "SummaryBox",
-        parent=styles["Normal"],
-        fontName="Helvetica-Oblique",
-        fontSize=10,
-        textColor=colors.HexColor("#0f766e"),
-        leading=15
-    )
-
-    tbl_header_style = ParagraphStyle(
-        "TableHeader",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=8,
-        textColor=COLOR_WHITE
-    )
-
-    tbl_body_style = ParagraphStyle(
-        "TableBody",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=8,
-        textColor=COLOR_NEUTRAL_DARK
-    )
-
-    story = []
-
-    # Format period in WIB (Asia/Jakarta) timezone
-    from datetime import timezone, timedelta
+def _format_report_period(query: HotspotQuery) -> str:
+    """Format rentang tanggal laporan dalam WIB (Asia/Jakarta), mis. "1 - 7 Agustus 2026"."""
     wib_tz = timezone(timedelta(hours=7))
     start_wib = query.start_at.astimezone(wib_tz)
     end_wib = (query.end_at - timedelta(seconds=1)).astimezone(wib_tz)
-    
+
     start_str = start_wib.strftime("%d %B %Y")
     end_str = end_wib.strftime("%d %B %Y")
-    
-    if start_str == end_str:
-        period_str = start_str
-    else:
-        period_str = f"{start_str} - {end_str}"
-    
-    # ------------------ SECTION 1: HEADER BANNER & INFO ------------------
-    story.append(Paragraph("LAPORAN EKSEKUTIF PEMANTAUAN HOTSPOT KPS", title_style))
-    story.append(Paragraph("Sistem Deteksi Dini Kebakaran Hutan dan Lahan — KPS Hotspot Monitoring & Analysis", subtitle_style))
-    
-    # Executive Summary Paragraph
+
+    return start_str if start_str == end_str else f"{start_str} - {end_str}"
+
+
+def _section_header_banner(hotspots: list[dict], period_str: str, styles: dict) -> list:
+    """SECTION 1: judul laporan, subjudul, dan kotak ringkasan eksekutif."""
     exec_summary_text = (
         "<b>Ringkasan Eksekutif:</b> Pemantauan titik panas (hotspot) dilakukan untuk mendukung mitigasi kebakaran "
         f"hutan dan lahan pada periode <b>{period_str}</b>. Hasil analisis spasial mendeteksi sebanyak <b>{len(hotspots)} "
         f"titik panas</b> yang tersebar di wilayah Kelompok Perhutanan Sosial (KPS). Data dihimpun secara real-time dari "
         "NASA FIRMS dan disinkronkan secara otomatis untuk mendukung respon cepat di lapangan."
     )
-    
-    # Styling Executive Summary as a callout box
+
     summary_table = Table(
-        [[Paragraph(exec_summary_text, summary_box_style)]],
+        [[Paragraph(exec_summary_text, styles["summary_box"])]],
         colWidths=[769.89]
     )
     summary_table.setStyle(TableStyle([
@@ -1028,12 +996,17 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
         ('PADDING', (0,0), (-1,-1), 10),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
     ]))
-    story.append(summary_table)
-    story.append(Spacer(1, 12))
+
+    return [
+        Paragraph("LAPORAN EKSEKUTIF PEMANTAUAN HOTSPOT KPS", styles["title"]),
+        Paragraph("Sistem Deteksi Dini Kebakaran Hutan dan Lahan — KPS Hotspot Monitoring & Analysis", styles["subtitle"]),
+        summary_table,
+        Spacer(1, 12),
+    ]
 
 
-    # ------------------ SECTION 2: KPI CARDS ------------------
-    # Generate statistics
+def _section_kpi_cards(hotspots: list[dict]) -> list:
+    """SECTION 2: kartu KPI ringkas (total hotspot, wilayah, satelit, status sinkronisasi)."""
     active_satellites_count = len(set(h.get("source", "N/A") for h in hotspots)) if hotspots else 0
     # Unique wilayah lembaga from actual hotspot layer_name — no duplicate counting
     total_wilayah = len(set(h.get("layer_name", "") for h in hotspots if h.get("layer_name")))
@@ -1042,67 +1015,76 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
     card2 = _create_kpi_card(str(total_wilayah), "WILAYAH LEMBAGA", COLOR_SECONDARY)
     card3 = _create_kpi_card(str(active_satellites_count), "SATELIT DETEKTOR", COLOR_PRIMARY)
     card4 = _create_kpi_card("AKTIF / ONLINE", "STATUS SINKRONISASI", COLOR_SECONDARY)
-    
+
     kpi_table = Table([[card1, card2, card3, card4]], colWidths=[192.4, 192.4, 192.4, 192.4])
     kpi_table.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('PADDING', (0,0), (-1,-1), 0),
     ]))
-    story.append(kpi_table)
-    story.append(Spacer(1, 12))
+    return [kpi_table, Spacer(1, 12)]
 
-    # ------------------ SECTION 2B: SEBARAN PER BALAI PS ------------------
-    # Dipecah jadi dua tabel: rekap per Balai PS (wilayah kerja, belasan baris)
-    # lalu rincian per lembaga/KPS. Sebelumnya keduanya tercampur dalam satu
-    # tabel berjudul "Balai Pengelola" yang isinya justru ratusan lembaga.
-    story.append(Paragraph("Sebaran Hotspot per Balai Pengelola (Wilayah Kerja)", section_heading))
-    story.append(Paragraph(
-        "Rekapitulasi titik panas per Balai Perhutanan Sosial selaku wilayah kerja pembinaan, "
-        "diurutkan berdasarkan jumlah titik panas terbanyak.",
-        body_style
-    ))
-    story.append(Spacer(1, 6))
+
+def _section_balai_ranking(hotspots: list[dict], styles: dict) -> list:
+    """SECTION 2B: rekap titik panas per Balai PS (wilayah kerja pembinaan).
+
+    Dipecah jadi dua tabel: rekap per Balai PS (wilayah kerja, belasan baris)
+    lalu rincian per lembaga/KPS (lihat _section_lembaga_ranking). Sebelumnya
+    keduanya tercampur dalam satu tabel berjudul "Balai Pengelola" yang isinya
+    justru ratusan lembaga.
+    """
+    story: list = [
+        Paragraph("Sebaran Hotspot per Balai Pengelola (Wilayah Kerja)", styles["section_heading"]),
+        Paragraph(
+            "Rekapitulasi titik panas per Balai Perhutanan Sosial selaku wilayah kerja pembinaan, "
+            "diurutkan berdasarkan jumlah titik panas terbanyak.",
+            styles["body"]
+        ),
+        Spacer(1, 6),
+    ]
 
     ranked_balai = get_ranked_wilkers(hotspots)
     if ranked_balai:
         story.append(create_balai_ranking_table(
-            hotspots, tbl_header_style, body_style, bold_body_style,
+            hotspots, styles["tbl_header"], styles["body"], styles["bold_body"],
             ranked=ranked_balai, name_header="Balai Pengelola (Wilker BPS)",
         ))
     else:
-        story.append(Paragraph("Tidak ada data titik panas untuk periode ini.", body_style))
+        story.append(Paragraph("Tidak ada data titik panas untuk periode ini.", styles["body"]))
 
     story.append(Spacer(1, 15))
     story.append(PageBreak())
+    return story
 
-    # ------------------ SECTION 2C: SELURUH LEMBAGA TERDAMPAK ------------------
-    story.append(Paragraph("Sebaran Hotspot per Lembaga (KPS)", section_heading))
-    story.append(Paragraph(
-        "Seluruh lembaga pemegang izin perhutanan sosial yang wilayahnya terdampak titik panas "
-        "pada periode ini, diurutkan berdasarkan jumlah titik panas terbanyak.",
-        body_style
-    ))
-    story.append(Spacer(1, 6))
+
+def _section_lembaga_ranking(hotspots: list[dict], styles: dict) -> list:
+    """SECTION 2C: seluruh lembaga (KPS) yang wilayahnya terdampak titik panas."""
+    story: list = [
+        Paragraph("Sebaran Hotspot per Lembaga (KPS)", styles["section_heading"]),
+        Paragraph(
+            "Seluruh lembaga pemegang izin perhutanan sosial yang wilayahnya terdampak titik panas "
+            "pada periode ini, diurutkan berdasarkan jumlah titik panas terbanyak.",
+            styles["body"]
+        ),
+        Spacer(1, 6),
+    ]
 
     ranked_lembaga = get_ranked_lembaga(hotspots)
     if ranked_lembaga:
         story.append(create_balai_ranking_table(
-            hotspots, tbl_header_style, body_style, bold_body_style,
+            hotspots, styles["tbl_header"], styles["body"], styles["bold_body"],
             ranked=ranked_lembaga, name_header="Lembaga (KPS)",
         ))
     else:
-        story.append(Paragraph("Tidak ada data titik panas untuk periode ini.", body_style))
+        story.append(Paragraph("Tidak ada data titik panas untuk periode ini.", styles["body"]))
 
     story.append(Spacer(1, 15))
     story.append(PageBreak())
+    return story
 
-    # ------------------ SECTION 3: VISUALIZATION (MAP & PIE CHART) ------------------
-    story.append(Paragraph("Sebaran Spasial & Proporsi Satelit Detektor", section_heading))
-    story.append(Paragraph("Peta sebaran spasial titik panas berdasarkan batas wilayah lembaga pengelola kawasan hutan dan proporsi deteksi masing-masing satelit.", body_style))
-    story.append(Spacer(1, 10))
 
-    # Generate spatial summary counts
+def _section_visualization(hotspots: list[dict], layers_info: list[dict], styles: dict) -> list:
+    """SECTION 3: peta sebaran spasial, pie chart satelit, dan kotak ringkasan spasial."""
     provinces = set()
     balais = set()
     wilker_counts = Counter()
@@ -1110,18 +1092,18 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
         prov = h.get("province_name") or h.get("nama_prov") or h.get("polygon_metadata", {}).get("NAMA_PROV")
         if prov:
             provinces.add(prov)
-        
+
         balai = h.get("polygon_metadata", {}).get("WILKER_BPS")
         if balai:
             balais.add(balai)
-            
+
         wilker = h.get("layer_name") or h.get("polygon_metadata", {}).get("LEMBAGA")
         if wilker:
             wilker_counts[wilker] += 1
-            
+
     count_prov = len(provinces)
     count_balai = len(balais)
-    
+
     if wilker_counts:
         top_wilker, top_count = wilker_counts.most_common(1)[0]
         if len(top_wilker) > 28:
@@ -1132,6 +1114,7 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
     else:
         top_wilker_str = "-"
 
+    body_style = styles["body"]
     summary_data = [
         [Paragraph("<b>RINGKASAN SPASIAL</b>", ParagraphStyle("SpHeader", parent=body_style, fontName="Helvetica-Bold", fontSize=8, textColor=COLOR_PRIMARY, spaceAfter=4))],
         [Paragraph(f"Provinsi Terdampak: <b>{count_prov}</b>", body_style)],
@@ -1148,69 +1131,72 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
 
     map_drawing = create_spatial_map_drawing(hotspots, layers_info, width=540, height=275)
     pie_drawing = create_pie_chart(hotspots, width=224, height=135)
-    
+
     right_col_table = Table([[pie_drawing], [Spacer(1, 10)], [summary_box]], colWidths=[224])
     right_col_table.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('PADDING', (0,0), (-1,-1), 0),
     ]))
-    
+
     vis_table = Table([[map_drawing, right_col_table]], colWidths=[540, 230])
     vis_table.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('PADDING', (0,0), (-1,-1), 0),
     ]))
-    story.append(vis_table)
-    story.append(PageBreak())
 
-    # ------------------ SECTION 3B: TREND ANALYSIS ------------------
-    story.append(Paragraph("Analisis Tren Harian Titik Panas", section_heading))
-    story.append(Paragraph(
-        "Visualisasi tren harian volume kejadian dan Fire Radiative Power (FRP) dalam periode yang dipilih.",
-        body_style
-    ))
-    story.append(Spacer(1, 10))
+    return [
+        Paragraph("Sebaran Spasial & Proporsi Satelit Detektor", styles["section_heading"]),
+        Paragraph("Peta sebaran spasial titik panas berdasarkan batas wilayah lembaga pengelola kawasan hutan dan proporsi deteksi masing-masing satelit.", body_style),
+        Spacer(1, 10),
+        vis_table,
+        PageBreak(),
+    ]
 
+
+def _section_trend(hotspots: list[dict], styles: dict) -> list:
+    """SECTION 3B: grafik tren harian volume kejadian dan FRP."""
     volume_chart = create_daily_volume_trend_chart(hotspots, width=769, height=110)
-    frp_chart    = create_daily_frp_trend_chart(hotspots,    width=769, height=110)
-    story.append(volume_chart)
-    story.append(Spacer(1, 10))
-    story.append(frp_chart)
-    
-    story.append(PageBreak())
+    frp_chart = create_daily_frp_trend_chart(hotspots, width=769, height=110)
+    return [
+        Paragraph("Analisis Tren Harian Titik Panas", styles["section_heading"]),
+        Paragraph(
+            "Visualisasi tren harian volume kejadian dan Fire Radiative Power (FRP) dalam periode yang dipilih.",
+            styles["body"]
+        ),
+        Spacer(1, 10),
+        volume_chart,
+        Spacer(1, 10),
+        frp_chart,
+        PageBreak(),
+    ]
 
-    
-    # ------------------ SECTION 4: CONFIDENCE & FRP ------------------
-    story.append(Paragraph("ANALISIS HOTSPOT BERDASARKAN CONFIDENCE DAN FRP", section_heading))
-    
+
+def _section_confidence_frp(hotspots: list[dict], styles: dict) -> list:
+    """SECTION 4: distribusi confidence & FRP -- narasi, grafik batang, dan tabel per kategori."""
+    body_style = styles["body"]
+    bold_body_style = styles["bold_body"]
+
     conf_counts = {"Tinggi": 0, "Sedang": 0, "Rendah": 0}
     frp_counts = {"Tinggi": 0, "Sedang": 0, "Rendah": 0}
-    
+
     for h in hotspots:
         conf_counts[_get_conf_cat(h)] += 1
         frp_counts[_get_frp_cat(h)] += 1
-        
+
     total_hs = len(hotspots)
-    
-    # Narratives
+
     dom_conf = max(conf_counts.items(), key=lambda x: x[1]) if total_hs else ("Rendah", 0)
     dom_frp = max(frp_counts.items(), key=lambda x: x[1]) if total_hs else ("Rendah", 0)
-    
+
     pct_conf = int(round((dom_conf[1] / total_hs) * 100)) if total_hs else 0
     pct_frp = int(round((dom_frp[1] / total_hs) * 100)) if total_hs else 0
-    
+
     narrative_text = f"Berdasarkan distribusi confidence, mayoritas hotspot berada pada kategori {dom_conf[0]} sebanyak {dom_conf[1]} titik ({pct_conf}%). "
     narrative_text += f"Berdasarkan distribusi FRP, mayoritas hotspot berada pada kategori {dom_frp[0]} sebanyak {dom_frp[1]} titik ({pct_frp}%), menunjukkan bahwa sebagian besar hotspot memiliki tingkat intensitas panas "
     narrative_text += "tinggi." if dom_frp[0] == "Tinggi" else "menengah." if dom_frp[0] == "Sedang" else "rendah."
-    
-    story.append(Paragraph(narrative_text, body_style))
-    story.append(Spacer(1, 15))
-    
 
-
-    
     # Confidence Chart & Table
     conf_data = [
         ("Tinggi", conf_counts["Tinggi"], "#ef4444"),
@@ -1218,7 +1204,7 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
         ("Rendah", conf_counts["Rendah"], "#3b82f6")
     ]
     conf_chart = create_bar_chart_drawing(conf_data, "DISTRIBUSI CONFIDENCE", width=370, height=130)
-    
+
     conf_table_data = [
         [Paragraph("Confidence", bold_body_style), Paragraph("Jumlah", bold_body_style), Paragraph("Persentase", bold_body_style)],
         [Paragraph("Tinggi", body_style), Paragraph(str(conf_counts["Tinggi"]), body_style), Paragraph(f"{int(round((conf_counts['Tinggi']/total_hs)*100))}%" if total_hs else "0%", body_style)],
@@ -1234,10 +1220,7 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('PADDING', (0,0), (-1,-1), 6)
     ]))
-    
-    story.append(Table([[conf_chart, conf_table]], colWidths=[385, 384]))
-    story.append(Spacer(1, 15))
-    
+
     # FRP Chart & Table
     frp_data = [
         ("Tinggi", frp_counts["Tinggi"], "#ef4444"),
@@ -1245,7 +1228,7 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
         ("Rendah", frp_counts["Rendah"], "#22c55e")
     ]
     frp_chart = create_bar_chart_drawing(frp_data, "DISTRIBUSI INTENSITAS FRP", width=370, height=130)
-    
+
     frp_table_data = [
         [Paragraph("Kategori FRP", bold_body_style), Paragraph("Jumlah", bold_body_style), Paragraph("Persentase", bold_body_style)],
         [Paragraph("Tinggi", body_style), Paragraph(str(frp_counts["Tinggi"]), body_style), Paragraph(f"{int(round((frp_counts['Tinggi']/total_hs)*100))}%" if total_hs else "0%", body_style)],
@@ -1261,20 +1244,27 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('PADDING', (0,0), (-1,-1), 6)
     ]))
-    
-    story.append(Table([[frp_chart, frp_table]], colWidths=[385, 384]))
-    story.append(PageBreak())
 
-# ------------------ SECTION 5: DETAILED HOTSPOT OBSERVATIONS ------------------
-    story.append(Paragraph("Daftar Detail Observasi Titik Panas (Hotspot)", section_heading))
-    
+    return [
+        Paragraph("ANALISIS HOTSPOT BERDASARKAN CONFIDENCE DAN FRP", styles["section_heading"]),
+        Paragraph(narrative_text, body_style),
+        Spacer(1, 15),
+        Table([[conf_chart, conf_table]], colWidths=[385, 384]),
+        Spacer(1, 15),
+        Table([[frp_chart, frp_table]], colWidths=[385, 384]),
+        PageBreak(),
+    ]
+
+
+def _section_detailed_table(hotspots: list[dict], styles: dict) -> list:
+    """SECTION 5: tabel rinci seluruh observasi hotspot, baris diwarnai per kategori FRP."""
     detailed_rows = create_detailed_hotspot_rows(hotspots)
     hotspot_rows = [
-        [Paragraph(cell, tbl_header_style) for cell in detailed_rows[0]]
+        [Paragraph(cell, styles["tbl_header"]) for cell in detailed_rows[0]]
     ]
     hotspot_rows.extend(
         [
-            Paragraph(cell, tbl_body_style) for cell in row
+            Paragraph(cell, styles["tbl_body"]) for cell in row
         ]
         for row in detailed_rows[1:]
     )
@@ -1299,11 +1289,18 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
 
     hotspots_table = Table(hotspot_rows, colWidths=HOTSPOT_TABLE_COL_WIDTHS, repeatRows=1)
     hotspots_table.setStyle(TableStyle(table_styles))
-    story.append(hotspots_table)
 
-    story.append(Spacer(1, 10))
+    return [
+        Paragraph("Daftar Detail Observasi Titik Panas (Hotspot)", styles["section_heading"]),
+        hotspots_table,
+        Spacer(1, 10),
+    ]
 
-    # ------------------ SIGN-OFF ------------------
+
+def _section_signoff(styles: dict) -> list:
+    """Blok tanda tangan penyiap/penyetuju di penutup laporan."""
+    body_style = styles["body"]
+    bold_body_style = styles["bold_body"]
     sig_data = [
         [Paragraph("Disiapkan Oleh:", bold_body_style), Paragraph("Disetujui Oleh:", bold_body_style)],
         [Spacer(1, 20), Spacer(1, 20)],
@@ -1319,7 +1316,45 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
         ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
         ('PADDING', (0,0), (-1,-1), 0),
     ]))
-    story.append(KeepTogether([Spacer(1, 10), sig_table]))
+    return [KeepTogether([Spacer(1, 10), sig_table])]
+
+
+def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: list[dict]) -> bytes:
+    """
+    Generates a beautifully designed landscape A4 PDF report.
+
+    Laporan per-lembaga memakai jalur terpisah (lihat
+    agency_pdf_service.build_agency_pdf_weasyprint) -- fungsi ini hanya
+    untuk laporan agregat semua lembaga. Tiap seksi laporan (lihat komentar
+    "SECTION N" yang sudah ada sejak awal di kode ini) dibangun oleh fungsi
+    _section_* terpisah supaya masing-masing bisa dibaca dan diuji sendiri,
+    alih-alih satu fungsi ~450 baris.
+    """
+    buffer = BytesIO()
+
+    # margins 36pt (0.5 inch) left/right, 54pt top/bottom
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=54,
+        bottomMargin=54
+    )
+
+    styles = _build_report_styles()
+    period_str = _format_report_period(query)
+
+    story: list = []
+    story.extend(_section_header_banner(hotspots, period_str, styles))
+    story.extend(_section_kpi_cards(hotspots))
+    story.extend(_section_balai_ranking(hotspots, styles))
+    story.extend(_section_lembaga_ranking(hotspots, styles))
+    story.extend(_section_visualization(hotspots, layers_info, styles))
+    story.extend(_section_trend(hotspots, styles))
+    story.extend(_section_confidence_frp(hotspots, styles))
+    story.extend(_section_detailed_table(hotspots, styles))
+    story.extend(_section_signoff(styles))
 
     # Build the document
     # Inject metadata to canvas
@@ -1327,10 +1362,9 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
         pass
 
     ConfiguredNumberedCanvas.period_str = period_str
-    from datetime import timedelta
     ConfiguredNumberedCanvas.download_date = datetime.now(timezone(timedelta(hours=7))).strftime("%d-%m-%Y %H:%M:%S")
 
     doc.build(story, canvasmaker=ConfiguredNumberedCanvas)
-    
+
     return buffer.getvalue()
 
