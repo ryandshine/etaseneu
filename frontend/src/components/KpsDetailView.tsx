@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Download } from "lucide-react";
-import { CircleMarker, GeoJSON, MapContainer, Popup, TileLayer, useMap } from "react-leaflet";
+import { CircleMarker, GeoJSON, MapContainer, Pane, Popup, TileLayer, useMap } from "react-leaflet";
 import { geoJSON as buildLeafletGeoJSON } from "leaflet";
 
 import type { DashboardHotspot } from "../hooks/useDashboardData";
@@ -307,32 +307,49 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                 <FitToPolygon geometry={detail.geometry} />
                 <GeoJSON
                   data={{ type: "Feature", properties: {}, geometry: detail.geometry } as never}
-                  style={{ color: "#ff8c42", weight: 3, fillColor: "#ff8c42", fillOpacity: 0.14 }}
+                  // Batas KPS tidak punya popup maupun penangan klik. Selama ia
+                  // ikut diperhitungkan, Leaflet memilih lapisan tergambar
+                  // paling akhir sebagai sasaran klik -- dan karena geometri
+                  // baru tiba setelah titik hotspot terpasang, polygon inilah
+                  // yang menang, lalu kliknya dibuang tanpa jejak. Titik jadi
+                  // terlihat mati padahal penanganya ada.
+                  style={{
+                    color: "#ff8c42",
+                    weight: 3,
+                    fillColor: "#ff8c42",
+                    fillOpacity: 0.14,
+                    interactive: false
+                  }}
                 />
               </>
             ) : null}
-            {kpsHotspots.map((hotspot) => (
-              <CircleMarker
-                key={hotspot.id}
-                center={[hotspot.latitude, hotspot.longitude]}
-                radius={6}
-                pathOptions={{
-                  color: "#1b120d",
-                  weight: 2,
-                  fillColor: sourceColor(hotspot.source),
-                  fillOpacity: 0.95
-                }}
-                eventHandlers={{ click: () => setSelectedDetectionId(hotspot.id) }}
-              >
-                <Popup>
-                  <div style={{ fontSize: "12px", fontFamily: "sans-serif" }}>
-                    <strong>{hotspot.source}</strong> ({hotspot.satellite})
-                    <div>FRP: {hotspot.frp?.toFixed(2) ?? "Tidak tersedia"}</div>
-                    <div>{new Date(hotspot.detectedAt).toLocaleString("id-ID")}</div>
-                  </div>
-                </Popup>
-              </CircleMarker>
-            ))}
+            {/* Panel sendiri di atas overlayPane (z-index 400) supaya titik
+                hotspot tidak tertutup arsiran polygon, apa pun urutan
+                datangnya data. */}
+            <Pane name="hotspot-titik" style={{ zIndex: 450 }}>
+              {kpsHotspots.map((hotspot) => (
+                <CircleMarker
+                  key={hotspot.id}
+                  center={[hotspot.latitude, hotspot.longitude]}
+                  radius={6}
+                  pathOptions={{
+                    color: "#1b120d",
+                    weight: 2,
+                    fillColor: sourceColor(hotspot.source),
+                    fillOpacity: 0.95
+                  }}
+                  eventHandlers={{ click: () => setSelectedDetectionId(hotspot.id) }}
+                >
+                  <Popup>
+                    <div style={{ fontSize: "12px", fontFamily: "sans-serif" }}>
+                      <strong>{hotspot.source}</strong> ({hotspot.satellite})
+                      <div>FRP: {hotspot.frp?.toFixed(2) ?? "Tidak tersedia"}</div>
+                      <div>{new Date(hotspot.detectedAt).toLocaleString("id-ID")}</div>
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              ))}
+            </Pane>
           </MapContainer>
         </div>
       </div>
