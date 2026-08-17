@@ -330,21 +330,21 @@ def test_dashboard_sheet_contains_kpi_charts_and_tables() -> None:
     assert dashboard["G6"].value == 2
 
     # 3. Section Headers
-    assert "1. DISTRIBUSI SEBARAN PER BALAI PS" in str(dashboard["A10"].value)
-    assert "2. DISTRIBUSI SEBARAN PER SKEMA PERHUTANAN SOSIAL" in str(dashboard["I10"].value)
+    assert "1. SEBARAN HOTSPOT PER BALAI PS" in str(dashboard["A10"].value)
+    assert "2. SEBARAN HOTSPOT PER SKEMA PERHUTANAN SOSIAL" in str(dashboard["I10"].value)
     assert "3. TREN DETEKSI HOTSPOT BULANAN" in str(dashboard["A29"].value)
     assert "4. DISTRIBUSI SEBARAN PER PROVINSI" in str(dashboard["I29"].value)
     assert "5. PARAMETER TINGKAT RISIKO" in str(dashboard["A48"].value)
-    assert "6. 10 UNIT KPS PRIORITAS PENANGANAN" in str(dashboard["H48"].value)
+    assert "6. 10 UNIT KPS PRIORITAS PENANGANAN" in str(dashboard["I48"].value)
 
     # 4. Tables in Section 3
     assert dashboard["A50"].value == "Tingkat Kepercayaan"
     assert dashboard["A56"].value == "Kategori FRP"
-    assert dashboard["D50"].value == "Satelit Sensor"
-    assert dashboard["H50"].value == "No"
-    assert dashboard["I50"].value == "Nama Kawasan / KPS"
-    assert dashboard["H51"].value == "#1"
-    assert dashboard["I51"].value == "LPHD KALIBANDUNG"
+    assert dashboard["E50"].value == "Satelit Sensor"
+    assert dashboard["I50"].value == "No"
+    assert dashboard["J50"].value == "Nama Kawasan / KPS"
+    assert dashboard["I51"].value == "#1"
+    assert dashboard["J51"].value == "LPHD KALIBANDUNG"
 
     # 5. Charts attached
     assert len(dashboard._charts) == 4

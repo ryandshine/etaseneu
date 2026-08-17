@@ -314,13 +314,14 @@ def _write_kpi_cards(sheet, summary: dict) -> None:
 def _write_section_header(sheet, row: int, col_start: int, col_end: int, title: str) -> None:
     sheet.merge_cells(start_row=row, start_column=col_start, end_row=row, end_column=col_end)
     cell = sheet.cell(row=row, column=col_start, value=title)
-    cell.font = Font(name="Calibri", bold=True, size=9.5, color=_INK)
-    cell.fill = PatternFill("solid", fgColor=_CARD_BG)
+    cell.font = Font(name="Calibri", bold=True, size=10, color=_HEADER_TEXT)
+    cell.fill = PatternFill("solid", fgColor=_INK)
     cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
     for c in range(col_start, col_end + 1):
-        sheet.cell(row=row, column=c).border = _CARD_BOX
-        sheet.cell(row=row, column=c).fill = PatternFill("solid", fgColor=_CARD_BG)
-    sheet.row_dimensions[row].height = 20
+        c_cell = sheet.cell(row=row, column=c)
+        c_cell.border = _CELL_BORDER
+        c_cell.fill = PatternFill("solid", fgColor=_INK)
+    sheet.row_dimensions[row].height = 22
 
 
 def _attach_bar_chart(sheet, anchor: str, title: str, header_row: int, row_count: int,
@@ -437,7 +438,7 @@ def _write_chart_data(sheet, row: int, col: int, headers: tuple[str, str],
 def _write_mini_summary_table(sheet, start_row: int, start_col: int, title: str,
                               data: list[tuple[str, int]], total: int) -> int:
     headers = [title, "Jumlah", "%"]
-    header_fill = PatternFill("solid", fgColor=_INK)
+    header_fill = PatternFill("solid", fgColor=_EMERALD)
     for idx, h in enumerate(headers):
         cell = sheet.cell(row=start_row, column=start_col + idx, value=h)
         cell.fill = header_fill
@@ -502,32 +503,24 @@ def _write_mini_summary_table(sheet, start_row: int, start_col: int, title: str,
 
 def _write_top_kps_table(sheet, start_row: int, start_col: int, top_kps_detail: list[dict], total: int) -> int:
     headers = [
-        ("No", 1),
-        ("Nama Kawasan / KPS", 1),
-        ("Provinsi", 1),
-        ("Skema", 1),
-        ("Balai PS", 1),
-        ("Jumlah", 1),
-        ("% Total", 2),
+        ("No", "center"),
+        ("Nama Kawasan / KPS", "left"),
+        ("Provinsi", "left"),
+        ("Skema", "center"),
+        ("Balai PS", "left"),
+        ("Jumlah", "right"),
+        ("% Total", "right"),
     ]
-    header_fill = PatternFill("solid", fgColor=_INK)
+    header_fill = PatternFill("solid", fgColor=_EMERALD)
 
-    curr_col = start_col
-    for title, span in headers:
-        cell = sheet.cell(row=start_row, column=curr_col, value=title)
+    for idx, (title, align) in enumerate(headers):
+        cell = sheet.cell(row=start_row, column=start_col + idx, value=title)
         cell.fill = header_fill
         cell.font = Font(name="Calibri", bold=True, color=_HEADER_TEXT, size=8.5)
-        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.alignment = Alignment(horizontal="center" if idx < 5 else align, vertical="center")
         cell.border = _CELL_BORDER
-        if span > 1:
-            for extra in range(1, span):
-                e_cell = sheet.cell(row=start_row, column=curr_col + extra)
-                e_cell.fill = header_fill
-                e_cell.border = _CELL_BORDER
-            sheet.merge_cells(start_row=start_row, start_column=curr_col, end_row=start_row, end_column=curr_col + span - 1)
-        curr_col += span
 
-    sheet.row_dimensions[start_row].height = 20
+    sheet.row_dimensions[start_row].height = 18
     current_row = start_row + 1
 
     for row_idx, item in enumerate(top_kps_detail):
@@ -564,12 +557,11 @@ def _write_top_kps_table(sheet, start_row: int, start_col: int, top_kps_detail: 
         c_pct.font = Font(name="Calibri", size=8)
         c_pct.number_format = "0.0%"
 
-        for offset in range(8):
+        for offset in range(7):
             cell = sheet.cell(row=current_row, column=start_col + offset)
             cell.border = _CELL_BORDER
             cell.fill = row_fill
 
-        sheet.merge_cells(start_row=current_row, start_column=start_col + 6, end_row=current_row, end_column=start_col + 7)
         sheet.row_dimensions[current_row].height = 17
         current_row += 1
 
@@ -577,8 +569,8 @@ def _write_top_kps_table(sheet, start_row: int, start_col: int, top_kps_detail: 
         empty_cell = sheet.cell(row=current_row, column=start_col, value="Tidak ada data KPS terdampak")
         empty_cell.alignment = Alignment(horizontal="center", vertical="center")
         empty_cell.font = Font(name="Calibri", italic=True, size=8.5, color=_MUTED)
-        sheet.merge_cells(start_row=current_row, start_column=start_col, end_row=current_row, end_column=start_col + 7)
-        for offset in range(8):
+        sheet.merge_cells(start_row=current_row, start_column=start_col, end_row=current_row, end_column=start_col + 6)
+        for offset in range(7):
             sheet.cell(row=current_row, column=start_col + offset).border = _CELL_BORDER
         sheet.row_dimensions[current_row].height = 20
         current_row += 1
@@ -601,9 +593,8 @@ def _write_top_kps_table(sheet, start_row: int, start_col: int, top_kps_detail: 
     p_cell.alignment = Alignment(horizontal="right", vertical="center")
     p_cell.font = Font(name="Calibri", bold=True, size=8.5, color=_INK)
     p_cell.number_format = "0.0%"
-    sheet.merge_cells(start_row=current_row, start_column=start_col + 6, end_row=current_row, end_column=start_col + 7)
 
-    for offset in range(8):
+    for offset in range(7):
         cell = sheet.cell(row=current_row, column=start_col + offset)
         cell.border = _TOTAL_BORDER
         cell.fill = PatternFill("solid", fgColor=_TOTAL_BG)
@@ -615,34 +606,34 @@ def _write_top_kps_table(sheet, start_row: int, start_col: int, top_kps_detail: 
 def _write_dashboard_sheet(sheet, summary: dict) -> None:
     total = summary["total"]
 
-    # 1. Header Banner & Metadata
+    # 1. Header Banner & Metadata Card
     _title_banner(sheet, summary)
 
-    # 2. 5 KPI Summary Cards (Baris 5 - 8)
+    # 2. 5 KPI Scorecard Cards (Baris 5 - 8)
     _write_kpi_cards(sheet, summary)
 
-    # 3. Bagian 1: Distribusi Wilayah Balai & Skema PS (Baris 10 - 27)
-    _write_section_header(sheet, 10, 1, 7, "1. DISTRIBUSI SEBARAN PER BALAI PS")
-    _write_section_header(sheet, 10, 9, 15, "2. DISTRIBUSI SEBARAN PER SKEMA PERHUTANAN SOSIAL")
+    # 3. Card Baris 1: Distribusi Wilayah Balai & Skema PS (Baris 10 - 27)
+    _write_section_header(sheet, 10, 1, 7, "1. SEBARAN HOTSPOT PER BALAI PS")
+    _write_section_header(sheet, 10, 9, 15, "2. SEBARAN HOTSPOT PER SKEMA PERHUTANAN SOSIAL")
 
-    # 4. Bagian 2: Tren Waktu & Distribusi Provinsi (Baris 29 - 46)
+    # 4. Card Baris 2: Tren Waktu & Distribusi Provinsi (Baris 29 - 46)
     _write_section_header(sheet, 29, 1, 7, "3. TREN DETEKSI HOTSPOT BULANAN")
     _write_section_header(sheet, 29, 9, 15, "4. DISTRIBUSI SEBARAN PER PROVINSI")
 
-    # 5. Bagian 3: Parameter Risiko, Satelit, & 10 KPS Prioritas (Baris 48 - 63)
-    _write_section_header(sheet, 48, 1, 6, "5. PARAMETER TINGKAT RISIKO & SENSOR SATELIT")
-    _write_section_header(sheet, 48, 8, 15, "6. 10 UNIT KPS PRIORITAS PENANGANAN (HOTSPOT TERBANYAK)")
+    # 5. Card Baris 3: Parameter Risiko & 10 KPS Prioritas (Baris 48 - 63)
+    _write_section_header(sheet, 48, 1, 7, "5. PARAMETER TINGKAT RISIKO & SENSOR SATELIT")
+    _write_section_header(sheet, 48, 9, 15, "6. 10 UNIT KPS PRIORITAS PENANGANAN (HOTSPOT TERBANYAK)")
 
     # Tabel Parameter Risiko di Kolom A:C
     _write_mini_summary_table(sheet, 50, 1, "Tingkat Kepercayaan", summary["per_confidence"], total)
     _write_mini_summary_table(sheet, 56, 1, "Kategori FRP", summary["per_frp"], total)
 
-    # Tabel Satelit Sensor di Kolom D:F
+    # Tabel Satelit Sensor di Kolom E:G
     satelit_data = summary["per_satelit"] if summary["per_satelit"] else [("Semua Sensor", total)]
-    _write_mini_summary_table(sheet, 50, 4, "Satelit Sensor", satelit_data, total)
+    _write_mini_summary_table(sheet, 50, 5, "Satelit Sensor", satelit_data, total)
 
-    # Tabel 10 KPS Prioritas di Kolom H:O
-    _write_top_kps_table(sheet, 50, 8, summary.get("top_kps_detail", []), total)
+    # Tabel 10 KPS Prioritas di Kolom I:O
+    _write_top_kps_table(sheet, 50, 9, summary.get("top_kps_detail", []), total)
 
     # 6. Pemasangan Chart & Penulisan Data Staging
     charts = [
@@ -670,12 +661,13 @@ def _write_dashboard_sheet(sheet, summary: dict) -> None:
             _attach_bar_chart(sheet, anchor, title, header_row, len(data), chart_type="bar", color=color,
                               height=7.2, width=16.2)
 
-    # Pengaturan Lebar Kolom yang Seimbang
+    # Pengaturan Lebar Kolom Grid Modular (Simetris 2 Panel A..G dan I..O)
     col_widths = {
-        "A": 16, "B": 10, "C": 9,
-        "D": 16, "E": 10, "F": 9,
-        "G": 4,
-        "H": 6, "I": 28, "J": 18, "K": 12, "L": 18, "M": 14, "N": 9, "O": 9
+        "A": 14, "B": 10, "C": 8,
+        "D": 3,
+        "E": 16, "F": 10, "G": 8,
+        "H": 4,
+        "I": 6, "J": 28, "K": 16, "L": 12, "M": 18, "N": 12, "O": 9
     }
     for col_letter, width in col_widths.items():
         sheet.column_dimensions[col_letter].width = width
