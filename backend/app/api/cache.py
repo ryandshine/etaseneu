@@ -118,6 +118,66 @@ async def upload_geojson(
     }
 
 
+@router.post("/geojson/{file_name}/deactivate")
+async def deactivate_geojson(
+    file_name: str,
+    _: None = Depends(require_admin_key),
+) -> dict[str, object]:
+    """Nonaktifkan satu layer tanpa membuang riwayatnya dari registry.
+
+    Beda dari DELETE /geojson/{file_name}: baris `geojson_file_registry` TETAP
+    ada (ditandai NONAKTIF, bukan dihapus) supaya masih terlihat di daftar
+    layer sebagai jejak riwayat. Berkas fisik tetap dihapus dari shp_dir --
+    kalau tidak, sync berikutnya akan melihatnya masih ada di disk dan
+    mengaktifkannya kembali secara otomatis (lihat `_registry_changed` di
+    GeoJsonSyncService: baris NONAKTIF yang berkasnya masih ada dianggap
+    "berubah" dan disinkron ulang jadi aktif lagi).
+    """
+    safe_filename = Path(file_name).name
+    if not safe_filename or safe_filename in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Nama file tidak valid.")
+
+    service = HotspotService()
+    shp_dir = service.layer_service.shp_dir
+
+    target_path = shp_dir / safe_filename
+    file_removed = False
+    if target_path.exists():
+        try:
+            os.remove(target_path)
+            file_removed = True
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Gagal menghapus berkas geojson: {str(e)}")
+
+    deactivated = service.layer_service.geojson_sync_service.postgres_store.deactivate_geojson_file_registry(
+        safe_filename
+    )
+
+    if not file_removed and not deactivated:
+        raise HTTPException(status_code=404, detail="Berkas geojson tidak ditemukan.")
+
+    service.layer_service.clear_caches()
+
+    summary: dict[str, object] = {
+        "active_polygon_count": 0,
+        "pruned": 0,
+        "rebuilt": 0,
+    }
+    if deactivated:
+        try:
+            summary = service.refresh_polygon_hotspot_summaries()
+        except Exception:
+            pass
+
+    return {
+        "status": "deactivated",
+        "file_name": safe_filename,
+        "file_removed": file_removed,
+        "deactivated": deactivated,
+        "polygon_hotspot_summary": summary,
+    }
+
+
 @router.delete("/geojson/{file_name}")
 async def delete_geojson(
     file_name: str,

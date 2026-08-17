@@ -18,8 +18,9 @@ export function SettingsPanel({ onRefreshLayers, adminKey }: SettingsPanelProps)
   // yang harus dipilih sadar, bukan yang kebetulan terjadi.
   const [uploadMode, setUploadMode] = useState<"add" | "replace">("add");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
-  const [deletingFile, setDeletingFile] = useState<string | null>(null);
+  type LayerAction = "delete" | "deactivate";
+  const [pendingAction, setPendingAction] = useState<{ fileName: string; action: LayerAction } | null>(null);
+  const [processingFile, setProcessingFile] = useState<string | null>(null);
 
   const fetchStatus = async () => {
     setLoadingStatus(true);
@@ -156,39 +157,56 @@ export function SettingsPanel({ onRefreshLayers, adminKey }: SettingsPanelProps)
     xhr.send(formData);
   };
 
-  const handleDeleteFile = async (fileName: string) => {
-    setDeletingFile(fileName);
+  const ACTION_CONFIG: Record<
+    LayerAction,
+    { method: "DELETE" | "POST"; path: (f: string) => string; successTitle: string; successBody: (f: string) => string; failTitle: string }
+  > = {
+    delete: {
+      method: "DELETE",
+      path: (f) => `/api/geojson/${encodeURIComponent(f)}`,
+      successTitle: "Berkas Dihapus",
+      successBody: (f) => `${f} beserta poligon terkaitnya telah dihapus permanen dari sistem.`,
+      failTitle: "Gagal Menghapus Berkas",
+    },
+    deactivate: {
+      method: "POST",
+      path: (f) => `/api/geojson/${encodeURIComponent(f)}/deactivate`,
+      successTitle: "Layer Dinonaktifkan",
+      successBody: (f) => `${f} dinonaktifkan. Riwayatnya tetap tersimpan dan masih terlihat di daftar sebagai NONAKTIF.`,
+      failTitle: "Gagal Menonaktifkan Layer",
+    },
+  };
+
+  const handleLayerAction = async (fileName: string, action: LayerAction) => {
+    setProcessingFile(fileName);
     setFeedback(null);
+    const config = ACTION_CONFIG[action];
     try {
-      const response = await fetch(`/api/geojson/${encodeURIComponent(fileName)}`, {
-        method: "DELETE",
+      const response = await fetch(config.path(fileName), {
+        method: config.method,
         headers: adminKey ? { "X-Admin-Key": adminKey } : {},
       });
       const body = await response.json().catch(() => null);
       if (response.ok) {
-        setFeedback({
-          tone: "success",
-          title: "Berkas Dihapus",
-          body: `${fileName} beserta poligon terkaitnya telah dihapus dari sistem.`
-        });
+        setFeedback({ tone: "success", title: config.successTitle, body: config.successBody(fileName) });
         fetchStatus();
         onRefreshLayers();
       } else {
         setFeedback({
           tone: "danger",
-          title: "Gagal Menghapus Berkas",
-          body: body?.detail ?? "Terjadi kesalahan saat menghapus berkas GeoJSON di server."
+          title: config.failTitle,
+          body: body?.detail ?? "Terjadi kesalahan saat memproses berkas GeoJSON di server."
         });
       }
     } catch {
       setFeedback({
         tone: "danger",
         title: "Koneksi Terputus",
-        body: "Terjadi kesalahan jaringan saat menghapus berkas. Silakan coba lagi."
+        body: "Terjadi kesalahan jaringan. Silakan coba lagi."
       });
     } finally {
-      setDeletingFile(null);
-      setPendingDelete(null);
+      setProcessingFile(null);
+      setPendingAction(null);
     }
   };
 
@@ -360,14 +378,15 @@ export function SettingsPanel({ onRefreshLayers, adminKey }: SettingsPanelProps)
           {registryStatus && registryStatus.files && registryStatus.files.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               {registryStatus.files.map((file: any) => {
-                const confirming = pendingDelete === file.file_name;
-                const isDeleting = deletingFile === file.file_name;
+                const confirmingAction =
+                  pendingAction !== null && pendingAction.fileName === file.file_name ? pendingAction.action : null;
+                const isProcessing = processingFile === file.file_name;
                 return (
                 <div
                   key={file.file_name}
                   style={{
                     background: "rgba(255, 255, 255, 0.02)",
-                    border: `1px solid ${confirming ? "rgba(239,68,68,0.4)" : "rgba(255, 255, 255, 0.05)"}`,
+                    border: `1px solid ${confirmingAction ? "rgba(239,68,68,0.4)" : "rgba(255, 255, 255, 0.05)"}`,
                     borderRadius: "8px",
                     padding: "1rem",
                     display: "flex",
@@ -399,11 +418,11 @@ export function SettingsPanel({ onRefreshLayers, adminKey }: SettingsPanelProps)
                         {file.feature_count} Poligon Wilayah
                       </span>
                     </div>
-                    {confirming ? (
+                    {confirmingAction ? (
                       <div style={{ display: "flex", gap: "0.4rem" }}>
                         <button
-                          onClick={() => handleDeleteFile(file.file_name)}
-                          disabled={isDeleting}
+                          onClick={() => handleLayerAction(file.file_name, confirmingAction)}
+                          disabled={isProcessing}
                           style={{
                             background: "#ef4444",
                             border: "1px solid #ef4444",
@@ -412,15 +431,17 @@ export function SettingsPanel({ onRefreshLayers, adminKey }: SettingsPanelProps)
                             borderRadius: "6px",
                             fontSize: "0.75rem",
                             fontWeight: 600,
-                            cursor: isDeleting ? "not-allowed" : "pointer",
-                            opacity: isDeleting ? 0.7 : 1,
+                            cursor: isProcessing ? "not-allowed" : "pointer",
+                            opacity: isProcessing ? 0.7 : 1,
                           }}
                         >
-                          {isDeleting ? "Menghapus…" : "Yakin, Hapus"}
+                          {isProcessing
+                            ? confirmingAction === "delete" ? "Menghapus…" : "Menonaktifkan…"
+                            : confirmingAction === "delete" ? "Yakin, Hapus" : "Yakin, Nonaktifkan"}
                         </button>
                         <button
-                          onClick={() => setPendingDelete(null)}
-                          disabled={isDeleting}
+                          onClick={() => setPendingAction(null)}
+                          disabled={isProcessing}
                           style={{
                             background: "transparent",
                             border: "1px solid rgba(255,255,255,0.15)",
@@ -428,28 +449,47 @@ export function SettingsPanel({ onRefreshLayers, adminKey }: SettingsPanelProps)
                             padding: "0.4rem 0.7rem",
                             borderRadius: "6px",
                             fontSize: "0.75rem",
-                            cursor: isDeleting ? "not-allowed" : "pointer",
+                            cursor: isProcessing ? "not-allowed" : "pointer",
                           }}
                         >
                           Batal
                         </button>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => setPendingDelete(file.file_name)}
-                        title={`Hapus ${file.file_name}`}
-                        style={{
-                          background: "transparent",
-                          border: "1px solid rgba(239,68,68,0.35)",
-                          color: "#fca5a5",
-                          padding: "0.4rem 0.7rem",
-                          borderRadius: "6px",
-                          fontSize: "0.75rem",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Hapus
-                      </button>
+                      <div style={{ display: "flex", gap: "0.4rem" }}>
+                        {file.is_active && (
+                          <button
+                            onClick={() => setPendingAction({ fileName: file.file_name, action: "deactivate" })}
+                            title={`Nonaktifkan ${file.file_name}`}
+                            style={{
+                              background: "transparent",
+                              border: "1px solid rgba(255,255,255,0.15)",
+                              color: "#d1d5db",
+                              padding: "0.4rem 0.7rem",
+                              borderRadius: "6px",
+                              fontSize: "0.75rem",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Nonaktifkan
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setPendingAction({ fileName: file.file_name, action: "delete" })}
+                          title={`Hapus ${file.file_name}`}
+                          style={{
+                            background: "transparent",
+                            border: "1px solid rgba(239,68,68,0.35)",
+                            color: "#fca5a5",
+                            padding: "0.4rem 0.7rem",
+                            borderRadius: "6px",
+                            fontSize: "0.75rem",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Hapus
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>

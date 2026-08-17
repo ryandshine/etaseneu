@@ -251,6 +251,49 @@ def test_upload_mode_replace_is_still_the_default(monkeypatch, tmp_path) -> None
     assert not existing.exists()
 
 
+def test_deactivate_geojson_removes_file_but_keeps_registry_row(monkeypatch, tmp_path) -> None:
+    client = _upload_client(monkeypatch, tmp_path)
+
+    from app.services.postgres_store import PostgresStore
+
+    calls: list[str] = []
+
+    def fake_deactivate(self, file_name: str) -> bool:
+        calls.append(file_name)
+        return True
+
+    monkeypatch.setattr(PostgresStore, "deactivate_geojson_file_registry", fake_deactivate)
+    monkeypatch.setattr(
+        "app.services.hotspot_service.HotspotService.refresh_polygon_hotspot_summaries",
+        lambda self: {"active_polygon_count": 1, "pruned": 1, "rebuilt": 0},
+    )
+
+    existing = tmp_path / "PS_FEB_26.geojson"
+    existing.write_text("{}", encoding="utf-8")
+
+    response = client.post("/api/geojson/PS_FEB_26.geojson/deactivate")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "deactivated"
+    assert body["file_removed"] is True
+    assert body["deactivated"] is True
+    assert not existing.exists()
+    assert calls == ["PS_FEB_26.geojson"]
+
+
+def test_deactivate_geojson_404_when_unknown(monkeypatch, tmp_path) -> None:
+    client = _upload_client(monkeypatch, tmp_path)
+
+    from app.services.postgres_store import PostgresStore
+
+    monkeypatch.setattr(PostgresStore, "deactivate_geojson_file_registry", lambda self, file_name: False)
+
+    response = client.post("/api/geojson/tidak-ada.geojson/deactivate")
+
+    assert response.status_code == 404
+
+
 def test_delete_geojson_removes_file_and_deactivates_registry(monkeypatch, tmp_path) -> None:
     client = _upload_client(monkeypatch, tmp_path)
 
