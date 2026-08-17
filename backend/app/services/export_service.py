@@ -252,86 +252,9 @@ def _title_block(sheet, summary: dict) -> int:
     return 8
 
 
-def _write_section(sheet, start_row: int, title: str, headers: tuple[str, str],
-                   data: list[tuple[str, int]], total: int) -> int:
-    """Tulis satu tabel ringkasan dengan zebra-striping dan baris total."""
-    title_cell = sheet.cell(row=start_row, column=1, value=title)
-    title_cell.font = Font(name="Calibri", bold=True, size=11, color=_INK)
-    sheet.row_dimensions[start_row].height = 22
-
-    header_row = start_row + 1
-    sheet.row_dimensions[header_row].height = 20
-    header_fill = PatternFill("solid", fgColor=_INK)
-
-    for offset, header in enumerate((*headers, "%")):
-        cell = sheet.cell(row=header_row, column=1 + offset, value=header)
-        cell.fill = header_fill
-        cell.font = Font(name="Calibri", bold=True, color=_HEADER_TEXT, size=9)
-        cell.border = _CELL_BORDER
-        cell.alignment = Alignment(
-            vertical="center",
-            horizontal="left" if offset == 0 else "right"
-        )
-
-    sum_count = sum(count for _, count in data) if data else 0
-
-    for index, (label, count) in enumerate(data):
-        row_number = header_row + 1 + index
-        sheet.row_dimensions[row_number].height = 18
-        share = (count / total) if total else 0
-
-        c_lbl = sheet.cell(row=row_number, column=1, value=label)
-        c_lbl.border = _CELL_BORDER
-        c_lbl.font = Font(name="Calibri", size=9)
-        c_lbl.alignment = Alignment(vertical="center", horizontal="left")
-
-        c_cnt = sheet.cell(row=row_number, column=2, value=count)
-        c_cnt.border = _CELL_BORDER
-        c_cnt.font = Font(name="Calibri", size=9)
-        c_cnt.number_format = "#,##0"
-        c_cnt.alignment = Alignment(vertical="center", horizontal="right")
-
-        c_pct = sheet.cell(row=row_number, column=3, value=share)
-        c_pct.border = _CELL_BORDER
-        c_pct.font = Font(name="Calibri", size=9)
-        c_pct.number_format = "0.0%"
-        c_pct.alignment = Alignment(vertical="center", horizontal="right")
-
-        if index % 2 == 1:
-            c_lbl.fill = PatternFill("solid", fgColor=_BAND)
-            c_cnt.fill = PatternFill("solid", fgColor=_BAND)
-            c_pct.fill = PatternFill("solid", fgColor=_BAND)
-
-    # Total Row
-    total_row = header_row + len(data) + 1
-    sheet.row_dimensions[total_row].height = 20
-    total_fill = PatternFill("solid", fgColor=_TOTAL_BG)
-
-    t_lbl = sheet.cell(row=total_row, column=1, value="Total")
-    t_lbl.font = Font(name="Calibri", bold=True, size=9, color=_INK)
-    t_lbl.fill = total_fill
-    t_lbl.border = _TOTAL_BORDER
-    t_lbl.alignment = Alignment(vertical="center", horizontal="left")
-
-    t_cnt = sheet.cell(row=total_row, column=2, value=sum_count)
-    t_cnt.font = Font(name="Calibri", bold=True, size=9, color=_INK)
-    t_cnt.fill = total_fill
-    t_cnt.border = _TOTAL_BORDER
-    t_cnt.number_format = "#,##0"
-    t_cnt.alignment = Alignment(vertical="center", horizontal="right")
-
-    t_pct = sheet.cell(row=total_row, column=3, value=(sum_count / total) if total else 0)
-    t_pct.font = Font(name="Calibri", bold=True, size=9, color=_INK)
-    t_pct.fill = total_fill
-    t_pct.border = _TOTAL_BORDER
-    t_pct.number_format = "0.0%"
-    t_pct.alignment = Alignment(vertical="center", horizontal="right")
-
-    return total_row + 2
-
-
 def _attach_bar_chart(sheet, anchor: str, title: str, header_row: int, row_count: int,
-                      chart_type: str = "bar", color: str = _INK) -> None:
+                      chart_type: str = "bar", color: str = _INK, data_col: int = 1,
+                      height: float = 8.5, width: float = 16.5) -> None:
     if row_count <= 0:
         return
     chart = BarChart()
@@ -339,11 +262,10 @@ def _attach_bar_chart(sheet, anchor: str, title: str, header_row: int, row_count
     chart.title = title
     chart.style = 10
     chart.legend = None
+    chart.height = height
+    chart.width = width
 
     if chart_type == "bar":
-        chart.height = min(max(4.0 + row_count * 0.48, 6.0), 16.0)
-        chart.width = 17.5
-
         # x_axis is Category Axis on the LEFT
         chart.x_axis.axPos = "l"
         chart.x_axis.tickLblPos = "nextTo"
@@ -355,9 +277,6 @@ def _attach_bar_chart(sheet, anchor: str, title: str, header_row: int, row_count
         chart.y_axis.title = "Jumlah Titik Panas"
         chart.y_axis.majorGridlines = ChartLines()
     else:
-        chart.height = 8.0
-        chart.width = 16.5
-
         # x_axis is Category Axis at the BOTTOM
         chart.x_axis.axPos = "b"
         chart.x_axis.tickLblPos = "nextTo"
@@ -377,12 +296,14 @@ def _attach_bar_chart(sheet, anchor: str, title: str, header_row: int, row_count
     chart.dataLabels.showPercent = False
     chart.dataLabels.showLegendKey = False
 
-    data = Reference(sheet, min_col=2, min_row=header_row, max_row=header_row + row_count)
-    categories = Reference(sheet, min_col=1, min_row=header_row + 1, max_row=header_row + row_count)
+    value_col = data_col + 1
+    data = Reference(sheet, min_col=value_col, min_row=header_row, max_row=header_row + row_count)
+    categories = Reference(sheet, min_col=data_col, min_row=header_row + 1, max_row=header_row + row_count)
     chart.add_data(data, titles_from_data=True)
     chart.set_categories(categories)
 
-    cat_range = f"'{sheet.title}'!$A${header_row + 1}:$A${header_row + row_count}"
+    cat_col_letter = get_column_letter(data_col)
+    cat_range = f"'{sheet.title}'!${cat_col_letter}${header_row + 1}:${cat_col_letter}${header_row + row_count}"
     if chart.series:
         chart.series[0].cat = AxDataSource(strRef=StrRef(f=cat_range))
         chart.series[0].graphicalProperties.solidFill = color
@@ -391,14 +312,15 @@ def _attach_bar_chart(sheet, anchor: str, title: str, header_row: int, row_count
 
 
 def _attach_line_chart(sheet, anchor: str, title: str, header_row: int, row_count: int,
-                       color: str = _INK, accent_color: str = _ACCENT) -> None:
+                       color: str = _INK, accent_color: str = _ACCENT, data_col: int = 1,
+                       height: float = 8.5, width: float = 16.5) -> None:
     if row_count <= 0:
         return
     chart = LineChart()
     chart.title = title
     chart.style = 13
-    chart.height = 8.0
-    chart.width = 16.5
+    chart.height = height
+    chart.width = width
     chart.legend = None
 
     chart.x_axis.axPos = "b"
@@ -418,12 +340,14 @@ def _attach_line_chart(sheet, anchor: str, title: str, header_row: int, row_coun
     chart.dataLabels.showPercent = False
     chart.dataLabels.showLegendKey = False
 
-    data = Reference(sheet, min_col=2, min_row=header_row, max_row=header_row + row_count)
-    categories = Reference(sheet, min_col=1, min_row=header_row + 1, max_row=header_row + row_count)
+    value_col = data_col + 1
+    data = Reference(sheet, min_col=value_col, min_row=header_row, max_row=header_row + row_count)
+    categories = Reference(sheet, min_col=data_col, min_row=header_row + 1, max_row=header_row + row_count)
     chart.add_data(data, titles_from_data=True)
     chart.set_categories(categories)
 
-    cat_range = f"'{sheet.title}'!$A${header_row + 1}:$A${header_row + row_count}"
+    cat_col_letter = get_column_letter(data_col)
+    cat_range = f"'{sheet.title}'!${cat_col_letter}${header_row + 1}:${cat_col_letter}${header_row + row_count}"
     if chart.series:
         chart.series[0].cat = AxDataSource(strRef=StrRef(f=cat_range))
         chart.series[0].graphicalProperties.line.solidFill = color
@@ -436,50 +360,105 @@ def _attach_line_chart(sheet, anchor: str, title: str, header_row: int, row_coun
     sheet.add_chart(chart, anchor)
 
 
-def _write_dashboard_sheet(sheet, summary: dict) -> None:
-    total = summary["total"]
-    row = _title_block(sheet, summary)
+def _write_chart_data(sheet, row: int, col: int, headers: tuple[str, str],
+                      data: list[tuple[str, int]]) -> int:
+    """Tulis label+jumlah polos (tanpa styling tabel) sebagai sumber data chart.
 
-    sections = [
+    Dashboard sekarang murni visual (KPI + chart grid), jadi angka mentahnya
+    tidak perlu tampil sebagai tabel di layar -- cukup jadi sumber Reference
+    untuk chart. Baris ini sengaja diletakkan di bawah print_area supaya tidak
+    ikut tercetak/terekspor PDF.
+    """
+    header_row = row
+    sheet.cell(row=header_row, column=col, value=headers[0])
+    sheet.cell(row=header_row, column=col + 1, value=headers[1])
+    for index, (label, count) in enumerate(data, start=1):
+        sheet.cell(row=header_row + index, column=col, value=label)
+        sheet.cell(row=header_row + index, column=col + 1, value=count)
+    return header_row
+
+
+# Grid ringkasan eksekutif: 2 kolom x 2 baris -- empat pertanyaan inti saja
+# (di mana, skema apa, kapan, provinsi mana), bukan delapan tabel+chart yang
+# ditumpuk memanjang seperti desain sebelumnya. Dibatasi 4 (bukan 6) supaya
+# muat satu halaman cetak yang sungguhan tanpa berharap pada auto-scale
+# "fit to page" -- terbukti tidak konsisten hasilnya antar aplikasi (Excel vs
+# LibreOffice). Distribusi Confidence/FRP tetap dihitung di
+# `build_dashboard_summary` untuk laporan PDF, hanya tidak ditampilkan di
+# sini supaya ringkasannya benar-benar ringkas.
+_GRID_COL_LEFT = 1   # A
+_GRID_COL_RIGHT = 9  # I
+_GRID_ROW_STEP = 16  # chart tinggi 7cm + jarak antar baris
+_CHART_HEIGHT_CM = 7.0
+_CHART_WIDTH_CM = 16.0
+
+
+def _write_dashboard_sheet(sheet, summary: dict) -> None:
+    grid_start = _title_block(sheet, summary) + 1
+
+    charts = [
         ("Hotspot per Balai PS", ("Balai PS", "Jumlah"), summary["per_balai"], "bar", _INK),
         ("Hotspot per Skema Perhutanan Sosial", ("Skema", "Jumlah"), summary["per_skema"], "col", _EMERALD),
         ("Tren Bulanan", ("Bulan", "Jumlah"), summary["per_bulan"], "line", _INK),
-        ("10 KPS dengan Hotspot Terbanyak", ("KPS", "Jumlah"), summary["top_kps"], "bar", _ACCENT),
-        ("Hotspot per Provinsi", ("Provinsi", "Jumlah"), summary["per_provinsi"], "bar", _INK),
-        ("Distribusi Confidence", ("Kategori", "Jumlah"), summary["per_confidence"], "col", _INK),
-        ("Distribusi Intensitas FRP", ("Kategori", "Jumlah"), summary["per_frp"], "col", _EMERALD),
-        ("Hotspot per Satelit", ("Satelit", "Jumlah"), summary["per_satelit"], "col", _ACCENT),
+        ("10 Provinsi Teratas", ("Provinsi", "Jumlah"), summary["per_provinsi"][:10], "bar", _ACCENT),
     ]
+    grid_rows = 2
 
-    for title, headers, data, chart_kind, color in sections:
-        header_row = row + 1
-        next_row = _write_section(sheet, row, title, headers, data, total)
-        anchor = f"E{row}"
+    # Sumber data tiap chart ditulis polos (tanpa styling tabel) berurutan di
+    # bawah grid, di luar print_area -- dashboard yang tercetak/PDF cuma
+    # berisi KPI + grid chart, tapi angka mentahnya tetap ada di sheet ini
+    # (bukan dihapus) kalau suatu saat perlu ditelusuri manual.
+    staging_row = grid_start + grid_rows * _GRID_ROW_STEP + 3
+    sheet.cell(row=staging_row - 2, column=1, value="Data pendukung chart di atas (tidak ikut tercetak)")
+    sheet.cell(row=staging_row - 2, column=1).font = Font(name="Calibri", italic=True, size=8, color=_MUTED)
+
+    for index, (title, headers, data, chart_kind, color) in enumerate(charts):
+        header_row = _write_chart_data(sheet, staging_row, 1, headers, data)
+        staging_row = header_row + len(data) + 3
+
+        grid_col = _GRID_COL_LEFT if index % 2 == 0 else _GRID_COL_RIGHT
+        grid_row = grid_start + (index // 2) * _GRID_ROW_STEP
+        anchor = f"{get_column_letter(grid_col)}{grid_row}"
+
         if chart_kind == "line":
-            _attach_line_chart(sheet, anchor, title, header_row, len(data), color)
+            _attach_line_chart(sheet, anchor, title, header_row, len(data), color,
+                               height=_CHART_HEIGHT_CM, width=_CHART_WIDTH_CM)
         elif chart_kind == "col":
-            _attach_bar_chart(sheet, anchor, title, header_row, len(data), chart_type="col", color=color)
+            _attach_bar_chart(sheet, anchor, title, header_row, len(data), chart_type="col", color=color,
+                              height=_CHART_HEIGHT_CM, width=_CHART_WIDTH_CM)
         else:
-            _attach_bar_chart(sheet, anchor, title, header_row, len(data), chart_type="bar", color=color)
+            _attach_bar_chart(sheet, anchor, title, header_row, len(data), chart_type="bar", color=color,
+                              height=_CHART_HEIGHT_CM, width=_CHART_WIDTH_CM)
 
-        table_rows = len(data) + 4
-        chart_rows = int(min(max(3.8 + len(data) * 0.45, 5.5), 14.0) * 1.8) if chart_kind == "bar" else 15
-        row = row + max(table_rows, chart_rows) + 2
+    last_grid_row = grid_start + grid_rows * _GRID_ROW_STEP
 
-    # Kolom Grid: A=28, B=11, C=9, D=3, E s.d. K = 11 masing-masing
-    sheet.column_dimensions["A"].width = 28
-    sheet.column_dimensions["B"].width = 11
-    sheet.column_dimensions["C"].width = 9
-    sheet.column_dimensions["D"].width = 3
-    for col_idx in range(5, 12):
+    # Kolom Grid: A s.d. O seragam lebar 11 (7 kolom per chart + 1 gutter)
+    for col_idx in range(1, 16):
         sheet.column_dimensions[get_column_letter(col_idx)].width = 11
 
-    # Landscape print & fit setup
+    # Landscape print & fit setup. print_area dibatasi tepat sampai bawah
+    # grid chart supaya data pendukung yang polos di bawahnya tidak ikut
+    # tercetak/terekspor PDF -- tanpa ini, area cetak default hanya
+    # mengikuti sel yang ada isinya dan chart yang melayang di luar itu bisa
+    # terpotong (persis bug yang bikin dashboard versi sebelumnya kacau).
+    sheet.print_area = f"A1:O{last_grid_row}"
     sheet.page_setup.orientation = sheet.ORIENTATION_LANDSCAPE
     sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
     sheet.sheet_properties.pageSetUpPr.fitToPage = True
+    # fitToHeight=1 (bukan 0) supaya ringkasan eksekutif ini benar-benar muat
+    # satu halaman cetak/PDF. Margin dipersempit karena auto-scale
+    # "fit to page" terbukti tidak konsisten hasilnya antar aplikasi (Excel vs
+    # LibreOffice) -- dengan grid 4 chart yang sudah dikompakkan, layout ini
+    # muat 1 halaman A4 landscape bahkan di skala 100%, jadi tidak
+    # menggantungkan diri sepenuhnya pada auto-scale itu.
     sheet.page_setup.fitToWidth = 1
-    sheet.page_setup.fitToHeight = 0
+    sheet.page_setup.fitToHeight = 1
+    sheet.page_margins.left = 0.4
+    sheet.page_margins.right = 0.4
+    sheet.page_margins.top = 0.5
+    sheet.page_margins.bottom = 0.4
+    sheet.page_margins.header = 0.2
+    sheet.page_margins.footer = 0.2
 
     sheet.views.sheetView[0].showGridLines = True
 
