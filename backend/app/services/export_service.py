@@ -3,7 +3,8 @@ from datetime import datetime, timedelta, timezone
 from io import BytesIO
 
 from openpyxl import Workbook
-from openpyxl.chart import BarChart, LineChart, Reference
+from openpyxl.chart import BarChart, DoughnutChart, LineChart, Reference
+from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
@@ -56,14 +57,18 @@ SKEMA_SHEET_TITLE = "Skema per Provinsi"
 
 # ── Palet ──────────────────────────────────────────────────────────────────
 _INK = "1B3A2B"
+_EMERALD = "2D6A4F"
 _ACCENT = "E0862A"
 _HEADER_TEXT = "FFFFFF"
-_BAND = "EEF3EF"
-_MUTED = "6B726D"
+_BAND = "F5F8F6"
+_MUTED = "5A655F"
 _RULE = "D8DDD9"
+_CARD_BG = "F4F8F5"
 
 _THIN_RULE = Side(style="thin", color=_RULE)
+_DOUBLE_RULE = Side(style="double", color=_INK)
 _CELL_BORDER = Border(left=_THIN_RULE, right=_THIN_RULE, top=_THIN_RULE, bottom=_THIN_RULE)
+_TOTAL_BORDER = Border(left=_THIN_RULE, right=_THIN_RULE, top=_THIN_RULE, bottom=_DOUBLE_RULE)
 
 
 def _wib_datetime(detected_at: object) -> datetime | None:
@@ -185,12 +190,15 @@ def _write_data_sheet(sheet, rows: list[dict]) -> None:
 
 def _title_block(sheet, summary: dict) -> int:
     sheet["A1"] = "DASHBOARD HOTSPOT KAWASAN PERHUTANAN SOSIAL"
-    sheet["A1"].font = Font(bold=True, size=16, color=_INK)
+    sheet["A1"].font = Font(bold=True, size=15, color=_INK)
     sheet["A2"] = (
         f"Periode {summary['periode_awal']} s.d. {summary['periode_akhir']}  •  "
         f"Sumber: ETA SENEU (hotspot beririsan dengan poligon KPS)"
     )
-    sheet["A2"].font = Font(size=10, color=_MUTED, italic=True)
+    sheet["A2"].font = Font(size=9, color=_MUTED, italic=True)
+
+    sheet.row_dimensions[1].height = 24
+    sheet.row_dimensions[2].height = 18
 
     cards = [
         ("Total Hotspot", summary["total"]),
@@ -199,74 +207,184 @@ def _title_block(sheet, summary: dict) -> int:
         ("Provinsi", summary["jumlah_provinsi"]),
         ("Skema PS", summary["jumlah_skema"]),
     ]
+
+    card_fill = PatternFill("solid", fgColor=_CARD_BG)
+    card_border = Border(left=_THIN_RULE, right=_THIN_RULE, top=_THIN_RULE, bottom=_THIN_RULE)
+
     for offset, (label, value) in enumerate(cards):
         column = 1 + offset * 2
         label_cell = sheet.cell(row=4, column=column, value=label)
-        label_cell.font = Font(bold=True, size=9, color=_MUTED)
+        label_cell.font = Font(bold=True, size=8, color=_MUTED)
+        label_cell.fill = card_fill
+        label_cell.border = card_border
+        label_cell.alignment = Alignment(horizontal="center", vertical="center")
+
         value_cell = sheet.cell(row=5, column=column, value=value)
-        value_cell.font = Font(bold=True, size=20, color=_INK)
+        value_cell.font = Font(bold=True, size=18, color=_INK)
+        value_cell.fill = card_fill
+        value_cell.border = card_border
+        value_cell.number_format = "#,##0"
+        value_cell.alignment = Alignment(horizontal="center", vertical="center")
+
         sheet.cell(row=6, column=column).fill = PatternFill("solid", fgColor=_ACCENT)
+
+    sheet.row_dimensions[4].height = 16
+    sheet.row_dimensions[5].height = 26
+    sheet.row_dimensions[6].height = 4
+    sheet.row_dimensions[7].height = 12
 
     return 8
 
 
 def _write_section(sheet, start_row: int, title: str, headers: tuple[str, str],
                    data: list[tuple[str, int]], total: int) -> int:
-    """Tulis satu tabel ringkasan. Mengembalikan baris kosong setelah tabel."""
+    """Tulis satu tabel ringkasan dengan zebra-striping dan baris total."""
     title_cell = sheet.cell(row=start_row, column=1, value=title)
-    title_cell.font = Font(bold=True, size=12, color=_INK)
+    title_cell.font = Font(bold=True, size=11, color=_INK)
+    sheet.row_dimensions[start_row].height = 20
 
     header_row = start_row + 1
+    sheet.row_dimensions[header_row].height = 20
     header_fill = PatternFill("solid", fgColor=_INK)
     for offset, header in enumerate((*headers, "%")):
         cell = sheet.cell(row=header_row, column=1 + offset, value=header)
         cell.fill = header_fill
-        cell.font = Font(bold=True, color=_HEADER_TEXT, size=10)
+        cell.font = Font(bold=True, color=_HEADER_TEXT, size=9)
         cell.border = _CELL_BORDER
+        cell.alignment = Alignment(
+            vertical="center",
+            horizontal="left" if offset == 0 else "right"
+        )
+
+    sum_count = sum(count for _, count in data) if data else 0
 
     for index, (label, count) in enumerate(data):
         row_number = header_row + 1 + index
-        share = (count / total * 100) if total else 0
-        values = (label, count, round(share, 1) / 100)
-        for offset, value in enumerate(values):
-            cell = sheet.cell(row=row_number, column=1 + offset, value=value)
-            cell.border = _CELL_BORDER
-            if index % 2 == 0:
-                cell.fill = PatternFill("solid", fgColor=_BAND)
-        sheet.cell(row=row_number, column=3).number_format = "0.0%"
+        sheet.row_dimensions[row_number].height = 18
+        share = (count / total) if total else 0
 
-    return header_row + max(len(data), 1) + 2
+        c_lbl = sheet.cell(row=row_number, column=1, value=label)
+        c_lbl.border = _CELL_BORDER
+        c_lbl.font = Font(size=9)
+        c_lbl.alignment = Alignment(vertical="center", horizontal="left")
+
+        c_cnt = sheet.cell(row=row_number, column=2, value=count)
+        c_cnt.border = _CELL_BORDER
+        c_cnt.font = Font(size=9)
+        c_cnt.number_format = "#,##0"
+        c_cnt.alignment = Alignment(vertical="center", horizontal="right")
+
+        c_pct = sheet.cell(row=row_number, column=3, value=share)
+        c_pct.border = _CELL_BORDER
+        c_pct.font = Font(size=9)
+        c_pct.number_format = "0.0%"
+        c_pct.alignment = Alignment(vertical="center", horizontal="right")
+
+        if index % 2 == 1:
+            c_lbl.fill = PatternFill("solid", fgColor=_BAND)
+            c_cnt.fill = PatternFill("solid", fgColor=_BAND)
+            c_pct.fill = PatternFill("solid", fgColor=_BAND)
+
+    total_row = header_row + len(data) + 1
+    sheet.row_dimensions[total_row].height = 19
+    total_fill = PatternFill("solid", fgColor="EBF2ED")
+
+    t_lbl = sheet.cell(row=total_row, column=1, value="Total")
+    t_lbl.font = Font(bold=True, size=9, color=_INK)
+    t_lbl.fill = total_fill
+    t_lbl.border = _TOTAL_BORDER
+    t_lbl.alignment = Alignment(vertical="center", horizontal="left")
+
+    t_cnt = sheet.cell(row=total_row, column=2, value=sum_count)
+    t_cnt.font = Font(bold=True, size=9, color=_INK)
+    t_cnt.fill = total_fill
+    t_cnt.border = _TOTAL_BORDER
+    t_cnt.number_format = "#,##0"
+    t_cnt.alignment = Alignment(vertical="center", horizontal="right")
+
+    t_pct = sheet.cell(row=total_row, column=3, value=(sum_count / total) if total else 0)
+    t_pct.font = Font(bold=True, size=9, color=_INK)
+    t_pct.fill = total_fill
+    t_pct.border = _TOTAL_BORDER
+    t_pct.number_format = "0.0%"
+    t_pct.alignment = Alignment(vertical="center", horizontal="right")
+
+    return total_row + 2
 
 
-def _attach_bar_chart(sheet, anchor: str, title: str, header_row: int, row_count: int) -> None:
+def _attach_bar_chart(sheet, anchor: str, title: str, header_row: int, row_count: int,
+                      chart_type: str = "bar", color: str = _INK) -> None:
     if row_count <= 0:
         return
     chart = BarChart()
-    chart.type = "bar"
+    chart.type = chart_type
     chart.title = title
-    chart.height = min(2 + row_count * 0.65, 11)
-    chart.width = 16
+    chart.style = 10
+    chart.height = min(2.8 + row_count * 0.55, 10.0) if chart_type == "bar" else 7.5
+    chart.width = 15.0
     chart.legend = None
     chart.y_axis.majorGridlines = None
+    chart.x_axis.majorGridlines = None
+
+    chart.dataLabels = DataLabelList()
+    chart.dataLabels.showVal = True
+
     data = Reference(sheet, min_col=2, min_row=header_row, max_row=header_row + row_count)
     categories = Reference(sheet, min_col=1, min_row=header_row + 1, max_row=header_row + row_count)
     chart.add_data(data, titles_from_data=True)
     chart.set_categories(categories)
+
+    if chart.series:
+        chart.series[0].graphicalProperties.solidFill = color
+
     sheet.add_chart(chart, anchor)
 
 
-def _attach_line_chart(sheet, anchor: str, title: str, header_row: int, row_count: int) -> None:
+def _attach_line_chart(sheet, anchor: str, title: str, header_row: int, row_count: int,
+                       color: str = _INK, accent_color: str = _ACCENT) -> None:
     if row_count <= 0:
         return
     chart = LineChart()
     chart.title = title
-    chart.height = 8
-    chart.width = 18
+    chart.style = 13
+    chart.height = 7.5
+    chart.width = 15.5
     chart.legend = None
+    chart.dataLabels = DataLabelList()
+    chart.dataLabels.showVal = True
+
     data = Reference(sheet, min_col=2, min_row=header_row, max_row=header_row + row_count)
     categories = Reference(sheet, min_col=1, min_row=header_row + 1, max_row=header_row + row_count)
     chart.add_data(data, titles_from_data=True)
     chart.set_categories(categories)
+
+    if chart.series:
+        chart.series[0].graphicalProperties.line.solidFill = color
+        chart.series[0].graphicalProperties.line.width = 25000
+        chart.series[0].marker.symbol = "circle"
+        chart.series[0].marker.size = 5
+        chart.series[0].marker.graphicalProperties.solidFill = accent_color
+        chart.series[0].marker.graphicalProperties.line.solidFill = accent_color
+
+    sheet.add_chart(chart, anchor)
+
+
+def _attach_doughnut_chart(sheet, anchor: str, title: str, header_row: int, row_count: int) -> None:
+    if row_count <= 0:
+        return
+    chart = DoughnutChart()
+    chart.title = title
+    chart.height = 6.5
+    chart.width = 12.0
+    chart.dataLabels = DataLabelList()
+    chart.dataLabels.showPercent = True
+    chart.dataLabels.showVal = False
+
+    data = Reference(sheet, min_col=2, min_row=header_row, max_row=header_row + row_count)
+    categories = Reference(sheet, min_col=1, min_row=header_row + 1, max_row=header_row + row_count)
+    chart.add_data(data, titles_from_data=True)
+    chart.set_categories(categories)
+
     sheet.add_chart(chart, anchor)
 
 
@@ -275,33 +393,39 @@ def _write_dashboard_sheet(sheet, summary: dict) -> None:
     row = _title_block(sheet, summary)
 
     sections = [
-        ("Hotspot per Balai PS", ("Balai PS", "Jumlah"), summary["per_balai"], "bar"),
-        ("Hotspot per Provinsi", ("Provinsi", "Jumlah"), summary["per_provinsi"], "bar"),
-        ("Hotspot per Skema Perhutanan Sosial", ("Skema", "Jumlah"), summary["per_skema"], "bar"),
-        ("Tren Bulanan", ("Bulan", "Jumlah"), summary["per_bulan"], "line"),
-        ("10 KPS dengan Hotspot Terbanyak", ("KPS", "Jumlah"), summary["top_kps"], "bar"),
-        ("Distribusi Confidence", ("Kategori", "Jumlah"), summary["per_confidence"], "bar"),
-        ("Distribusi Intensitas FRP", ("Kategori", "Jumlah"), summary["per_frp"], "bar"),
-        ("Hotspot per Satelit", ("Satelit", "Jumlah"), summary["per_satelit"], "bar"),
+        ("Hotspot per Balai PS", ("Balai PS", "Jumlah"), summary["per_balai"], "bar", _INK),
+        ("Hotspot per Skema Perhutanan Sosial", ("Skema", "Jumlah"), summary["per_skema"], "col", _EMERALD),
+        ("Tren Bulanan", ("Bulan", "Jumlah"), summary["per_bulan"], "line", _INK),
+        ("10 KPS dengan Hotspot Terbanyak", ("KPS", "Jumlah"), summary["top_kps"], "bar", _ACCENT),
+        ("Hotspot per Provinsi", ("Provinsi", "Jumlah"), summary["per_provinsi"], "bar", _INK),
+        ("Distribusi Confidence", ("Kategori", "Jumlah"), summary["per_confidence"], "doughnut", _INK),
+        ("Distribusi Intensitas FRP", ("Kategori", "Jumlah"), summary["per_frp"], "doughnut", _EMERALD),
+        ("Hotspot per Satelit", ("Satelit", "Jumlah"), summary["per_satelit"], "col", _ACCENT),
     ]
 
-    for title, headers, data, chart_kind in sections:
+    for title, headers, data, chart_kind, color in sections:
         header_row = row + 1
         next_row = _write_section(sheet, row, title, headers, data, total)
         anchor = f"E{row}"
         if chart_kind == "line":
-            _attach_line_chart(sheet, anchor, title, header_row, len(data))
+            _attach_line_chart(sheet, anchor, title, header_row, len(data), color)
+        elif chart_kind == "doughnut":
+            _attach_doughnut_chart(sheet, anchor, title, header_row, len(data))
+        elif chart_kind == "col":
+            _attach_bar_chart(sheet, anchor, title, header_row, len(data), chart_type="col", color=color)
         else:
-            _attach_bar_chart(sheet, anchor, title, header_row, len(data))
-        # Chart menempel di kolom E dan butuh ruang vertikal sendiri; tabelnya
-        # biasanya lebih pendek, jadi jarak antar seksi mengikuti yang lebih
-        # tinggi supaya chart tidak saling tumpuk.
-        row = max(next_row, header_row + len(data) + 2, row + 16)
+            _attach_bar_chart(sheet, anchor, title, header_row, len(data), chart_type="bar", color=color)
+
+        table_height = (header_row + len(data) + 3) - row
+        chart_space = max(int(min(2.8 + len(data) * 0.55, 10.0) * 1.8), 15)
+        row = max(next_row, row + max(table_height, chart_space) + 1)
 
     sheet.column_dimensions["A"].width = 38
-    sheet.column_dimensions["B"].width = 12
-    sheet.column_dimensions["C"].width = 10
+    sheet.column_dimensions["B"].width = 14
+    sheet.column_dimensions["C"].width = 11
     sheet.column_dimensions["D"].width = 3
+
+    sheet.views.sheetView[0].showGridLines = True
 
 
 def _write_skema_provinsi_sheet(sheet, matrix: SkemaProvinsiMatrix) -> None:
