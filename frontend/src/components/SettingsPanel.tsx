@@ -18,6 +18,8 @@ export function SettingsPanel({ onRefreshLayers, adminKey }: SettingsPanelProps)
   // yang harus dipilih sadar, bukan yang kebetulan terjadi.
   const [uploadMode, setUploadMode] = useState<"add" | "replace">("add");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [deletingFile, setDeletingFile] = useState<string | null>(null);
 
   const fetchStatus = async () => {
     setLoadingStatus(true);
@@ -152,6 +154,42 @@ export function SettingsPanel({ onRefreshLayers, adminKey }: SettingsPanelProps)
       xhr.setRequestHeader("X-Admin-Key", adminKey);
     }
     xhr.send(formData);
+  };
+
+  const handleDeleteFile = async (fileName: string) => {
+    setDeletingFile(fileName);
+    setFeedback(null);
+    try {
+      const response = await fetch(`/api/geojson/${encodeURIComponent(fileName)}`, {
+        method: "DELETE",
+        headers: adminKey ? { "X-Admin-Key": adminKey } : {},
+      });
+      const body = await response.json().catch(() => null);
+      if (response.ok) {
+        setFeedback({
+          tone: "success",
+          title: "Berkas Dihapus",
+          body: `${fileName} beserta poligon terkaitnya telah dihapus dari sistem.`
+        });
+        fetchStatus();
+        onRefreshLayers();
+      } else {
+        setFeedback({
+          tone: "danger",
+          title: "Gagal Menghapus Berkas",
+          body: body?.detail ?? "Terjadi kesalahan saat menghapus berkas GeoJSON di server."
+        });
+      }
+    } catch {
+      setFeedback({
+        tone: "danger",
+        title: "Koneksi Terputus",
+        body: "Terjadi kesalahan jaringan saat menghapus berkas. Silakan coba lagi."
+      });
+    } finally {
+      setDeletingFile(null);
+      setPendingDelete(null);
+    }
   };
 
   return (
@@ -321,17 +359,21 @@ export function SettingsPanel({ onRefreshLayers, adminKey }: SettingsPanelProps)
 
           {registryStatus && registryStatus.files && registryStatus.files.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              {registryStatus.files.map((file: any) => (
-                <div 
-                  key={file.file_name} 
+              {registryStatus.files.map((file: any) => {
+                const confirming = pendingDelete === file.file_name;
+                const isDeleting = deletingFile === file.file_name;
+                return (
+                <div
+                  key={file.file_name}
                   style={{
                     background: "rgba(255, 255, 255, 0.02)",
-                    border: "1px solid rgba(255, 255, 255, 0.05)",
+                    border: `1px solid ${confirming ? "rgba(239,68,68,0.4)" : "rgba(255, 255, 255, 0.05)"}`,
                     borderRadius: "8px",
                     padding: "1rem",
                     display: "flex",
                     justifyContent: "space-between",
-                    alignItems: "center"
+                    alignItems: "center",
+                    gap: "1rem",
                   }}
                 >
                   <div>
@@ -340,24 +382,78 @@ export function SettingsPanel({ onRefreshLayers, adminKey }: SettingsPanelProps)
                       Layer Key: <code>{file.layer_key}</code>
                     </span>
                   </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", justifyContent: "flex-end", marginBottom: "0.25rem" }}>
-                      <span style={{ 
-                        width: "6px", 
-                        height: "6px", 
-                        borderRadius: "50%", 
-                        backgroundColor: file.is_active ? "#10b981" : "#6b7280" 
-                      }} />
-                      <span style={{ fontSize: "0.75rem", color: file.is_active ? "#10b981" : "#6b7280", fontWeight: "bold" }}>
-                        {file.is_active ? "AKTIF" : "NONAKTIF"}
+                  <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", justifyContent: "flex-end", marginBottom: "0.25rem" }}>
+                        <span style={{
+                          width: "6px",
+                          height: "6px",
+                          borderRadius: "50%",
+                          backgroundColor: file.is_active ? "#10b981" : "#6b7280"
+                        }} />
+                        <span style={{ fontSize: "0.75rem", color: file.is_active ? "#10b981" : "#6b7280", fontWeight: "bold" }}>
+                          {file.is_active ? "AKTIF" : "NONAKTIF"}
+                        </span>
+                      </div>
+                      <span style={{ color: "#9ca3af", fontSize: "0.75rem" }}>
+                        {file.feature_count} Poligon Wilayah
                       </span>
                     </div>
-                    <span style={{ color: "#9ca3af", fontSize: "0.75rem" }}>
-                      {file.feature_count} Poligon Wilayah
-                    </span>
+                    {confirming ? (
+                      <div style={{ display: "flex", gap: "0.4rem" }}>
+                        <button
+                          onClick={() => handleDeleteFile(file.file_name)}
+                          disabled={isDeleting}
+                          style={{
+                            background: "#ef4444",
+                            border: "1px solid #ef4444",
+                            color: "#fff",
+                            padding: "0.4rem 0.7rem",
+                            borderRadius: "6px",
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            cursor: isDeleting ? "not-allowed" : "pointer",
+                            opacity: isDeleting ? 0.7 : 1,
+                          }}
+                        >
+                          {isDeleting ? "Menghapus…" : "Yakin, Hapus"}
+                        </button>
+                        <button
+                          onClick={() => setPendingDelete(null)}
+                          disabled={isDeleting}
+                          style={{
+                            background: "transparent",
+                            border: "1px solid rgba(255,255,255,0.15)",
+                            color: "#fff",
+                            padding: "0.4rem 0.7rem",
+                            borderRadius: "6px",
+                            fontSize: "0.75rem",
+                            cursor: isDeleting ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          Batal
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setPendingDelete(file.file_name)}
+                        title={`Hapus ${file.file_name}`}
+                        style={{
+                          background: "transparent",
+                          border: "1px solid rgba(239,68,68,0.35)",
+                          color: "#fca5a5",
+                          padding: "0.4rem 0.7rem",
+                          borderRadius: "6px",
+                          fontSize: "0.75rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Hapus
+                      </button>
+                    )}
                   </div>
                 </div>
-              ))}
+              );})}
             </div>
           ) : (
             <div style={{ textAlign: "center", padding: "2rem", color: "#6b7280", fontSize: "0.85rem" }}>

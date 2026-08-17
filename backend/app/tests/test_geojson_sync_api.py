@@ -251,6 +251,72 @@ def test_upload_mode_replace_is_still_the_default(monkeypatch, tmp_path) -> None
     assert not existing.exists()
 
 
+def test_delete_geojson_removes_file_and_deactivates_registry(monkeypatch, tmp_path) -> None:
+    client = _upload_client(monkeypatch, tmp_path)
+
+    from app.services.postgres_store import PostgresStore
+
+    calls: list[str] = []
+
+    def fake_remove(self, file_name: str) -> str | None:
+        calls.append(file_name)
+        return "PS_FEB_26"
+
+    monkeypatch.setattr(PostgresStore, "remove_geojson_file_registry", fake_remove)
+    monkeypatch.setattr(
+        "app.services.hotspot_service.HotspotService.refresh_polygon_hotspot_summaries",
+        lambda self: {"active_polygon_count": 1, "pruned": 0, "rebuilt": 1},
+    )
+
+    existing = tmp_path / "PS_FEB_26.geojson"
+    existing.write_text("{}", encoding="utf-8")
+
+    response = client.delete("/api/geojson/PS_FEB_26.geojson")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "deleted"
+    assert body["file_name"] == "PS_FEB_26.geojson"
+    assert body["file_removed"] is True
+    assert body["layer_key"] == "PS_FEB_26"
+    assert not existing.exists()
+    assert calls == ["PS_FEB_26.geojson"]
+
+
+def test_delete_geojson_404_when_unknown(monkeypatch, tmp_path) -> None:
+    client = _upload_client(monkeypatch, tmp_path)
+
+    from app.services.postgres_store import PostgresStore
+
+    monkeypatch.setattr(PostgresStore, "remove_geojson_file_registry", lambda self, file_name: None)
+
+    response = client.delete("/api/geojson/tidak-ada.geojson")
+
+    assert response.status_code == 404
+
+
+def test_delete_geojson_rejects_path_traversal(monkeypatch, tmp_path) -> None:
+    client = _upload_client(monkeypatch, tmp_path)
+
+    from app.services.postgres_store import PostgresStore
+
+    calls: list[str] = []
+    monkeypatch.setattr(
+        PostgresStore,
+        "remove_geojson_file_registry",
+        lambda self, file_name: calls.append(file_name) or None,
+    )
+
+    response = client.delete("/api/geojson/..%2F..%2Fetc%2Fpasswd")
+
+    # "{file_name}" adalah path segment tunggal -- routing FastAPI sendiri
+    # sudah menolak "/" yang ter-decode dari "%2F" sebelum handler dipanggil,
+    # jadi Path(...).name di dalam handler adalah lapisan pertahanan kedua,
+    # bukan satu-satunya. calls tetap kosong karena handler tidak pernah jalan.
+    assert response.status_code == 404
+    assert calls == []
+
+
 def test_upload_rejects_unknown_mode(monkeypatch, tmp_path) -> None:
     client = _upload_client(monkeypatch, tmp_path)
     existing = tmp_path / "lama.geojson"

@@ -118,6 +118,58 @@ async def upload_geojson(
     }
 
 
+@router.delete("/geojson/{file_name}")
+async def delete_geojson(
+    file_name: str,
+    _: None = Depends(require_admin_key),
+) -> dict[str, object]:
+    # Path.name membuang komponen direktori apa pun, sama seperti di upload --
+    # file_name di sini datang dari URL yang diketik/dibentuk klien.
+    safe_filename = Path(file_name).name
+    if not safe_filename or safe_filename in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Nama file tidak valid.")
+
+    service = HotspotService()
+    shp_dir = service.layer_service.shp_dir
+
+    target_path = shp_dir / safe_filename
+    file_removed = False
+    if target_path.exists():
+        try:
+            os.remove(target_path)
+            file_removed = True
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Gagal menghapus berkas geojson: {str(e)}")
+
+    layer_key = service.layer_service.geojson_sync_service.postgres_store.remove_geojson_file_registry(
+        safe_filename
+    )
+
+    if not file_removed and layer_key is None:
+        raise HTTPException(status_code=404, detail="Berkas geojson tidak ditemukan.")
+
+    service.layer_service.clear_caches()
+
+    summary: dict[str, object] = {
+        "active_polygon_count": 0,
+        "pruned": 0,
+        "rebuilt": 0,
+    }
+    if layer_key is not None:
+        try:
+            summary = service.refresh_polygon_hotspot_summaries()
+        except Exception:
+            pass
+
+    return {
+        "status": "deleted",
+        "file_name": safe_filename,
+        "file_removed": file_removed,
+        "layer_key": layer_key,
+        "polygon_hotspot_summary": summary,
+    }
+
+
 @router.post("/polygon-hotspot-summary/refresh")
 async def polygon_hotspot_summary_refresh(_: None = Depends(require_admin_key)) -> dict[str, int]:
     service = HotspotService()

@@ -199,3 +199,46 @@ class _LayerRegistryMixin:
                     )
                     return True
                 return False
+
+    def remove_geojson_file_registry(self, file_name: str) -> str | None:
+        """Hapus berkas GeoJSON dari sistem secara permanen.
+
+        Beda dari `deactivate_geojson_file_registry` (dipakai mode upload
+        "replace" dan pembersihan otomatis saat sync): fungsi itu menyisakan
+        baris registry sebagai riwayat NONAKTIF, yang lama-lama menumpuk jadi
+        sampah di daftar layer. Ini dipanggil dari aksi "Hapus" yang eksplisit
+        di menu Pengaturan, jadi baris registry-nya sekalian dibuang -- tidak
+        ada FK lain yang menunjuk ke `geojson_file_registry` jadi aman untuk
+        hard delete.
+
+        `polygon_metadata` milik layer itu tetap hanya dinonaktifkan (bukan
+        dihapus): baris itu masih dirujuk oleh `hotspot_polygon_relation`
+        lewat FK, jadi menghapusnya akan merusak riwayat pencocokan hotspot
+        yang sudah tercatat.
+
+        Return `layer_key` kalau ada baris yang ditemukan & dihapus, `None`
+        kalau berkasnya memang tidak terdaftar (pemanggil lalu tahu harus
+        balas 404, bukan pura-pura sukses).
+        """
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE polygon_metadata
+                    SET is_active = FALSE, updated_at = NOW()
+                    WHERE layer_key = (
+                        SELECT layer_key FROM geojson_file_registry WHERE file_name = %s
+                    ) AND is_active = TRUE
+                    """,
+                    (file_name,),
+                )
+                cur.execute(
+                    """
+                    DELETE FROM geojson_file_registry
+                    WHERE file_name = %s
+                    RETURNING layer_key
+                    """,
+                    (file_name,),
+                )
+                row = cur.fetchone()
+                return row["layer_key"] if row else None
