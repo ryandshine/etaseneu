@@ -116,9 +116,9 @@ function slugifyFilename(value: string): string {
 type HotspotMatrixProps = {
   hotspots: MatrixHotspot[];
   geojsonStatus: GeoJsonStatusResponse | null;
-  onExport: (filters: { province?: string; wilker?: string; confidence?: string }) => void;
+  onExport: (filters: { province?: string; wilker?: string; confidence?: string; skema?: string }) => void;
   isExporting: boolean;
-  onExportPdf: (filters: { province?: string; wilker?: string; confidence?: string; agency?: string }) => void;
+  onExportPdf: (filters: { province?: string; wilker?: string; confidence?: string; skema?: string; agency?: string }) => void;
   isExportingPdf: boolean;
   startDate: string;
   endDate: string;
@@ -298,6 +298,72 @@ function buildFrpDistribution(hotspots: MatrixHotspot[]): ChartItem[] {
     ...bin,
     value: hotspots.filter((hotspot) => getFrpCategory(hotspot) === bin.label).length,
   }));
+}
+
+const SKEMA_FALLBACK = "Tanpa Skema";
+
+// Sebagian polygon di sumber belum mengisi SKEMA; titiknya tetap dihitung lewat
+// label SKEMA_FALLBACK supaya total tabel silang sama dengan jumlah rekaman
+// yang tampil di buku besar. Label ini sengaja sama dengan yang dipakai ekspor
+// XLSX/PDF (backend: polygon_fields.skema_name).
+function getSkema(hotspot: MatrixHotspot) {
+  return (hotspot.polygonMetadata.SKEMA || "").trim() || SKEMA_FALLBACK;
+}
+
+function getProvinsi(hotspot: MatrixHotspot) {
+  return (hotspot.provinceName || hotspot.polygonMetadata.NAMA_PROV || "").trim() || "Tanpa Provinsi";
+}
+
+type SkemaProvinsiRow = {
+  provinsi: string;
+  counts: number[];
+  total: number;
+};
+
+type SkemaProvinsiMatrix = {
+  skema: string[];
+  rows: SkemaProvinsiRow[];
+  totals: number[];
+  grandTotal: number;
+  maxCell: number;
+};
+
+function buildSkemaProvinsiMatrix(hotspots: MatrixHotspot[]): SkemaProvinsiMatrix {
+  const pairCounts = new Map<string, number>();
+  const skemaTotals = new Map<string, number>();
+  const provinsiTotals = new Map<string, number>();
+
+  hotspots.forEach((hotspot) => {
+    const skema = getSkema(hotspot);
+    const provinsi = getProvinsi(hotspot);
+    const pairKey = `${provinsi} ${skema}`;
+    pairCounts.set(pairKey, (pairCounts.get(pairKey) ?? 0) + 1);
+    skemaTotals.set(skema, (skemaTotals.get(skema) ?? 0) + 1);
+    provinsiTotals.set(provinsi, (provinsiTotals.get(provinsi) ?? 0) + 1);
+  });
+
+  // Kolom & baris diurutkan dari yang terbanyak: tabelnya bisa selebar delapan
+  // kolom dan pembaca hampir selalu berhenti di beberapa kolom pertama.
+  const byCountDesc = (a: [string, number], b: [string, number]) =>
+    b[1] - a[1] || a[0].localeCompare(b[0]);
+
+  const skema = Array.from(skemaTotals.entries()).sort(byCountDesc).map(([label]) => label);
+  const rows = Array.from(provinsiTotals.entries())
+    .sort(byCountDesc)
+    .map(([provinsi, total]) => ({
+      provinsi,
+      counts: skema.map((label) => pairCounts.get(`${provinsi} ${label}`) ?? 0),
+      total,
+    }));
+  const totals = skema.map((label) => skemaTotals.get(label) ?? 0);
+
+  return {
+    skema,
+    rows,
+    totals,
+    grandTotal: hotspots.length,
+    maxCell: Math.max(0, ...Array.from(pairCounts.values())),
+  };
 }
 
 function buildTopWilker(hotspots: MatrixHotspot[]) {
@@ -563,6 +629,116 @@ function MultiLineChart({
 }
 
 
+function SkemaProvinsiCard({
+  matrix,
+  activeSkema,
+  activeProvince,
+  onSelectSkema,
+  onSelectProvince
+}: {
+  matrix: SkemaProvinsiMatrix;
+  activeSkema: string;
+  activeProvince: string;
+  onSelectSkema: (label: string) => void;
+  onSelectProvince: (label: string) => void;
+}) {
+  const dominant = matrix.skema[0];
+  const dominantShare = matrix.grandTotal ? Math.round((matrix.totals[0] / matrix.grandTotal) * 100) : 0;
+
+  return (
+    <section className="matrix-chart-card matrix-chart-card--wide glass-panel">
+      <div className="matrix-chart-card__header">
+        <div>
+          <p className="panel-eyebrow">Tabel Silang</p>
+          <h3>Hotspot per Skema per Provinsi</h3>
+        </div>
+        <p className="skema-matrix__meta">
+          {matrix.skema.length} skema · {matrix.rows.length} provinsi · {matrix.grandTotal} titik
+        </p>
+      </div>
+
+      {matrix.skema.length === 0 ? (
+        <div className="matrix-empty matrix-empty--card">Data hotspot tidak tersedia</div>
+      ) : (
+        <>
+          <p className="skema-matrix__lead">
+            Konsentrasi terbesar pada skema <strong>{dominant}</strong> ({matrix.totals[0]} titik ·{" "}
+            {dominantShare}%). Klik nama skema atau provinsi untuk menyaring seluruh matriks.
+          </p>
+          <div className="skema-matrix__scroll">
+            <table className="skema-matrix">
+              <thead>
+                <tr>
+                  <th scope="col">Provinsi</th>
+                  {matrix.skema.map((label) => (
+                    <th key={label} scope="col">
+                      <button
+                        type="button"
+                        className={`skema-matrix__head-btn${activeSkema === label ? " is-active" : ""}`}
+                        onClick={() => onSelectSkema(label)}
+                        title={`Saring skema ${label}`}
+                      >
+                        {label}
+                      </button>
+                    </th>
+                  ))}
+                  <th className="skema-matrix__total-col" scope="col">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {matrix.rows.map((row) => (
+                  <tr key={row.provinsi} className={activeProvince === row.provinsi ? "is-active" : ""}>
+                    <th scope="row">
+                      <button
+                        type="button"
+                        className={`skema-matrix__head-btn${activeProvince === row.provinsi ? " is-active" : ""}`}
+                        onClick={() => onSelectProvince(row.provinsi)}
+                        title={`Saring provinsi ${row.provinsi}`}
+                      >
+                        {row.provinsi}
+                      </button>
+                    </th>
+                    {row.counts.map((count, index) => (
+                      <td
+                        key={matrix.skema[index]}
+                        // Sel diberi gradasi menurut nilai terbesar di seluruh
+                        // tabel supaya konsentrasi terbaca sekilas tanpa harus
+                        // membandingkan angka satu per satu.
+                        style={
+                          count
+                            ? {
+                                background: `rgba(255, 78, 0, ${Math.max(
+                                  0.08,
+                                  (count / (matrix.maxCell || 1)) * 0.62,
+                                ).toFixed(3)})`
+                              }
+                            : undefined
+                        }
+                      >
+                        {count || <span className="skema-matrix__zero">–</span>}
+                      </td>
+                    ))}
+                    <td className="skema-matrix__total-col">{row.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th scope="row">Total</th>
+                  {matrix.totals.map((total, index) => (
+                    <td key={matrix.skema[index]}>{total}</td>
+                  ))}
+                  <td className="skema-matrix__total-col">{matrix.grandTotal}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 function renderCompactCard(title: string, data: any[], total: number, activeLabel: string | null = null, onClick: ((label: string | null) => void) | null = null) {
   const maxVal = Math.max(...data.map(d => d.value), 1);
   const domCategory = [...data].sort((a, b) => b.value - a.value)[0];
@@ -673,6 +849,7 @@ export function HotspotMatrix({
 
   const [wilkerFilter, setWilkerFilter] = useState("");
   const [provinceFilter, setProvinceFilter] = useState("");
+  const [skemaFilter, setSkemaFilter] = useState("");
   const [activeFrpCategory, setActiveFrpCategory] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
@@ -695,13 +872,14 @@ export function HotspotMatrix({
             .filter((h) => {
               const wilkerMatch = wilkerFilter ? h.polygonMetadata.WILKER_BPS === wilkerFilter : true;
               const frpMatch = activeFrpCategory ? getFrpCategory(h) === activeFrpCategory : true;
-              return wilkerMatch && frpMatch;
+              const skemaMatch = skemaFilter ? getSkema(h) === skemaFilter : true;
+              return wilkerMatch && frpMatch && skemaMatch;
             })
             .map((h) => h.provinceName)
             .filter((province): province is string => Boolean(province)),
         ),
       ).sort(),
-    [hotspots, wilkerFilter, activeFrpCategory],
+    [hotspots, wilkerFilter, activeFrpCategory, skemaFilter],
   );
 
   // Cascading filter: Wilker options only show wilkers that have hotspots
@@ -714,13 +892,33 @@ export function HotspotMatrix({
             .filter((h) => {
               const provinceMatch = provinceFilter ? h.provinceName === provinceFilter : true;
               const frpMatch = activeFrpCategory ? getFrpCategory(h) === activeFrpCategory : true;
-              return provinceMatch && frpMatch;
+              const skemaMatch = skemaFilter ? getSkema(h) === skemaFilter : true;
+              return provinceMatch && frpMatch && skemaMatch;
             })
             .map((h) => h.polygonMetadata.WILKER_BPS)
             .filter((value): value is string => Boolean(value && value.trim())),
         ),
       ).sort(),
-    [hotspots, provinceFilter, activeFrpCategory],
+    [hotspots, provinceFilter, activeFrpCategory, skemaFilter],
+  );
+
+  // Opsi skema mengikuti pilihan wilker/provinsi/FRP yang sedang aktif, sama
+  // seperti dua filter bertingkat di atasnya.
+  const skemaOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          hotspots
+            .filter((h) => {
+              const wilkerMatch = wilkerFilter ? h.polygonMetadata.WILKER_BPS === wilkerFilter : true;
+              const provinceMatch = provinceFilter ? h.provinceName === provinceFilter : true;
+              const frpMatch = activeFrpCategory ? getFrpCategory(h) === activeFrpCategory : true;
+              return wilkerMatch && provinceMatch && frpMatch;
+            })
+            .map(getSkema),
+        ),
+      ).sort(),
+    [hotspots, wilkerFilter, provinceFilter, activeFrpCategory],
   );
 
   const latestRegistrySync = useMemo(() => getLatestRegistrySync(geojsonStatus), [geojsonStatus]);
@@ -733,6 +931,7 @@ export function HotspotMatrix({
           : true;
         const provinceMatch = provinceFilter ? hotspot.provinceName === provinceFilter : true;
         const frpMatch = activeFrpCategory ? getFrpCategory(hotspot) === activeFrpCategory : true;
+        const skemaMatch = skemaFilter ? getSkema(hotspot) === skemaFilter : true;
 
         let periodMatch = true;
         if (selectedPeriod) {
@@ -752,9 +951,9 @@ export function HotspotMatrix({
           searchMatch = kpsValue.includes(query) || balaiPsValue.includes(query) || provinsiValue.includes(query) || kabupatenValue.includes(query);
         }
 
-        return wilkerMatch && provinceMatch && frpMatch && periodMatch && searchMatch;
+        return wilkerMatch && provinceMatch && frpMatch && skemaMatch && periodMatch && searchMatch;
       }),
-    [activeFrpCategory, hotspots, wilkerFilter, provinceFilter, selectedPeriod, searchQuery],
+    [activeFrpCategory, hotspots, wilkerFilter, provinceFilter, skemaFilter, selectedPeriod, searchQuery],
   );
 
   const groupedRows = useMemo(() => {
@@ -787,11 +986,15 @@ export function HotspotMatrix({
   // Reset ke halaman 1 setiap kali filter berubah
   useEffect(() => {
     setCurrentPage(1);
-  }, [wilkerFilter, provinceFilter, activeFrpCategory, groupedRows.length]);
+  }, [wilkerFilter, provinceFilter, skemaFilter, activeFrpCategory, groupedRows.length]);
 
     const confidenceDistribution = useMemo(() => buildConfidenceDistribution(filteredHotspots), [filteredHotspots]);
 const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [filteredHotspots]);
   const topWilker = useMemo(() => buildTopWilker(filteredHotspots), [filteredHotspots]);
+  const skemaProvinsiMatrix = useMemo(
+    () => buildSkemaProvinsiMatrix(filteredHotspots),
+    [filteredHotspots],
+  );
   const frpChartHeight = Math.max(220, frpDistribution.length * 28 + 44);
   const topWilkerChartHeight = Math.max(240, topWilker.length * 34 + 56);
   const analyticsChartHeight = Math.max(frpChartHeight, topWilkerChartHeight);
@@ -881,7 +1084,8 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
             onClick={() => onExport({
               province: provinceFilter || undefined,
               wilker: wilkerFilter || undefined,
-              confidence: activeFrpCategory || undefined
+              confidence: activeFrpCategory || undefined,
+              skema: skemaFilter || undefined
             })}
             disabled={isExporting || filteredHotspots.length === 0}
           >
@@ -893,7 +1097,8 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
             onClick={() => onExportPdf({
               province: provinceFilter || undefined,
               wilker: wilkerFilter || undefined,
-              confidence: activeFrpCategory || undefined
+              confidence: activeFrpCategory || undefined,
+              skema: skemaFilter || undefined
             })}
             disabled={isExportingPdf || filteredHotspots.length === 0}
           >
@@ -964,6 +1169,21 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
         </label>
 
         <label className="matrix-field">
+          <span>Skema Filter</span>
+          <select
+            value={skemaFilter}
+            onChange={(event) => setSkemaFilter(event.currentTarget.value)}
+          >
+            <option value="">Semua skema</option>
+            {skemaOptions.map((skema) => (
+              <option key={skema} value={skema}>
+                {skema}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="matrix-field">
           <span>Provinsi Filter</span>
           <select
             value={provinceFilter}
@@ -985,6 +1205,14 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
           {renderCompactCard("Confidence", confidenceDistribution, filteredHotspots.length)}
           {renderCompactCard("FRP", frpDistribution, filteredHotspots.length, activeFrpCategory, handleSelectFrpCategory)}
           
+          <SkemaProvinsiCard
+            matrix={skemaProvinsiMatrix}
+            activeSkema={skemaFilter}
+            activeProvince={provinceFilter}
+            onSelectSkema={(label) => setSkemaFilter((current) => (current === label ? "" : label))}
+            onSelectProvince={(label) => setProvinceFilter((current) => (current === label ? "" : label))}
+          />
+
           <section className="matrix-chart-card matrix-chart-card--wide glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>
             <div className="matrix-chart-card__header">
               <div>
@@ -1087,6 +1315,23 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                       type="button"
                       onClick={() => {
                         setWilkerFilter("");
+                        setCurrentPage(1);
+                      }}
+                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '0.2rem' }}
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+                {skemaFilter && (
+                  <>
+                    <span style={{ backgroundColor: 'rgba(20, 184, 166, 0.2)', color: '#2dd4bf', padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.8rem', fontWeight: '500' }}>
+                      SKEMA: {skemaFilter}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSkemaFilter("");
                         setCurrentPage(1);
                       }}
                       style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '0.2rem' }}

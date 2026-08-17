@@ -12,7 +12,18 @@ from app.services.hotspot_categories import (
     confidence_category,
     frp_category,
 )
-from app.services.polygon_fields import polygon_field, sk_date, sk_number
+from app.services.polygon_fields import (
+    polygon_field,
+    provinsi_name,
+    sk_date,
+    sk_number,
+    skema_name,
+)
+from app.services.skema_stats import (
+    SkemaProvinsiMatrix,
+    build_skema_provinsi_matrix,
+    count_per_skema,
+)
 
 
 WIB = timezone(timedelta(hours=7))
@@ -20,11 +31,12 @@ WIB = timezone(timedelta(hours=7))
 EXPORT_HEADERS = [
     "No",
     "Nama Wilayah",
-    # Balai PS & Provinsi disisipkan setelah "Nama Wilayah" -- posisi kolom
-    # sebelumnya (No, Nama Wilayah) sengaja dipertahankan supaya konsumen lama
-    # yang membaca dua kolom pertama tidak ikut bergeser.
+    # Balai PS, Provinsi, & Skema disisipkan setelah "Nama Wilayah" -- posisi
+    # kolom sebelumnya (No, Nama Wilayah) sengaja dipertahankan supaya konsumen
+    # lama yang membaca dua kolom pertama tidak ikut bergeser.
     "No. SK",
     "Tgl SK",
+    "Skema",
     "Balai PS",
     "Provinsi",
     "Kabupaten",
@@ -40,6 +52,7 @@ EXPORT_HEADERS = [
 
 DATA_SHEET_TITLE = "Data Hotspot"
 DASHBOARD_SHEET_TITLE = "Dashboard"
+SKEMA_SHEET_TITLE = "Skema per Provinsi"
 
 # ── Palet ──────────────────────────────────────────────────────────────────
 _INK = "1B3A2B"
@@ -69,13 +82,6 @@ def _balai_ps(hotspot: dict) -> str:
     return polygon_field(hotspot, "WILKER_BPS") or "Tanpa Balai"
 
 
-def _provinsi(hotspot: dict) -> str:
-    direct = hotspot.get("province_name")
-    if direct not in (None, ""):
-        return str(direct)
-    return polygon_field(hotspot, "NAMA_PROV", "NAMA_PROVINSI", "PROVINSI") or "Tanpa Provinsi"
-
-
 def build_export_rows(hotspots: list[dict]) -> list[dict]:
     rows: list[dict] = []
     for index, hotspot in enumerate(hotspots, start=1):
@@ -90,8 +96,9 @@ def build_export_rows(hotspots: list[dict]) -> list[dict]:
                 "Nama Wilayah": hotspot.get("layer_name", ""),
                 "No. SK": sk_number(hotspot),
                 "Tgl SK": sk_date(hotspot),
+                "Skema": skema_name(hotspot),
                 "Balai PS": _balai_ps(hotspot),
-                "Provinsi": _provinsi(hotspot),
+                "Provinsi": provinsi_name(hotspot),
                 "Kabupaten": polygon_field(hotspot, "NAMA_KAB"),
                 "Satelit": hotspot.get("source", ""),
                 "Tanggal Deteksi": detected_at_wib,
@@ -130,8 +137,11 @@ def build_dashboard_summary(hotspots: list[dict]) -> dict:
         "jumlah_kps": len({row["Nama Wilayah"] for row in rows if row["Nama Wilayah"]}),
         "jumlah_balai": len({row["Balai PS"] for row in rows if row["Balai PS"]}),
         "jumlah_provinsi": len({row["Provinsi"] for row in rows if row["Provinsi"]}),
+        "jumlah_skema": len({row["Skema"] for row in rows if row["Skema"]}),
         "per_balai": Counter(row["Balai PS"] for row in rows).most_common(),
         "per_provinsi": Counter(row["Provinsi"] for row in rows).most_common(),
+        "per_skema": count_per_skema(hotspots),
+        "skema_per_provinsi": build_skema_provinsi_matrix(hotspots),
         "per_satelit": Counter(row["Satelit"] for row in rows).most_common(),
         "per_confidence": [
             (level, sum(1 for row in rows if row["Confidence"] == level))
@@ -162,7 +172,7 @@ def _write_data_sheet(sheet, rows: list[dict]) -> None:
         cell.alignment = Alignment(vertical="center", horizontal="left")
     sheet.row_dimensions[1].height = 22
 
-    widths = [5, 34, 40, 12, 22, 20, 18, 15, 20, 12, 12, 12, 12, 10, 12]
+    widths = [5, 34, 40, 12, 14, 22, 20, 18, 15, 20, 12, 12, 12, 12, 10, 12]
     for index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
 
@@ -187,6 +197,7 @@ def _title_block(sheet, summary: dict) -> int:
         ("KPS Terdampak", summary["jumlah_kps"]),
         ("Balai PS", summary["jumlah_balai"]),
         ("Provinsi", summary["jumlah_provinsi"]),
+        ("Skema PS", summary["jumlah_skema"]),
     ]
     for offset, (label, value) in enumerate(cards):
         column = 1 + offset * 2
@@ -266,6 +277,7 @@ def _write_dashboard_sheet(sheet, summary: dict) -> None:
     sections = [
         ("Hotspot per Balai PS", ("Balai PS", "Jumlah"), summary["per_balai"], "bar"),
         ("Hotspot per Provinsi", ("Provinsi", "Jumlah"), summary["per_provinsi"], "bar"),
+        ("Hotspot per Skema Perhutanan Sosial", ("Skema", "Jumlah"), summary["per_skema"], "bar"),
         ("Tren Bulanan", ("Bulan", "Jumlah"), summary["per_bulan"], "line"),
         ("10 KPS dengan Hotspot Terbanyak", ("KPS", "Jumlah"), summary["top_kps"], "bar"),
         ("Distribusi Confidence", ("Kategori", "Jumlah"), summary["per_confidence"], "bar"),
@@ -292,6 +304,58 @@ def _write_dashboard_sheet(sheet, summary: dict) -> None:
     sheet.column_dimensions["D"].width = 3
 
 
+def _write_skema_provinsi_sheet(sheet, matrix: SkemaProvinsiMatrix) -> None:
+    """Tabel silang provinsi (baris) x skema (kolom) beserta baris/kolom total."""
+    sheet["A1"] = "REKAP HOTSPOT PER SKEMA PERHUTANAN SOSIAL PER PROVINSI"
+    sheet["A1"].font = Font(bold=True, size=14, color=_INK)
+    sheet["A2"] = (
+        "Jumlah titik panas pada setiap kombinasi provinsi dan skema izin perhutanan sosial. "
+        "Kolom diurutkan dari skema dengan titik panas terbanyak."
+    )
+    sheet["A2"].font = Font(size=10, color=_MUTED, italic=True)
+
+    header_row = 4
+    headers = ("Provinsi", *matrix.skema, "Total")
+    header_fill = PatternFill("solid", fgColor=_INK)
+    for offset, header in enumerate(headers):
+        cell = sheet.cell(row=header_row, column=1 + offset, value=header)
+        cell.fill = header_fill
+        cell.font = Font(bold=True, color=_HEADER_TEXT, size=10)
+        cell.border = _CELL_BORDER
+        cell.alignment = Alignment(
+            vertical="center", horizontal="left" if offset == 0 else "center", wrap_text=True
+        )
+    sheet.row_dimensions[header_row].height = 28
+
+    for index, row in enumerate(matrix.rows):
+        row_number = header_row + 1 + index
+        values = (row.provinsi, *row.counts, row.total)
+        for offset, value in enumerate(values):
+            cell = sheet.cell(row=row_number, column=1 + offset, value=value)
+            cell.border = _CELL_BORDER
+            if offset:
+                cell.alignment = Alignment(horizontal="center")
+            if index % 2 == 0:
+                cell.fill = PatternFill("solid", fgColor=_BAND)
+        sheet.cell(row=row_number, column=len(headers)).font = Font(bold=True, color=_INK)
+
+    total_row = header_row + len(matrix.rows) + 1
+    for offset, value in enumerate(("Total", *matrix.totals, matrix.grand_total)):
+        cell = sheet.cell(row=total_row, column=1 + offset, value=value)
+        cell.font = Font(bold=True, color=_HEADER_TEXT, size=10)
+        cell.fill = PatternFill("solid", fgColor=_ACCENT)
+        cell.border = _CELL_BORDER
+        if offset:
+            cell.alignment = Alignment(horizontal="center")
+
+    sheet.column_dimensions["A"].width = 30
+    for offset in range(1, len(headers)):
+        sheet.column_dimensions[get_column_letter(1 + offset)].width = 16
+    # Kolom provinsi & baris header dibekukan supaya tetap terbaca saat tabel
+    # digulir ke kanan (skema bisa sampai delapan kolom).
+    sheet.freeze_panes = f"B{header_row + 1}"
+
+
 def build_excel_file(hotspots: list[dict]) -> bytes:
     workbook = Workbook()
 
@@ -299,8 +363,13 @@ def build_excel_file(hotspots: list[dict]) -> bytes:
     data_sheet.title = DATA_SHEET_TITLE
     _write_data_sheet(data_sheet, build_export_rows(hotspots))
 
+    summary = build_dashboard_summary(hotspots)
+
     dashboard_sheet = workbook.create_sheet(DASHBOARD_SHEET_TITLE)
-    _write_dashboard_sheet(dashboard_sheet, build_dashboard_summary(hotspots))
+    _write_dashboard_sheet(dashboard_sheet, summary)
+
+    skema_sheet = workbook.create_sheet(SKEMA_SHEET_TITLE)
+    _write_skema_provinsi_sheet(skema_sheet, summary["skema_per_provinsi"])
 
     buffer = BytesIO()
     workbook.save(buffer)

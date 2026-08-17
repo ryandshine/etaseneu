@@ -7,6 +7,7 @@ from app.models.query import HotspotQuery
 from app.services.export_service import build_excel_file
 from app.services.hotspot_categories import frp_category as _get_frp_category
 from app.services.hotspot_service import HotspotService
+from app.services.polygon_fields import skema_name
 
 
 router = APIRouter()
@@ -23,6 +24,7 @@ async def export_hotspots(
     province: str | None = None,
     wilker: str | None = None,
     confidence: str | None = None,
+    skema: str | None = None,
     agency: str | None = None,
 ) -> Response:
     service = HotspotService()
@@ -44,6 +46,8 @@ async def export_hotspots(
         ]
     if confidence:
         hotspots = [h for h in hotspots if _get_frp_category(h) == confidence]
+    if skema:
+        hotspots = [h for h in hotspots if skema_name(h) == skema]
     if agency:
         hotspots = [h for h in hotspots if h.get("agency_name") == agency]
 
@@ -65,6 +69,7 @@ async def export_hotspots_pdf(
     province: str | None = None,
     wilker: str | None = None,
     confidence: str | None = None,
+    skema: str | None = None,
     agency: str | None = None,
 ) -> Response:
     service = HotspotService()
@@ -86,6 +91,8 @@ async def export_hotspots_pdf(
         ]
     if confidence:
         hotspots = [h for h in hotspots if _get_frp_category(h) == confidence]
+    if skema:
+        hotspots = [h for h in hotspots if skema_name(h) == skema]
     if agency:
         hotspots = [
             h for h in hotspots

@@ -48,6 +48,7 @@ def test_build_excel_file_writes_headers_and_row_values() -> None:
         "Nama Wilayah",
         "No. SK",
         "Tgl SK",
+        "Skema",
         "Balai PS",
         "Provinsi",
         "Kabupaten",
@@ -70,6 +71,7 @@ def test_build_excel_file_writes_headers_and_row_values() -> None:
         "sample_area",
         None,
         None,
+        "Tanpa Skema",
         "Tanpa Balai",
         "Tanpa Provinsi",
         None,
@@ -100,6 +102,7 @@ def _sample_hotspots() -> list[dict]:
                 "WILKER_BPS": "Balai PS Banjarbaru",
                 "NAMA_PROV": "Kalimantan Barat",
                 "NAMA_KAB": "Kubu Raya",
+                "SKEMA": "PPHD",
             },
         },
         {
@@ -116,6 +119,7 @@ def _sample_hotspots() -> list[dict]:
                 "WILKER_BPS": "Balai PS Manokwari",
                 "NAMA_PROV": "Papua Selatan",
                 "NAMA_KAB": "Merauke",
+                "SKEMA": "PKK",
             },
         },
     ]
@@ -174,7 +178,7 @@ def test_build_excel_file_creates_dashboard_sheet() -> None:
 
     workbook = load_workbook(BytesIO(build_excel_file(_sample_hotspots())))
 
-    assert workbook.sheetnames == ["Data Hotspot", "Dashboard"]
+    assert workbook.sheetnames == ["Data Hotspot", "Dashboard", "Skema per Provinsi"]
     dashboard = workbook["Dashboard"]
     assert "DASHBOARD" in str(dashboard["A1"].value)
     # Kartu ringkasan: label di baris 4, angkanya di baris 5.
@@ -192,7 +196,7 @@ def test_build_excel_file_handles_empty_hotspots() -> None:
 
     workbook = load_workbook(BytesIO(build_excel_file([])))
 
-    assert workbook.sheetnames == ["Data Hotspot", "Dashboard"]
+    assert workbook.sheetnames == ["Data Hotspot", "Dashboard", "Skema per Provinsi"]
     assert workbook["Dashboard"]["A5"].value == 0
 
 
@@ -225,3 +229,63 @@ def test_export_rows_include_sk_columns() -> None:
 
     assert "No. SK" in rows[0]
     assert "Tgl SK" in rows[0]
+
+
+def test_export_rows_include_skema_column() -> None:
+    from app.services.export_service import build_export_rows
+
+    rows = build_export_rows(_sample_hotspots())
+
+    assert rows[0]["Skema"] == "PPHD"
+    assert rows[1]["Skema"] == "PKK"
+
+
+def test_export_rows_label_missing_skema_instead_of_dropping_the_point() -> None:
+    from app.services.export_service import build_export_rows
+
+    rows = build_export_rows([{"layer_name": "X", "polygon_metadata": {"NAMA_PROV": "Riau"}}])
+
+    assert rows[0]["Skema"] == "Tanpa Skema"
+
+
+def test_dashboard_summary_aggregates_per_skema_and_skema_per_provinsi() -> None:
+    from app.services.export_service import build_dashboard_summary
+
+    summary = build_dashboard_summary(_sample_hotspots())
+
+    assert summary["jumlah_skema"] == 2
+    assert dict(summary["per_skema"]) == {"PPHD": 1, "PKK": 1}
+
+    matrix = summary["skema_per_provinsi"]
+    assert set(matrix.skema) == {"PPHD", "PKK"}
+    assert {row.provinsi: row.total for row in matrix.rows} == {
+        "Kalimantan Barat": 1,
+        "Papua Selatan": 1,
+    }
+    assert matrix.grand_total == 2
+
+
+def test_build_excel_file_writes_skema_per_provinsi_crosstab() -> None:
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
+    from app.services.export_service import build_excel_file
+
+    workbook = load_workbook(BytesIO(build_excel_file(_sample_hotspots())))
+    sheet = workbook["Skema per Provinsi"]
+
+    # Baris 4 = header tabel silang: Provinsi, kolom per skema, lalu Total.
+    header = [cell.value for cell in sheet[4] if cell.value is not None]
+    assert header[0] == "Provinsi"
+    assert header[-1] == "Total"
+    assert set(header[1:-1]) == {"PPHD", "PKK"}
+
+    body = {
+        row[0]: row[1:]
+        for row in sheet.iter_rows(min_row=5, max_row=sheet.max_row, values_only=True)
+    }
+    assert body["Kalimantan Barat"][-1] == 1
+    assert body["Papua Selatan"][-1] == 1
+    # Baris terakhir adalah total keseluruhan.
+    assert body["Total"][-1] == 2

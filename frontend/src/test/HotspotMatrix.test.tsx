@@ -125,4 +125,53 @@ describe("HotspotMatrix", () => {
     // halaman KpsDetailView tersendiri.
     expect(screen.queryByText("Laporan deteksi spesifik")).not.toBeInTheDocument();
   });
+
+  it("renders the skema x provinsi crosstab and filters everything when a skema is picked", () => {
+    const onExport = vi.fn();
+    const otherSkema = {
+      ...hotspot,
+      id: "hotspot-2",
+      layerName: "LPHD Lain",
+      agencyName: "LPHD Lain",
+      provinceName: "Riau",
+      polygonMetadata: { ...hotspot.polygonMetadata, LEMBAGA: "LPHD Lain", SKEMA: "PPHD" }
+    };
+
+    render(
+      <HotspotMatrix
+        hotspots={[hotspot, otherSkema]}
+        geojsonStatus={null}
+        onExport={onExport}
+        isExporting={false}
+        onExportPdf={() => undefined}
+        isExportingPdf={false}
+        onDateChange={() => undefined}
+        startDate="2026-05-27"
+        endDate="2026-05-28"
+        timeRange={{
+          startAt: new Date("2026-05-27T00:00:00Z"),
+          endAt: new Date("2026-05-28T00:00:00Z"),
+          label: "Hari ini"
+        }}
+        dateRangeLabel="Hari ini"
+        timePreset="24h"
+        onTimePresetChange={() => undefined}
+      />
+    );
+
+    expect(screen.getByText("Hotspot per Skema per Provinsi")).toBeInTheDocument();
+    expect(screen.getByText("Skema Filter")).toBeInTheDocument();
+    expect(screen.getByText("2 skema · 2 provinsi · 2 titik")).toBeInTheDocument();
+
+    // Klik judul kolom skema menyaring seluruh matriks, bukan cuma tabelnya.
+    fireEvent.click(screen.getByTitle("Saring skema PKK"));
+
+    expect(screen.getByText("SKEMA: PKK")).toBeInTheDocument();
+    expect(screen.getByText("1 skema · 1 provinsi · 1 titik")).toBeInTheDocument();
+
+    // Filter yang aktif ikut terbawa ke ekspor supaya isi file sama dengan
+    // yang terlihat di layar.
+    fireEvent.click(screen.getByText("Ekspor XLSX"));
+    expect(onExport).toHaveBeenCalledWith(expect.objectContaining({ skema: "PKK" }));
+  });
 });

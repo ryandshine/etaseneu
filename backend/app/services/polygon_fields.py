@@ -11,6 +11,9 @@ import re
 
 _WHITESPACE = re.compile(r"\s+")
 
+PROVINSI_FALLBACK = "Tanpa Provinsi"
+SKEMA_FALLBACK = "Tanpa Skema"
+
 
 def polygon_field(hotspot: dict, *keys: str) -> str:
     """Ambil field pertama yang terisi dari polygon_metadata."""
@@ -49,3 +52,26 @@ def sk_number(hotspot: dict) -> str:
 
 def sk_date(hotspot: dict) -> str:
     return _WHITESPACE.sub(" ", polygon_field(hotspot, "TGL_SK")).strip()
+
+
+def provinsi_name(hotspot: dict) -> str:
+    """Provinsi titik panas.
+
+    Hasil spatial join (`province_name`) didahulukan karena sudah dinormalkan;
+    properti shapefile baru dipakai kalau kolom itu kosong.
+    """
+    direct = hotspot.get("province_name")
+    if direct not in (None, ""):
+        return str(direct)
+    return polygon_field(hotspot, "NAMA_PROV", "NAMA_PROVINSI", "PROVINSI") or PROVINSI_FALLBACK
+
+
+def skema_name(hotspot: dict) -> str:
+    """Skema perhutanan sosial (PPHD, PPHKm, PPHTR, PKK, Hutan Adat, IPHPS, ...).
+
+    Sebagian polygon di sumber belum mengisi SKEMA; titiknya tetap dihitung
+    lewat label SKEMA_FALLBACK supaya total rekap per skema sama dengan total
+    hotspot pada periode yang sama.
+    """
+    raw = polygon_field(hotspot, "SKEMA", "Skema", "skema")
+    return _WHITESPACE.sub(" ", raw).strip() or SKEMA_FALLBACK

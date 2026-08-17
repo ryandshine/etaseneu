@@ -638,7 +638,7 @@ export function useDashboardData(
     setEndDate(value);
   }
 
-  async function exportDashboard(filters?: { province?: string; wilker?: string; confidence?: string }) {
+  async function exportDashboard(filters?: { province?: string; wilker?: string; confidence?: string; skema?: string }) {
     setIsExporting(true);
     setExportError(null);
 
@@ -647,7 +647,8 @@ export function useDashboardData(
         ...queryParams,
         ...(filters?.province ? { province: filters.province } : {}),
         ...(filters?.wilker ? { wilker: filters.wilker } : {}),
-        ...(filters?.confidence ? { confidence: filters.confidence } : {})
+        ...(filters?.confidence ? { confidence: filters.confidence } : {}),
+        ...(filters?.skema ? { skema: filters.skema } : {})
       };
       const response = await fetch(withQuery(`${api.baseUrl}/export.xlsx`, params), {
         headers: {
@@ -676,7 +677,7 @@ export function useDashboardData(
     }
   }
 
-  async function exportPdf(filters?: { province?: string; wilker?: string; confidence?: string; agency?: string }) {
+  async function exportPdf(filters?: { province?: string; wilker?: string; confidence?: string; skema?: string; agency?: string }) {
     setIsExportingPdf(true);
     setExportError(null);
 
@@ -686,6 +687,7 @@ export function useDashboardData(
         ...(filters?.province ? { province: filters.province } : {}),
         ...(filters?.wilker ? { wilker: filters.wilker } : {}),
         ...(filters?.confidence ? { confidence: filters.confidence } : {}),
+        ...(filters?.skema ? { skema: filters.skema } : {}),
         ...(filters?.agency ? { agency: filters.agency } : {})
       };
       const response = await fetch(withQuery(`${api.baseUrl}/export.pdf`, params), {

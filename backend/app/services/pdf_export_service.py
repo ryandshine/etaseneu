@@ -20,6 +20,11 @@ from reportlab.graphics.shapes import Drawing, Rect, Circle, Line, String as DSt
 from app.models.query import HotspotQuery
 from app.services.hotspot_categories import confidence_category as _get_conf_cat, frp_category as _get_frp_cat
 from app.services.polygon_fields import sk_number
+from app.services.skema_stats import (
+    build_skema_provinsi_matrix,
+    collapse_skema_columns,
+    count_per_skema,
+)
 
 logger = logging.getLogger("hotspot.pdf_export")
 
@@ -1083,6 +1088,108 @@ def _section_lembaga_ranking(hotspots: list[dict], styles: dict) -> list:
     return story
 
 
+# Tabel silang skema x provinsi harus muat di lebar cetak A4 lanskap (769pt).
+# Kalau sumber data suatu saat memuat lebih banyak skema, kolom sisanya
+# digabung jadi "Lainnya" alih-alih membuat tabel melewati batas kertas.
+SKEMA_TABLE_MAX_COLUMNS = 8
+_SKEMA_TABLE_WIDTH = 769.0
+_SKEMA_TABLE_PROVINSI_WIDTH = 150.0
+_SKEMA_TABLE_TOTAL_WIDTH = 52.0
+
+
+def _skema_col_widths(column_count: int) -> list[float]:
+    available = _SKEMA_TABLE_WIDTH - _SKEMA_TABLE_PROVINSI_WIDTH - _SKEMA_TABLE_TOTAL_WIDTH
+    per_column = min(110.0, available / max(column_count, 1))
+    provinsi_width = _SKEMA_TABLE_WIDTH - _SKEMA_TABLE_TOTAL_WIDTH - per_column * column_count
+    return [provinsi_width, *[per_column] * column_count, _SKEMA_TABLE_TOTAL_WIDTH]
+
+
+def _skema_narrative(hotspots: list[dict]) -> str:
+    per_skema = count_per_skema(hotspots)
+    if not per_skema:
+        return "Tidak ada titik panas terdeteksi pada periode ini."
+
+    total = sum(count for _, count in per_skema)
+    dominant, dominant_count = per_skema[0]
+    share = int(round(dominant_count / total * 100)) if total else 0
+    ringkasan = ", ".join(f"{label} ({count} titik)" for label, count in per_skema[:3])
+
+    return (
+        f"Titik panas periode ini tersebar pada <b>{len(per_skema)} skema</b> perhutanan sosial, "
+        f"dengan konsentrasi terbesar pada skema <b>{dominant}</b> sebanyak {dominant_count} titik "
+        f"({share}% dari total). Tiga skema teratas: {ringkasan}."
+    )
+
+
+def _section_skema_provinsi(hotspots: list[dict], styles: dict) -> list:
+    """SECTION 2D: tabel silang jumlah titik panas per skema PS untuk tiap provinsi."""
+    story: list = [
+        Paragraph("Sebaran Hotspot per Skema Perhutanan Sosial per Provinsi", styles["section_heading"]),
+        Paragraph(_skema_narrative(hotspots), styles["body"]),
+        Spacer(1, 8),
+    ]
+
+    matrix = collapse_skema_columns(
+        build_skema_provinsi_matrix(hotspots), SKEMA_TABLE_MAX_COLUMNS
+    )
+    if not matrix.skema:
+        story.append(Paragraph("Tidak ada data titik panas untuk periode ini.", styles["body"]))
+        story.append(Spacer(1, 15))
+        story.append(PageBreak())
+        return story
+
+    header_style = styles["tbl_header"]
+    bold_body_style = styles["bold_body"]
+    # Angka dirata-tengah lewat ParagraphStyle: perintah ALIGN pada TableStyle
+    # hanya mengatur posisi Paragraph-nya, bukan teks di dalamnya, sehingga
+    # kolom angka tetap rata kiri kalau hanya mengandalkan TableStyle.
+    number_style = ParagraphStyle("SkemaNumber", parent=styles["body"], alignment=1)
+    number_bold_style = ParagraphStyle("SkemaNumberBold", parent=bold_body_style, alignment=1)
+    header_center_style = ParagraphStyle("SkemaHeaderCenter", parent=header_style, alignment=1)
+
+    table_rows = [
+        [
+            Paragraph("Provinsi", header_style),
+            *[Paragraph(label, header_center_style) for label in matrix.skema],
+            Paragraph("Total", header_center_style),
+        ]
+    ]
+    for row in matrix.rows:
+        table_rows.append([
+            Paragraph(row.provinsi, bold_body_style),
+            *[Paragraph(str(count) if count else "-", number_style) for count in row.counts],
+            Paragraph(str(row.total), number_bold_style),
+        ])
+    table_rows.append([
+        Paragraph("Total", bold_body_style),
+        *[Paragraph(str(total), number_bold_style) for total in matrix.totals],
+        Paragraph(str(matrix.grand_total), number_bold_style),
+    ])
+
+    table = Table(
+        table_rows,
+        colWidths=_skema_col_widths(len(matrix.skema)),
+        repeatRows=1,
+    )
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), COLOR_SECONDARY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), COLOR_WHITE),
+        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [COLOR_WHITE, COLOR_NEUTRAL_LIGHT]),
+        ('PADDING', (0, 0), (-1, -1), 4),
+        # Baris total dibedakan supaya tidak terbaca sebagai provinsi terakhir.
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#e0f2fe")),
+        ('LINEABOVE', (0, -1), (-1, -1), 1, COLOR_PRIMARY),
+    ]))
+
+    story.append(table)
+    story.append(Spacer(1, 15))
+    story.append(PageBreak())
+    return story
+
+
 def _section_visualization(hotspots: list[dict], layers_info: list[dict], styles: dict) -> list:
     """SECTION 3: peta sebaran spasial, pie chart satelit, dan kotak ringkasan spasial."""
     provinces = set()
@@ -1350,6 +1457,7 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
     story.extend(_section_kpi_cards(hotspots))
     story.extend(_section_balai_ranking(hotspots, styles))
     story.extend(_section_lembaga_ranking(hotspots, styles))
+    story.extend(_section_skema_provinsi(hotspots, styles))
     story.extend(_section_visualization(hotspots, layers_info, styles))
     story.extend(_section_trend(hotspots, styles))
     story.extend(_section_confidence_frp(hotspots, styles))
