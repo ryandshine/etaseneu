@@ -923,6 +923,20 @@ export function HotspotMatrix({
 
   const latestRegistrySync = useMemo(() => getLatestRegistrySync(geojsonStatus), [geojsonStatus]);
 
+  // Determine groupBy granularity based on selected date range.
+  // Dideklarasikan sebelum `filteredHotspots` karena filter periode di bawah
+  // memakainya -- sebelumnya trendGroupBy dideklarasikan lebih ke bawah, jadi
+  // begin diakses di sini kena Temporal Dead Zone dan React error persis saat
+  // pengguna klik titik periode (baru saat itu `selectedPeriod` terisi dan
+  // baris yang membaca trendGroupBy benar-benar dieksekusi).
+  const trendGroupBy = useMemo((): 'day' | 'month' => {
+    if (!startDate || !endDate) return 'day';
+    const s = new Date(startDate);
+    const e = new Date(endDate);
+    const monthsDiff = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+    return monthsDiff >= 1 ? 'month' : 'day';
+  }, [startDate, endDate]);
+
   const filteredHotspots = useMemo(
     () =>
       hotspots.filter((hotspot) => {
@@ -998,14 +1012,6 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
   const frpChartHeight = Math.max(220, frpDistribution.length * 28 + 44);
   const topWilkerChartHeight = Math.max(240, topWilker.length * 34 + 56);
   const analyticsChartHeight = Math.max(frpChartHeight, topWilkerChartHeight);
-  // Determine groupBy granularity based on selected date range
-  const trendGroupBy = useMemo((): 'day' | 'month' => {
-    if (!startDate || !endDate) return 'day';
-    const s = new Date(startDate);
-    const e = new Date(endDate);
-    const monthsDiff = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
-    return monthsDiff >= 1 ? 'month' : 'day';
-  }, [startDate, endDate]);
 
   const dailyTrend = useMemo(() => buildDailyTrend(filteredHotspots, trendGroupBy), [filteredHotspots, trendGroupBy]);
   const dailyFrpTrend = useMemo(() => buildDailyFrpTrend(filteredHotspots, trendGroupBy), [filteredHotspots, trendGroupBy]);
