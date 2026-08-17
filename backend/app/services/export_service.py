@@ -4,6 +4,8 @@ from io import BytesIO
 
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, DoughnutChart, LineChart, Reference
+from openpyxl.chart.axis import ChartLines
+from openpyxl.chart.data_source import AxDataSource, StrRef
 from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -55,20 +57,25 @@ DATA_SHEET_TITLE = "Data Hotspot"
 DASHBOARD_SHEET_TITLE = "Dashboard"
 SKEMA_SHEET_TITLE = "Skema per Provinsi"
 
-# ── Palet ──────────────────────────────────────────────────────────────────
-_INK = "1B3A2B"
-_EMERALD = "2D6A4F"
-_ACCENT = "E0862A"
-_HEADER_TEXT = "FFFFFF"
-_BAND = "F5F8F6"
-_MUTED = "5A655F"
-_RULE = "D8DDD9"
-_CARD_BG = "F4F8F5"
+# ── Palet Warna Eksekutif Modern ─────────────────────────────────────────────
+_INK = "1B3A2B"        # Deep Forest Green (Utama)
+_EMERALD = "2D6A4F"    # Emerald Green (Sekunder)
+_ACCENT = "E0862A"     # Warm Amber (Aksen Highlight)
+_HEADER_TEXT = "FFFFFF"# Putih
+_CARD_BG = "F4F8F5"    # Card background
+_CARD_BORDER = "CFD8D2"# Card border
+_BAND = "F8FAF9"       # Zebra striping lembut
+_MUTED = "5A655F"      # Text muted
+_RULE = "D8DDD9"       # Border tabel
+_TOTAL_BG = "EBF2ED"   # Background baris total
 
 _THIN_RULE = Side(style="thin", color=_RULE)
 _DOUBLE_RULE = Side(style="double", color=_INK)
+_CARD_SIDE = Side(style="thin", color=_CARD_BORDER)
+
 _CELL_BORDER = Border(left=_THIN_RULE, right=_THIN_RULE, top=_THIN_RULE, bottom=_THIN_RULE)
 _TOTAL_BORDER = Border(left=_THIN_RULE, right=_THIN_RULE, top=_THIN_RULE, bottom=_DOUBLE_RULE)
+_CARD_BOX = Border(left=_CARD_SIDE, right=_CARD_SIDE, top=_CARD_SIDE, bottom=_CARD_SIDE)
 
 
 def _wib_datetime(detected_at: object) -> datetime | None:
@@ -199,34 +206,43 @@ def _title_block(sheet, summary: dict) -> int:
 
     sheet.row_dimensions[1].height = 24
     sheet.row_dimensions[2].height = 18
+    sheet.row_dimensions[3].height = 10
 
+    # 5 Kartu Metrik Ringkasan (A, C, E, G, I) dengan merge 2 kolom per kartu
     cards = [
-        ("Total Hotspot", summary["total"]),
-        ("KPS Terdampak", summary["jumlah_kps"]),
-        ("Balai PS", summary["jumlah_balai"]),
-        ("Provinsi", summary["jumlah_provinsi"]),
-        ("Skema PS", summary["jumlah_skema"]),
+        ("Total Hotspot", summary["total"], 1, 2),
+        ("KPS Terdampak", summary["jumlah_kps"], 3, 4),
+        ("Balai PS", summary["jumlah_balai"], 5, 6),
+        ("Provinsi", summary["jumlah_provinsi"], 7, 8),
+        ("Skema PS", summary["jumlah_skema"], 9, 10),
     ]
 
     card_fill = PatternFill("solid", fgColor=_CARD_BG)
-    card_border = Border(left=_THIN_RULE, right=_THIN_RULE, top=_THIN_RULE, bottom=_THIN_RULE)
+    accent_fill = PatternFill("solid", fgColor=_ACCENT)
 
-    for offset, (label, value) in enumerate(cards):
-        column = 1 + offset * 2
-        label_cell = sheet.cell(row=4, column=column, value=label)
-        label_cell.font = Font(name="Calibri", bold=True, size=8, color=_MUTED)
-        label_cell.fill = card_fill
-        label_cell.border = card_border
-        label_cell.alignment = Alignment(horizontal="center", vertical="center")
+    for label, value, col_start, col_end in cards:
+        sheet.cell(row=4, column=col_start, value=label)
+        sheet.cell(row=5, column=col_start, value=value)
 
-        value_cell = sheet.cell(row=5, column=column, value=value)
-        value_cell.font = Font(name="Calibri", bold=True, size=18, color=_INK)
-        value_cell.fill = card_fill
-        value_cell.border = card_border
-        value_cell.number_format = "#,##0"
-        value_cell.alignment = Alignment(horizontal="center", vertical="center")
+        for r in range(4, 7):
+            for c in range(col_start, col_end + 1):
+                cell = sheet.cell(row=r, column=c)
+                cell.fill = accent_fill if r == 6 else card_fill
+                cell.border = _CARD_BOX
 
-        sheet.cell(row=6, column=column).fill = PatternFill("solid", fgColor=_ACCENT)
+        lbl_cell = sheet.cell(row=4, column=col_start)
+        lbl_cell.font = Font(name="Calibri", bold=True, size=8.5, color=_MUTED)
+        lbl_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        val_cell = sheet.cell(row=5, column=col_start)
+        val_cell.font = Font(name="Calibri", bold=True, size=18, color=_INK)
+        val_cell.number_format = "#,##0"
+        val_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        if col_end > col_start:
+            sheet.merge_cells(start_row=4, start_column=col_start, end_row=4, end_column=col_end)
+            sheet.merge_cells(start_row=5, start_column=col_start, end_row=5, end_column=col_end)
+            sheet.merge_cells(start_row=6, start_column=col_start, end_row=6, end_column=col_end)
 
     sheet.row_dimensions[4].height = 16
     sheet.row_dimensions[5].height = 26
@@ -246,6 +262,7 @@ def _write_section(sheet, start_row: int, title: str, headers: tuple[str, str],
     header_row = start_row + 1
     sheet.row_dimensions[header_row].height = 20
     header_fill = PatternFill("solid", fgColor=_INK)
+
     for offset, header in enumerate((*headers, "%")):
         cell = sheet.cell(row=header_row, column=1 + offset, value=header)
         cell.fill = header_fill
@@ -285,9 +302,10 @@ def _write_section(sheet, start_row: int, title: str, headers: tuple[str, str],
             c_cnt.fill = PatternFill("solid", fgColor=_BAND)
             c_pct.fill = PatternFill("solid", fgColor=_BAND)
 
+    # Total Row
     total_row = header_row + len(data) + 1
     sheet.row_dimensions[total_row].height = 20
-    total_fill = PatternFill("solid", fgColor="EBF2ED")
+    total_fill = PatternFill("solid", fgColor=_TOTAL_BG)
 
     t_lbl = sheet.cell(row=total_row, column=1, value="Total")
     t_lbl.font = Font(name="Calibri", bold=True, size=9, color=_INK)
@@ -320,49 +338,38 @@ def _attach_bar_chart(sheet, anchor: str, title: str, header_row: int, row_count
     chart.type = chart_type
     chart.title = title
     chart.style = 10
+    chart.legend = None
 
     if chart_type == "bar":
-        chart.height = min(max(3.5 + row_count * 0.45, 5.5), 12.0)
-        chart.width = 17.0
+        chart.height = min(max(4.0 + row_count * 0.48, 6.0), 16.0)
+        chart.width = 17.5
+
+        # x_axis is Category Axis on the LEFT
+        chart.x_axis.axPos = "l"
+        chart.x_axis.tickLblPos = "nextTo"
+        chart.x_axis.title = None
+
+        # y_axis is Value Axis at the BOTTOM
+        chart.y_axis.axPos = "b"
+        chart.y_axis.tickLblPos = "nextTo"
+        chart.y_axis.title = "Jumlah Titik Panas"
+        chart.y_axis.majorGridlines = ChartLines()
     else:
-        chart.height = 7.5
-        chart.width = 16.0
+        chart.height = 8.0
+        chart.width = 16.5
 
-    chart.legend = None
-    chart.y_axis.majorGridlines = None
-    chart.x_axis.majorGridlines = None
+        # x_axis is Category Axis at the BOTTOM
+        chart.x_axis.axPos = "b"
+        chart.x_axis.tickLblPos = "nextTo"
+        chart.x_axis.title = None
 
-    # Hanya tampilkan dataLabels jika item <= 14 untuk menghindari text overlap
-    if row_count <= 14:
-        chart.dataLabels = DataLabelList()
-        chart.dataLabels.showVal = True
-        chart.dataLabels.showCatName = False
-        chart.dataLabels.showSerName = False
-        chart.dataLabels.showPercent = False
-        chart.dataLabels.showLegendKey = False
+        # y_axis is Value Axis on the LEFT
+        chart.y_axis.axPos = "l"
+        chart.y_axis.tickLblPos = "nextTo"
+        chart.y_axis.title = "Jumlah Titik Panas"
+        chart.y_axis.majorGridlines = ChartLines()
 
-    data = Reference(sheet, min_col=2, min_row=header_row, max_row=header_row + row_count)
-    categories = Reference(sheet, min_col=1, min_row=header_row + 1, max_row=header_row + row_count)
-    chart.add_data(data, titles_from_data=True)
-    chart.set_categories(categories)
-
-    if chart.series:
-        chart.series[0].graphicalProperties.solidFill = color
-
-    sheet.add_chart(chart, anchor)
-
-
-def _attach_line_chart(sheet, anchor: str, title: str, header_row: int, row_count: int,
-                       color: str = _INK, accent_color: str = _ACCENT) -> None:
-    if row_count <= 0:
-        return
-    chart = LineChart()
-    chart.title = title
-    chart.style = 13
-    chart.height = 7.5
-    chart.width = 16.0
-    chart.legend = None
-
+    # Data Labels: selalu tampilkan nilai angka pada setiap batang
     chart.dataLabels = DataLabelList()
     chart.dataLabels.showVal = True
     chart.dataLabels.showCatName = False
@@ -375,11 +382,54 @@ def _attach_line_chart(sheet, anchor: str, title: str, header_row: int, row_coun
     chart.add_data(data, titles_from_data=True)
     chart.set_categories(categories)
 
+    cat_range = f"'{sheet.title}'!$A${header_row + 1}:$A${header_row + row_count}"
     if chart.series:
+        chart.series[0].cat = AxDataSource(strRef=StrRef(f=cat_range))
+        chart.series[0].graphicalProperties.solidFill = color
+
+    sheet.add_chart(chart, anchor)
+
+
+def _attach_line_chart(sheet, anchor: str, title: str, header_row: int, row_count: int,
+                       color: str = _INK, accent_color: str = _ACCENT) -> None:
+    if row_count <= 0:
+        return
+    chart = LineChart()
+    chart.title = title
+    chart.style = 13
+    chart.height = 8.0
+    chart.width = 16.5
+    chart.legend = None
+
+    chart.x_axis.axPos = "b"
+    chart.x_axis.tickLblPos = "nextTo"
+    chart.x_axis.title = "Bulan"
+
+    chart.y_axis.axPos = "l"
+    chart.y_axis.tickLblPos = "nextTo"
+    chart.y_axis.title = "Jumlah Titik Panas"
+    chart.y_axis.majorGridlines = ChartLines()
+
+    # Data Labels informatif pada setiap titik tren bulanan
+    chart.dataLabels = DataLabelList()
+    chart.dataLabels.showVal = True
+    chart.dataLabels.showCatName = False
+    chart.dataLabels.showSerName = False
+    chart.dataLabels.showPercent = False
+    chart.dataLabels.showLegendKey = False
+
+    data = Reference(sheet, min_col=2, min_row=header_row, max_row=header_row + row_count)
+    categories = Reference(sheet, min_col=1, min_row=header_row + 1, max_row=header_row + row_count)
+    chart.add_data(data, titles_from_data=True)
+    chart.set_categories(categories)
+
+    cat_range = f"'{sheet.title}'!$A${header_row + 1}:$A${header_row + row_count}"
+    if chart.series:
+        chart.series[0].cat = AxDataSource(strRef=StrRef(f=cat_range))
         chart.series[0].graphicalProperties.line.solidFill = color
         chart.series[0].graphicalProperties.line.width = 25000
         chart.series[0].marker.symbol = "circle"
-        chart.series[0].marker.size = 5
+        chart.series[0].marker.size = 6
         chart.series[0].marker.graphicalProperties.solidFill = accent_color
         chart.series[0].marker.graphicalProperties.line.solidFill = accent_color
 
@@ -413,20 +463,23 @@ def _write_dashboard_sheet(sheet, summary: dict) -> None:
             _attach_bar_chart(sheet, anchor, title, header_row, len(data), chart_type="bar", color=color)
 
         table_rows = len(data) + 4
-        chart_rows = int(min(max(3.5 + len(data) * 0.45, 5.5), 12.0) * 1.8) if chart_kind == "bar" else 15
+        chart_rows = int(min(max(3.8 + len(data) * 0.45, 5.5), 14.0) * 1.8) if chart_kind == "bar" else 15
         row = row + max(table_rows, chart_rows) + 2
 
-    sheet.column_dimensions["A"].width = 32
-    sheet.column_dimensions["B"].width = 12
-    sheet.column_dimensions["C"].width = 10
+    # Kolom Grid: A=28, B=11, C=9, D=3, E s.d. K = 11 masing-masing
+    sheet.column_dimensions["A"].width = 28
+    sheet.column_dimensions["B"].width = 11
+    sheet.column_dimensions["C"].width = 9
     sheet.column_dimensions["D"].width = 3
-    sheet.column_dimensions["E"].width = 14
-    sheet.column_dimensions["F"].width = 14
-    sheet.column_dimensions["G"].width = 14
-    sheet.column_dimensions["H"].width = 14
-    sheet.column_dimensions["I"].width = 14
-    sheet.column_dimensions["J"].width = 14
-    sheet.column_dimensions["K"].width = 14
+    for col_idx in range(5, 12):
+        sheet.column_dimensions[get_column_letter(col_idx)].width = 11
+
+    # Landscape print & fit setup
+    sheet.page_setup.orientation = sheet.ORIENTATION_LANDSCAPE
+    sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
+    sheet.sheet_properties.pageSetUpPr.fitToPage = True
+    sheet.page_setup.fitToWidth = 1
+    sheet.page_setup.fitToHeight = 0
 
     sheet.views.sheetView[0].showGridLines = True
 
