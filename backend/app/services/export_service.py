@@ -190,12 +190,12 @@ def _write_data_sheet(sheet, rows: list[dict]) -> None:
 
 def _title_block(sheet, summary: dict) -> int:
     sheet["A1"] = "DASHBOARD HOTSPOT KAWASAN PERHUTANAN SOSIAL"
-    sheet["A1"].font = Font(bold=True, size=15, color=_INK)
+    sheet["A1"].font = Font(name="Calibri", bold=True, size=15, color=_INK)
     sheet["A2"] = (
         f"Periode {summary['periode_awal']} s.d. {summary['periode_akhir']}  •  "
         f"Sumber: ETA SENEU (hotspot beririsan dengan poligon KPS)"
     )
-    sheet["A2"].font = Font(size=9, color=_MUTED, italic=True)
+    sheet["A2"].font = Font(name="Calibri", size=9, color=_MUTED, italic=True)
 
     sheet.row_dimensions[1].height = 24
     sheet.row_dimensions[2].height = 18
@@ -214,13 +214,13 @@ def _title_block(sheet, summary: dict) -> int:
     for offset, (label, value) in enumerate(cards):
         column = 1 + offset * 2
         label_cell = sheet.cell(row=4, column=column, value=label)
-        label_cell.font = Font(bold=True, size=8, color=_MUTED)
+        label_cell.font = Font(name="Calibri", bold=True, size=8, color=_MUTED)
         label_cell.fill = card_fill
         label_cell.border = card_border
         label_cell.alignment = Alignment(horizontal="center", vertical="center")
 
         value_cell = sheet.cell(row=5, column=column, value=value)
-        value_cell.font = Font(bold=True, size=18, color=_INK)
+        value_cell.font = Font(name="Calibri", bold=True, size=18, color=_INK)
         value_cell.fill = card_fill
         value_cell.border = card_border
         value_cell.number_format = "#,##0"
@@ -231,7 +231,7 @@ def _title_block(sheet, summary: dict) -> int:
     sheet.row_dimensions[4].height = 16
     sheet.row_dimensions[5].height = 26
     sheet.row_dimensions[6].height = 4
-    sheet.row_dimensions[7].height = 12
+    sheet.row_dimensions[7].height = 14
 
     return 8
 
@@ -240,8 +240,8 @@ def _write_section(sheet, start_row: int, title: str, headers: tuple[str, str],
                    data: list[tuple[str, int]], total: int) -> int:
     """Tulis satu tabel ringkasan dengan zebra-striping dan baris total."""
     title_cell = sheet.cell(row=start_row, column=1, value=title)
-    title_cell.font = Font(bold=True, size=11, color=_INK)
-    sheet.row_dimensions[start_row].height = 20
+    title_cell.font = Font(name="Calibri", bold=True, size=11, color=_INK)
+    sheet.row_dimensions[start_row].height = 22
 
     header_row = start_row + 1
     sheet.row_dimensions[header_row].height = 20
@@ -249,7 +249,7 @@ def _write_section(sheet, start_row: int, title: str, headers: tuple[str, str],
     for offset, header in enumerate((*headers, "%")):
         cell = sheet.cell(row=header_row, column=1 + offset, value=header)
         cell.fill = header_fill
-        cell.font = Font(bold=True, color=_HEADER_TEXT, size=9)
+        cell.font = Font(name="Calibri", bold=True, color=_HEADER_TEXT, size=9)
         cell.border = _CELL_BORDER
         cell.alignment = Alignment(
             vertical="center",
@@ -265,18 +265,18 @@ def _write_section(sheet, start_row: int, title: str, headers: tuple[str, str],
 
         c_lbl = sheet.cell(row=row_number, column=1, value=label)
         c_lbl.border = _CELL_BORDER
-        c_lbl.font = Font(size=9)
+        c_lbl.font = Font(name="Calibri", size=9)
         c_lbl.alignment = Alignment(vertical="center", horizontal="left")
 
         c_cnt = sheet.cell(row=row_number, column=2, value=count)
         c_cnt.border = _CELL_BORDER
-        c_cnt.font = Font(size=9)
+        c_cnt.font = Font(name="Calibri", size=9)
         c_cnt.number_format = "#,##0"
         c_cnt.alignment = Alignment(vertical="center", horizontal="right")
 
         c_pct = sheet.cell(row=row_number, column=3, value=share)
         c_pct.border = _CELL_BORDER
-        c_pct.font = Font(size=9)
+        c_pct.font = Font(name="Calibri", size=9)
         c_pct.number_format = "0.0%"
         c_pct.alignment = Alignment(vertical="center", horizontal="right")
 
@@ -286,24 +286,24 @@ def _write_section(sheet, start_row: int, title: str, headers: tuple[str, str],
             c_pct.fill = PatternFill("solid", fgColor=_BAND)
 
     total_row = header_row + len(data) + 1
-    sheet.row_dimensions[total_row].height = 19
+    sheet.row_dimensions[total_row].height = 20
     total_fill = PatternFill("solid", fgColor="EBF2ED")
 
     t_lbl = sheet.cell(row=total_row, column=1, value="Total")
-    t_lbl.font = Font(bold=True, size=9, color=_INK)
+    t_lbl.font = Font(name="Calibri", bold=True, size=9, color=_INK)
     t_lbl.fill = total_fill
     t_lbl.border = _TOTAL_BORDER
     t_lbl.alignment = Alignment(vertical="center", horizontal="left")
 
     t_cnt = sheet.cell(row=total_row, column=2, value=sum_count)
-    t_cnt.font = Font(bold=True, size=9, color=_INK)
+    t_cnt.font = Font(name="Calibri", bold=True, size=9, color=_INK)
     t_cnt.fill = total_fill
     t_cnt.border = _TOTAL_BORDER
     t_cnt.number_format = "#,##0"
     t_cnt.alignment = Alignment(vertical="center", horizontal="right")
 
     t_pct = sheet.cell(row=total_row, column=3, value=(sum_count / total) if total else 0)
-    t_pct.font = Font(bold=True, size=9, color=_INK)
+    t_pct.font = Font(name="Calibri", bold=True, size=9, color=_INK)
     t_pct.fill = total_fill
     t_pct.border = _TOTAL_BORDER
     t_pct.number_format = "0.0%"
@@ -320,14 +320,26 @@ def _attach_bar_chart(sheet, anchor: str, title: str, header_row: int, row_count
     chart.type = chart_type
     chart.title = title
     chart.style = 10
-    chart.height = min(2.8 + row_count * 0.55, 10.0) if chart_type == "bar" else 7.5
-    chart.width = 15.0
+
+    if chart_type == "bar":
+        chart.height = min(max(3.5 + row_count * 0.45, 5.5), 12.0)
+        chart.width = 17.0
+    else:
+        chart.height = 7.5
+        chart.width = 16.0
+
     chart.legend = None
     chart.y_axis.majorGridlines = None
     chart.x_axis.majorGridlines = None
 
-    chart.dataLabels = DataLabelList()
-    chart.dataLabels.showVal = True
+    # Hanya tampilkan dataLabels jika item <= 14 untuk menghindari text overlap
+    if row_count <= 14:
+        chart.dataLabels = DataLabelList()
+        chart.dataLabels.showVal = True
+        chart.dataLabels.showCatName = False
+        chart.dataLabels.showSerName = False
+        chart.dataLabels.showPercent = False
+        chart.dataLabels.showLegendKey = False
 
     data = Reference(sheet, min_col=2, min_row=header_row, max_row=header_row + row_count)
     categories = Reference(sheet, min_col=1, min_row=header_row + 1, max_row=header_row + row_count)
@@ -348,10 +360,15 @@ def _attach_line_chart(sheet, anchor: str, title: str, header_row: int, row_coun
     chart.title = title
     chart.style = 13
     chart.height = 7.5
-    chart.width = 15.5
+    chart.width = 16.0
     chart.legend = None
+
     chart.dataLabels = DataLabelList()
     chart.dataLabels.showVal = True
+    chart.dataLabels.showCatName = False
+    chart.dataLabels.showSerName = False
+    chart.dataLabels.showPercent = False
+    chart.dataLabels.showLegendKey = False
 
     data = Reference(sheet, min_col=2, min_row=header_row, max_row=header_row + row_count)
     categories = Reference(sheet, min_col=1, min_row=header_row + 1, max_row=header_row + row_count)
@@ -369,25 +386,6 @@ def _attach_line_chart(sheet, anchor: str, title: str, header_row: int, row_coun
     sheet.add_chart(chart, anchor)
 
 
-def _attach_doughnut_chart(sheet, anchor: str, title: str, header_row: int, row_count: int) -> None:
-    if row_count <= 0:
-        return
-    chart = DoughnutChart()
-    chart.title = title
-    chart.height = 6.5
-    chart.width = 12.0
-    chart.dataLabels = DataLabelList()
-    chart.dataLabels.showPercent = True
-    chart.dataLabels.showVal = False
-
-    data = Reference(sheet, min_col=2, min_row=header_row, max_row=header_row + row_count)
-    categories = Reference(sheet, min_col=1, min_row=header_row + 1, max_row=header_row + row_count)
-    chart.add_data(data, titles_from_data=True)
-    chart.set_categories(categories)
-
-    sheet.add_chart(chart, anchor)
-
-
 def _write_dashboard_sheet(sheet, summary: dict) -> None:
     total = summary["total"]
     row = _title_block(sheet, summary)
@@ -398,8 +396,8 @@ def _write_dashboard_sheet(sheet, summary: dict) -> None:
         ("Tren Bulanan", ("Bulan", "Jumlah"), summary["per_bulan"], "line", _INK),
         ("10 KPS dengan Hotspot Terbanyak", ("KPS", "Jumlah"), summary["top_kps"], "bar", _ACCENT),
         ("Hotspot per Provinsi", ("Provinsi", "Jumlah"), summary["per_provinsi"], "bar", _INK),
-        ("Distribusi Confidence", ("Kategori", "Jumlah"), summary["per_confidence"], "doughnut", _INK),
-        ("Distribusi Intensitas FRP", ("Kategori", "Jumlah"), summary["per_frp"], "doughnut", _EMERALD),
+        ("Distribusi Confidence", ("Kategori", "Jumlah"), summary["per_confidence"], "col", _INK),
+        ("Distribusi Intensitas FRP", ("Kategori", "Jumlah"), summary["per_frp"], "col", _EMERALD),
         ("Hotspot per Satelit", ("Satelit", "Jumlah"), summary["per_satelit"], "col", _ACCENT),
     ]
 
@@ -409,21 +407,26 @@ def _write_dashboard_sheet(sheet, summary: dict) -> None:
         anchor = f"E{row}"
         if chart_kind == "line":
             _attach_line_chart(sheet, anchor, title, header_row, len(data), color)
-        elif chart_kind == "doughnut":
-            _attach_doughnut_chart(sheet, anchor, title, header_row, len(data))
         elif chart_kind == "col":
             _attach_bar_chart(sheet, anchor, title, header_row, len(data), chart_type="col", color=color)
         else:
             _attach_bar_chart(sheet, anchor, title, header_row, len(data), chart_type="bar", color=color)
 
-        table_height = (header_row + len(data) + 3) - row
-        chart_space = max(int(min(2.8 + len(data) * 0.55, 10.0) * 1.8), 15)
-        row = max(next_row, row + max(table_height, chart_space) + 1)
+        table_rows = len(data) + 4
+        chart_rows = int(min(max(3.5 + len(data) * 0.45, 5.5), 12.0) * 1.8) if chart_kind == "bar" else 15
+        row = row + max(table_rows, chart_rows) + 2
 
-    sheet.column_dimensions["A"].width = 38
-    sheet.column_dimensions["B"].width = 14
-    sheet.column_dimensions["C"].width = 11
+    sheet.column_dimensions["A"].width = 32
+    sheet.column_dimensions["B"].width = 12
+    sheet.column_dimensions["C"].width = 10
     sheet.column_dimensions["D"].width = 3
+    sheet.column_dimensions["E"].width = 14
+    sheet.column_dimensions["F"].width = 14
+    sheet.column_dimensions["G"].width = 14
+    sheet.column_dimensions["H"].width = 14
+    sheet.column_dimensions["I"].width = 14
+    sheet.column_dimensions["J"].width = 14
+    sheet.column_dimensions["K"].width = 14
 
     sheet.views.sheetView[0].showGridLines = True
 
