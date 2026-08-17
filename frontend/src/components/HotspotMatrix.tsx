@@ -336,7 +336,7 @@ function buildSkemaProvinsiMatrix(hotspots: MatrixHotspot[]): SkemaProvinsiMatri
   hotspots.forEach((hotspot) => {
     const skema = getSkema(hotspot);
     const provinsi = getProvinsi(hotspot);
-    const pairKey = `${provinsi} ${skema}`;
+    const pairKey = `${provinsi} ${skema}`;
     pairCounts.set(pairKey, (pairCounts.get(pairKey) ?? 0) + 1);
     skemaTotals.set(skema, (skemaTotals.get(skema) ?? 0) + 1);
     provinsiTotals.set(provinsi, (provinsiTotals.get(provinsi) ?? 0) + 1);
@@ -352,7 +352,7 @@ function buildSkemaProvinsiMatrix(hotspots: MatrixHotspot[]): SkemaProvinsiMatri
     .sort(byCountDesc)
     .map(([provinsi, total]) => ({
       provinsi,
-      counts: skema.map((label) => pairCounts.get(`${provinsi} ${label}`) ?? 0),
+      counts: skema.map((label) => pairCounts.get(`${provinsi} ${label}`) ?? 0),
       total,
     }));
   const totals = skema.map((label) => skemaTotals.get(label) ?? 0);

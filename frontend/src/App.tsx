@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FilterPanel } from "./components/FilterPanel";
 import { PasswordGateModal } from "./components/PasswordGateModal";
 import { SidebarNav } from "./components/SidebarNav";
@@ -535,6 +536,7 @@ export default function App() {
       />
 
       <main className="workspace">
+      <ErrorBoundary key={activeView} label={`tampilan ${activeView}`}>
         {activeView === "map" ? (
           <section aria-label="Dashboard workspace" className="workspace-stage workspace-stage--map">
             <Suspense fallback={<ViewLoader label="Memuat tampilan peta..." />}>
@@ -753,6 +755,7 @@ export default function App() {
             </Suspense>
           </section>
         )}
+      </ErrorBoundary>
       </main>
 
       <PasswordGateModal
