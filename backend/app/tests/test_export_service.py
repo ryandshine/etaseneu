@@ -41,7 +41,7 @@ def test_build_excel_file_writes_headers_and_row_values() -> None:
     )
 
     workbook = load_workbook(BytesIO(content))
-    sheet = workbook.active
+    sheet = workbook["Data Hotspot"]
 
     assert [cell.value for cell in sheet[1]] == [
         "No",
@@ -178,13 +178,13 @@ def test_build_excel_file_creates_dashboard_sheet() -> None:
 
     workbook = load_workbook(BytesIO(build_excel_file(_sample_hotspots())))
 
-    assert workbook.sheetnames == ["Data Hotspot", "Dashboard", "Skema per Provinsi"]
+    assert workbook.sheetnames == ["Dashboard", "Skema per Provinsi", "Data Hotspot"]
     dashboard = workbook["Dashboard"]
     assert "DASHBOARD" in str(dashboard["A1"].value)
-    # Kartu ringkasan: label di baris 4, angkanya di baris 5.
-    assert dashboard["A4"].value == "Total Hotspot"
-    assert dashboard["A5"].value == 2
-    assert dashboard["C5"].value == 2  # Balai PS
+    # Kartu ringkasan: label di baris 5, angkanya di baris 6.
+    assert dashboard["A5"].value == "TOTAL HOTSPOT"
+    assert dashboard["A6"].value == 2
+    assert dashboard["G6"].value == 2  # Balai PS (kolom G:I)
 
 
 def test_build_excel_file_handles_empty_hotspots() -> None:
@@ -196,8 +196,8 @@ def test_build_excel_file_handles_empty_hotspots() -> None:
 
     workbook = load_workbook(BytesIO(build_excel_file([])))
 
-    assert workbook.sheetnames == ["Data Hotspot", "Dashboard", "Skema per Provinsi"]
-    assert workbook["Dashboard"]["A5"].value == 0
+    assert workbook.sheetnames == ["Dashboard", "Skema per Provinsi", "Data Hotspot"]
+    assert workbook["Dashboard"]["A6"].value == 0
 
 
 def test_sk_number_collapses_duplicate_lines_from_source_shapefile() -> None:
@@ -289,3 +289,63 @@ def test_build_excel_file_writes_skema_per_provinsi_crosstab() -> None:
     assert body["Papua Selatan"][-1] == 1
     # Baris terakhir adalah total keseluruhan.
     assert body["Total"][-1] == 2
+
+
+def test_dashboard_summary_includes_top_kps_detail() -> None:
+    from app.services.export_service import build_dashboard_summary
+
+    summary = build_dashboard_summary(_sample_hotspots())
+    detail = summary["top_kps_detail"]
+
+    assert len(detail) == 2
+    assert detail[0]["rank"] == 1
+    assert detail[0]["name"] == "LPHD KALIBANDUNG"
+    assert detail[0]["provinsi"] == "Kalimantan Barat"
+    assert detail[0]["skema"] == "PPHD"
+    assert detail[0]["balai"] == "Balai PS Banjarbaru"
+    assert detail[0]["count"] == 1
+    assert detail[0]["percent"] == 0.5
+
+
+def test_dashboard_sheet_contains_kpi_charts_and_tables() -> None:
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
+    from app.services.export_service import build_excel_file
+
+    workbook = load_workbook(BytesIO(build_excel_file(_sample_hotspots())))
+    dashboard = workbook["Dashboard"]
+
+    # 1. Judul & Banner
+    assert "ETA SENEU" in str(dashboard["A1"].value)
+    assert "Periode Data" in str(dashboard["A3"].value)
+
+    # 2. KPI Cards
+    assert dashboard["A5"].value == "TOTAL HOTSPOT"
+    assert dashboard["A6"].value == 2
+    assert dashboard["D5"].value == "KPS TERDAMPAK"
+    assert dashboard["D6"].value == 2
+    assert dashboard["G5"].value == "BALAI PS"
+    assert dashboard["G6"].value == 2
+
+    # 3. Section Headers
+    assert "1. DISTRIBUSI SEBARAN PER BALAI PS" in str(dashboard["A10"].value)
+    assert "2. DISTRIBUSI SEBARAN PER SKEMA PERHUTANAN SOSIAL" in str(dashboard["I10"].value)
+    assert "3. TREN DETEKSI HOTSPOT BULANAN" in str(dashboard["A29"].value)
+    assert "4. DISTRIBUSI SEBARAN PER PROVINSI" in str(dashboard["I29"].value)
+    assert "5. PARAMETER TINGKAT RISIKO" in str(dashboard["A48"].value)
+    assert "6. 10 UNIT KPS PRIORITAS PENANGANAN" in str(dashboard["H48"].value)
+
+    # 4. Tables in Section 3
+    assert dashboard["A50"].value == "Tingkat Kepercayaan"
+    assert dashboard["A56"].value == "Kategori FRP"
+    assert dashboard["D50"].value == "Satelit Sensor"
+    assert dashboard["H50"].value == "No"
+    assert dashboard["I50"].value == "Nama Kawasan / KPS"
+    assert dashboard["H51"].value == "#1"
+    assert dashboard["I51"].value == "LPHD KALIBANDUNG"
+
+    # 5. Charts attached
+    assert len(dashboard._charts) == 4
+

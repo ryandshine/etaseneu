@@ -81,13 +81,27 @@ _CARD_BOX = Border(left=_CARD_SIDE, right=_CARD_SIDE, top=_CARD_SIDE, bottom=_CA
 def _wib_datetime(detected_at: object) -> datetime | None:
     if not detected_at:
         return None
+    if isinstance(detected_at, datetime):
+        if detected_at.tzinfo is None:
+            return detected_at.replace(tzinfo=timezone.utc).astimezone(WIB)
+        return detected_at.astimezone(WIB)
+    s = str(detected_at).strip()
     try:
-        parsed = datetime.fromisoformat(str(detected_at).replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(WIB)
     except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(WIB)
+        pass
+    for fmt in ("%d-%m-%Y %H:%M WIB", "%d-%m-%Y %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            parsed = datetime.strptime(s, fmt)
+            if "WIB" in s:
+                return parsed.replace(tzinfo=WIB)
+            return parsed.replace(tzinfo=timezone.utc).astimezone(WIB)
+        except ValueError:
+            continue
+    return None
 
 
 def _balai_ps(hotspot: dict) -> str:
@@ -142,6 +156,33 @@ def build_dashboard_summary(hotspots: list[dict]) -> dict:
     for moment in moments:
         per_bulan[moment.strftime("%Y-%m")] += 1
 
+    kps_counter: Counter[str] = Counter()
+    kps_meta: dict[str, dict] = {}
+    for row in rows:
+        name = row["Nama Wilayah"]
+        if name:
+            kps_counter[name] += 1
+            if name not in kps_meta:
+                kps_meta[name] = {
+                    "provinsi": row.get("Provinsi") or "Tanpa Provinsi",
+                    "skema": row.get("Skema") or "Tanpa Skema",
+                    "balai": row.get("Balai PS") or "Tanpa Balai",
+                }
+
+    top_kps_list = kps_counter.most_common(10)
+    top_kps_detail = [
+        {
+            "rank": idx,
+            "name": name,
+            "provinsi": kps_meta[name]["provinsi"],
+            "skema": kps_meta[name]["skema"],
+            "balai": kps_meta[name]["balai"],
+            "count": count,
+            "percent": (count / total) if total > 0 else 0,
+        }
+        for idx, (name, count) in enumerate(top_kps_list, start=1)
+    ]
+
     return {
         "total": total,
         "periode_awal": min(moments).strftime("%d-%m-%Y") if moments else "-",
@@ -154,7 +195,7 @@ def build_dashboard_summary(hotspots: list[dict]) -> dict:
         "per_provinsi": Counter(row["Provinsi"] for row in rows).most_common(),
         "per_skema": count_per_skema(hotspots),
         "skema_per_provinsi": build_skema_provinsi_matrix(hotspots),
-        "per_satelit": Counter(row["Satelit"] for row in rows).most_common(),
+        "per_satelit": Counter(row["Satelit"] for row in rows if row.get("Satelit")).most_common(),
         "per_confidence": [
             (level, sum(1 for row in rows if row["Confidence"] == level))
             for level in CATEGORY_ORDER
@@ -164,9 +205,8 @@ def build_dashboard_summary(hotspots: list[dict]) -> dict:
             for level in CATEGORY_ORDER
         ],
         "per_bulan": sorted(per_bulan.items()),
-        "top_kps": Counter(
-            row["Nama Wilayah"] for row in rows if row["Nama Wilayah"]
-        ).most_common(10),
+        "top_kps": top_kps_list,
+        "top_kps_detail": top_kps_detail,
     }
 
 
@@ -188,73 +228,104 @@ def _write_data_sheet(sheet, rows: list[dict]) -> None:
     for index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
 
-    # Baris header dibekukan supaya kolom Balai PS/Provinsi tetap terbaca saat
-    # menggulir ribuan baris.
     sheet.freeze_panes = "A2"
     if rows:
         sheet.auto_filter.ref = f"A1:{get_column_letter(len(EXPORT_HEADERS))}{len(rows) + 1}"
 
 
-def _title_block(sheet, summary: dict) -> int:
-    sheet["A1"] = "DASHBOARD HOTSPOT KAWASAN PERHUTANAN SOSIAL"
-    sheet["A1"].font = Font(name="Calibri", bold=True, size=15, color=_INK)
-    sheet["A2"] = (
-        f"Periode {summary['periode_awal']} s.d. {summary['periode_akhir']}  •  "
-        f"Sumber: ETA SENEU (hotspot beririsan dengan poligon KPS)"
+def _title_banner(sheet, summary: dict) -> None:
+    sheet.merge_cells("A1:O1")
+    sheet["A1"] = "ETA SENEU  •  DASHBOARD MONITORING HOTSPOT KAWASAN"
+    sheet["A1"].font = Font(name="Calibri", bold=True, size=14, color=_HEADER_TEXT)
+    sheet["A1"].fill = PatternFill("solid", fgColor=_INK)
+    sheet["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    sheet.row_dimensions[1].height = 26
+
+    sheet.merge_cells("A2:O2")
+    sheet["A2"] = "Sistem Peringatan Dini & Rekapitulasi Intersep Titik Panas Poligon Perhutanan Sosial (KPS)"
+    sheet["A2"].font = Font(name="Calibri", size=9.5, color="E2EFE7", italic=True)
+    sheet["A2"].fill = PatternFill("solid", fgColor=_EMERALD)
+    sheet["A2"].alignment = Alignment(horizontal="center", vertical="center")
+    sheet.row_dimensions[2].height = 20
+
+    sheet.merge_cells("A3:O3")
+    meta_text = (
+        f"Periode Data: {summary['periode_awal']} s.d. {summary['periode_akhir']}   •   "
+        f"Total Hotspot: {summary['total']:,} Titik   •   "
+        f"KPS Terdampak: {summary['jumlah_kps']:,} Unit SK   •   "
+        f"Cakupan: {summary['jumlah_balai']} Balai PS / {summary['jumlah_provinsi']} Provinsi"
     )
-    sheet["A2"].font = Font(name="Calibri", size=9, color=_MUTED, italic=True)
+    sheet["A3"] = meta_text
+    sheet["A3"].font = Font(name="Calibri", bold=True, size=9, color=_INK)
+    sheet["A3"].fill = PatternFill("solid", fgColor=_TOTAL_BG)
+    sheet["A3"].alignment = Alignment(horizontal="center", vertical="center")
+    sheet.row_dimensions[3].height = 20
+    sheet.row_dimensions[4].height = 8
 
-    sheet.row_dimensions[1].height = 24
-    sheet.row_dimensions[2].height = 18
-    sheet.row_dimensions[3].height = 10
 
-    # 5 Kartu Metrik Ringkasan (A, C, E, G, I) dengan merge 2 kolom per kartu
+def _write_kpi_cards(sheet, summary: dict) -> None:
     cards = [
-        ("Total Hotspot", summary["total"], 1, 2),
-        ("KPS Terdampak", summary["jumlah_kps"], 3, 4),
-        ("Balai PS", summary["jumlah_balai"], 5, 6),
-        ("Provinsi", summary["jumlah_provinsi"], 7, 8),
-        ("Skema PS", summary["jumlah_skema"], 9, 10),
+        ("TOTAL HOTSPOT", summary["total"], "Titik Panas Terdeteksi", 1, 3, _ACCENT),
+        ("KPS TERDAMPAK", summary["jumlah_kps"], "Unit SK Kawasan Hutan", 4, 6, _EMERALD),
+        ("BALAI PS", summary["jumlah_balai"], "Wilayah Kerja Balai PS", 7, 9, _EMERALD),
+        ("PROVINSI", summary["jumlah_provinsi"], "Provinsi Teridentifikasi", 10, 12, _EMERALD),
+        ("SKEMA PS", summary["jumlah_skema"], "Skema Izin Terdaftar", 13, 15, _EMERALD),
     ]
-
     card_fill = PatternFill("solid", fgColor=_CARD_BG)
-    accent_fill = PatternFill("solid", fgColor=_ACCENT)
 
-    for label, value, col_start, col_end in cards:
-        sheet.cell(row=4, column=col_start, value=label)
-        sheet.cell(row=5, column=col_start, value=value)
+    for label, value, subtitle, c_start, c_end, accent_color in cards:
+        accent_fill = PatternFill("solid", fgColor=accent_color)
+        sheet.cell(row=5, column=c_start, value=label)
+        sheet.cell(row=6, column=c_start, value=value)
+        sheet.cell(row=7, column=c_start, value=subtitle)
 
-        for r in range(4, 7):
-            for c in range(col_start, col_end + 1):
+        for r in range(5, 9):
+            for c in range(c_start, c_end + 1):
                 cell = sheet.cell(row=r, column=c)
-                cell.fill = accent_fill if r == 6 else card_fill
+                cell.fill = accent_fill if r == 8 else card_fill
                 cell.border = _CARD_BOX
 
-        lbl_cell = sheet.cell(row=4, column=col_start)
+        lbl_cell = sheet.cell(row=5, column=c_start)
         lbl_cell.font = Font(name="Calibri", bold=True, size=8.5, color=_MUTED)
         lbl_cell.alignment = Alignment(horizontal="center", vertical="center")
 
-        val_cell = sheet.cell(row=5, column=col_start)
-        val_cell.font = Font(name="Calibri", bold=True, size=18, color=_INK)
+        val_cell = sheet.cell(row=6, column=c_start)
+        val_color = _ACCENT if accent_color == _ACCENT else _INK
+        val_cell.font = Font(name="Calibri", bold=True, size=18, color=val_color)
         val_cell.number_format = "#,##0"
         val_cell.alignment = Alignment(horizontal="center", vertical="center")
 
-        if col_end > col_start:
-            sheet.merge_cells(start_row=4, start_column=col_start, end_row=4, end_column=col_end)
-            sheet.merge_cells(start_row=5, start_column=col_start, end_row=5, end_column=col_end)
-            sheet.merge_cells(start_row=6, start_column=col_start, end_row=6, end_column=col_end)
+        sub_cell = sheet.cell(row=7, column=c_start)
+        sub_cell.font = Font(name="Calibri", italic=True, size=8, color=_MUTED)
+        sub_cell.alignment = Alignment(horizontal="center", vertical="center")
 
-    sheet.row_dimensions[4].height = 16
-    sheet.row_dimensions[5].height = 26
-    sheet.row_dimensions[6].height = 4
+        sheet.merge_cells(start_row=5, start_column=c_start, end_row=5, end_column=c_end)
+        sheet.merge_cells(start_row=6, start_column=c_start, end_row=6, end_column=c_end)
+        sheet.merge_cells(start_row=7, start_column=c_start, end_row=7, end_column=c_end)
+        sheet.merge_cells(start_row=8, start_column=c_start, end_row=8, end_column=c_end)
+
+    sheet.row_dimensions[5].height = 16
+    sheet.row_dimensions[6].height = 26
     sheet.row_dimensions[7].height = 14
+    sheet.row_dimensions[8].height = 4
+    sheet.row_dimensions[9].height = 10
 
-    return 8
+
+def _write_section_header(sheet, row: int, col_start: int, col_end: int, title: str) -> None:
+    sheet.merge_cells(start_row=row, start_column=col_start, end_row=row, end_column=col_end)
+    cell = sheet.cell(row=row, column=col_start, value=title)
+    cell.font = Font(name="Calibri", bold=True, size=9.5, color=_INK)
+    cell.fill = PatternFill("solid", fgColor=_CARD_BG)
+    cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    for c in range(col_start, col_end + 1):
+        sheet.cell(row=row, column=c).border = _CARD_BOX
+        sheet.cell(row=row, column=c).fill = PatternFill("solid", fgColor=_CARD_BG)
+    sheet.row_dimensions[row].height = 20
 
 
 def _attach_bar_chart(sheet, anchor: str, title: str, header_row: int, row_count: int,
                       chart_type: str = "bar", color: str = _INK, data_col: int = 1,
-                      height: float = 8.5, width: float = 16.5) -> None:
+                      height: float = 7.5, width: float = 16.5) -> None:
     if row_count <= 0:
         return
     chart = BarChart()
@@ -266,29 +337,22 @@ def _attach_bar_chart(sheet, anchor: str, title: str, header_row: int, row_count
     chart.width = width
 
     if chart_type == "bar":
-        # x_axis is Category Axis on the LEFT
         chart.x_axis.axPos = "l"
         chart.x_axis.tickLblPos = "nextTo"
         chart.x_axis.title = None
-
-        # y_axis is Value Axis at the BOTTOM
         chart.y_axis.axPos = "b"
         chart.y_axis.tickLblPos = "nextTo"
         chart.y_axis.title = "Jumlah Titik Panas"
         chart.y_axis.majorGridlines = ChartLines()
     else:
-        # x_axis is Category Axis at the BOTTOM
         chart.x_axis.axPos = "b"
         chart.x_axis.tickLblPos = "nextTo"
         chart.x_axis.title = None
-
-        # y_axis is Value Axis on the LEFT
         chart.y_axis.axPos = "l"
         chart.y_axis.tickLblPos = "nextTo"
         chart.y_axis.title = "Jumlah Titik Panas"
         chart.y_axis.majorGridlines = ChartLines()
 
-    # Data Labels: selalu tampilkan nilai angka pada setiap batang
     chart.dataLabels = DataLabelList()
     chart.dataLabels.showVal = True
     chart.dataLabels.showCatName = False
@@ -313,7 +377,7 @@ def _attach_bar_chart(sheet, anchor: str, title: str, header_row: int, row_count
 
 def _attach_line_chart(sheet, anchor: str, title: str, header_row: int, row_count: int,
                        color: str = _INK, accent_color: str = _ACCENT, data_col: int = 1,
-                       height: float = 8.5, width: float = 16.5) -> None:
+                       height: float = 7.5, width: float = 16.5) -> None:
     if row_count <= 0:
         return
     chart = LineChart()
@@ -332,7 +396,6 @@ def _attach_line_chart(sheet, anchor: str, title: str, header_row: int, row_coun
     chart.y_axis.title = "Jumlah Titik Panas"
     chart.y_axis.majorGridlines = ChartLines()
 
-    # Data Labels informatif pada setiap titik tren bulanan
     chart.dataLabels = DataLabelList()
     chart.dataLabels.showVal = True
     chart.dataLabels.showCatName = False
@@ -362,13 +425,6 @@ def _attach_line_chart(sheet, anchor: str, title: str, header_row: int, row_coun
 
 def _write_chart_data(sheet, row: int, col: int, headers: tuple[str, str],
                       data: list[tuple[str, int]]) -> int:
-    """Tulis label+jumlah polos (tanpa styling tabel) sebagai sumber data chart.
-
-    Dashboard sekarang murni visual (KPI + chart grid), jadi angka mentahnya
-    tidak perlu tampil sebagai tabel di layar -- cukup jadi sumber Reference
-    untuk chart. Baris ini sengaja diletakkan di bawah print_area supaya tidak
-    ikut tercetak/terekspor PDF.
-    """
     header_row = row
     sheet.cell(row=header_row, column=col, value=headers[0])
     sheet.cell(row=header_row, column=col + 1, value=headers[1])
@@ -378,85 +434,263 @@ def _write_chart_data(sheet, row: int, col: int, headers: tuple[str, str],
     return header_row
 
 
-# Grid ringkasan eksekutif: 2 kolom x 2 baris -- empat pertanyaan inti saja
-# (di mana, skema apa, kapan, provinsi mana), bukan delapan tabel+chart yang
-# ditumpuk memanjang seperti desain sebelumnya. Dibatasi 4 (bukan 6) supaya
-# muat satu halaman cetak yang sungguhan tanpa berharap pada auto-scale
-# "fit to page" -- terbukti tidak konsisten hasilnya antar aplikasi (Excel vs
-# LibreOffice). Distribusi Confidence/FRP tetap dihitung di
-# `build_dashboard_summary` untuk laporan PDF, hanya tidak ditampilkan di
-# sini supaya ringkasannya benar-benar ringkas.
-_GRID_COL_LEFT = 1   # A
-_GRID_COL_RIGHT = 9  # I
-_GRID_ROW_STEP = 16  # chart tinggi 7cm + jarak antar baris
-_CHART_HEIGHT_CM = 7.0
-_CHART_WIDTH_CM = 16.0
+def _write_mini_summary_table(sheet, start_row: int, start_col: int, title: str,
+                              data: list[tuple[str, int]], total: int) -> int:
+    headers = [title, "Jumlah", "%"]
+    header_fill = PatternFill("solid", fgColor=_INK)
+    for idx, h in enumerate(headers):
+        cell = sheet.cell(row=start_row, column=start_col + idx, value=h)
+        cell.fill = header_fill
+        cell.font = Font(name="Calibri", bold=True, color=_HEADER_TEXT, size=8.5)
+        cell.alignment = Alignment(horizontal="center" if idx > 0 else "left", vertical="center")
+        cell.border = _CELL_BORDER
+    sheet.row_dimensions[start_row].height = 18
+
+    current_row = start_row + 1
+    for idx, (label, count) in enumerate(data):
+        pct = (count / total) if total > 0 else 0
+        r_cell = sheet.cell(row=current_row, column=start_col, value=label)
+        r_cell.font = Font(name="Calibri", size=8.5)
+        r_cell.alignment = Alignment(horizontal="left", vertical="center")
+        r_cell.border = _CELL_BORDER
+        if idx % 2 == 1:
+            r_cell.fill = PatternFill("solid", fgColor=_BAND)
+
+        c_cell = sheet.cell(row=current_row, column=start_col + 1, value=count)
+        c_cell.font = Font(name="Calibri", size=8.5)
+        c_cell.number_format = "#,##0"
+        c_cell.alignment = Alignment(horizontal="right", vertical="center")
+        c_cell.border = _CELL_BORDER
+        if idx % 2 == 1:
+            c_cell.fill = PatternFill("solid", fgColor=_BAND)
+
+        p_cell = sheet.cell(row=current_row, column=start_col + 2, value=pct)
+        p_cell.font = Font(name="Calibri", size=8.5)
+        p_cell.number_format = "0.0%"
+        p_cell.alignment = Alignment(horizontal="right", vertical="center")
+        p_cell.border = _CELL_BORDER
+        if idx % 2 == 1:
+            p_cell.fill = PatternFill("solid", fgColor=_BAND)
+
+        sheet.row_dimensions[current_row].height = 16
+        current_row += 1
+
+    sum_counts = sum(count for _, count in data)
+    sum_pct = (sum_counts / total) if total > 0 else 0
+    t_lbl = sheet.cell(row=current_row, column=start_col, value="Total")
+    t_lbl.font = Font(name="Calibri", bold=True, size=8.5, color=_INK)
+    t_lbl.fill = PatternFill("solid", fgColor=_TOTAL_BG)
+    t_lbl.border = _TOTAL_BORDER
+
+    t_val = sheet.cell(row=current_row, column=start_col + 1, value=sum_counts)
+    t_val.font = Font(name="Calibri", bold=True, size=8.5, color=_INK)
+    t_val.number_format = "#,##0"
+    t_val.alignment = Alignment(horizontal="right", vertical="center")
+    t_val.fill = PatternFill("solid", fgColor=_TOTAL_BG)
+    t_val.border = _TOTAL_BORDER
+
+    t_pct = sheet.cell(row=current_row, column=start_col + 2, value=sum_pct)
+    t_pct.font = Font(name="Calibri", bold=True, size=8.5, color=_INK)
+    t_pct.number_format = "0.0%"
+    t_pct.alignment = Alignment(horizontal="right", vertical="center")
+    t_pct.fill = PatternFill("solid", fgColor=_TOTAL_BG)
+    t_pct.border = _TOTAL_BORDER
+
+    sheet.row_dimensions[current_row].height = 18
+    return current_row
+
+
+def _write_top_kps_table(sheet, start_row: int, start_col: int, top_kps_detail: list[dict], total: int) -> int:
+    headers = [
+        ("No", 1),
+        ("Nama Kawasan / KPS", 1),
+        ("Provinsi", 1),
+        ("Skema", 1),
+        ("Balai PS", 1),
+        ("Jumlah", 1),
+        ("% Total", 2),
+    ]
+    header_fill = PatternFill("solid", fgColor=_INK)
+
+    curr_col = start_col
+    for title, span in headers:
+        cell = sheet.cell(row=start_row, column=curr_col, value=title)
+        cell.fill = header_fill
+        cell.font = Font(name="Calibri", bold=True, color=_HEADER_TEXT, size=8.5)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = _CELL_BORDER
+        if span > 1:
+            for extra in range(1, span):
+                e_cell = sheet.cell(row=start_row, column=curr_col + extra)
+                e_cell.fill = header_fill
+                e_cell.border = _CELL_BORDER
+            sheet.merge_cells(start_row=start_row, start_column=curr_col, end_row=start_row, end_column=curr_col + span - 1)
+        curr_col += span
+
+    sheet.row_dimensions[start_row].height = 20
+    current_row = start_row + 1
+
+    for row_idx, item in enumerate(top_kps_detail):
+        fill_color = _BAND if row_idx % 2 == 1 else "FFFFFF"
+        row_fill = PatternFill("solid", fgColor=fill_color)
+
+        c_no = sheet.cell(row=current_row, column=start_col, value=f"#{item['rank']}")
+        c_no.alignment = Alignment(horizontal="center", vertical="center")
+        c_no.font = Font(name="Calibri", bold=True, size=8, color=_MUTED)
+
+        c_name = sheet.cell(row=current_row, column=start_col + 1, value=item["name"])
+        c_name.alignment = Alignment(horizontal="left", vertical="center")
+        c_name.font = Font(name="Calibri", bold=True, size=8.5, color=_INK)
+
+        c_prov = sheet.cell(row=current_row, column=start_col + 2, value=item["provinsi"])
+        c_prov.alignment = Alignment(horizontal="left", vertical="center")
+        c_prov.font = Font(name="Calibri", size=8)
+
+        c_skema = sheet.cell(row=current_row, column=start_col + 3, value=item["skema"])
+        c_skema.alignment = Alignment(horizontal="center", vertical="center")
+        c_skema.font = Font(name="Calibri", bold=True, size=8, color=_EMERALD)
+
+        c_balai = sheet.cell(row=current_row, column=start_col + 4, value=item["balai"])
+        c_balai.alignment = Alignment(horizontal="left", vertical="center")
+        c_balai.font = Font(name="Calibri", size=8)
+
+        c_count = sheet.cell(row=current_row, column=start_col + 5, value=item["count"])
+        c_count.alignment = Alignment(horizontal="right", vertical="center")
+        c_count.font = Font(name="Calibri", bold=True, size=8.5, color=_ACCENT)
+        c_count.number_format = "#,##0"
+
+        c_pct = sheet.cell(row=current_row, column=start_col + 6, value=item["percent"])
+        c_pct.alignment = Alignment(horizontal="right", vertical="center")
+        c_pct.font = Font(name="Calibri", size=8)
+        c_pct.number_format = "0.0%"
+
+        for offset in range(8):
+            cell = sheet.cell(row=current_row, column=start_col + offset)
+            cell.border = _CELL_BORDER
+            cell.fill = row_fill
+
+        sheet.merge_cells(start_row=current_row, start_column=start_col + 6, end_row=current_row, end_column=start_col + 7)
+        sheet.row_dimensions[current_row].height = 17
+        current_row += 1
+
+    if not top_kps_detail:
+        empty_cell = sheet.cell(row=current_row, column=start_col, value="Tidak ada data KPS terdampak")
+        empty_cell.alignment = Alignment(horizontal="center", vertical="center")
+        empty_cell.font = Font(name="Calibri", italic=True, size=8.5, color=_MUTED)
+        sheet.merge_cells(start_row=current_row, start_column=start_col, end_row=current_row, end_column=start_col + 7)
+        for offset in range(8):
+            sheet.cell(row=current_row, column=start_col + offset).border = _CELL_BORDER
+        sheet.row_dimensions[current_row].height = 20
+        current_row += 1
+
+    sum_top_counts = sum(item["count"] for item in top_kps_detail)
+    sum_top_pct = (sum_top_counts / total) if total > 0 else 0
+
+    sheet.cell(row=current_row, column=start_col, value="Total 10 KPS Teratas")
+    sheet.merge_cells(start_row=current_row, start_column=start_col, end_row=current_row, end_column=start_col + 4)
+    lbl = sheet.cell(row=current_row, column=start_col)
+    lbl.alignment = Alignment(horizontal="right", vertical="center")
+    lbl.font = Font(name="Calibri", bold=True, size=8.5, color=_INK)
+
+    v_cell = sheet.cell(row=current_row, column=start_col + 5, value=sum_top_counts)
+    v_cell.alignment = Alignment(horizontal="right", vertical="center")
+    v_cell.font = Font(name="Calibri", bold=True, size=8.5, color=_INK)
+    v_cell.number_format = "#,##0"
+
+    p_cell = sheet.cell(row=current_row, column=start_col + 6, value=sum_top_pct)
+    p_cell.alignment = Alignment(horizontal="right", vertical="center")
+    p_cell.font = Font(name="Calibri", bold=True, size=8.5, color=_INK)
+    p_cell.number_format = "0.0%"
+    sheet.merge_cells(start_row=current_row, start_column=start_col + 6, end_row=current_row, end_column=start_col + 7)
+
+    for offset in range(8):
+        cell = sheet.cell(row=current_row, column=start_col + offset)
+        cell.border = _TOTAL_BORDER
+        cell.fill = PatternFill("solid", fgColor=_TOTAL_BG)
+
+    sheet.row_dimensions[current_row].height = 18
+    return current_row
 
 
 def _write_dashboard_sheet(sheet, summary: dict) -> None:
-    grid_start = _title_block(sheet, summary) + 1
+    total = summary["total"]
 
+    # 1. Header Banner & Metadata
+    _title_banner(sheet, summary)
+
+    # 2. 5 KPI Summary Cards (Baris 5 - 8)
+    _write_kpi_cards(sheet, summary)
+
+    # 3. Bagian 1: Distribusi Wilayah Balai & Skema PS (Baris 10 - 27)
+    _write_section_header(sheet, 10, 1, 7, "1. DISTRIBUSI SEBARAN PER BALAI PS")
+    _write_section_header(sheet, 10, 9, 15, "2. DISTRIBUSI SEBARAN PER SKEMA PERHUTANAN SOSIAL")
+
+    # 4. Bagian 2: Tren Waktu & Distribusi Provinsi (Baris 29 - 46)
+    _write_section_header(sheet, 29, 1, 7, "3. TREN DETEKSI HOTSPOT BULANAN")
+    _write_section_header(sheet, 29, 9, 15, "4. DISTRIBUSI SEBARAN PER PROVINSI")
+
+    # 5. Bagian 3: Parameter Risiko, Satelit, & 10 KPS Prioritas (Baris 48 - 63)
+    _write_section_header(sheet, 48, 1, 6, "5. PARAMETER TINGKAT RISIKO & SENSOR SATELIT")
+    _write_section_header(sheet, 48, 8, 15, "6. 10 UNIT KPS PRIORITAS PENANGANAN (HOTSPOT TERBANYAK)")
+
+    # Tabel Parameter Risiko di Kolom A:C
+    _write_mini_summary_table(sheet, 50, 1, "Tingkat Kepercayaan", summary["per_confidence"], total)
+    _write_mini_summary_table(sheet, 56, 1, "Kategori FRP", summary["per_frp"], total)
+
+    # Tabel Satelit Sensor di Kolom D:F
+    satelit_data = summary["per_satelit"] if summary["per_satelit"] else [("Semua Sensor", total)]
+    _write_mini_summary_table(sheet, 50, 4, "Satelit Sensor", satelit_data, total)
+
+    # Tabel 10 KPS Prioritas di Kolom H:O
+    _write_top_kps_table(sheet, 50, 8, summary.get("top_kps_detail", []), total)
+
+    # 6. Pemasangan Chart & Penulisan Data Staging
     charts = [
-        ("Hotspot per Balai PS", ("Balai PS", "Jumlah"), summary["per_balai"], "bar", _INK),
-        ("Hotspot per Skema Perhutanan Sosial", ("Skema", "Jumlah"), summary["per_skema"], "col", _EMERALD),
-        ("Tren Bulanan", ("Bulan", "Jumlah"), summary["per_bulan"], "line", _INK),
-        ("10 Provinsi Teratas", ("Provinsi", "Jumlah"), summary["per_provinsi"][:10], "bar", _ACCENT),
+        ("Hotspot per Balai PS", ("Balai PS", "Jumlah"), summary["per_balai"], "bar", _INK, "A11"),
+        ("Hotspot per Skema PS", ("Skema", "Jumlah"), summary["per_skema"], "col", _EMERALD, "I11"),
+        ("Tren Bulanan", ("Bulan", "Jumlah"), summary["per_bulan"], "line", _INK, "A30"),
+        ("Hotspot per Provinsi", ("Provinsi", "Jumlah"), summary["per_provinsi"], "bar", _ACCENT, "I30"),
     ]
-    grid_rows = 2
 
-    # Sumber data tiap chart ditulis polos (tanpa styling tabel) berurutan di
-    # bawah grid, di luar print_area -- dashboard yang tercetak/PDF cuma
-    # berisi KPI + grid chart, tapi angka mentahnya tetap ada di sheet ini
-    # (bukan dihapus) kalau suatu saat perlu ditelusuri manual.
-    staging_row = grid_start + grid_rows * _GRID_ROW_STEP + 3
-    sheet.cell(row=staging_row - 2, column=1, value="Data pendukung chart di atas (tidak ikut tercetak)")
+    staging_row = 70
+    sheet.cell(row=staging_row - 2, column=1, value="Data pendukung chart (di luar area cetak dashboard)")
     sheet.cell(row=staging_row - 2, column=1).font = Font(name="Calibri", italic=True, size=8, color=_MUTED)
 
-    for index, (title, headers, data, chart_kind, color) in enumerate(charts):
+    for title, headers, data, chart_kind, color, anchor in charts:
         header_row = _write_chart_data(sheet, staging_row, 1, headers, data)
         staging_row = header_row + len(data) + 3
 
-        grid_col = _GRID_COL_LEFT if index % 2 == 0 else _GRID_COL_RIGHT
-        grid_row = grid_start + (index // 2) * _GRID_ROW_STEP
-        anchor = f"{get_column_letter(grid_col)}{grid_row}"
-
         if chart_kind == "line":
             _attach_line_chart(sheet, anchor, title, header_row, len(data), color,
-                               height=_CHART_HEIGHT_CM, width=_CHART_WIDTH_CM)
+                               height=7.2, width=16.2)
         elif chart_kind == "col":
             _attach_bar_chart(sheet, anchor, title, header_row, len(data), chart_type="col", color=color,
-                              height=_CHART_HEIGHT_CM, width=_CHART_WIDTH_CM)
+                              height=7.2, width=16.2)
         else:
             _attach_bar_chart(sheet, anchor, title, header_row, len(data), chart_type="bar", color=color,
-                              height=_CHART_HEIGHT_CM, width=_CHART_WIDTH_CM)
+                              height=7.2, width=16.2)
 
-    last_grid_row = grid_start + grid_rows * _GRID_ROW_STEP
+    # Pengaturan Lebar Kolom yang Seimbang
+    col_widths = {
+        "A": 16, "B": 10, "C": 9,
+        "D": 16, "E": 10, "F": 9,
+        "G": 4,
+        "H": 6, "I": 28, "J": 18, "K": 12, "L": 18, "M": 14, "N": 9, "O": 9
+    }
+    for col_letter, width in col_widths.items():
+        sheet.column_dimensions[col_letter].width = width
 
-    # Kolom Grid: A s.d. O seragam lebar 11 (7 kolom per chart + 1 gutter)
-    for col_idx in range(1, 16):
-        sheet.column_dimensions[get_column_letter(col_idx)].width = 11
-
-    # Landscape print & fit setup. print_area dibatasi tepat sampai bawah
-    # grid chart supaya data pendukung yang polos di bawahnya tidak ikut
-    # tercetak/terekspor PDF -- tanpa ini, area cetak default hanya
-    # mengikuti sel yang ada isinya dan chart yang melayang di luar itu bisa
-    # terpotong (persis bug yang bikin dashboard versi sebelumnya kacau).
-    sheet.print_area = f"A1:O{last_grid_row}"
+    # Print & View setup
+    sheet.print_area = "A1:O63"
     sheet.page_setup.orientation = sheet.ORIENTATION_LANDSCAPE
     sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
     sheet.sheet_properties.pageSetUpPr.fitToPage = True
-    # fitToHeight=1 (bukan 0) supaya ringkasan eksekutif ini benar-benar muat
-    # satu halaman cetak/PDF. Margin dipersempit karena auto-scale
-    # "fit to page" terbukti tidak konsisten hasilnya antar aplikasi (Excel vs
-    # LibreOffice) -- dengan grid 4 chart yang sudah dikompakkan, layout ini
-    # muat 1 halaman A4 landscape bahkan di skala 100%, jadi tidak
-    # menggantungkan diri sepenuhnya pada auto-scale itu.
     sheet.page_setup.fitToWidth = 1
-    sheet.page_setup.fitToHeight = 1
-    sheet.page_margins.left = 0.4
-    sheet.page_margins.right = 0.4
-    sheet.page_margins.top = 0.5
-    sheet.page_margins.bottom = 0.4
+    sheet.page_setup.fitToHeight = 0
+    sheet.page_margins.left = 0.3
+    sheet.page_margins.right = 0.3
+    sheet.page_margins.top = 0.4
+    sheet.page_margins.bottom = 0.3
     sheet.page_margins.header = 0.2
     sheet.page_margins.footer = 0.2
 
@@ -510,25 +744,26 @@ def _write_skema_provinsi_sheet(sheet, matrix: SkemaProvinsiMatrix) -> None:
     sheet.column_dimensions["A"].width = 30
     for offset in range(1, len(headers)):
         sheet.column_dimensions[get_column_letter(1 + offset)].width = 16
-    # Kolom provinsi & baris header dibekukan supaya tetap terbaca saat tabel
-    # digulir ke kanan (skema bisa sampai delapan kolom).
     sheet.freeze_panes = f"B{header_row + 1}"
 
 
 def build_excel_file(hotspots: list[dict]) -> bytes:
     workbook = Workbook()
 
-    data_sheet = workbook.active
-    data_sheet.title = DATA_SHEET_TITLE
-    _write_data_sheet(data_sheet, build_export_rows(hotspots))
-
     summary = build_dashboard_summary(hotspots)
 
-    dashboard_sheet = workbook.create_sheet(DASHBOARD_SHEET_TITLE)
+    # 1. Sheet Dashboard sebagai lembar kerja utama
+    dashboard_sheet = workbook.active
+    dashboard_sheet.title = DASHBOARD_SHEET_TITLE
     _write_dashboard_sheet(dashboard_sheet, summary)
 
+    # 2. Sheet Skema per Provinsi
     skema_sheet = workbook.create_sheet(SKEMA_SHEET_TITLE)
     _write_skema_provinsi_sheet(skema_sheet, summary["skema_per_provinsi"])
+
+    # 3. Sheet Data Hotspot
+    data_sheet = workbook.create_sheet(DATA_SHEET_TITLE)
+    _write_data_sheet(data_sheet, build_export_rows(hotspots))
 
     buffer = BytesIO()
     workbook.save(buffer)

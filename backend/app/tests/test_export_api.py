@@ -111,7 +111,8 @@ def test_export_endpoint_returns_xlsx_attachment(monkeypatch) -> None:
         ]
 
         workbook = load_workbook(BytesIO(body["body"]))
-        sheet = workbook.active
+        assert workbook.sheetnames == ["Dashboard", "Skema per Provinsi", "Data Hotspot"]
+        sheet = workbook["Data Hotspot"]
         assert sheet["A1"].value == "No"
     finally:
         get_settings.cache_clear()
@@ -299,7 +300,7 @@ def test_export_endpoints_apply_matrix_filters(monkeypatch) -> None:
         assert status == 200
         body = next(message for message in messages if message["type"] == "http.response.body")
         wb = load_workbook(BytesIO(body["body"]))
-        sheet = wb.active
+        sheet = wb["Data Hotspot"]
         rows = list(sheet.iter_rows(values_only=True))
         assert len(rows) == 2
         assert rows[1][1] == "KTH KAPENTA NANGANAE"
@@ -315,7 +316,7 @@ def test_export_endpoints_apply_matrix_filters(monkeypatch) -> None:
         assert status == 200
         body = next(message for message in messages if message["type"] == "http.response.body")
         wb = load_workbook(BytesIO(body["body"]))
-        sheet = wb.active
+        sheet = wb["Data Hotspot"]
         rows = list(sheet.iter_rows(values_only=True))
         assert len(rows) == 2
         assert rows[1][1] == "LDPH ANDU LESTARI"
@@ -331,7 +332,7 @@ def test_export_endpoints_apply_matrix_filters(monkeypatch) -> None:
         assert status == 200
         body = next(message for message in messages if message["type"] == "http.response.body")
         wb = load_workbook(BytesIO(body["body"]))
-        sheet = wb.active
+        sheet = wb["Data Hotspot"]
         rows = list(sheet.iter_rows(values_only=True))
         assert len(rows) == 2
         assert rows[1][1] == "KTH KAPENTA NANGANAE"
