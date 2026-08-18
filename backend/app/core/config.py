@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     gee_service_account_email: str = ""
     gee_service_account_key_path: str = ""
     gee_project_id: str = ""
+    # Auto-refresh burned area. Beda dari scheduler_interval_hours (hotspot,
+    # tiap 3 jam) -- produk MCD64A1/VNP64A1 terbit BULANAN, jadi mengecek
+    # tiap hari sia-sia. Default mingguan, coba ulang 3 bulan ke belakang
+    # tiap kali supaya begitu NASA merilis citra baru sistem otomatis
+    # menangkapnya tanpa perlu tahu persis tanggal rilisnya.
+    burned_area_scheduler_enabled: bool = True
+    burned_area_scheduler_interval_hours: float = 168.0
+    burned_area_scheduler_lookback_months: int = 3
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,

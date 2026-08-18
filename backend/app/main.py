@@ -9,6 +9,7 @@ from app.api.router import api_router
 from app.core.config import get_settings
 from app.services import scheduler as scheduler_service
 from app.services.scheduler import hotspot_scheduler_loop
+from app.services.burned_area_scheduler import burned_area_scheduler_loop
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,6 +39,28 @@ def _defer_scheduler_start(
     return handle, holder
 
 
+def _defer_burned_area_scheduler_start(
+    *,
+    interval_hours: float,
+    lookback_months: int,
+) -> tuple[asyncio.Handle, dict[str, asyncio.Task | None]]:
+    loop = asyncio.get_running_loop()
+    holder: dict[str, asyncio.Task | None] = {"task": None}
+
+    def _start_scheduler() -> None:
+        holder["task"] = asyncio.create_task(
+            burned_area_scheduler_loop(
+                interval_hours=interval_hours,
+                lookback_months=lookback_months,
+            )
+        )
+
+    # Mulai 2 detik setelah startup, setelah scheduler hotspot (1 detik) --
+    # supaya tidak berebut start-up cost di detik pertama yang sama.
+    handle = loop.call_later(2.0, _start_scheduler)
+    return handle, holder
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
@@ -61,6 +84,25 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("AUTO-SYNC: Scheduler dinonaktifkan (SCHEDULER_ENABLED=false).")
 
+    burned_area_task = None
+    burned_area_start_handle = None
+    burned_area_task_holder: dict[str, asyncio.Task | None] | None = None
+    if settings.burned_area_scheduler_enabled:
+        logger.info(
+            "BURNED_AREA_SCHEDULER: Auto-refresh aktif — interval %.1f jam, lookback %d bulan "
+            "(nonaktif otomatis kalau GEE belum dikonfigurasi).",
+            settings.burned_area_scheduler_interval_hours,
+            settings.burned_area_scheduler_lookback_months,
+        )
+        burned_area_start_handle, burned_area_task_holder = _defer_burned_area_scheduler_start(
+            interval_hours=settings.burned_area_scheduler_interval_hours,
+            lookback_months=settings.burned_area_scheduler_lookback_months,
+        )
+    else:
+        logger.info(
+            "BURNED_AREA_SCHEDULER: Dinonaktifkan (BURNED_AREA_SCHEDULER_ENABLED=false)."
+        )
+
     yield  # aplikasi berjalan di sini
 
     if scheduler_start_handle is not None and scheduler_task_holder is not None:
@@ -75,6 +117,19 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("AUTO-SYNC: Scheduler dihentikan.")
+
+    if burned_area_start_handle is not None and burned_area_task_holder is not None:
+        burned_area_task = burned_area_task_holder["task"]
+        if burned_area_task is None:
+            burned_area_start_handle.cancel()
+
+    if burned_area_task is not None:
+        burned_area_task.cancel()
+        try:
+            await burned_area_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("BURNED_AREA_SCHEDULER: Dihentikan.")
 
 
 def create_app() -> FastAPI:

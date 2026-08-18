@@ -12,6 +12,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 from app.core.auth import require_admin_key
 from app.core.config import get_settings
 from app.services import scheduler as scheduler_service
+from app.services import burned_area_scheduler as burned_area_scheduler_service
+from app.services.burned_area_service import BurnedAreaService
 from app.services.hotspot_service import HotspotService
 
 router = APIRouter(prefix="/scheduler", tags=["scheduler"])
@@ -84,3 +86,26 @@ async def trigger_manual_sync(_: None = Depends(require_admin_key)) -> dict:
         "new_hotspot_count": result.get("new_hotspot_count", 0),
         "message": "Sync hotspot selesai secara manual.",
     }
+
+
+@router.get("/burned-area/status")
+async def burned_area_scheduler_status() -> dict:
+    """Status auto-refresh burned area (MCD64A1 + fallback VNP64A1)."""
+    settings = get_settings()
+    metrics = burned_area_scheduler_service.get_burned_area_scheduler_metrics_snapshot()
+    return {
+        "scheduler_enabled": settings.burned_area_scheduler_enabled,
+        "gee_configured": BurnedAreaService().enabled,
+        **metrics,
+    }
+
+
+@router.post("/burned-area/sync")
+async def trigger_burned_area_sync(_: None = Depends(require_admin_key)) -> dict:
+    """Trigger manual siklus auto-refresh burned area (lookback N bulan) sekarang."""
+    settings = get_settings()
+    service = BurnedAreaService()
+    result = await burned_area_scheduler_service.run_burned_area_cycle(
+        service, settings.burned_area_scheduler_lookback_months
+    )
+    return {"triggered": True, **result}

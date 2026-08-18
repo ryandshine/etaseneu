@@ -1,16 +1,23 @@
 """Luas kebakaran (burned area) per poligon KPS per bulan.
 
-Sumber: MODIS MCD64A1 (Burned Area, band BurnDate, resolusi 500m) lewat
-Google Earth Engine. Cadence-nya bulanan dan biasanya baru terbit dengan lag
-~1-3 bulan dari bulan berjalan -- beda jauh dari sync hotspot NASA FIRMS yang
-tiap 3 jam. Jangan disamakan kesegarannya di UI: KPI "luas terbakar bulan
-ini" pada dasarnya selalu menampilkan bulan beberapa waktu lalu, bukan bulan
-sekarang.
+Sumber utama: MODIS MCD64A1 (Burned Area, band BurnDate, resolusi 500m)
+lewat Google Earth Engine. Kalau MCD64A1 belum terbit untuk suatu bulan,
+sistem fallback ke VIIRS VNP64A1 (band Burn_Date, resolusi 500m juga, tim &
+algoritma sama) -- lihat `_resolve_monthly_source()`. Cadence-nya bulanan
+dan biasanya baru terbit dengan lag ~1-3 bulan dari bulan berjalan -- beda
+jauh dari sync hotspot NASA FIRMS yang tiap 3 jam. Jangan disamakan
+kesegarannya di UI: KPI "luas terbakar bulan ini" pada dasarnya selalu
+menampilkan bulan beberapa waktu lalu, bukan bulan sekarang.
 """
 
 from __future__ import annotations
 
 import logging
+
+from shapely.geometry import MultiPolygon as ShapelyMultiPolygon
+from shapely.geometry import Polygon as ShapelyPolygon
+from shapely.geometry import mapping, shape as shapely_shape
+from shapely.ops import unary_union
 
 from app.core.config import get_settings
 from app.services.postgres_store import PostgresStore
@@ -24,6 +31,18 @@ logger = logging.getLogger("burned_area")
 _BATCH_SIZE = 200
 
 MCD64A1_COLLECTION = "MODIS/061/MCD64A1"
+MCD64A1_BAND = "BurnDate"
+
+# VIIRS/VNP64A1: algoritma & tim yang sama dengan MCD64A1 (University of
+# Maryland), resolusi 500m sama, tapi disokong satelit yang lebih baru
+# (Suomi-NPP/NOAA-20) sehingga lag rilisnya cenderung lebih pendek daripada
+# MODIS (Terra/Aqua, makin uzur). Dipakai sebagai FALLBACK -- bukan sumber
+# utama -- karena histori panjang MCD64A1 lebih mapan untuk baseline.
+VNP64A1_COLLECTION = "NASA/VIIRS/002/VNP64A1"
+VNP64A1_BAND = "Burn_Date"
+
+# Urutan dicoba: MODIS dulu, VIIRS kalau MODIS belum terbit untuk bulan ini.
+_MONTHLY_SOURCES = ((MCD64A1_COLLECTION, MCD64A1_BAND), (VNP64A1_COLLECTION, VNP64A1_BAND))
 
 
 class BurnedAreaServiceError(Exception):
@@ -80,6 +99,20 @@ class BurnedAreaService:
         `reduceRegions()` di pemanggil hanya mengembalikan angka luas, bentuk
         area-nya tidak ikut. Gagal di sini tidak fatal: angka luasnya tetap
         tersimpan, hanya lapisan petanya yang absen.
+
+        `reduceToVectors()` diberi `geometry` cuma untuk MEMILIH piksel mana
+        yang diproses -- poligon hasilnya adalah SELURUH piksel MODIS 500m
+        (25 ha) yang tersentuh, TIDAK dipotong ke batas KPS. Piksel yang cuma
+        menyerempet tepi kawasan tetap ikut utuh, sehingga geometrinya bisa
+        meluber jauh melebihi luas KPS-nya sendiri -- ditemukan lewat sanity
+        check luas_bakar > luas_poligon: satu KPS 20,7 ha menunjukkan
+        geometry 49,7 ha (2,4x lipat), padahal angka `burned_area_ha`
+        (dari reduceRegions, yang MEMANG diclip ke batas KPS) di baris yang
+        sama cuma 24,1 ha -- dua angka yang seharusnya konsisten tapi
+        terpisah 2x lipat karena beda cara hitung. Makanya hasil vektor di
+        sini di-intersect ulang ke `polygon_geojson` pakai shapely sebelum
+        disimpan, supaya geometry yang tergambar di peta tidak pernah lebih
+        luas dari kawasannya sendiri, dan konsisten dengan burned_area_ha.
         """
         try:
             vectors = (
@@ -96,17 +129,47 @@ class BurnedAreaService:
             logger.warning("BURNED_AREA: reduceToVectors gagal — %s", exc)
             return None
 
-        polygons: list = []
-        for feature in vectors.get("features", []):
-            geom = feature.get("geometry") or {}
-            if geom.get("type") == "Polygon":
-                polygons.append(geom["coordinates"])
-            elif geom.get("type") == "MultiPolygon":
-                polygons.extend(geom["coordinates"])
-
-        if not polygons:
+        try:
+            kps_boundary = shapely_shape(polygon_geojson).buffer(0)
+            raw_geoms = [
+                shapely_shape(feature["geometry"]).buffer(0)
+                for feature in vectors.get("features", [])
+                if feature.get("geometry")
+            ]
+            if not raw_geoms:
+                return None
+            clipped = unary_union(raw_geoms).intersection(kps_boundary)
+        except Exception as exc:
+            logger.warning("BURNED_AREA: gagal clip geometry ke batas KPS — %s", exc)
             return None
-        return {"type": "MultiPolygon", "coordinates": polygons}
+
+        if clipped.is_empty:
+            return None
+
+        if isinstance(clipped, ShapelyPolygon):
+            clipped = ShapelyMultiPolygon([clipped])
+        elif not isinstance(clipped, ShapelyMultiPolygon):
+            # GeometryCollection dsb (potongan garis/titik sisa numerik) --
+            # ambil cuma bagian poligonalnya.
+            polys = [g for g in getattr(clipped, "geoms", []) if isinstance(g, ShapelyPolygon)]
+            if not polys:
+                return None
+            clipped = ShapelyMultiPolygon(polys)
+
+        return mapping(clipped)
+
+    def _resolve_monthly_source(self, ee, start: str, end: str):
+        """Cari sumber burned-area yang sudah punya citra untuk bulan ini.
+
+        Coba MCD64A1 dulu, fallback ke VNP64A1 kalau MODIS belum terbit --
+        lihat catatan di konstanta `VNP64A1_COLLECTION` di atas. Return
+        `(None, None)` kalau dua-duanya belum ada citra untuk periode ini.
+        """
+        for collection_id, band in _MONTHLY_SOURCES:
+            collection = ee.ImageCollection(collection_id).filterDate(start, end).select(band)
+            if collection.size().getInfo() > 0:
+                return collection_id, collection.mosaic().gt(0)
+        return None, None
 
     def refresh_burned_area(
         self,
@@ -128,22 +191,19 @@ class BurnedAreaService:
             return {"year": year, "month": month, "polygons_checked": 0, "computed": 0}
 
         start, end = _month_range(year, month)
-        collection = (
-            ee.ImageCollection(MCD64A1_COLLECTION).filterDate(start, end).select("BurnDate")
-        )
-        if collection.size().getInfo() == 0:
+        source_id, burned_mask = self._resolve_monthly_source(ee, start, end)
+        if burned_mask is None:
             return {
                 "year": year,
                 "month": month,
                 "polygons_checked": 0,
                 "computed": 0,
                 "note": (
-                    "Citra MCD64A1 belum tersedia untuk periode ini "
+                    "Citra MCD64A1 maupun VNP64A1 belum tersedia untuk periode ini "
                     "(produk biasanya terbit dengan lag beberapa bulan)."
                 ),
             }
 
-        burned_mask = collection.mosaic().gt(0)
         area_image = burned_mask.multiply(ee.Image.pixelArea())
 
         polygons_checked = 0
@@ -157,8 +217,17 @@ class BurnedAreaService:
 
             for batch_start in range(0, len(polygon_ids), _BATCH_SIZE):
                 batch_ids = polygon_ids[batch_start : batch_start + _BATCH_SIZE]
+                # tolerance jauh lebih ketat dari default (0.001 / ~110m,
+                # dipakai tempat lain untuk peta kecil di laporan PDF) --
+                # untuk KPS mungil, simplifikasi sekasar itu bisa MENGGEMBUNG-
+                # KAN poligon: ditemukan KPS 20,7 ha menyimpang jadi 25,1 ha
+                # (+21%) pada tolerance 0.001, dan itu jadi batas clip untuk
+                # burned_area_ha/geometry -- inflasi luas kawasannya ikut
+                # mengangkat luas terbakar yang dilaporkan. 0.0001 (~11m)
+                # cukup presisi dan masih jauh lebih halus dari resolusi
+                # piksel MODIS (500m) yang jadi bottleneck presisi sesungguhnya.
                 geometries = self.postgres_store.read_polygon_geometries(
-                    batch_ids, tolerance=0.001
+                    batch_ids, tolerance=0.0001
                 )
                 if not geometries:
                     continue
@@ -210,6 +279,7 @@ class BurnedAreaService:
                             "year": year,
                             "month": month,
                             "burned_area_ha": float(sum_sqm) / 10_000.0,
+                            "source": source_id,
                             "geometry_geojson": geometry_geojson,
                         }
                     )

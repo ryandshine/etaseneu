@@ -45,6 +45,23 @@ async def burned_area_summary(
     }
 
 
+@router.get("/burned-area/by-skema")
+async def burned_area_by_skema(
+    year: int | None = None,
+    month: int | None = None,
+    layer_ids: list[str] = Query(default=[]),
+) -> dict[str, object]:
+    """Rekap luas terbakar unik per skema perhutanan sosial (PPHD, PPHKm,
+    dst) -- digabung per poligon (union geometry) dulu sebelum dijumlah per
+    skema, supaya lahan yang terbakar berulang tidak dobel-hitung."""
+    store = PostgresStore(get_settings().database_url)
+    rows = store.burned_area_by_skema(year=year, month=month, layer_keys=layer_ids or None)
+    return {
+        "rows": rows,
+        "total_ha": sum(row["total_ha"] for row in rows),
+    }
+
+
 @router.get("/burned-area/geometry")
 async def burned_area_geometry(
     polygon_ids: list[int] = Query(default=[]),

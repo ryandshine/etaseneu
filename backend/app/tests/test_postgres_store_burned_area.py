@@ -132,6 +132,42 @@ def test_burned_area_unique_ha_uses_st_union(monkeypatch) -> None:
     assert params == [[43617], 2026]
 
 
+def test_burned_area_unique_ha_query_combines_geometry_and_fallback(monkeypatch) -> None:
+    """Regresi: versi awal cuma ST_Union tanpa GROUP BY per-poligon, jadi
+    poligon dengan campuran bulan-ada-geometry dan bulan-tanpa-geometry
+    diam-diam kehilangan kontribusi bulan yang tanpa geometry (bukan dobel
+    hitung, tapi kurang hitung). Query sekarang harus menggabungkan
+    keduanya per poligon (FILTER WHERE geometry IS NOT NULL / IS NULL)
+    sebelum dijumlah lintas poligon."""
+    store, cursor = _store_with_fake_cursor(monkeypatch, fetchone_result={"ha": 149.44})
+
+    store.burned_area_unique_ha([49634])
+
+    query, _params = cursor.executed[0]
+    assert "GROUP BY polygon_metadata_id" in query
+    assert "FILTER (WHERE geometry IS NOT NULL)" in query
+    assert "FILTER (WHERE geometry IS NULL)" in query
+
+
+def test_burned_area_by_skema_groups_and_filters(monkeypatch) -> None:
+    fake_rows = [
+        {"skema": "PPHKm", "kps_count": 10, "total_ha": 2413.9},
+        {"skema": "PPHD", "kps_count": 10, "total_ha": 1866.5},
+    ]
+    store, cursor = _store_with_fake_cursor(monkeypatch, fetchall_result=fake_rows)
+
+    result = store.burned_area_by_skema(year=2026, layer_keys=["PS_FEB_26"])
+
+    assert result == [
+        {"skema": "PPHKm", "kps_count": 10, "total_ha": 2413.9},
+        {"skema": "PPHD", "kps_count": 10, "total_ha": 1866.5},
+    ]
+    query, params = cursor.executed[0]
+    assert "GROUP BY b.polygon_metadata_id, p.skema" in query
+    assert "GROUP BY skema" in query
+    assert params == [2026, ["PS_FEB_26"]]
+
+
 def test_burned_area_unique_ha_returns_none_without_geometry(monkeypatch) -> None:
     store, _cursor = _store_with_fake_cursor(monkeypatch, fetchone_result={"ha": None})
     assert store.burned_area_unique_ha([43617]) is None
@@ -152,3 +188,48 @@ def test_latest_burned_area_period_returns_none_when_empty(monkeypatch) -> None:
 def test_latest_burned_area_period_returns_tuple(monkeypatch) -> None:
     store, _cursor = _store_with_fake_cursor(monkeypatch, fetchone_result={"year": 2026, "month": 4})
     assert store.latest_burned_area_period() == (2026, 4)
+
+
+def test_save_burned_area_scheduler_state_upserts_single_row(monkeypatch) -> None:
+    from datetime import datetime, timezone
+
+    store, cursor = _store_with_fake_cursor(monkeypatch)
+
+    now = datetime(2026, 8, 18, tzinfo=timezone.utc)
+    store.save_burned_area_scheduler_state(
+        last_run_at=now,
+        last_successful_run_at=now,
+        last_run_result={"success": True, "months": []},
+        consecutive_failures=0,
+    )
+
+    query, params = cursor.executed[-1]
+    assert "INSERT INTO burned_area_scheduler_state" in query
+    assert "ON CONFLICT (id) DO UPDATE" in query
+    assert params[0] == now
+    assert params[1] == now
+    assert params[3] == 0
+
+
+def test_read_burned_area_scheduler_state_returns_none_when_no_row(monkeypatch) -> None:
+    store, _cursor = _store_with_fake_cursor(monkeypatch, fetchone_result=None)
+    assert store.read_burned_area_scheduler_state() is None
+
+
+def test_read_burned_area_scheduler_state_parses_row(monkeypatch) -> None:
+    import json as _json
+
+    store, _cursor = _store_with_fake_cursor(
+        monkeypatch,
+        fetchone_result={
+            "last_run_at": "2026-08-18T00:00:00+00:00",
+            "last_successful_run_at": "2026-08-18T00:00:00+00:00",
+            "last_run_result": _json.dumps({"success": True}),
+            "consecutive_failures": 0,
+        },
+    )
+
+    result = store.read_burned_area_scheduler_state()
+
+    assert result["last_run_result"] == {"success": True}
+    assert result["consecutive_failures"] == 0

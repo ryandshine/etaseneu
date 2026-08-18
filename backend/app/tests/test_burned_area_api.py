@@ -87,6 +87,25 @@ def test_burned_area_summary_filters_by_polygon_id_on_the_server(monkeypatch) ->
     assert captured["polygon_ids"] == [42854]
 
 
+def test_burned_area_by_skema_is_public(monkeypatch) -> None:
+    from app.services.postgres_store import PostgresStore
+
+    fake_rows = [
+        {"skema": "PPHKm", "kps_count": 10, "total_ha": 2413.9},
+        {"skema": "PPHD", "kps_count": 10, "total_ha": 1866.5},
+        {"skema": "PPHTR", "kps_count": 1, "total_ha": 24.8},
+    ]
+    monkeypatch.setattr(PostgresStore, "burned_area_by_skema", lambda self, **kwargs: fake_rows)
+
+    client = _client(monkeypatch)
+    response = client.get("/api/burned-area/by-skema?year=2026")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["rows"] == fake_rows
+    assert body["total_ha"] == pytest.approx(2413.9 + 1866.5 + 24.8)
+
+
 def test_burned_area_refresh_requires_admin_key(monkeypatch) -> None:
     client = _client(monkeypatch)
     response = client.post("/api/burned-area/refresh?year=2026&month=4")

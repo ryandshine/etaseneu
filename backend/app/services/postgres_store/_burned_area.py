@@ -6,6 +6,9 @@ cadence terbit produknya (lihat `burned_area_service.py`).
 
 import json
 from collections.abc import Sequence
+from datetime import datetime
+
+from ._base import Json, _safe_json
 
 
 class _BurnedAreaMixin:
@@ -147,30 +150,49 @@ class _BurnedAreaMixin:
         Lahan yang sama bisa terbakar lebih dari sekali dalam setahun, dan
         menjumlahkan angka bulanan akan menghitungnya berkali-kali -- pada
         satu KPS di Bengkalis selisihnya mencapai 536 ha (22%), bahkan bisa
-        membuat totalnya melebihi luas kawasannya sendiri. ST_Union
-        menggabungkan jejak bulanan jadi satu area sehingga tumpang tindihnya
-        dihitung sekali.
+        membuat totalnya melebihi luas kawasannya sendiri.
 
-        Return None kalau tidak ada satu pun jejak geometry tersimpan --
-        pemanggil sebaiknya jatuh kembali ke penjumlahan bulanan dan
-        melabelinya sebagai akumulasi, bukan luas unik.
+        Dihitung PER POLIGON dulu (union geometry bulan-bulan yang punya
+        geometry, ditambah jumlah bulan yang TIDAK punya geometry -- efek
+        piksel yang cuma menyerempet tepi poligon, lihat komentar di
+        `burned_area_service.py`), baru dijumlah lintas poligon. Versi
+        sebelumnya cuma mengambil ST_Union tanpa filter per-poligon: pada
+        poligon yang punya campuran bulan-ada-geometry dan bulan-tanpa-
+        geometry, bulan yang tanpa geometry itu diam-diam KETINGGALAN dari
+        hasil -- bukan dobel hitung, tapi kurang hitung.
+
+        Return None kalau tidak ada satu baris pun yang cocok filter (tidak
+        ada data sama sekali) -- beda dari poligon yang datanya ada tapi
+        semuanya tanpa geometry (itu tetap dihitung, cuma dari penjumlahan
+        bulanan apa adanya karena tidak ada jejak untuk di-union).
         """
         if not polygon_ids:
             return None
 
-        clauses = ["polygon_metadata_id = ANY(%s)", "geometry IS NOT NULL"]
+        clauses = ["polygon_metadata_id = ANY(%s)"]
         params: list[object] = [[int(pid) for pid in polygon_ids]]
         if year is not None:
             clauses.append("year = %s")
             params.append(int(year))
+        where_sql = " AND ".join(clauses)
 
         with self.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     f"""
-                    SELECT ST_Area(ST_Union(geometry)::geography) / 10000 AS ha
-                    FROM burned_area_summary
-                    WHERE {' AND '.join(clauses)}
+                    WITH per_polygon AS (
+                        SELECT
+                            polygon_metadata_id,
+                            COALESCE(
+                                ST_Area(ST_Union(geometry) FILTER (WHERE geometry IS NOT NULL)::geography) / 10000,
+                                0
+                            ) AS unioned_ha,
+                            COALESCE(SUM(burned_area_ha) FILTER (WHERE geometry IS NULL), 0) AS unvectorized_ha
+                        FROM burned_area_summary
+                        WHERE {where_sql}
+                        GROUP BY polygon_metadata_id
+                    )
+                    SELECT SUM(unioned_ha + unvectorized_ha) AS ha FROM per_polygon
                     """,
                     params,
                 )
@@ -178,6 +200,136 @@ class _BurnedAreaMixin:
         if not row or row.get("ha") is None:
             return None
         return float(row["ha"])
+
+    def burned_area_by_skema(
+        self,
+        *,
+        year: int | None = None,
+        month: int | None = None,
+        layer_keys: Sequence[str] | None = None,
+    ) -> list[dict[str, object]]:
+        """Rekap luas terbakar UNIK per skema perhutanan sosial.
+
+        Sama seperti `burned_area_unique_ha`: digabung per poligon dulu
+        (union + fallback bulan-tanpa-geometry) baru dijumlah -- kali ini
+        dikelompokkan per skema, bukan dijumlah jadi satu angka.
+        """
+        clauses = ["1 = 1"]
+        params: list[object] = []
+        if year is not None:
+            clauses.append("b.year = %s")
+            params.append(int(year))
+        if month is not None:
+            clauses.append("b.month = %s")
+            params.append(int(month))
+        if layer_keys:
+            clauses.append("b.layer_key = ANY(%s)")
+            params.append([str(lk) for lk in layer_keys])
+        where_sql = " AND ".join(clauses)
+
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    WITH per_polygon AS (
+                        SELECT
+                            b.polygon_metadata_id,
+                            p.skema,
+                            COALESCE(
+                                ST_Area(ST_Union(b.geometry) FILTER (WHERE b.geometry IS NOT NULL)::geography) / 10000,
+                                0
+                            ) AS unioned_ha,
+                            COALESCE(SUM(b.burned_area_ha) FILTER (WHERE b.geometry IS NULL), 0) AS unvectorized_ha
+                        FROM burned_area_summary b
+                        JOIN polygon_metadata p ON p.id = b.polygon_metadata_id
+                        WHERE {where_sql}
+                        GROUP BY b.polygon_metadata_id, p.skema
+                    )
+                    SELECT
+                        skema,
+                        COUNT(*) FILTER (WHERE unioned_ha + unvectorized_ha > 0) AS kps_count,
+                        SUM(unioned_ha + unvectorized_ha) AS total_ha
+                    FROM per_polygon
+                    GROUP BY skema
+                    HAVING SUM(unioned_ha + unvectorized_ha) > 0
+                    ORDER BY total_ha DESC
+                    """,
+                    params,
+                )
+                rows = cur.fetchall()
+        return [
+            {"skema": r["skema"], "kps_count": int(r["kps_count"]), "total_ha": float(r["total_ha"])}
+            for r in rows
+        ]
+
+    def _ensure_burned_area_scheduler_state_table(self, conn) -> None:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS burned_area_scheduler_state (
+                    id SMALLINT PRIMARY KEY DEFAULT 1,
+                    last_run_at TIMESTAMPTZ,
+                    last_successful_run_at TIMESTAMPTZ,
+                    last_run_result JSONB,
+                    consecutive_failures INTEGER NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CHECK (id = 1)
+                )
+                """
+            )
+
+    def save_burned_area_scheduler_state(
+        self,
+        *,
+        last_run_at: datetime | None,
+        last_successful_run_at: datetime | None,
+        last_run_result: dict,
+        consecutive_failures: int,
+    ) -> None:
+        """Simpan status siklus auto-refresh burned area (satu baris global,
+        beda dari `hotspot_sync_state` yang dipakai scheduler hotspot -- lihat
+        `burned_area_scheduler.py` untuk kenapa perlu tabel terpisah."""
+        with self.connection() as conn:
+            self._ensure_burned_area_scheduler_state_table(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO burned_area_scheduler_state (
+                        id, last_run_at, last_successful_run_at, last_run_result, consecutive_failures
+                    )
+                    VALUES (1, %s, %s, %s, %s)
+                    ON CONFLICT (id) DO UPDATE SET
+                        last_run_at = EXCLUDED.last_run_at,
+                        last_successful_run_at = EXCLUDED.last_successful_run_at,
+                        last_run_result = EXCLUDED.last_run_result,
+                        consecutive_failures = EXCLUDED.consecutive_failures,
+                        updated_at = NOW()
+                    """,
+                    (last_run_at, last_successful_run_at, Json(last_run_result), consecutive_failures),
+                )
+
+    def read_burned_area_scheduler_state(self) -> dict[str, object] | None:
+        with self.connection() as conn:
+            self._ensure_burned_area_scheduler_state_table(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT last_run_at, last_successful_run_at, last_run_result, consecutive_failures
+                    FROM burned_area_scheduler_state
+                    WHERE id = 1
+                    """
+                )
+                row = cur.fetchone()
+
+        if not row:
+            return None
+
+        return {
+            "last_run_at": row.get("last_run_at"),
+            "last_successful_run_at": row.get("last_successful_run_at"),
+            "last_run_result": _safe_json(row.get("last_run_result"), {}),
+            "consecutive_failures": int(row.get("consecutive_failures", 0) or 0),
+        }
 
     def latest_burned_area_period(self) -> tuple[int, int] | None:
         """Periode (tahun, bulan) terbaru yang sudah dihitung, kalau ada."""
