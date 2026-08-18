@@ -29,9 +29,16 @@ async def burned_area_summary(
         month=month,
     )
     latest = store.latest_burned_area_period()
+    # `total_ha` menjumlahkan angka bulanan, jadi lahan yang terbakar lebih
+    # dari sekali ikut terhitung berulang. `unique_ha` menggabungkan jejaknya
+    # (ST_Union) sehingga tumpang tindih dihitung sekali -- ini yang layak
+    # disebut "luas lahan terbakar". Keduanya dikirim supaya pemakai bisa
+    # membedakan akumulasi kejadian dari luas area sesungguhnya.
+    unique_ha = store.burned_area_unique_ha(polygon_ids) if polygon_ids else None
     return {
         "rows": rows,
         "total_ha": sum(float(row["burned_area_ha"]) for row in rows),
+        "unique_ha": unique_ha,
         "latest_period": (
             {"year": latest[0], "month": latest[1]} if latest else None
         ),

@@ -136,6 +136,49 @@ class _BurnedAreaMixin:
                 rows = cur.fetchall()
         return list(rows)
 
+    def burned_area_unique_ha(
+        self,
+        polygon_ids: Sequence[int],
+        *,
+        year: int | None = None,
+    ) -> float | None:
+        """Luas lahan terbakar UNIK (bukan penjumlahan bulanan).
+
+        Lahan yang sama bisa terbakar lebih dari sekali dalam setahun, dan
+        menjumlahkan angka bulanan akan menghitungnya berkali-kali -- pada
+        satu KPS di Bengkalis selisihnya mencapai 536 ha (22%), bahkan bisa
+        membuat totalnya melebihi luas kawasannya sendiri. ST_Union
+        menggabungkan jejak bulanan jadi satu area sehingga tumpang tindihnya
+        dihitung sekali.
+
+        Return None kalau tidak ada satu pun jejak geometry tersimpan --
+        pemanggil sebaiknya jatuh kembali ke penjumlahan bulanan dan
+        melabelinya sebagai akumulasi, bukan luas unik.
+        """
+        if not polygon_ids:
+            return None
+
+        clauses = ["polygon_metadata_id = ANY(%s)", "geometry IS NOT NULL"]
+        params: list[object] = [[int(pid) for pid in polygon_ids]]
+        if year is not None:
+            clauses.append("year = %s")
+            params.append(int(year))
+
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT ST_Area(ST_Union(geometry)::geography) / 10000 AS ha
+                    FROM burned_area_summary
+                    WHERE {' AND '.join(clauses)}
+                    """,
+                    params,
+                )
+                row = cur.fetchone()
+        if not row or row.get("ha") is None:
+            return None
+        return float(row["ha"])
+
     def latest_burned_area_period(self) -> tuple[int, int] | None:
         """Periode (tahun, bulan) terbaru yang sudah dihitung, kalau ada."""
         with self.connection() as conn:

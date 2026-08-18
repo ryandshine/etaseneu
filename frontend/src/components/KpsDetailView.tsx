@@ -221,11 +221,20 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
   // bulan, jadi KPS yang datanya belum dihitung adalah kondisi normal --
   // bukan error yang perlu ditampilkan sebagai kegagalan halaman.
   const [burnedAreas, setBurnedAreas] = useState<BurnedAreaRow[]>([]);
+  // Luas UNIK (ST_Union server-side) -- beda dari menjumlahkan burned_area_ha
+  // per bulan, yang menghitung ganda lahan yang terbakar lebih dari sekali
+  // dalam setahun. Pada satu KPS di Bengkalis selisihnya 536 ha (22%), dan
+  // pada dua KPS lain penjumlahan bulanannya bahkan melebihi luas kawasan
+  // itu sendiri -- mustahil secara fisik. null = belum ada geometry
+  // tersimpan (jatuh kembali ke penjumlahan bulanan, dilabeli sebagai
+  // akumulasi kejadian, bukan luas area).
+  const [uniqueHa, setUniqueHa] = useState<number | null>(null);
   const [burnedGeometry, setBurnedGeometry] = useState<BurnedAreaFeatureCollection | null>(null);
 
   useEffect(() => {
     if (polygonId === null) {
       setBurnedAreas([]);
+      setUniqueHa(null);
       setBurnedGeometry(null);
       return;
     }
@@ -235,10 +244,12 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
     // tabelnya bisa puluhan ribu baris kalau seluruh KPS sudah dihitung.
     fetch(`/api/burned-area/summary?polygon_ids=${polygonId}`)
       .then((response) => (response.ok ? response.json() : null))
-      .then((payload: { rows?: BurnedAreaRow[] } | null) => {
-        if (active && payload?.rows) {
-          setBurnedAreas(payload.rows);
+      .then((payload: { rows?: BurnedAreaRow[]; unique_ha?: number | null } | null) => {
+        if (!active || !payload?.rows) {
+          return;
         }
+        setBurnedAreas(payload.rows);
+        setUniqueHa(payload.unique_ha ?? null);
       })
       .catch(() => {
         /* diamkan -- lihat komentar di atas */
@@ -264,12 +275,18 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
     if (burnedAreas.length === 0) {
       return null;
     }
-    const totalHa = burnedAreas.reduce((sum, row) => sum + (row.burned_area_ha ?? 0), 0);
+    const accumulatedHa = burnedAreas.reduce((sum, row) => sum + (row.burned_area_ha ?? 0), 0);
     const sorted = [...burnedAreas].sort(
       (a, b) => b.year - a.year || b.month - a.month
     );
-    return { totalHa, latest: sorted[0], months: sorted };
-  }, [burnedAreas]);
+    // uniqueHa (dari ST_Union server) adalah luas area yang benar -- dipakai
+    // kalau tersedia. accumulatedHa cuma fallback untuk KPS yang belum punya
+    // geometry tersimpan, dan diberi label "akumulasi" (bukan "total") supaya
+    // tidak disalahartikan sebagai luas area sesungguhnya.
+    const displayHa = uniqueHa ?? accumulatedHa;
+    const isAccumulated = uniqueHa === null;
+    return { displayHa, isAccumulated, latest: sorted[0], months: sorted };
+  }, [burnedAreas, uniqueHa]);
 
   const stats = useMemo(() => {
     let tinggi = 0;
@@ -382,9 +399,16 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
             {burnedAreaStats && (
               <div style={{ marginTop: "1rem", paddingTop: "0.85rem", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
                 <div className="control-metric">
-                  <span>Luas terbakar (total):</span>
-                  <strong>{formatNumber(Math.round(burnedAreaStats.totalHa * 10) / 10)} Ha</strong>
+                  <span>{burnedAreaStats.isAccumulated ? "Luas terbakar (akumulasi bulanan):" : "Luas terbakar (area unik):"}</span>
+                  <strong>{formatNumber(Math.round(burnedAreaStats.displayHa * 10) / 10)} Ha</strong>
                 </div>
+                {burnedAreaStats.isAccumulated && (
+                  <p className="help-copy" style={{ marginTop: "0.3rem", color: "#f59e0b" }}>
+                    Jumlah angka per bulan -- lahan yang terbakar lebih dari sekali
+                    ikut terhitung berulang. Belum ada jejak area tersimpan untuk
+                    menghitung luas unik yang sesungguhnya.
+                  </p>
+                )}
                 <p className="help-copy" style={{ marginTop: "0.4rem" }}>
                   Terakhir dihitung: {MONTH_LABELS[burnedAreaStats.latest.month - 1]}{" "}
                   {burnedAreaStats.latest.year}

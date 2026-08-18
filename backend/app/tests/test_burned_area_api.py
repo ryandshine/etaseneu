@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 
 def _client(monkeypatch):
     from fastapi.testclient import TestClient
@@ -36,6 +38,32 @@ def test_burned_area_summary_is_public(monkeypatch) -> None:
     assert body["rows"] == fake_rows
     assert body["total_ha"] == 12.5
     assert body["latest_period"] == {"year": 2026, "month": 4}
+
+
+def test_burned_area_summary_includes_unique_ha_via_st_union(monkeypatch) -> None:
+    """total_ha menjumlahkan angka bulanan (bisa hitung ganda lahan yang
+    terbakar berulang); unique_ha (ST_Union) adalah luas area sesungguhnya --
+    endpoint harus mengirim keduanya, bukan cuma yang menyesatkan."""
+    from app.services.postgres_store import PostgresStore
+
+    fake_rows = [
+        {"polygon_metadata_id": 1, "layer_key": "PS_FEB_26", "year": 2026, "month": 3,
+         "burned_area_ha": 98.5, "source": "MODIS/061/MCD64A1", "computed_at": "2026-04-01T00:00:00Z"},
+        {"polygon_metadata_id": 1, "layer_key": "PS_FEB_26", "year": 2026, "month": 4,
+         "burned_area_ha": 68.4, "source": "MODIS/061/MCD64A1", "computed_at": "2026-05-01T00:00:00Z"},
+    ]
+    monkeypatch.setattr(PostgresStore, "read_burned_area_summary", lambda self, **kwargs: fake_rows)
+    monkeypatch.setattr(PostgresStore, "latest_burned_area_period", lambda self: (2026, 4))
+    monkeypatch.setattr(PostgresStore, "burned_area_unique_ha", lambda self, polygon_ids: 124.1)
+
+    client = _client(monkeypatch)
+    response = client.get("/api/burned-area/summary?polygon_ids=1")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_ha"] == pytest.approx(166.9)
+    assert body["unique_ha"] == 124.1
+    assert body["unique_ha"] < body["total_ha"]
 
 
 def test_burned_area_summary_filters_by_polygon_id_on_the_server(monkeypatch) -> None:

@@ -121,6 +121,29 @@ def test_read_burned_area_summary_filters_by_year_and_month(monkeypatch) -> None
     assert params == [2026, 4]
 
 
+def test_burned_area_unique_ha_uses_st_union(monkeypatch) -> None:
+    store, cursor = _store_with_fake_cursor(monkeypatch, fetchone_result={"ha": 124.1})
+
+    result = store.burned_area_unique_ha([43617], year=2026)
+
+    assert result == 124.1
+    query, params = cursor.executed[0]
+    assert "ST_Union(geometry)" in query
+    assert params == [[43617], 2026]
+
+
+def test_burned_area_unique_ha_returns_none_without_geometry(monkeypatch) -> None:
+    store, _cursor = _store_with_fake_cursor(monkeypatch, fetchone_result={"ha": None})
+    assert store.burned_area_unique_ha([43617]) is None
+
+
+def test_burned_area_unique_ha_empty_polygon_list(monkeypatch) -> None:
+    from app.services.postgres_store import PostgresStore
+
+    store = PostgresStore("postgresql://unused/db")
+    assert store.burned_area_unique_ha([]) is None
+
+
 def test_latest_burned_area_period_returns_none_when_empty(monkeypatch) -> None:
     store, _cursor = _store_with_fake_cursor(monkeypatch, fetchone_result=None)
     assert store.latest_burned_area_period() is None
