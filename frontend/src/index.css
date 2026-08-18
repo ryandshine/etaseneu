@@ -744,12 +744,20 @@ body {
   height: 11px;
 }
 
-/* Sebaris di bawah tombol "Lokasi Saya" -- dua-duanya kontrol lapisan peta,
-   jadi dikelompokkan di sudut yang sama, bukan tersebar. */
+/* Baris SENDIRI di bawah "Lokasi Saya" + peralihan Peta/Satelit -- awalnya
+   ditumpuk sebaris di top:1rem, tapi lebar tombol ini (variabel, tergantung
+   teks + badge jumlah KPS) ternyata menabrak posisi tetap peralihan
+   Peta/Satelit yang mengasumsikan cuma "Lokasi Saya" di kirinya. Baris baru
+   ini menghindari itu sepenuhnya, apa pun lebar kontennya. */
 .burned-toggle {
   position: absolute;
-  top: 1rem;
-  left: 3.35rem;
+  /* 6.5rem, bukan langsung di bawah baris ikon (top:1rem) -- .locate-error-toast
+     juga muncul di left:1rem (kondisional, saat izin lokasi gagal) dan bisa
+     2-3 baris teks panjang ("Izin lokasi ditolak. Aktifkan izin lokasi untuk
+     situs ini di pengaturan browser."). Jarak ini dipilih supaya lolos dari
+     toast itu di kasus umum, bukan cuma dari baris ikon di atasnya. */
+  top: 6.5rem;
+  left: 1rem;
   z-index: 1000;
   height: 34px;
   display: inline-flex;
@@ -803,8 +811,8 @@ body {
 /* Menjawab "seberapa parah" tanpa harus mengklik satu per satu di peta. */
 .burned-summary-chip {
   position: absolute;
-  top: 3.4rem;
-  left: 3.35rem;
+  top: 8.9rem;
+  left: 1rem;
   z-index: 1000;
   max-width: 15rem;
   display: flex;
@@ -831,14 +839,11 @@ body {
 }
 
 @media (max-width: 640px) {
-  /* Di layar sempit label teksnya dibuang -- ikonnya sudah cukup, dan
-     menahan lebar penuh akan menabrak panel statistik di kanan atas. */
+  /* Di layar sempit label teksnya dibuang -- ikonnya sudah cukup dan
+     tombolnya sekarang di baris sendiri (lihat override top/left di blok
+     @media (max-width: 639px)), jadi lebar penuh tidak lagi jadi soal. */
   .burned-toggle span:not(.burned-toggle__count) {
     display: none;
-  }
-
-  .burned-summary-chip {
-    max-width: 11rem;
   }
 }
 
@@ -6095,6 +6100,21 @@ a + a {
 
   .locate-error-toast {
     top: 68px;
+    left: 1rem;
+    right: 1rem;
+    max-width: none;
+  }
+
+  /* Baris sendiri, konsisten dengan versi desktop -- ikon hamburger 48px
+     cuma menempati sudut sampai ~64px, jadi left:1rem di baris yang lebih
+     rendah ini aman, tidak ketiban hamburger atau tombol baris atas. */
+  .burned-toggle {
+    top: 108px;
+    left: 1rem;
+  }
+
+  .burned-summary-chip {
+    top: 148px;
     left: 1rem;
     right: 1rem;
     max-width: none;
