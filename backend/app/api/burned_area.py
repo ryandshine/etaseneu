@@ -38,6 +38,36 @@ async def burned_area_summary(
     }
 
 
+@router.get("/burned-area/geometry")
+async def burned_area_geometry(
+    polygon_ids: list[int] = Query(default=[]),
+    year: int | None = None,
+    month: int | None = None,
+) -> dict[str, object]:
+    """Jejak area terbakar sebagai FeatureCollection, untuk lapisan peta."""
+    if not polygon_ids:
+        return {"type": "FeatureCollection", "features": []}
+
+    store = PostgresStore(get_settings().database_url)
+    rows = store.read_burned_area_geometries(polygon_ids, year=year, month=month)
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": row["geometry_json"],
+                "properties": {
+                    "polygon_metadata_id": row["polygon_metadata_id"],
+                    "year": row["year"],
+                    "month": row["month"],
+                    "burned_area_ha": row["burned_area_ha"],
+                },
+            }
+            for row in rows
+        ],
+    }
+
+
 @router.post("/burned-area/refresh")
 async def burned_area_refresh(
     year: int | None = None,

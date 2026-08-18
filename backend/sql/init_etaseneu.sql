@@ -175,6 +175,10 @@ CREATE TABLE IF NOT EXISTS burned_area_summary (
     year INTEGER NOT NULL,
     month INTEGER NOT NULL,
     burned_area_ha DOUBLE PRECISION NOT NULL DEFAULT 0,
+    -- Jejak area terbakar hasil vektorisasi piksel MCD64A1 (reduceToVectors),
+    -- dipakai menggambar lapisan merah di peta detail KPS. NULL = belum
+    -- divektorkan atau memang tidak ada piksel terbakar bulan itu.
+    geometry geometry(MultiPolygon, 4326),
     source TEXT NOT NULL DEFAULT 'MODIS/061/MCD64A1',
     computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (polygon_metadata_id, year, month)

@@ -72,7 +72,31 @@ def test_upsert_burned_area_summary_writes_rows(monkeypatch) -> None:
     query, params = cursor.executemany_calls[0]
     assert "INSERT INTO burned_area_summary" in query
     assert "ON CONFLICT (polygon_metadata_id, year, month)" in query
-    assert params[0] == (1, "PS_FEB_26", 2026, 4, 12.5, "MODIS/061/MCD64A1")
+    # Kolom terakhir = geometry (NULL kalau baris tidak membawa geometry_geojson).
+    assert params[0] == (1, "PS_FEB_26", 2026, 4, 12.5, "MODIS/061/MCD64A1", None)
+
+
+def test_upsert_burned_area_summary_serializes_geometry(monkeypatch) -> None:
+    store, cursor = _store_with_fake_cursor(monkeypatch)
+
+    geom = {"type": "MultiPolygon", "coordinates": [[[[109.0, 0.4], [109.1, 0.4], [109.1, 0.5], [109.0, 0.4]]]]}
+    store.upsert_burned_area_summary(
+        [
+            {
+                "polygon_metadata_id": 43617,
+                "layer_key": "PS_FEB_26",
+                "year": 2026,
+                "month": 1,
+                "burned_area_ha": 149.0,
+                "geometry_geojson": geom,
+            }
+        ]
+    )
+
+    _query, params = cursor.executemany_calls[0]
+    import json as _json
+
+    assert _json.loads(params[0][6]) == geom
 
 
 def test_upsert_burned_area_summary_empty_is_noop(monkeypatch) -> None:

@@ -73,6 +73,41 @@ class BurnedAreaService:
         self._ee_initialized = True
         return ee
 
+    def _vectorize_burned_area(self, ee, burned_mask, polygon_geojson) -> dict | None:
+        """Ubah piksel terbakar di dalam satu poligon jadi GeoJSON MultiPolygon.
+
+        Dipakai untuk menggambar lapisan area terbakar di peta detail KPS --
+        `reduceRegions()` di pemanggil hanya mengembalikan angka luas, bentuk
+        area-nya tidak ikut. Gagal di sini tidak fatal: angka luasnya tetap
+        tersimpan, hanya lapisan petanya yang absen.
+        """
+        try:
+            vectors = (
+                burned_mask.selfMask()
+                .reduceToVectors(
+                    geometry=ee.Geometry(polygon_geojson),
+                    scale=500,
+                    geometryType="polygon",
+                    maxPixels=1e9,
+                )
+                .getInfo()
+            )
+        except Exception as exc:
+            logger.warning("BURNED_AREA: reduceToVectors gagal — %s", exc)
+            return None
+
+        polygons: list = []
+        for feature in vectors.get("features", []):
+            geom = feature.get("geometry") or {}
+            if geom.get("type") == "Polygon":
+                polygons.append(geom["coordinates"])
+            elif geom.get("type") == "MultiPolygon":
+                polygons.extend(geom["coordinates"])
+
+        if not polygons:
+            return None
+        return {"type": "MultiPolygon", "coordinates": polygons}
+
     def refresh_burned_area(
         self,
         year: int,
@@ -108,7 +143,8 @@ class BurnedAreaService:
                 ),
             }
 
-        area_image = collection.mosaic().gt(0).multiply(ee.Image.pixelArea())
+        burned_mask = collection.mosaic().gt(0)
+        area_image = burned_mask.multiply(ee.Image.pixelArea())
 
         polygons_checked = 0
         computed_rows: list[dict[str, object]] = []
@@ -156,6 +192,17 @@ class BurnedAreaService:
                     sum_sqm = props.get("sum") or 0
                     if pid is None:
                         continue
+
+                    # Vektorisasi hanya untuk poligon yang benar-benar terbakar.
+                    # reduceToVectors() satu panggilan per poligon, jadi
+                    # melakukannya untuk semua (mayoritas nol) akan memperlambat
+                    # sinkronisasi berkali-kali lipat tanpa hasil apa pun.
+                    geometry_geojson = None
+                    if sum_sqm and float(sum_sqm) > 0:
+                        geometry_geojson = self._vectorize_burned_area(
+                            ee, burned_mask, geometries[int(pid)]
+                        )
+
                     computed_rows.append(
                         {
                             "polygon_metadata_id": int(pid),
@@ -163,6 +210,7 @@ class BurnedAreaService:
                             "year": year,
                             "month": month,
                             "burned_area_ha": float(sum_sqm) / 10_000.0,
+                            "geometry_geojson": geometry_geojson,
                         }
                     )
 

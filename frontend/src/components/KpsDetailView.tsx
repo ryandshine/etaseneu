@@ -32,6 +32,15 @@ type BurnedAreaRow = {
   source: string;
 };
 
+type BurnedAreaFeatureCollection = {
+  type: "FeatureCollection";
+  features: Array<{
+    type: "Feature";
+    geometry: Record<string, unknown>;
+    properties: { year: number; month: number; burned_area_ha: number };
+  }>;
+};
+
 type KpsDetailViewProps = {
   agency: string;
   hotspots: DashboardHotspot[];
@@ -212,10 +221,12 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
   // bulan, jadi KPS yang datanya belum dihitung adalah kondisi normal --
   // bukan error yang perlu ditampilkan sebagai kegagalan halaman.
   const [burnedAreas, setBurnedAreas] = useState<BurnedAreaRow[]>([]);
+  const [burnedGeometry, setBurnedGeometry] = useState<BurnedAreaFeatureCollection | null>(null);
 
   useEffect(() => {
     if (polygonId === null) {
       setBurnedAreas([]);
+      setBurnedGeometry(null);
       return;
     }
 
@@ -227,6 +238,17 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
       .then((payload: { rows?: BurnedAreaRow[] } | null) => {
         if (active && payload?.rows) {
           setBurnedAreas(payload.rows);
+        }
+      })
+      .catch(() => {
+        /* diamkan -- lihat komentar di atas */
+      });
+
+    fetch(`/api/burned-area/geometry?polygon_ids=${polygonId}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: BurnedAreaFeatureCollection | null) => {
+        if (active && payload?.features?.length) {
+          setBurnedGeometry(payload);
         }
       })
       .catch(() => {
@@ -382,6 +404,21 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                     ))}
                   </div>
                 )}
+                {burnedGeometry && (
+                  <p className="help-copy" style={{ marginTop: "0.5rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        width: "12px",
+                        height: "12px",
+                        background: "rgba(220,38,38,0.45)",
+                        border: "1px solid #dc2626",
+                        flexShrink: 0
+                      }}
+                    />
+                    Area merah di peta = jejak lahan terbakar.
+                  </p>
+                )}
                 <p className="help-copy" style={{ marginTop: "0.5rem", fontSize: "0.72rem" }}>
                   Sumber: MODIS MCD64A1 (resolusi 500 m, terbit bulanan dengan jeda beberapa bulan).
                 </p>
@@ -418,6 +455,38 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                 />
               </>
             ) : null}
+            {/* Jejak area terbakar (MCD64A1). Di panel sendiri di antara batas
+                KPS (overlayPane, 400) dan titik hotspot (450) supaya arsiran
+                merahnya menimpa batas kawasan tapi tidak menutupi titik. */}
+            {burnedGeometry && (
+              <Pane name="area-terbakar" style={{ zIndex: 420 }}>
+                <GeoJSON
+                  key={`burned-${polygonId}`}
+                  data={burnedGeometry as never}
+                  style={{
+                    color: "#dc2626",
+                    weight: 1,
+                    fillColor: "#dc2626",
+                    fillOpacity: 0.45,
+                    interactive: true
+                  }}
+                  onEachFeature={(feature, layer) => {
+                    const props = feature.properties as {
+                      year: number;
+                      month: number;
+                      burned_area_ha: number;
+                    };
+                    layer.bindPopup(
+                      `<div style="font-size:12px;font-family:sans-serif">
+                         <strong>Area terbakar</strong><br/>
+                         ${MONTH_LABELS[props.month - 1]} ${props.year}<br/>
+                         ${formatNumber(Math.round(props.burned_area_ha * 10) / 10)} Ha
+                       </div>`
+                    );
+                  }}
+                />
+              </Pane>
+            )}
             {/* Panel sendiri di atas overlayPane (z-index 400) supaya titik
                 hotspot tidak tertutup arsiran polygon, apa pun urutan
                 datangnya data. */}

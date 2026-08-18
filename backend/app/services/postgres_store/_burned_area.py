@@ -4,6 +4,7 @@ Granularitas bulanan -- beda dari hotspot yang sub-harian -- karena itu
 cadence terbit produknya (lihat `burned_area_service.py`).
 """
 
+import json
 from collections.abc import Sequence
 
 
@@ -12,7 +13,9 @@ class _BurnedAreaMixin:
         """Simpan/perbarui luas terbakar per poligon per bulan.
 
         `rows` masing-masing butuh: polygon_metadata_id, layer_key, year,
-        month, burned_area_ha. `source` opsional (default MCD64A1).
+        month, burned_area_ha. `source` dan `geometry_geojson` opsional --
+        geometry adalah jejak area terbakar hasil vektorisasi, dipakai
+        menggambar lapisan di peta detail KPS.
         """
         if not rows:
             return 0
@@ -25,6 +28,7 @@ class _BurnedAreaMixin:
                 int(row["month"]),
                 float(row["burned_area_ha"]),
                 str(row.get("source") or "MODIS/061/MCD64A1"),
+                json.dumps(row["geometry_geojson"]) if row.get("geometry_geojson") else None,
             )
             for row in rows
         ]
@@ -35,19 +39,61 @@ class _BurnedAreaMixin:
                     """
                     INSERT INTO burned_area_summary (
                         polygon_metadata_id, layer_key, year, month,
-                        burned_area_ha, source, computed_at
+                        burned_area_ha, source, geometry, computed_at
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                    VALUES (
+                        %s, %s, %s, %s, %s, %s,
+                        -- ST_GeomFromGeoJSON strict: NULL masuk -> NULL keluar,
+                        -- jadi baris tanpa geometry tetap tersimpan apa adanya.
+                        ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON(%s::text), 4326)),
+                        NOW()
+                    )
                     ON CONFLICT (polygon_metadata_id, year, month)
                     DO UPDATE SET
                         layer_key = EXCLUDED.layer_key,
                         burned_area_ha = EXCLUDED.burned_area_ha,
                         source = EXCLUDED.source,
+                        geometry = EXCLUDED.geometry,
                         computed_at = NOW()
                     """,
                     params,
                 )
         return len(params)
+
+    def read_burned_area_geometries(
+        self,
+        polygon_ids: Sequence[int],
+        *,
+        year: int | None = None,
+        month: int | None = None,
+    ) -> list[dict[str, object]]:
+        """Jejak area terbakar sebagai GeoJSON, untuk digambar di peta."""
+        if not polygon_ids:
+            return []
+
+        clauses = ["polygon_metadata_id = ANY(%s)", "geometry IS NOT NULL"]
+        params: list[object] = [[int(pid) for pid in polygon_ids]]
+        if year is not None:
+            clauses.append("year = %s")
+            params.append(int(year))
+        if month is not None:
+            clauses.append("month = %s")
+            params.append(int(month))
+
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT polygon_metadata_id, year, month, burned_area_ha,
+                           ST_AsGeoJSON(geometry)::json AS geometry_json
+                    FROM burned_area_summary
+                    WHERE {' AND '.join(clauses)}
+                    ORDER BY year DESC, month DESC
+                    """,
+                    params,
+                )
+                rows = cur.fetchall()
+        return list(rows)
 
     def read_burned_area_summary(
         self,
