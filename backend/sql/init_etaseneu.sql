@@ -164,6 +164,22 @@ CREATE TABLE IF NOT EXISTS polygon_hotspot_summary (
     UNIQUE (polygon_metadata_id, year)
 );
 
+-- Luas kebakaran per poligon KPS per bulan, dari MODIS MCD64A1 (Burned Area)
+-- lewat Google Earth Engine. Beda dari polygon_hotspot_summary (titik panas,
+-- bisa sub-harian) -- ini granularitas bulanan karena itu cadence terbit
+-- produknya, dan datanya biasanya baru tersedia dengan lag ~1-3 bulan.
+CREATE TABLE IF NOT EXISTS burned_area_summary (
+    id BIGSERIAL PRIMARY KEY,
+    polygon_metadata_id BIGINT NOT NULL REFERENCES polygon_metadata(id),
+    layer_key TEXT NOT NULL,
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    burned_area_ha DOUBLE PRECISION NOT NULL DEFAULT 0,
+    source TEXT NOT NULL DEFAULT 'MODIS/061/MCD64A1',
+    computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (polygon_metadata_id, year, month)
+);
+
 CREATE TABLE IF NOT EXISTS geojson_file_registry (
     id BIGSERIAL PRIMARY KEY,
     file_name TEXT NOT NULL UNIQUE,

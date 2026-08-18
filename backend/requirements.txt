@@ -14,4 +14,5 @@ pytest-cov==6.1.1
 reportlab==4.5.1
 weasyprint==69.0
 jinja2==3.1.6
+earthengine-api==1.7.40
 

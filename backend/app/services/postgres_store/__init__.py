@@ -14,6 +14,7 @@ yang sama seperti sebelumnya, karena `postgres_store` sekarang adalah paket
 """
 
 from ._base import _ConnectionMixin
+from ._burned_area import _BurnedAreaMixin
 from ._cache import _CacheMixin
 from ._history import _HistoryArchiveMixin
 from ._hotspots import _HotspotObservationMixin
@@ -36,5 +37,6 @@ class PostgresStore(
     _HotspotObservationMixin,
     _PolygonRelationMixin,
     _SpatialMatchMixin,
+    _BurnedAreaMixin,
 ):
     """Fasad tunggal ke semua tabel aplikasi -- lihat docstring modul ini."""

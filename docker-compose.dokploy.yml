@@ -8,6 +8,7 @@ services:
       - .env.dokploy
     volumes:
       - ${HOST_SHP_DIR:-/etc/dokploy/data/etaseneu/shp}:/app/shp:ro
+      - ${HOST_GEE_KEY_PATH:-/etc/dokploy/data/etaseneu/gee-service-account-key.json}:/app/secrets/gee-service-account-key.json:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.auth import router as auth_router
+from app.api.burned_area import router as burned_area_router
 from app.api.cache import router as cache_router
 from app.api.export import router as export_router
 from app.api.hotspots import router as hotspots_router
@@ -27,6 +28,7 @@ router.include_router(scheduler_router)
 router.include_router(metrics_router)
 router.include_router(wind_router)
 router.include_router(weather_router)
+router.include_router(burned_area_router)
 api_router = router
 
 

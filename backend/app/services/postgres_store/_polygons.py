@@ -206,6 +206,20 @@ class _PolygonMetadataMixin:
 
         return {int(row["feature_index"]): int(row["id"]) for row in rows}
 
+    def read_active_layer_keys(self) -> list[str]:
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT DISTINCT layer_key
+                    FROM polygon_metadata
+                    WHERE is_active = TRUE
+                    ORDER BY layer_key ASC
+                    """
+                )
+                rows = cur.fetchall()
+        return [str(row["layer_key"]) for row in rows]
+
     def read_active_polygon_metadata_ids(self, layer_keys: Sequence[str] | None = None) -> list[int]:
         params: tuple[object, ...] = ()
         where_clause = "WHERE is_active = TRUE"

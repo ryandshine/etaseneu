@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     scheduler_fixed_hours: str = "0,3,6,9,12,15,18,21"
     scheduler_timezone: str = "Asia/Jakarta"
     scheduler_new_hotspot_alert_threshold: int = 1
+    # Luas kebakaran (burned area) dari MODIS MCD64A1 lewat Google Earth Engine.
+    # Kosong = fitur nonaktif (fail closed, sama seperti admin_api_key) --
+    # service account punya proyek GCP yang sudah teregistrasi Earth Engine.
+    gee_service_account_email: str = ""
+    gee_service_account_key_path: str = ""
+    gee_project_id: str = ""
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
