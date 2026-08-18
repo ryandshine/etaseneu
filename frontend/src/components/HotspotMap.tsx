@@ -631,11 +631,11 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
   const userLocation = useUserLocationWatch(showUserLocation);
   const userWeatherAnchor = useThrottledWeatherAnchor(userLocation.position);
   const [mapStyle, setMapStyle] = useState<"dark" | "satellite">("dark");
-  // Default mati: lapisan ini menjawab pertanyaan berbeda dari hotspot
-  // (bekas kebakaran bulan-bulan lalu vs titik api beberapa hari terakhir),
-  // jadi menyalakannya otomatis akan menutupi peta dengan konteks yang tidak
-  // semua orang cari saat membuka halaman.
-  const [showBurnedArea, setShowBurnedArea] = useState(false);
+  // Default nyala: pengguna ingin langsung tahu KPS mana yang terdampak
+  // bekas kebakaran begitu buka peta, tanpa perlu tahu dulu ada tombol
+  // togglenya (ikon api di sudut kiri atas kurang gampang ditemukan sendiri).
+  // Tombolnya tetap ada untuk yang mau menyembunyikannya.
+  const [showBurnedArea, setShowBurnedArea] = useState(true);
   const burnedArea = useBurnedAreaOverlay(showBurnedArea);
 
   useEffect(() => {
