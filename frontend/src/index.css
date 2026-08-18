@@ -720,6 +720,128 @@ body {
   box-shadow: 0 0 6px #ef4444;
 }
 
+.map-legend-divider {
+  height: 1px;
+  margin: 0.1rem 0;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Kotak (bukan titik): bekas terbakar adalah area, beda kelas dari titik
+   deteksi hotspot di atasnya -- bentuk legendanya ikut membedakan itu. */
+.map-legend-swatch {
+  width: 11px;
+  height: 9px;
+  border-radius: 2px;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+}
+
+.map-legend-swatch--estimated {
+  border-radius: 50%;
+  background: rgba(220, 38, 38, 0.22);
+  border: 2px dashed #dc2626;
+  width: 11px;
+  height: 11px;
+}
+
+/* Sebaris di bawah tombol "Lokasi Saya" -- dua-duanya kontrol lapisan peta,
+   jadi dikelompokkan di sudut yang sama, bukan tersebar. */
+.burned-toggle {
+  position: absolute;
+  top: 1rem;
+  left: 3.35rem;
+  z-index: 1000;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.7rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(19, 21, 26, 0.92);
+  color: #f5efe6;
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.burned-toggle:hover {
+  background: rgba(220, 38, 38, 0.16);
+  color: #fff;
+}
+
+.burned-toggle--active {
+  border-color: rgba(220, 38, 38, 0.55);
+  background: rgba(220, 38, 38, 0.18);
+  color: #fca5a5;
+}
+
+.burned-toggle__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: rgba(220, 38, 38, 0.9);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.burned-toggle--loading {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+/* Menjawab "seberapa parah" tanpa harus mengklik satu per satu di peta. */
+.burned-summary-chip {
+  position: absolute;
+  top: 3.4rem;
+  left: 3.35rem;
+  z-index: 1000;
+  max-width: 15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  background: rgba(19, 21, 26, 0.94);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.burned-summary-chip strong {
+  font-size: 0.9rem;
+  color: #fca5a5;
+  line-height: 1.1;
+}
+
+.burned-summary-chip span {
+  font-size: 0.63rem;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+@media (max-width: 640px) {
+  /* Di layar sempit label teksnya dibuang -- ikonnya sudah cukup, dan
+     menahan lebar penuh akan menabrak panel statistik di kanan atas. */
+  .burned-toggle span:not(.burned-toggle__count) {
+    display: none;
+  }
+
+  .burned-summary-chip {
+    max-width: 11rem;
+  }
+}
+
 /* Tombol "Lokasi Saya" sengaja diletakkan di pojok kiri atas peta -- satu-
    satunya sudut yang kosong di desktop (kanan atas dipakai panel statistik,
    bawah sudah penuh kontrol zoom + legenda + tombol UI). */
@@ -5283,6 +5405,81 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   font-weight: 600;
+}
+
+/* Peringkat KPS terdampak: batang proporsional dipakai (bukan angka saja)
+   supaya timpangnya sebaran langsung terbaca -- satu KPS sering menyumbang
+   sebagian besar total luas. */
+.burned-top-list {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.burned-top-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70px auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.32rem 0;
+}
+
+.burned-top-row__meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.burned-top-row__name {
+  font-size: 0.76rem;
+  color: #f5efe6;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.burned-top-row__sub {
+  font-size: 0.63rem;
+  color: rgba(255, 255, 255, 0.42);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.burned-top-row__bar {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.burned-top-row__bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #dc2626, #f97316);
+}
+
+.burned-top-row__value {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #fca5a5;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .burned-top-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  /* Batang dibuang di layar sempit -- ruangnya lebih berguna untuk nama KPS
+     yang panjang daripada indikator proporsi yang jadi terlalu pendek untuk
+     dibandingkan. */
+  .burned-top-row__bar {
+    display: none;
+  }
 }
 
 /* Initial Loading Screen Styles */

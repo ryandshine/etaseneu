@@ -121,6 +121,66 @@ def test_read_burned_area_summary_filters_by_year_and_month(monkeypatch) -> None
     assert params == [2026, 4]
 
 
+def test_read_burned_area_geometries_unions_real_and_estimated_rows(monkeypatch) -> None:
+    """Baris burned_area_ha > 0 tanpa geometry (piksel MODIS cuma menyerempet
+    tepi KPS, reduceToVectors tidak menghasilkan bentuk) harus tetap ikut
+    dikirim -- sebagai centroid poligon, ditandai is_estimated=true -- bukan
+    hilang begitu saja dari peta."""
+    fake_rows = [
+        {"polygon_metadata_id": 1, "year": 2026, "month": 3, "burned_area_ha": 50.0,
+         "geometry_json": {"type": "Polygon", "coordinates": []}, "is_estimated": False},
+        {"polygon_metadata_id": 2, "year": 2026, "month": 3, "burned_area_ha": 2.1,
+         "geometry_json": {"type": "Point", "coordinates": [110.0, -1.0]}, "is_estimated": True},
+    ]
+    store, cursor = _store_with_fake_cursor(monkeypatch, fetchall_result=fake_rows)
+
+    result = store.read_burned_area_geometries([1, 2], year=2026)
+
+    assert result == fake_rows
+    query, params = cursor.executed[0]
+    assert "UNION ALL" in query
+    assert "ST_Centroid(p.geometry)" in query
+    assert "geometry IS NULL AND b.burned_area_ha > 0" in query
+    assert "TRUE AS is_estimated" in query
+    assert "FALSE AS is_estimated" in query
+    # filter tahun harus diterapkan di kedua sisi UNION, bukan cuma satu
+    assert params == [[1, 2], 2026, [1, 2], 2026]
+
+
+def test_read_burned_area_geometries_empty_polygon_list(monkeypatch) -> None:
+    from app.services.postgres_store import PostgresStore
+
+    store = PostgresStore("postgresql://unused/db")
+    assert store.read_burned_area_geometries([]) == []
+
+
+def test_read_burned_area_map_overlay_groups_one_feature_per_kps(monkeypatch) -> None:
+    """Peta utama menjawab "KPS mana yang terdampak", bukan "apa yang terbakar
+    bulan apa" -- geometry bulanan harus digabung per KPS di server, supaya
+    kawasan yang terbakar berulang tidak mengirim bentuk bertumpuk di titik
+    yang sama."""
+    fake_rows = [
+        {"polygon_metadata_id": 49463, "lembaga": "KOPERASI X", "skema": "PPHKm",
+         "nama_prov": "Riau", "wilker_bps": "BPSKL", "latest_period": 202604,
+         "burned_months": 2, "burned_ha": 1786.3, "is_estimated": False,
+         "geometry_json": {"type": "MultiPolygon", "coordinates": []}},
+    ]
+    store, cursor = _store_with_fake_cursor(monkeypatch, fetchall_result=fake_rows)
+
+    result = store.read_burned_area_map_overlay(year=2026)
+
+    assert result == fake_rows
+    query, params = cursor.executed[0]
+    assert "ST_Union(b.geometry)" in query
+    assert "GROUP BY b.polygon_metadata_id" in query
+    # disederhanakan untuk peta, tapi tetap di bawah ukuran piksel MODIS 500m
+    assert "ST_SimplifyPreserveTopology" in query
+    # KPS tanpa geometry tetap ikut lewat centroid, tidak hilang dari peta
+    assert "ST_Centroid(p.geometry)" in query
+    assert "burned_geom IS NOT NULL OR unvectorized_ha > 0" in query
+    assert params == [2026]
+
+
 def test_burned_area_unique_ha_uses_st_union(monkeypatch) -> None:
     store, cursor = _store_with_fake_cursor(monkeypatch, fetchone_result={"ha": 124.1})
 

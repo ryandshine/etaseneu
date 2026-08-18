@@ -118,3 +118,117 @@ def test_skema_table_fits_landscape_a4_print_width() -> None:
 
     for column_count in range(1, 9):
         assert sum(_skema_col_widths(column_count)) == 769.0
+
+
+_BURNED_REPORT = {
+    "rows": [
+        {"lembaga": "KOPERASI A", "skema": "PPHKm", "nama_prov": "Riau", "wilker_bps": "BPS Kampar",
+         "burned_area_ha": 1786.3, "burned_months": 2, "latest_period": "2026-04", "is_estimated": False},
+        {"lembaga": "KT C", "skema": "PPHKm", "nama_prov": "Lampung", "wilker_bps": "BPS Lampung",
+         "burned_area_ha": 2.1, "burned_months": 1, "latest_period": "2026-03", "is_estimated": True},
+    ],
+    "by_skema": [{"skema": "PPHKm", "total_ha": 1788.4, "kps_count": 2}],
+    "total_ha": 1788.4,
+    "kps_count": 2,
+}
+
+
+def _burned_section_text(report):
+    from app.services.pdf_export_service import _build_report_styles, _section_burned_area
+
+    story = _section_burned_area(report, _build_report_styles())
+    texts = []
+    for item in story:
+        text = getattr(item, "text", None)
+        if text:
+            texts.append(str(text))
+        for row in getattr(item, "_cellvalues", []) or []:
+            for cell in row:
+                cell_text = getattr(cell, "text", None)
+                if cell_text:
+                    texts.append(str(cell_text))
+    return " ".join(texts)
+
+
+def test_section_burned_area_is_skipped_when_no_data() -> None:
+    """Laporan tidak boleh berisi halaman kosong hanya karena fitur luas
+    terbakar belum dikonfigurasi atau tidak ada kawasan terbakar."""
+    from app.services.pdf_export_service import _build_report_styles, _section_burned_area
+
+    styles = _build_report_styles()
+
+    assert _section_burned_area(None, styles) == []
+    assert _section_burned_area({"rows": [], "total_ha": 0, "kps_count": 0}, styles) == []
+
+
+def test_section_burned_area_lists_kps_and_totals() -> None:
+    text = _burned_section_text(_BURNED_REPORT)
+
+    assert "KOPERASI A" in text
+    assert "KT C" in text
+    # luas per KPS dan baris TOTAL keduanya muncul, dengan pemisah ribuan
+    assert "1,786.3" in text
+    assert "1,788.4" in text
+    # narasi menyebut cakupannya, bukan cuma menempelkan tabel tanpa konteks
+    assert "2 kawasan perhutanan sosial" in text
+
+
+def test_section_burned_area_warns_units_are_not_additive_with_hotspot_counts() -> None:
+    """Hektar (citra bulanan, jeda rilis 1-3 bulan) dan jumlah titik panas
+    (sinkron tiap 3 jam) bukan besaran sebanding -- laporan harus menyatakan
+    itu, bukan menaruh dua angka berdampingan tanpa penjelasan."""
+    text = _burned_section_text(_BURNED_REPORT)
+
+    assert "tidak dapat dijumlahkan langsung" in text
+    assert "MCD64A1" in text
+
+
+def test_section_burned_area_marks_estimated_rows() -> None:
+    text = _burned_section_text(_BURNED_REPORT)
+
+    assert "Perkiraan lokasi" in text
+    assert "Terpetakan" in text
+
+
+def test_section_burned_area_caps_rows_and_points_to_excel() -> None:
+    from app.services.pdf_export_service import BURNED_AREA_TABLE_MAX_ROWS
+
+    many = {
+        "rows": [
+            {"lembaga": f"KPS {i}", "skema": "PPHD", "nama_prov": "Riau", "wilker_bps": "BPS",
+             "burned_area_ha": float(100 - i), "burned_months": 1,
+             "latest_period": "2026-04", "is_estimated": False}
+            for i in range(BURNED_AREA_TABLE_MAX_ROWS + 5)
+        ],
+        "by_skema": [{"skema": "PPHD", "total_ha": 1000.0, "kps_count": BURNED_AREA_TABLE_MAX_ROWS + 5}],
+        "total_ha": 1000.0,
+        "kps_count": BURNED_AREA_TABLE_MAX_ROWS + 5,
+    }
+    text = _burned_section_text(many)
+
+    # KPS terluas ikut, yang paling kecil terpotong
+    assert "KPS 0" in text
+    assert f"KPS {BURNED_AREA_TABLE_MAX_ROWS + 4}" not in text
+    assert "Luas Terbakar" in text
+
+
+def test_build_pdf_report_accepts_burned_area_report() -> None:
+    from datetime import datetime, timezone
+
+    from app.models.query import HotspotQuery
+    from app.services.pdf_export_service import build_pdf_report
+
+    query = HotspotQuery(
+        start_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        end_at=datetime(2026, 8, 18, tzinfo=timezone.utc),
+        satellites=[],
+        active_layers=[],
+    )
+
+    with_burned = build_pdf_report(
+        hotspots=[], query=query, layers_info=[], burned_area_report=_BURNED_REPORT
+    )
+    without_burned = build_pdf_report(hotspots=[], query=query, layers_info=[])
+
+    assert with_burned.startswith(b"%PDF")
+    assert len(with_burned) > len(without_burned)

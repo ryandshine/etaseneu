@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Download } from "lucide-react";
 import { CircleMarker, GeoJSON, MapContainer, Pane, Popup, TileLayer, useMap } from "react-leaflet";
-import { geoJSON as buildLeafletGeoJSON } from "leaflet";
+import { circleMarker as buildLeafletCircleMarker, geoJSON as buildLeafletGeoJSON } from "leaflet";
 
 import type { DashboardHotspot } from "../hooks/useDashboardData";
 import type { PolygonDetail } from "../types/api";
@@ -37,7 +37,7 @@ type BurnedAreaFeatureCollection = {
   features: Array<{
     type: "Feature";
     geometry: Record<string, unknown>;
-    properties: { year: number; month: number; burned_area_ha: number };
+    properties: { year: number; month: number; burned_area_ha: number; is_estimated: boolean };
   }>;
 };
 
@@ -443,6 +443,22 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                     Area merah di peta = jejak lahan terbakar.
                   </p>
                 )}
+                {burnedGeometry?.features.some((feature) => feature.properties.is_estimated) && (
+                  <p className="help-copy" style={{ marginTop: "0.3rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        width: "12px",
+                        height: "12px",
+                        borderRadius: "50%",
+                        background: "rgba(220,38,38,0.25)",
+                        border: "2px dashed #dc2626",
+                        flexShrink: 0
+                      }}
+                    />
+                    Lingkaran putus-putus = perkiraan lokasi, luas di bawah resolusi piksel citra.
+                  </p>
+                )}
                 <p className="help-copy" style={{ marginTop: "0.5rem", fontSize: "0.72rem" }}>
                   Sumber: MODIS MCD64A1 (resolusi 500 m, terbit bulanan dengan jeda beberapa bulan).
                 </p>
@@ -494,17 +510,36 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                     fillOpacity: 0.45,
                     interactive: true
                   }}
+                  // Baris tanpa geometry (piksel MODIS-nya cuma menyerempet
+                  // tepi KPS, reduceToVectors tidak menghasilkan bentuk sama
+                  // sekali) dikirim server sebagai titik centroid, is_estimated
+                  // true -- digambar sebagai penanda putus-putus, bukan
+                  // disamakan dengan bentuk presisi hasil vektorisasi asli.
+                  pointToLayer={(_feature, latlng) =>
+                    buildLeafletCircleMarker(latlng, {
+                      radius: 9,
+                      color: "#dc2626",
+                      weight: 2,
+                      dashArray: "4 3",
+                      fillColor: "#dc2626",
+                      fillOpacity: 0.25
+                    })
+                  }
                   onEachFeature={(feature, layer) => {
                     const props = feature.properties as {
                       year: number;
                       month: number;
                       burned_area_ha: number;
+                      is_estimated: boolean;
                     };
+                    const note = props.is_estimated
+                      ? `<br/><em>Perkiraan lokasi -- luas di bawah resolusi piksel citra satelit</em>`
+                      : "";
                     layer.bindPopup(
                       `<div style="font-size:12px;font-family:sans-serif">
                          <strong>Area terbakar</strong><br/>
                          ${MONTH_LABELS[props.month - 1]} ${props.year}<br/>
-                         ${formatNumber(Math.round(props.burned_area_ha * 10) / 10)} Ha
+                         ${formatNumber(Math.round(props.burned_area_ha * 10) / 10)} Ha${note}
                        </div>`
                     );
                   }}

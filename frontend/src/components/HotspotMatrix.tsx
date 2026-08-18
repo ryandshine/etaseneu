@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer, AreaChart, Area, Cell, LabelList } from "recharts";
 import { Download } from "lucide-react";
 
+import { BurnedAreaCard } from "./BurnedAreaCard";
 import type { GeoJsonStatusResponse, PolygonDetail } from "../types/api";
 import { formatDateWIB, getTodayWIB } from "../lib/date";
 import { TIME_PRESET_OPTIONS, type TimePreset } from "../constants/time-windows";
@@ -1217,6 +1218,12 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
             activeProvince={provinceFilter}
             onSelectSkema={(label) => setSkemaFilter((current) => (current === label ? "" : label))}
             onSelectProvince={(label) => setProvinceFilter((current) => (current === label ? "" : label))}
+          />
+
+          <BurnedAreaCard
+            provinceFilter={provinceFilter}
+            skemaFilter={skemaFilter}
+            onSelectSkema={(label) => setSkemaFilter((current) => (current === label ? "" : label))}
           />
 
           <section className="matrix-chart-card matrix-chart-card--wide glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>

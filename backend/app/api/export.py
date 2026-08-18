@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import Response
 
 from app.models.query import HotspotQuery
+from app.services.burned_area_report import load_burned_area_report
 from app.services.export_service import build_excel_file
 from app.services.hotspot_categories import frp_category as _get_frp_category
 from app.services.hotspot_service import HotspotService
@@ -51,8 +52,16 @@ async def export_hotspots(
     if agency:
         hotspots = [h for h in hotspots if h.get("agency_name") == agency]
 
+    # Lampiran luas terbakar mengikuti filter wilayah/skema yang sama dengan
+    # laporan hotspot-nya. Filter waktu sengaja TIDAK diteruskan: burned area
+    # terbit bulanan dengan jeda 1-3 bulan, jadi menyamakannya dengan rentang
+    # beberapa hari terakhir akan membuat lampiran ini hampir selalu kosong.
+    burned_area_report = load_burned_area_report(
+        province=province, skema=skema, agency=agency
+    )
+
     return Response(
-        content=build_excel_file(hotspots),
+        content=build_excel_file(hotspots, burned_area_report=burned_area_report),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=eta-seuneu-hotspots.xlsx"},
     )
@@ -156,6 +165,11 @@ async def export_hotspots_pdf(
             hotspots=hotspots,
             query=query,
             layers_info=layers_info,
+            # Sama seperti lampiran Excel: ikut filter wilayah/skema, tapi
+            # tidak ikut filter waktu (lihat komentar di export_hotspots).
+            burned_area_report=load_burned_area_report(
+                province=province, skema=skema, agency=agency
+            ),
         )
 
     return Response(

@@ -90,6 +90,76 @@ def test_burned_area_summary_filters_by_polygon_id_on_the_server(monkeypatch) ->
     assert captured["polygon_ids"] == [42854]
 
 
+def test_burned_area_geometry_includes_is_estimated_flag(monkeypatch) -> None:
+    """Titik centroid perkiraan (KPS kecil tanpa bentuk piksel yang bisa
+    divektorisasi) harus bisa dibedakan frontend dari bentuk asli hasil
+    reduceToVectors, supaya digambar beda (bukan disamakan begitu saja)."""
+    from app.services.postgres_store import PostgresStore
+
+    fake_rows = [
+        {"polygon_metadata_id": 1, "year": 2026, "month": 3, "burned_area_ha": 50.0,
+         "geometry_json": {"type": "Polygon", "coordinates": []}, "is_estimated": False},
+        {"polygon_metadata_id": 2, "year": 2026, "month": 3, "burned_area_ha": 2.1,
+         "geometry_json": {"type": "Point", "coordinates": [110.0, -1.0]}, "is_estimated": True},
+    ]
+    monkeypatch.setattr(PostgresStore, "read_burned_area_geometries", lambda self, ids, **kwargs: fake_rows)
+
+    client = _client(monkeypatch)
+    response = client.get("/api/burned-area/geometry?polygon_ids=1&polygon_ids=2")
+
+    assert response.status_code == 200
+    features = response.json()["features"]
+    assert features[0]["properties"]["is_estimated"] is False
+    assert features[1]["properties"]["is_estimated"] is True
+    assert features[1]["geometry"]["type"] == "Point"
+
+
+def test_burned_area_map_overlay_is_public_and_formats_period(monkeypatch) -> None:
+    from app.services.postgres_store import PostgresStore
+
+    fake_rows = [
+        {"polygon_metadata_id": 49463, "lembaga": "KOPERASI X", "skema": "PPHKm",
+         "nama_prov": "Riau", "wilker_bps": "BPSKL", "latest_period": 202604,
+         "burned_months": 2, "burned_ha": 1786.3, "is_estimated": False,
+         "geometry_json": {"type": "MultiPolygon", "coordinates": []}},
+        {"polygon_metadata_id": 49735, "lembaga": "KT KECIL", "skema": "PPHKm",
+         "nama_prov": "Lampung", "wilker_bps": "BPSKL", "latest_period": 202603,
+         "burned_months": 1, "burned_ha": 2.1, "is_estimated": True,
+         "geometry_json": {"type": "Point", "coordinates": [104.5, -5.0]}},
+    ]
+    monkeypatch.setattr(PostgresStore, "read_burned_area_map_overlay", lambda self, **kwargs: fake_rows)
+
+    client = _client(monkeypatch)
+    response = client.get("/api/burned-area/map-overlay?year=2026")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["kps_count"] == 2
+    assert body["total_ha"] == pytest.approx(1788.4)
+    # 202604 (integer, biar bisa di-MAX() di SQL) harus jadi label yang terbaca
+    assert body["features"][0]["properties"]["latest_period"] == "2026-04"
+    assert body["features"][0]["properties"]["lembaga"] == "KOPERASI X"
+    assert body["features"][1]["properties"]["is_estimated"] is True
+
+
+def test_burned_area_map_overlay_handles_missing_period(monkeypatch) -> None:
+    from app.services.postgres_store import PostgresStore
+
+    fake_rows = [
+        {"polygon_metadata_id": 1, "lembaga": "X", "skema": "PPHD", "nama_prov": "Riau",
+         "wilker_bps": None, "latest_period": None, "burned_months": 0,
+         "burned_ha": 0.0, "is_estimated": True,
+         "geometry_json": {"type": "Point", "coordinates": [0, 0]}},
+    ]
+    monkeypatch.setattr(PostgresStore, "read_burned_area_map_overlay", lambda self, **kwargs: fake_rows)
+
+    client = _client(monkeypatch)
+    response = client.get("/api/burned-area/map-overlay")
+
+    assert response.status_code == 200
+    assert response.json()["features"][0]["properties"]["latest_period"] is None
+
+
 def test_burned_area_by_skema_is_public(monkeypatch) -> None:
     from app.services.postgres_store import PostgresStore
 

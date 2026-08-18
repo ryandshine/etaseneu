@@ -1092,6 +1092,10 @@ def _section_lembaga_ranking(hotspots: list[dict], styles: dict) -> list:
 # Kalau sumber data suatu saat memuat lebih banyak skema, kolom sisanya
 # digabung jadi "Lainnya" alih-alih membuat tabel melewati batas kertas.
 SKEMA_TABLE_MAX_COLUMNS = 8
+
+# Dibatasi supaya tabel luas terbakar tetap muat rapi di laporan ringkas;
+# kalau terpotong, pembaca diarahkan ke lampiran Excel yang memuat semuanya.
+BURNED_AREA_TABLE_MAX_ROWS = 20
 _SKEMA_TABLE_WIDTH = 769.0
 _SKEMA_TABLE_PROVINSI_WIDTH = 150.0
 _SKEMA_TABLE_TOTAL_WIDTH = 52.0
@@ -1185,6 +1189,121 @@ def _section_skema_provinsi(hotspots: list[dict], styles: dict) -> list:
     ]))
 
     story.append(table)
+    story.append(Spacer(1, 15))
+    story.append(PageBreak())
+    return story
+
+
+def _section_burned_area(burned_area_report: dict | None, styles: dict) -> list:
+    """SECTION 2E: rekap luas bekas terbakar (citra MODIS/VIIRS bulanan).
+
+    Ditempatkan setelah rekap hotspot dan diberi peringatan eksplisit karena
+    satuannya beda (hektar vs jumlah titik) dan kesegarannya beda jauh
+    (bulanan dengan jeda rilis 1-3 bulan vs sinkron tiap 3 jam) -- tanpa itu
+    pembaca mudah menjumlahkan dua angka yang tidak sebanding.
+
+    Kalau tidak ada data (fitur belum dikonfigurasi, atau tidak ada kawasan
+    terbakar pada filter laporan), seksi ini dilewati sama sekali supaya
+    laporan tidak berisi halaman kosong.
+    """
+    if not burned_area_report or not burned_area_report.get("rows"):
+        return []
+
+    rows = burned_area_report["rows"]
+    total_ha = float(burned_area_report.get("total_ha") or 0)
+    kps_count = int(burned_area_report.get("kps_count") or 0)
+    by_skema = burned_area_report.get("by_skema") or []
+
+    skema_phrase = ", ".join(
+        f"{item['skema']} {item['total_ha']:,.1f} Ha ({item['kps_count']} KPS)" for item in by_skema
+    )
+    narrative = (
+        f"Analisis citra satelit mendeteksi <b>{total_ha:,.1f} hektar</b> area bekas terbakar "
+        f"pada <b>{kps_count} kawasan perhutanan sosial</b>. Rincian per skema: {skema_phrase}. "
+        "Angka ini berasal dari produk burned area MODIS MCD64A1 / VIIRS VNP64A1 (resolusi 500 m, "
+        "terbit bulanan dengan jeda rilis 1-3 bulan) dan dihitung sekali per kawasan meskipun "
+        "terbakar berulang, sehingga <b>tidak dapat dijumlahkan langsung dengan jumlah titik "
+        "panas</b> pada bagian sebelumnya."
+    )
+
+    story: list = [
+        Paragraph("Luas Bekas Terbakar pada Kawasan Perhutanan Sosial", styles["section_heading"]),
+        Paragraph(narrative, styles["body"]),
+        Spacer(1, 8),
+    ]
+
+    header_style = styles["tbl_header"]
+    bold_body_style = styles["bold_body"]
+    number_style = ParagraphStyle("BurnNumber", parent=styles["body"], alignment=1)
+    number_bold_style = ParagraphStyle("BurnNumberBold", parent=bold_body_style, alignment=1)
+    header_center_style = ParagraphStyle("BurnHeaderCenter", parent=header_style, alignment=1)
+
+    table_rows = [[
+        Paragraph("No", header_center_style),
+        Paragraph("Nama Kawasan / KPS", header_style),
+        Paragraph("Skema", header_center_style),
+        Paragraph("Provinsi", header_style),
+        Paragraph("Luas Terbakar (Ha)", header_center_style),
+        Paragraph("Bulan", header_center_style),
+        Paragraph("Periode Terakhir", header_center_style),
+        Paragraph("Keterangan", header_center_style),
+    ]]
+
+    ranked = sorted(rows, key=lambda item: item["burned_area_ha"], reverse=True)
+    for index, item in enumerate(ranked[:BURNED_AREA_TABLE_MAX_ROWS], start=1):
+        table_rows.append([
+            Paragraph(str(index), number_style),
+            Paragraph(str(item["lembaga"]), bold_body_style),
+            Paragraph(str(item["skema"]), number_style),
+            Paragraph(str(item["nama_prov"]), styles["body"]),
+            Paragraph(f"{item['burned_area_ha']:,.1f}", number_bold_style),
+            Paragraph(str(item["burned_months"]), number_style),
+            Paragraph(str(item["latest_period"]), number_style),
+            Paragraph(
+                "Perkiraan lokasi" if item["is_estimated"] else "Terpetakan",
+                number_style,
+            ),
+        ])
+
+    table_rows.append([
+        Paragraph("", number_style),
+        Paragraph("TOTAL", bold_body_style),
+        Paragraph("", number_style),
+        Paragraph("", number_style),
+        Paragraph(f"{total_ha:,.1f}", number_bold_style),
+        Paragraph("", number_style),
+        Paragraph("", number_style),
+        Paragraph("", number_style),
+    ])
+
+    table = Table(
+        table_rows,
+        colWidths=[28, 205, 55, 105, 80, 42, 78, 82],
+        repeatRows=1,
+    )
+    table.setStyle(TableStyle([
+        # Merah, bukan teal seperti tabel hotspot -- penanda visual bahwa ini
+        # metrik yang berbeda, sejalan dengan warna lapisan peta dan Excel.
+        ('BACKGROUND', (0, 0), (-1, 0), COLOR_ACCENT),
+        ('TEXTCOLOR', (0, 0), (-1, 0), COLOR_WHITE),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [COLOR_WHITE, COLOR_NEUTRAL_LIGHT]),
+        ('PADDING', (0, 0), (-1, -1), 4),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#fee2e2")),
+        ('LINEABOVE', (0, -1), (-1, -1), 1, COLOR_ACCENT),
+    ]))
+    story.append(table)
+
+    if len(ranked) > BURNED_AREA_TABLE_MAX_ROWS:
+        story.append(Spacer(1, 5))
+        story.append(Paragraph(
+            f"Menampilkan {BURNED_AREA_TABLE_MAX_ROWS} kawasan dengan luas terbakar terbesar "
+            f"dari total {len(ranked)} kawasan terdampak. Rincian lengkap tersedia pada "
+            "lampiran Excel (sheet \"Luas Terbakar\").",
+            styles["body"],
+        ))
+
     story.append(Spacer(1, 15))
     story.append(PageBreak())
     return story
@@ -1426,7 +1545,12 @@ def _section_signoff(styles: dict) -> list:
     return [KeepTogether([Spacer(1, 10), sig_table])]
 
 
-def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: list[dict]) -> bytes:
+def build_pdf_report(
+    hotspots: list[dict],
+    query: HotspotQuery,
+    layers_info: list[dict],
+    burned_area_report: dict | None = None,
+) -> bytes:
     """
     Generates a beautifully designed landscape A4 PDF report.
 
@@ -1458,6 +1582,7 @@ def build_pdf_report(hotspots: list[dict], query: HotspotQuery, layers_info: lis
     story.extend(_section_balai_ranking(hotspots, styles))
     story.extend(_section_lembaga_ranking(hotspots, styles))
     story.extend(_section_skema_provinsi(hotspots, styles))
+    story.extend(_section_burned_area(burned_area_report, styles))
     story.extend(_section_visualization(hotspots, layers_info, styles))
     story.extend(_section_trend(hotspots, styles))
     story.extend(_section_confidence_frp(hotspots, styles))

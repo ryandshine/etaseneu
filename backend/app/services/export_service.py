@@ -56,6 +56,14 @@ EXPORT_HEADERS = [
 DATA_SHEET_TITLE = "Data Hotspot"
 DASHBOARD_SHEET_TITLE = "Dashboard"
 SKEMA_SHEET_TITLE = "Skema per Provinsi"
+BURNED_AREA_SHEET_TITLE = "Luas Terbakar"
+
+# Merah bata: burned area sengaja TIDAK memakai palet hijau/amber laporan
+# hotspot -- dua metrik ini beda satuan (hektar vs jumlah titik) dan beda
+# kesegaran data (bulanan vs 3 jam), jadi warnanya dibedakan supaya pembaca
+# tidak keliru menjumlahkan keduanya.
+_BURN = "9B2C2C"
+_BURN_SOFT = "FDF0EE"
 
 # ── Palet Warna Eksekutif Modern ─────────────────────────────────────────────
 _INK = "1B3A2B"        # Deep Forest Green (Utama)
@@ -739,7 +747,147 @@ def _write_skema_provinsi_sheet(sheet, matrix: SkemaProvinsiMatrix) -> None:
     sheet.freeze_panes = f"B{header_row + 1}"
 
 
-def build_excel_file(hotspots: list[dict]) -> bytes:
+def _write_burned_area_sheet(sheet, report: dict) -> None:
+    """Lampiran luas bekas terbakar: rekap per skema + rincian per KPS.
+
+    Angka hektar di sini TIDAK sebanding dengan jumlah titik hotspot di sheet
+    lain -- sumbernya citra bulanan MODIS/VIIRS (jeda rilis 1-3 bulan), bukan
+    deteksi near-real-time. Peringatan itu ditulis di sheet supaya pembaca
+    yang cuma membuka lampiran ini tidak salah menyimpulkan.
+    """
+    sheet["A1"] = "REKAP LUAS BEKAS TERBAKAR PADA KAWASAN PERHUTANAN SOSIAL"
+    sheet["A1"].font = Font(bold=True, size=14, color=_BURN)
+    sheet["A2"] = (
+        "Luas area terbakar hasil analisis citra satelit MODIS MCD64A1 / VIIRS VNP64A1 "
+        "(resolusi 500 m, terbit bulanan dengan jeda rilis 1-3 bulan). Luas dihitung sekali "
+        "per kawasan walau terbakar berulang, sehingga tidak dapat dijumlahkan langsung "
+        "dengan jumlah titik hotspot."
+    )
+    sheet["A2"].font = Font(size=9.5, color=_MUTED, italic=True)
+    sheet["A2"].alignment = Alignment(wrap_text=True, vertical="top")
+    sheet.merge_cells("A2:G2")
+    sheet.row_dimensions[2].height = 28
+
+    rows = report.get("rows") or []
+    if not rows:
+        sheet["A4"] = "Belum ada data luas terbakar untuk filter laporan ini."
+        sheet["A4"].font = Font(size=11, color=_MUTED, italic=True)
+        sheet.column_dimensions["A"].width = 60
+        return
+
+    total_cell = sheet["A4"]
+    total_cell.value = (
+        f"TOTAL {report['total_ha']:,.1f} Ha  •  {report['kps_count']} KPS terdampak"
+    )
+    total_cell.font = Font(bold=True, size=11, color=_HEADER_TEXT)
+    total_cell.fill = PatternFill("solid", fgColor=_BURN)
+    total_cell.alignment = Alignment(horizontal="center", vertical="center")
+    sheet.merge_cells("A4:G4")
+    sheet.row_dimensions[4].height = 22
+
+    # ── Rekap per skema ──────────────────────────────────────────────────
+    skema_header_row = 6
+    sheet.cell(row=skema_header_row - 1, column=1, value="A. REKAPITULASI PER SKEMA").font = Font(
+        bold=True, size=10, color=_INK
+    )
+    for offset, title in enumerate(("Skema", "Luas Terbakar (Ha)", "Jumlah KPS", "% Total")):
+        cell = sheet.cell(row=skema_header_row, column=1 + offset, value=title)
+        cell.fill = PatternFill("solid", fgColor=_BURN)
+        cell.font = Font(bold=True, color=_HEADER_TEXT, size=9)
+        cell.border = _CELL_BORDER
+        cell.alignment = Alignment(horizontal="left" if offset == 0 else "center", vertical="center")
+
+    total_ha = float(report["total_ha"]) or 1.0
+    for index, item in enumerate(report.get("by_skema") or []):
+        row_number = skema_header_row + 1 + index
+        values = (
+            item["skema"],
+            round(float(item["total_ha"]), 1),
+            int(item["kps_count"]),
+            float(item["total_ha"]) / total_ha,
+        )
+        for offset, value in enumerate(values):
+            cell = sheet.cell(row=row_number, column=1 + offset, value=value)
+            cell.border = _CELL_BORDER
+            cell.font = Font(size=9)
+            if offset:
+                cell.alignment = Alignment(horizontal="center")
+            if index % 2 == 0:
+                cell.fill = PatternFill("solid", fgColor=_BURN_SOFT)
+        sheet.cell(row=row_number, column=2).number_format = "#,##0.0"
+        sheet.cell(row=row_number, column=4).number_format = "0.0%"
+
+    # ── Rincian per KPS ──────────────────────────────────────────────────
+    detail_start = skema_header_row + len(report.get("by_skema") or []) + 3
+    sheet.cell(row=detail_start - 1, column=1, value="B. RINCIAN PER KAWASAN (KPS)").font = Font(
+        bold=True, size=10, color=_INK
+    )
+
+    detail_headers = (
+        "No",
+        "Nama Kawasan / KPS",
+        "Skema",
+        "Provinsi",
+        "Balai PS",
+        "Luas Terbakar (Ha)",
+        "Bulan Terbakar",
+        "Periode Terakhir",
+        "Keterangan",
+    )
+    for offset, title in enumerate(detail_headers):
+        cell = sheet.cell(row=detail_start, column=1 + offset, value=title)
+        cell.fill = PatternFill("solid", fgColor=_BURN)
+        cell.font = Font(bold=True, color=_HEADER_TEXT, size=9)
+        cell.border = _CELL_BORDER
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    sheet.row_dimensions[detail_start].height = 26
+
+    ranked = sorted(rows, key=lambda item: item["burned_area_ha"], reverse=True)
+    for index, item in enumerate(ranked):
+        row_number = detail_start + 1 + index
+        values = (
+            index + 1,
+            item["lembaga"],
+            item["skema"],
+            item["nama_prov"],
+            item["wilker_bps"],
+            round(float(item["burned_area_ha"]), 1),
+            item["burned_months"],
+            item["latest_period"],
+            # Dibedakan eksplisit: baris "perkiraan" luasnya di bawah resolusi
+            # piksel citra, jadi angkanya benar tapi lokasinya tidak presisi.
+            "Perkiraan lokasi" if item["is_estimated"] else "Terpetakan",
+        )
+        for offset, value in enumerate(values):
+            cell = sheet.cell(row=row_number, column=1 + offset, value=value)
+            cell.border = _CELL_BORDER
+            cell.font = Font(size=9)
+            cell.alignment = Alignment(horizontal="left" if offset in (1, 3, 4) else "center")
+            if index % 2 == 0:
+                cell.fill = PatternFill("solid", fgColor=_BURN_SOFT)
+        sheet.cell(row=row_number, column=2).font = Font(size=9, bold=True, color=_INK)
+        ha_cell = sheet.cell(row=row_number, column=6)
+        ha_cell.number_format = "#,##0.0"
+        ha_cell.font = Font(size=9, bold=True, color=_BURN)
+
+    total_row = detail_start + len(ranked) + 1
+    sheet.cell(row=total_row, column=1, value="TOTAL").font = Font(bold=True, color=_HEADER_TEXT, size=9)
+    sheet.cell(row=total_row, column=6, value=round(float(report["total_ha"]), 1)).number_format = "#,##0.0"
+    for offset in range(len(detail_headers)):
+        cell = sheet.cell(row=total_row, column=1 + offset)
+        cell.fill = PatternFill("solid", fgColor=_BURN)
+        cell.font = Font(bold=True, color=_HEADER_TEXT, size=9)
+        cell.border = _TOTAL_BORDER
+        cell.alignment = Alignment(horizontal="center")
+
+    widths = (5, 38, 10, 20, 22, 17, 14, 15, 16)
+    for offset, width in enumerate(widths):
+        sheet.column_dimensions[get_column_letter(1 + offset)].width = width
+    sheet.column_dimensions["A"].width = 5
+    sheet.freeze_panes = f"A{detail_start + 1}"
+
+
+def build_excel_file(hotspots: list[dict], burned_area_report: dict | None = None) -> bytes:
     workbook = Workbook()
 
     summary = build_dashboard_summary(hotspots)
@@ -753,7 +901,13 @@ def build_excel_file(hotspots: list[dict]) -> bytes:
     skema_sheet = workbook.create_sheet(SKEMA_SHEET_TITLE)
     _write_skema_provinsi_sheet(skema_sheet, summary["skema_per_provinsi"])
 
-    # 3. Sheet Data Hotspot
+    # 3. Sheet Luas Terbakar (opsional -- hanya kalau pemanggil menyertakan
+    #    datanya, supaya pemanggil lain yang tidak butuh tidak berubah).
+    if burned_area_report is not None:
+        burned_sheet = workbook.create_sheet(BURNED_AREA_SHEET_TITLE)
+        _write_burned_area_sheet(burned_sheet, burned_area_report)
+
+    # 4. Sheet Data Hotspot
     data_sheet = workbook.create_sheet(DATA_SHEET_TITLE)
     _write_data_sheet(data_sheet, build_export_rows(hotspots))
 

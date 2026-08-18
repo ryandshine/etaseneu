@@ -88,6 +88,12 @@ def test_export_endpoint_returns_xlsx_attachment(monkeypatch) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("SHP_DIR", "app/tests/fixtures/shp")
     monkeypatch.setenv("NASA_FIRMS_API_KEY", "")
+    # Lampiran luas terbakar dibaca dari database; di-stub supaya test ini
+    # tetap deterministik dan tidak bergantung isi DB yang sedang aktif.
+    monkeypatch.setattr(
+        "app.api.export.load_burned_area_report",
+        lambda **kwargs: {"rows": [], "by_skema": [], "total_ha": 0.0, "kps_count": 0},
+    )
     try:
         status, messages = asyncio.run(
             _request_export(
@@ -111,7 +117,12 @@ def test_export_endpoint_returns_xlsx_attachment(monkeypatch) -> None:
         ]
 
         workbook = load_workbook(BytesIO(body["body"]))
-        assert workbook.sheetnames == ["Dashboard", "Skema per Provinsi", "Data Hotspot"]
+        assert workbook.sheetnames == [
+            "Dashboard",
+            "Skema per Provinsi",
+            "Luas Terbakar",
+            "Data Hotspot",
+        ]
         sheet = workbook["Data Hotspot"]
         assert sheet["A1"].value == "No"
     finally:

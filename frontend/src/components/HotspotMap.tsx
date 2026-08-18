@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy, ExternalLink, LocateFixed } from "lucide-react";
+import { Check, Copy, ExternalLink, Flame, LocateFixed } from "lucide-react";
 import { WindLayer } from "./WindLayer";
 import { WeatherOverlay } from "./WeatherOverlay";
 import {
@@ -7,15 +7,23 @@ import {
   CircleMarker,
   GeoJSON,
   MapContainer,
+  Pane,
   Popup,
   Marker,
   TileLayer,
   useMap,
   ZoomControl
 } from "react-leaflet";
-import { canvas, latLngBounds, divIcon } from "leaflet";
+import { canvas, circleMarker as buildLeafletCircleMarker, latLngBounds, divIcon } from "leaflet";
 
+import { useBurnedAreaOverlay } from "../hooks/useBurnedAreaOverlay";
+import type { BurnedAreaOverlayFeature } from "../hooks/useBurnedAreaOverlay";
 import type { LayerBounds } from "../types/api";
+
+const MONTH_LABELS = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+];
 
 type HotspotRecord = {
   id: string;
@@ -623,6 +631,12 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
   const userLocation = useUserLocationWatch(showUserLocation);
   const userWeatherAnchor = useThrottledWeatherAnchor(userLocation.position);
   const [mapStyle, setMapStyle] = useState<"dark" | "satellite">("dark");
+  // Default mati: lapisan ini menjawab pertanyaan berbeda dari hotspot
+  // (bekas kebakaran bulan-bulan lalu vs titik api beberapa hari terakhir),
+  // jadi menyalakannya otomatis akan menutupi peta dengan konteks yang tidak
+  // semua orang cari saat membuka halaman.
+  const [showBurnedArea, setShowBurnedArea] = useState(false);
+  const burnedArea = useBurnedAreaOverlay(showBurnedArea);
 
   useEffect(() => {
     const activeLayers = layers.filter(l => l.active);
@@ -687,6 +701,21 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
         <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#ff8c42" }} />MODIS</div>
         <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#facc15" }} />VIIRS</div>
         <div className="map-legend-row"><span className="map-legend-dot map-legend-dot--pulse" />FRP tinggi (&gt;30MW)</div>
+        {showBurnedArea && burnedArea.data ? (
+          <>
+            <div className="map-legend-divider" />
+            <div className="map-legend-row">
+              <span className="map-legend-swatch" style={{ background: "rgba(220,38,38,0.5)", borderColor: "#dc2626" }} />
+              Bekas terbakar
+            </div>
+            {burnedArea.data.features.some((feature) => feature.properties.is_estimated) ? (
+              <div className="map-legend-row">
+                <span className="map-legend-swatch map-legend-swatch--estimated" />
+                Perkiraan lokasi
+              </div>
+            ) : null}
+          </>
+        ) : null}
       </div>
 
       <button
@@ -699,6 +728,35 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
       >
         <LocateFixed size={16} />
       </button>
+
+      <button
+        type="button"
+        className={`burned-toggle${showBurnedArea ? " burned-toggle--active" : ""}${
+          burnedArea.loading ? " burned-toggle--loading" : ""
+        }`}
+        onClick={() => setShowBurnedArea((current) => !current)}
+        title={
+          showBurnedArea
+            ? "Sembunyikan kawasan bekas terbakar"
+            : "Tampilkan kawasan bekas terbakar (citra satelit bulanan)"
+        }
+        aria-pressed={showBurnedArea}
+      >
+        <Flame size={15} />
+        <span>Bekas Terbakar</span>
+        {showBurnedArea && burnedArea.data ? (
+          <span className="burned-toggle__count">{burnedArea.data.kps_count}</span>
+        ) : null}
+      </button>
+
+      {showBurnedArea && burnedArea.data ? (
+        <div className="burned-summary-chip">
+          <strong>{formatNumber(Math.round(burnedArea.data.total_ha))} Ha</strong>
+          <span>
+            di {burnedArea.data.kps_count} KPS · citra bulanan, jeda rilis 1–3 bulan
+          </span>
+        </div>
+      ) : null}
       {userLocation.error ? <p className="locate-error-toast">{userLocation.error}</p> : null}
 
       <div className="basemap-switcher" role="group" aria-label="Gaya peta">
@@ -804,6 +862,54 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
             </Popup>
           </Marker>
         ))}
+        {/* Bekas terbakar di panel sendiri di bawah batas kawasan (overlayPane
+            400) supaya arsiran merahnya tidak menutupi garis batas KPS maupun
+            titik hotspot -- ia konteks latar, bukan fokus utama peta. */}
+        {showBurnedArea && burnedArea.data ? (
+          <Pane name="bekas-terbakar" style={{ zIndex: 390 }}>
+            <GeoJSON
+              key={`burned-overlay-${burnedArea.data.kps_count}`}
+              data={burnedArea.data as never}
+              style={{
+                color: "#dc2626",
+                weight: 1.5,
+                fillColor: "#dc2626",
+                fillOpacity: 0.42
+              }}
+              pointToLayer={(_feature, latlng) =>
+                buildLeafletCircleMarker(latlng, {
+                  radius: 8,
+                  color: "#dc2626",
+                  weight: 2,
+                  dashArray: "4 3",
+                  fillColor: "#dc2626",
+                  fillOpacity: 0.22
+                })
+              }
+              onEachFeature={(feature, layer) => {
+                const props = feature.properties as BurnedAreaOverlayFeature["properties"];
+                const periodLabel = props.latest_period
+                  ? `${MONTH_LABELS[Number(props.latest_period.slice(5, 7)) - 1]} ${props.latest_period.slice(0, 4)}`
+                  : "-";
+                const estimatedNote = props.is_estimated
+                  ? `<div style="margin-top:6px;color:#fca5a5;font-size:11px">Perkiraan lokasi — luas di bawah resolusi piksel citra.</div>`
+                  : "";
+                layer.bindPopup(
+                  `<div style="font-size:12px;font-family:sans-serif;min-width:190px">
+                     <strong style="color:#dc2626">Bekas Kebakaran</strong>
+                     <div style="margin-top:6px;font-weight:600">${props.lembaga ?? "-"}</div>
+                     <div style="color:#9ca3af;font-size:11px">${props.skema ?? "-"} · ${props.nama_prov ?? "-"}</div>
+                     <div style="margin-top:6px">Luas terbakar: <strong>${formatNumber(
+                       Math.round(props.burned_area_ha * 10) / 10
+                     )} Ha</strong></div>
+                     <div>Terdeteksi: <strong>${props.burned_months} bulan</strong> · terakhir ${periodLabel}</div>
+                     ${estimatedNote}
+                   </div>`
+                );
+              }}
+            />
+          </Pane>
+        ) : null}
         {layers
           .filter((layer) => layer.active)
           .map((layer) => (

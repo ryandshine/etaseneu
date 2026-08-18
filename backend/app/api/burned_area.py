@@ -85,10 +85,56 @@ async def burned_area_geometry(
                     "year": row["year"],
                     "month": row["month"],
                     "burned_area_ha": row["burned_area_ha"],
+                    "is_estimated": row["is_estimated"],
                 },
             }
             for row in rows
         ],
+    }
+
+
+@router.get("/burned-area/map-overlay")
+async def burned_area_map_overlay(
+    year: int | None = None,
+    layer_ids: list[str] = Query(default=[]),
+) -> dict[str, object]:
+    """Lapisan "kawasan terdampak kebakaran" untuk peta utama.
+
+    Satu fitur per KPS (geometry bulanan sudah digabung di server) supaya
+    peta menjawab "KPS mana yang terdampak" tanpa menumpuk bentuk yang sama
+    berkali-kali untuk kawasan yang terbakar berulang.
+    """
+    store = PostgresStore(get_settings().database_url)
+    rows = store.read_burned_area_map_overlay(year=year, layer_keys=layer_ids or None)
+
+    def _period_label(raw: object) -> str | None:
+        if not raw:
+            return None
+        value = int(raw)
+        return f"{value // 100:04d}-{value % 100:02d}"
+
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": row["geometry_json"],
+                "properties": {
+                    "polygon_metadata_id": row["polygon_metadata_id"],
+                    "lembaga": row["lembaga"],
+                    "skema": row["skema"],
+                    "nama_prov": row["nama_prov"],
+                    "wilker_bps": row["wilker_bps"],
+                    "burned_area_ha": float(row["burned_ha"] or 0),
+                    "burned_months": int(row["burned_months"] or 0),
+                    "latest_period": _period_label(row["latest_period"]),
+                    "is_estimated": row["is_estimated"],
+                },
+            }
+            for row in rows
+        ],
+        "total_ha": sum(float(row["burned_ha"] or 0) for row in rows),
+        "kps_count": len(rows),
     }
 
 

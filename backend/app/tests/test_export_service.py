@@ -349,3 +349,84 @@ def test_dashboard_sheet_contains_kpi_charts_and_tables() -> None:
     # 5. Charts attached
     assert len(dashboard._charts) == 4
 
+
+
+_BURNED_REPORT = {
+    "rows": [
+        {"lembaga": "KOPERASI A", "skema": "PPHKm", "nama_prov": "Riau", "wilker_bps": "BPS Kampar",
+         "burned_area_ha": 1786.3, "burned_months": 2, "latest_period": "2026-04", "is_estimated": False},
+        {"lembaga": "KT C", "skema": "PPHKm", "nama_prov": "Lampung", "wilker_bps": "BPS Lampung",
+         "burned_area_ha": 2.1, "burned_months": 1, "latest_period": "2026-03", "is_estimated": True},
+    ],
+    "by_skema": [{"skema": "PPHKm", "total_ha": 1788.4, "kps_count": 2}],
+    "total_ha": 1788.4,
+    "kps_count": 2,
+}
+
+
+def _load_sheet(content: bytes, title: str):
+    import io
+
+    import openpyxl
+
+    return openpyxl.load_workbook(io.BytesIO(content))[title]
+
+
+def test_build_excel_file_omits_burned_area_sheet_when_not_provided() -> None:
+    """Pemanggil lain (mis. laporan Cek Titik) tidak mengirim data ini --
+    sheet-nya tidak boleh muncul kosong di file mereka."""
+    import io
+
+    import openpyxl
+
+    from app.services.export_service import build_excel_file
+
+    workbook = openpyxl.load_workbook(io.BytesIO(build_excel_file([])))
+
+    assert "Luas Terbakar" not in workbook.sheetnames
+
+
+def test_build_excel_file_writes_burned_area_sheet() -> None:
+    from app.services.export_service import BURNED_AREA_SHEET_TITLE, build_excel_file
+
+    sheet = _load_sheet(
+        build_excel_file([], burned_area_report=_BURNED_REPORT), BURNED_AREA_SHEET_TITLE
+    )
+    values = [cell.value for row in sheet.iter_rows() for cell in row if cell.value is not None]
+
+    assert any("REKAP LUAS BEKAS TERBAKAR" in str(value) for value in values)
+    assert "KOPERASI A" in values
+    assert 1786.3 in values
+    # Baris yang lokasinya cuma perkiraan harus ditandai, bukan disamakan
+    # dengan yang benar-benar terpetakan.
+    assert "Perkiraan lokasi" in values
+    assert "Terpetakan" in values
+
+
+def test_burned_area_sheet_warns_that_hectares_are_not_comparable_to_hotspot_counts() -> None:
+    """Dua metrik ini beda satuan dan beda kesegaran data (bulanan vs 3 jam).
+    Tanpa peringatan tertulis, pembaca yang cuma membuka lampiran ini mudah
+    menjumlahkannya dengan jumlah titik hotspot di sheet lain."""
+    from app.services.export_service import BURNED_AREA_SHEET_TITLE, build_excel_file
+
+    sheet = _load_sheet(
+        build_excel_file([], burned_area_report=_BURNED_REPORT), BURNED_AREA_SHEET_TITLE
+    )
+    text = " ".join(
+        str(cell.value) for row in sheet.iter_rows() for cell in row if cell.value is not None
+    )
+
+    assert "tidak dapat dijumlahkan langsung" in text
+    assert "MCD64A1" in text
+
+
+def test_burned_area_sheet_handles_empty_report() -> None:
+    from app.services.export_service import BURNED_AREA_SHEET_TITLE, build_excel_file
+
+    empty = {"rows": [], "by_skema": [], "total_ha": 0.0, "kps_count": 0}
+    sheet = _load_sheet(build_excel_file([], burned_area_report=empty), BURNED_AREA_SHEET_TITLE)
+    text = " ".join(
+        str(cell.value) for row in sheet.iter_rows() for cell in row if cell.value is not None
+    )
+
+    assert "Belum ada data luas terbakar" in text

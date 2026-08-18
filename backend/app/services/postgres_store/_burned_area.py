@@ -70,28 +70,137 @@ class _BurnedAreaMixin:
         year: int | None = None,
         month: int | None = None,
     ) -> list[dict[str, object]]:
-        """Jejak area terbakar sebagai GeoJSON, untuk digambar di peta."""
+        """Jejak area terbakar sebagai GeoJSON, untuk digambar di peta.
+
+        Baris yang punya geometry (hasil vektorisasi reduceToVectors) dikirim
+        apa adanya. Baris yang burned_area_ha > 0 tapi TIDAK punya geometry --
+        piksel MODIS-nya cuma menyerempet tepi KPS sehingga reduceToVectors()
+        tidak menghasilkan bentuk apa pun walau reduceRegions() tetap mencatat
+        kontribusi luas fraksional kecil (lihat _vectorize_burned_area() di
+        burned_area_service.py) -- dikirim sebagai titik centroid poligon,
+        ditandai `is_estimated=true` supaya frontend menggambarnya beda
+        (penanda perkiraan, bukan bentuk presisi).
+        """
         if not polygon_ids:
             return []
 
-        clauses = ["polygon_metadata_id = ANY(%s)", "geometry IS NOT NULL"]
-        params: list[object] = [[int(pid) for pid in polygon_ids]]
-        if year is not None:
-            clauses.append("year = %s")
-            params.append(int(year))
-        if month is not None:
-            clauses.append("month = %s")
-            params.append(int(month))
+        ids_param = [int(pid) for pid in polygon_ids]
+
+        def _clauses(prefix: str) -> tuple[list[str], list[object]]:
+            clauses = [f"{prefix}polygon_metadata_id = ANY(%s)"]
+            params: list[object] = [ids_param]
+            if year is not None:
+                clauses.append(f"{prefix}year = %s")
+                params.append(int(year))
+            if month is not None:
+                clauses.append(f"{prefix}month = %s")
+                params.append(int(month))
+            return clauses, params
+
+        geometry_clauses, geometry_params = _clauses("")
+        estimated_clauses, estimated_params = _clauses("b.")
 
         with self.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     f"""
                     SELECT polygon_metadata_id, year, month, burned_area_ha,
-                           ST_AsGeoJSON(geometry)::json AS geometry_json
+                           ST_AsGeoJSON(geometry)::json AS geometry_json,
+                           FALSE AS is_estimated
                     FROM burned_area_summary
-                    WHERE {' AND '.join(clauses)}
+                    WHERE {' AND '.join(geometry_clauses)} AND geometry IS NOT NULL
+                    UNION ALL
+                    SELECT b.polygon_metadata_id, b.year, b.month, b.burned_area_ha,
+                           ST_AsGeoJSON(ST_Centroid(p.geometry))::json AS geometry_json,
+                           TRUE AS is_estimated
+                    FROM burned_area_summary b
+                    JOIN polygon_metadata p ON p.id = b.polygon_metadata_id
+                    WHERE {' AND '.join(estimated_clauses)}
+                      AND b.geometry IS NULL AND b.burned_area_ha > 0
                     ORDER BY year DESC, month DESC
+                    """,
+                    geometry_params + estimated_params,
+                )
+                rows = cur.fetchall()
+        return list(rows)
+
+    def read_burned_area_map_overlay(
+        self,
+        *,
+        year: int | None = None,
+        layer_keys: Sequence[str] | None = None,
+    ) -> list[dict[str, object]]:
+        """Satu fitur per KPS untuk lapisan peta utama (bukan per bulan).
+
+        Peta utama menjawab "KPS mana yang terdampak kebakaran", bukan "apa
+        yang terbakar di bulan apa" -- jadi geometry bulanan digabung
+        (ST_Union) jadi satu bentuk per KPS. Ini juga menjaga payload tetap
+        kecil: per-bulan akan mengirim baris berlipat untuk kawasan yang
+        terbakar berulang, padahal di peta hasilnya bertumpuk di tempat yang
+        sama.
+
+        Geometry disederhanakan (~55 m) khusus untuk tampilan peta -- jauh
+        lebih kasar dari yang dipakai perhitungan luas (lihat catatan
+        tolerance di burned_area_service.py), tapi di bawah ukuran satu
+        piksel MODIS 500 m sehingga tidak mengubah apa yang terlihat.
+
+        KPS yang punya luas terbakar tapi tanpa geometry (piksel cuma
+        menyerempet tepi) ikut dikirim sebagai centroid dengan
+        `is_estimated=true`, sama seperti read_burned_area_geometries().
+        """
+        clauses = ["1 = 1"]
+        params: list[object] = []
+        if year is not None:
+            clauses.append("b.year = %s")
+            params.append(int(year))
+        if layer_keys:
+            clauses.append("b.layer_key = ANY(%s)")
+            params.append([str(lk) for lk in layer_keys])
+        where_sql = " AND ".join(clauses)
+
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    WITH per_polygon AS (
+                        SELECT
+                            b.polygon_metadata_id,
+                            p.lembaga,
+                            p.skema,
+                            p.nama_prov,
+                            p.wilker_bps,
+                            ST_Union(b.geometry) FILTER (WHERE b.geometry IS NOT NULL) AS burned_geom,
+                            COALESCE(
+                                SUM(b.burned_area_ha) FILTER (WHERE b.geometry IS NULL), 0
+                            ) AS unvectorized_ha,
+                            ST_Centroid(p.geometry) AS centroid,
+                            MAX(b.year * 100 + b.month) FILTER (WHERE b.burned_area_ha > 0) AS latest_period,
+                            COUNT(*) FILTER (WHERE b.burned_area_ha > 0) AS burned_months
+                        FROM burned_area_summary b
+                        JOIN polygon_metadata p ON p.id = b.polygon_metadata_id
+                        WHERE {where_sql}
+                        GROUP BY b.polygon_metadata_id, p.lembaga, p.skema,
+                                 p.nama_prov, p.wilker_bps, p.geometry
+                    )
+                    SELECT
+                        polygon_metadata_id,
+                        lembaga,
+                        skema,
+                        nama_prov,
+                        wilker_bps,
+                        latest_period,
+                        burned_months,
+                        COALESCE(ST_Area(burned_geom::geography) / 10000, 0) + unvectorized_ha AS burned_ha,
+                        (burned_geom IS NULL) AS is_estimated,
+                        ST_AsGeoJSON(
+                            COALESCE(
+                                ST_SimplifyPreserveTopology(burned_geom, 0.0005),
+                                centroid
+                            )
+                        )::json AS geometry_json
+                    FROM per_polygon
+                    WHERE burned_geom IS NOT NULL OR unvectorized_ha > 0
+                    ORDER BY burned_ha DESC
                     """,
                     params,
                 )
