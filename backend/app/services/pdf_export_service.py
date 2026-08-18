@@ -1194,6 +1194,62 @@ def _section_skema_provinsi(hotspots: list[dict], styles: dict) -> list:
     return story
 
 
+_BURNED_AREA_SKEMA_COLORS = {
+    "PPHD": "#dc2626",
+    "PPHKm": "#f97316",
+    "PPHTR": "#f59e0b",
+    "PPHA": "#eab308",
+    "PPKKPS": "#fb7185",
+}
+_BURNED_AREA_FALLBACK_COLOR = "#dc2626"
+
+
+def create_burned_area_bar_chart(
+    data_points: list[tuple[str, float]], title: str, width: int = 370, height: int = 150
+) -> Drawing:
+    """Chart batang luas terbakar per skema.
+
+    Beda dari create_bar_chart_drawing() (dipakai untuk confidence/FRP): itu
+    hardcode 3 baris karena dua-duanya SELALU tepat 3 kategori
+    (Tinggi/Sedang/Rendah). Jumlah skema perhutanan sosial bervariasi
+    (1 sampai 5+), jadi tinggi barisnya di sini dihitung dari jumlah data
+    yang sebenarnya, bukan diasumsikan tetap.
+    """
+    d = Drawing(width, height)
+    d.add(Rect(0, 0, width, height, fillColor=colors.HexColor("#f8fafc"), strokeColor=COLOR_BORDER, strokeWidth=1, rx=4, ry=4))
+    d.add(DString(10, height - 15, title, fontName="Helvetica-Bold", fontSize=7, fillColor=COLOR_ACCENT))
+
+    if not data_points:
+        d.add(DString(width / 2, height / 2, "Tidak ada data", fontName="Helvetica", fontSize=8, textAnchor="middle", fillColor=COLOR_NEUTRAL_DARK))
+        return d
+
+    total = sum(v for _, v in data_points)
+    max_val = max(v for _, v in data_points) or 1
+    bar_max_width = width - 150
+    available_height = height - 40
+    row_count = len(data_points)
+    row_height = available_height / row_count
+    bar_height = min(14, row_height * 0.6)
+    font_size = 8
+    start_y = height - 40
+
+    for idx, (label, val) in enumerate(data_points):
+        current_y = start_y - (idx + 1) * row_height
+        pct = int(round((val / total) * 100)) if total else 0
+        color_hex = _BURNED_AREA_SKEMA_COLORS.get(label, _BURNED_AREA_FALLBACK_COLOR)
+        d.add(DString(15, current_y + bar_height * 0.15, label, fontName="Helvetica-Bold", fontSize=font_size, fillColor=COLOR_NEUTRAL_DARK))
+
+        bar_w = max(5, int((val / max_val) * bar_max_width)) if val > 0 else 0
+        if bar_w > 0:
+            d.add(Rect(60, current_y, bar_w, bar_height, fillColor=colors.HexColor(color_hex), strokeColor=None, rx=2, ry=2))
+        d.add(DString(
+            60 + bar_w + 8, current_y + bar_height * 0.15,
+            f"{val:,.1f} Ha ({pct}%)", fontName="Helvetica-Bold", fontSize=font_size, fillColor=COLOR_NEUTRAL_DARK
+        ))
+
+    return d
+
+
 def _section_burned_area(burned_area_report: dict | None, styles: dict) -> list:
     """SECTION 2E: rekap luas bekas terbakar (citra MODIS/VIIRS bulanan).
 
@@ -1231,6 +1287,13 @@ def _section_burned_area(burned_area_report: dict | None, styles: dict) -> list:
         Paragraph(narrative, styles["body"]),
         Spacer(1, 8),
     ]
+
+    if by_skema:
+        chart_points = [(item["skema"], float(item["total_ha"])) for item in by_skema]
+        story.append(create_burned_area_bar_chart(
+            chart_points, "LUAS TERBAKAR PER SKEMA (HA)", width=370, height=110
+        ))
+        story.append(Spacer(1, 10))
 
     header_style = styles["tbl_header"]
     bold_body_style = styles["bold_body"]

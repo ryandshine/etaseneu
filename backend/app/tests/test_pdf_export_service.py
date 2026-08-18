@@ -232,3 +232,47 @@ def test_build_pdf_report_accepts_burned_area_report() -> None:
 
     assert with_burned.startswith(b"%PDF")
     assert len(with_burned) > len(without_burned)
+
+
+def test_create_burned_area_bar_chart_scales_row_count_dynamically() -> None:
+    """Beda dari create_bar_chart_drawing() yang hardcode 3 baris (Confidence/
+    FRP selalu 3 kategori) -- jumlah skema perhutanan sosial bervariasi, jadi
+    chart ini harus tetap membuat satu batang per data point, bukan diam-diam
+    memotong atau menumpuk kalau jumlahnya bukan 3."""
+    from app.services.pdf_export_service import create_burned_area_bar_chart
+
+    two_bars = create_burned_area_bar_chart([("PPHKm", 2227.4), ("PPHD", 1771.9)], "Judul")
+    five_bars = create_burned_area_bar_chart(
+        [("PPHD", 100.0), ("PPHKm", 80.0), ("PPHTR", 40.0), ("PPHA", 20.0), ("PPKKPS", 10.0)],
+        "Judul",
+    )
+
+    def _rect_count(drawing):
+        from reportlab.graphics.shapes import Rect
+
+        return sum(1 for item in drawing.contents if isinstance(item, Rect))
+
+    # 1 rect latar + N rect batang (batang bernilai 0 tidak digambar, tapi di
+    # sini semua nilai > 0)
+    assert _rect_count(two_bars) == 1 + 2
+    assert _rect_count(five_bars) == 1 + 5
+
+
+def test_create_burned_area_bar_chart_handles_empty_data() -> None:
+    from app.services.pdf_export_service import create_burned_area_bar_chart
+
+    drawing = create_burned_area_bar_chart([], "Judul")
+    assert drawing is not None
+
+
+def test_section_burned_area_includes_chart_before_table() -> None:
+    from reportlab.graphics.shapes import Drawing
+    from reportlab.platypus import Table
+
+    from app.services.pdf_export_service import _build_report_styles, _section_burned_area
+
+    story = _section_burned_area(_BURNED_REPORT, _build_report_styles())
+
+    drawing_index = next(i for i, item in enumerate(story) if isinstance(item, Drawing))
+    table_index = next(i for i, item in enumerate(story) if isinstance(item, Table))
+    assert drawing_index < table_index

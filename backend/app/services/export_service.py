@@ -334,7 +334,8 @@ def _write_section_header(sheet, row: int, col_start: int, col_end: int, title: 
 
 def _attach_bar_chart(sheet, anchor: str, title: str, header_row: int, row_count: int,
                       chart_type: str = "bar", color: str = _INK, data_col: int = 1,
-                      height: float = 7.5, width: float = 16.5) -> None:
+                      height: float = 7.5, width: float = 16.5,
+                      y_axis_title: str = "Jumlah Titik Panas") -> None:
     if row_count <= 0:
         return
     chart = BarChart()
@@ -351,7 +352,7 @@ def _attach_bar_chart(sheet, anchor: str, title: str, header_row: int, row_count
         chart.x_axis.title = None
         chart.y_axis.axPos = "b"
         chart.y_axis.tickLblPos = "nextTo"
-        chart.y_axis.title = "Jumlah Titik Panas"
+        chart.y_axis.title = y_axis_title
         chart.y_axis.majorGridlines = ChartLines()
     else:
         chart.x_axis.axPos = "b"
@@ -359,7 +360,7 @@ def _attach_bar_chart(sheet, anchor: str, title: str, header_row: int, row_count
         chart.x_axis.title = None
         chart.y_axis.axPos = "l"
         chart.y_axis.tickLblPos = "nextTo"
-        chart.y_axis.title = "Jumlah Titik Panas"
+        chart.y_axis.title = y_axis_title
         chart.y_axis.majorGridlines = ChartLines()
 
     chart.dataLabels = DataLabelList()
@@ -817,8 +818,34 @@ def _write_burned_area_sheet(sheet, report: dict) -> None:
         sheet.cell(row=row_number, column=2).number_format = "#,##0.0"
         sheet.cell(row=row_number, column=4).number_format = "0.0%"
 
+    # Chart batang luas terbakar per skema, ditumpuk di kanan tabel rekap --
+    # sebelumnya sheet ini cuma berisi tabel angka, tanpa representasi visual
+    # sama sekali (beda dari sheet Dashboard yang penuh chart). Anchor-nya di
+    # kolom F (tabel rekap cuma sampai D) supaya tidak menimpa tabel di
+    # kirinya, tapi tingginya (~7cm, ~13 baris) tetap harus diperhitungkan
+    # supaya tabel rincian KPS di bawahnya tidak dimulai sebelum chart ini
+    # selesai -- kolom F-I dipakai keduanya (Luas/Bulan/Periode/Keterangan).
+    _CHART_ROW_SPAN = 15
+    chart_anchor_row = skema_header_row - 1
+    _attach_bar_chart(
+        sheet,
+        f"F{chart_anchor_row}",
+        "Luas Terbakar per Skema (Ha)",
+        skema_header_row,
+        len(report.get("by_skema") or []),
+        chart_type="col",
+        color=_BURN,
+        data_col=1,
+        height=7.0,
+        width=13.0,
+        y_axis_title="Luas Terbakar (Ha)",
+    )
+
     # ── Rincian per KPS ──────────────────────────────────────────────────
-    detail_start = skema_header_row + len(report.get("by_skema") or []) + 3
+    detail_start = max(
+        skema_header_row + len(report.get("by_skema") or []) + 3,
+        chart_anchor_row + _CHART_ROW_SPAN,
+    )
     sheet.cell(row=detail_start - 1, column=1, value="B. RINCIAN PER KAWASAN (KPS)").font = Font(
         bold=True, size=10, color=_INK
     )
