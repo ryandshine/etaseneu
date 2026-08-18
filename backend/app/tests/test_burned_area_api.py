@@ -79,6 +79,9 @@ def test_burned_area_summary_filters_by_polygon_id_on_the_server(monkeypatch) ->
 
     monkeypatch.setattr(PostgresStore, "read_burned_area_summary", fake_read)
     monkeypatch.setattr(PostgresStore, "latest_burned_area_period", lambda self: None)
+    # polygon_ids terisi -> endpoint juga memanggil burned_area_unique_ha();
+    # tanpa mock ini test diam-diam menyentuh PostgreSQL sungguhan.
+    monkeypatch.setattr(PostgresStore, "burned_area_unique_ha", lambda self, polygon_ids: None)
 
     client = _client(monkeypatch)
     response = client.get("/api/burned-area/summary?polygon_ids=42854")

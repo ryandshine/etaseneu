@@ -1,6 +1,30 @@
 import asyncio
 import json
+from pathlib import Path
 from urllib.parse import urlsplit
+
+
+class _DisabledPostgresStore:
+    """/api/layers mode penuh (bukan preview) memanggil LayerService.list_layers(),
+    yang menulis ke PostgreSQL dan memicu GeoJsonSyncService.sync_all() --
+    lihat komentar di app/api/layers.py. SHP_DIR di test ini sengaja diarahkan
+    ke direktori fixture kecil; kalau LayerService yang dibangun endpoint
+    tersambung ke DATABASE_URL sungguhan (produksi, tidak ada pemisahan DB
+    test), sync_all() menganggap SEMUA layer produksi lain sudah "dihapus"
+    dan menonaktifkannya. Insiden ini pernah benar-benar terjadi. Store palsu
+    ini mem-bypass seluruh jalur database tanpa peduli DATABASE_URL apa yang
+    sedang aktif di lingkungan."""
+
+    enabled = False
+
+
+def _isolate_layer_service(monkeypatch) -> None:
+    from app.services.layer_service import LayerService
+
+    def _fake_get_layer_service(shp_dir: str) -> LayerService:
+        return LayerService(Path(shp_dir), postgres_store=_DisabledPostgresStore())
+
+    monkeypatch.setattr("app.api.layers.get_layer_service", _fake_get_layer_service)
 
 
 async def _request_layers(query: str = "", admin_key: str | None = None) -> tuple[int, dict]:
@@ -88,6 +112,7 @@ def test_layers_endpoint_returns_detected_layers(monkeypatch) -> None:
     from app.core.config import get_settings
 
     get_settings.cache_clear()
+    _isolate_layer_service(monkeypatch)
     monkeypatch.setenv("SHP_DIR", "app/tests/fixtures/shp")
     monkeypatch.setenv("ADMIN_API_KEY", "kunci-rahasia")
     try:
@@ -105,6 +130,7 @@ def test_layer_detail_endpoint_returns_preview_geometry(monkeypatch) -> None:
     from app.core.config import get_settings
 
     get_settings.cache_clear()
+    _isolate_layer_service(monkeypatch)
     monkeypatch.setenv("SHP_DIR", "app/tests/fixtures/shp")
     monkeypatch.setenv("ADMIN_API_KEY", "kunci-rahasia")
     try:
@@ -125,6 +151,7 @@ def test_layers_preview_stays_public_for_the_map(monkeypatch) -> None:
     from app.core.config import get_settings
 
     get_settings.cache_clear()
+    _isolate_layer_service(monkeypatch)
     monkeypatch.setenv("SHP_DIR", "app/tests/fixtures/shp")
     monkeypatch.setenv("ADMIN_API_KEY", "kunci-rahasia")
     try:
@@ -140,6 +167,7 @@ def test_layers_full_mode_requires_admin_key(monkeypatch) -> None:
     from app.core.config import get_settings
 
     get_settings.cache_clear()
+    _isolate_layer_service(monkeypatch)
     monkeypatch.setenv("SHP_DIR", "app/tests/fixtures/shp")
     monkeypatch.setenv("ADMIN_API_KEY", "kunci-rahasia")
     try:
@@ -156,6 +184,7 @@ def test_layer_detail_requires_admin_key_even_in_preview_mode(monkeypatch) -> No
     from app.core.config import get_settings
 
     get_settings.cache_clear()
+    _isolate_layer_service(monkeypatch)
     monkeypatch.setenv("SHP_DIR", "app/tests/fixtures/shp")
     monkeypatch.setenv("ADMIN_API_KEY", "kunci-rahasia")
     try:

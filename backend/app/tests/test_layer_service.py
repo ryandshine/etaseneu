@@ -7,10 +7,22 @@ import pytest
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "shp"
 
 
+class _DisabledPostgresStore:
+    """LayerService.list_layers() (mode penuh) menulis ke PostgreSQL dan
+    memicu GeoJsonSyncService.sync_all(). Kalau tidak disuntik store yang
+    dinonaktifkan ini, test-test di file ini akan tersambung ke DATABASE_URL
+    sungguhan (produksi, karena tidak ada pemisahan DB test) sambil hanya
+    melihat fixture kecil di direktori ini -- sync_all() lantas menganggap
+    SEMUA layer produksi lain sudah "dihapus" dan menonaktifkannya. Insiden
+    ini pernah benar-benar terjadi lewat test_layers_api.py."""
+
+    enabled = False
+
+
 def test_layer_service_loads_geojson_layers() -> None:
     from app.services.layer_service import LayerService
 
-    service = LayerService(FIXTURE_DIR)
+    service = LayerService(FIXTURE_DIR, postgres_store=_DisabledPostgresStore())
 
     layers = service.list_layers()
 
@@ -52,7 +64,7 @@ def test_layer_service_transforms_projected_geojson_to_wgs84(tmp_path) -> None:
     }
     (tmp_path / "projected.geojson").write_text(json.dumps(payload), encoding="utf-8")
 
-    service = LayerService(tmp_path)
+    service = LayerService(tmp_path, postgres_store=_DisabledPostgresStore())
     layers = service.list_layers()
 
     assert len(layers) == 1
@@ -72,7 +84,7 @@ def test_display_simplification_tolerance_stays_close_to_spatial_boundary() -> N
 def test_layer_service_lists_preview_layers_without_building_full_display(monkeypatch) -> None:
     from app.services.layer_service import LayerService
 
-    service = LayerService(FIXTURE_DIR)
+    service = LayerService(FIXTURE_DIR, postgres_store=_DisabledPostgresStore())
 
     monkeypatch.setattr(
         "app.services.layer_service._build_display_payload",
@@ -113,7 +125,7 @@ def test_layer_service_preview_layers_preserve_original_shape(tmp_path) -> None:
     }
     (tmp_path / "sample.geojson").write_text(json.dumps(payload), encoding="utf-8")
 
-    service = LayerService(tmp_path)
+    service = LayerService(tmp_path, postgres_store=_DisabledPostgresStore())
     layers = service.list_preview_layers()
 
     preview_feature = layers[0].geojson["features"][0]

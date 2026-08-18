@@ -42,13 +42,19 @@ def _friendly_layer_label(layer_id: str, agencies: list[str]) -> str:
 
 
 class LayerService:
-    def __init__(self, shp_dir: Path) -> None:
+    def __init__(self, shp_dir: Path, postgres_store: PostgresStore | None = None) -> None:
         self.shp_dir = shp_dir
         self._layers_cache: list[LayerFeature] | None = None
         self._preview_layers_cache: list[LayerFeature] | None = None
         self._spatial_layers_cache: list[dict] | None = None
-        self.postgres_store = PostgresStore(get_settings().database_url)
-        self.geojson_sync_service = GeoJsonSyncService(self.shp_dir, get_settings().database_url)
+        self.postgres_store = postgres_store or PostgresStore(get_settings().database_url)
+        # `postgres_store` diteruskan (bukan dibiarkan GeoJsonSyncService bikin
+        # koneksinya sendiri) supaya keduanya selalu satu instance yang sama --
+        # kalau pemanggil suntik store palsu/nonaktif buat testing, sync_all()
+        # di bawah ikut aman, bukan cuma _sync_layer_to_database().
+        self.geojson_sync_service = GeoJsonSyncService(
+            self.shp_dir, get_settings().database_url, postgres_store=self.postgres_store
+        )
 
     def clear_caches(self) -> None:
         self._layers_cache = None
