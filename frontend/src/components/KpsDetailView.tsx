@@ -18,6 +18,20 @@ import {
 
 const DETECTION_PAGE_SIZE = 10;
 
+const MONTH_LABELS = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+];
+
+type BurnedAreaRow = {
+  polygon_metadata_id: number;
+  layer_key: string;
+  year: number;
+  month: number;
+  burned_area_ha: number;
+  source: string;
+};
+
 type KpsDetailViewProps = {
   agency: string;
   hotspots: DashboardHotspot[];
@@ -193,6 +207,46 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
     };
   }, [polygonId]);
 
+  // Luas kebakaran (MODIS MCD64A1) untuk polygon ini. Sengaja dibiarkan
+  // gagal diam-diam: produknya terbit bulanan dengan lag rilis beberapa
+  // bulan, jadi KPS yang datanya belum dihitung adalah kondisi normal --
+  // bukan error yang perlu ditampilkan sebagai kegagalan halaman.
+  const [burnedAreas, setBurnedAreas] = useState<BurnedAreaRow[]>([]);
+
+  useEffect(() => {
+    if (polygonId === null) {
+      setBurnedAreas([]);
+      return;
+    }
+
+    let active = true;
+    fetch("/api/burned-area/summary")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { rows?: BurnedAreaRow[] } | null) => {
+        if (active && payload?.rows) {
+          setBurnedAreas(payload.rows.filter((row) => row.polygon_metadata_id === polygonId));
+        }
+      })
+      .catch(() => {
+        /* diamkan -- lihat komentar di atas */
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [polygonId]);
+
+  const burnedAreaStats = useMemo(() => {
+    if (burnedAreas.length === 0) {
+      return null;
+    }
+    const totalHa = burnedAreas.reduce((sum, row) => sum + (row.burned_area_ha ?? 0), 0);
+    const sorted = [...burnedAreas].sort(
+      (a, b) => b.year - a.year || b.month - a.month
+    );
+    return { totalHa, latest: sorted[0], months: sorted };
+  }, [burnedAreas]);
+
   const stats = useMemo(() => {
     let tinggi = 0;
     let sedang = 0;
@@ -299,6 +353,37 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
             )}
             {stats.satellites.length > 0 && (
               <p className="help-copy">Satelit: {stats.satellites.join(", ")}</p>
+            )}
+
+            {burnedAreaStats && (
+              <div style={{ marginTop: "1rem", paddingTop: "0.85rem", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                <div className="control-metric">
+                  <span>Luas terbakar (total):</span>
+                  <strong>{formatNumber(Math.round(burnedAreaStats.totalHa * 10) / 10)} Ha</strong>
+                </div>
+                <p className="help-copy" style={{ marginTop: "0.4rem" }}>
+                  Terakhir dihitung: {MONTH_LABELS[burnedAreaStats.latest.month - 1]}{" "}
+                  {burnedAreaStats.latest.year}
+                </p>
+                {burnedAreaStats.months.length > 1 && (
+                  <div style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+                    {burnedAreaStats.months.slice(0, 6).map((row) => (
+                      <div
+                        key={`${row.year}-${row.month}`}
+                        style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", color: "#9ca3af" }}
+                      >
+                        <span>
+                          {MONTH_LABELS[row.month - 1]} {row.year}
+                        </span>
+                        <span>{formatNumber(Math.round(row.burned_area_ha * 10) / 10)} Ha</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="help-copy" style={{ marginTop: "0.5rem", fontSize: "0.72rem" }}>
+                  Sumber: MODIS MCD64A1 (resolusi 500 m, terbit bulanan dengan jeda beberapa bulan).
+                </p>
+              </div>
             )}
           </div>
         </aside>
