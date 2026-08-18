@@ -16,10 +16,17 @@ async def burned_area_summary(
     year: int | None = None,
     month: int | None = None,
     layer_ids: list[str] = Query(default=[]),
+    # Halaman detail KPS cuma butuh satu polygon. Tanpa filter ini pemanggil
+    # terpaksa mengunduh SELURUH tabel lalu menyaring di klien -- pada cakupan
+    # penuh (7313 polygon x 12 bulan) itu ~16 MB per kali buka halaman.
+    polygon_ids: list[int] = Query(default=[]),
 ) -> dict[str, object]:
     store = PostgresStore(get_settings().database_url)
     rows = store.read_burned_area_summary(
-        layer_keys=layer_ids or None, year=year, month=month
+        polygon_ids=polygon_ids or None,
+        layer_keys=layer_ids or None,
+        year=year,
+        month=month,
     )
     latest = store.latest_burned_area_period()
     return {

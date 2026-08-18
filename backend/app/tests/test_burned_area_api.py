@@ -38,6 +38,27 @@ def test_burned_area_summary_is_public(monkeypatch) -> None:
     assert body["latest_period"] == {"year": 2026, "month": 4}
 
 
+def test_burned_area_summary_filters_by_polygon_id_on_the_server(monkeypatch) -> None:
+    """Halaman detail KPS cuma butuh satu polygon -- filternya harus sampai ke
+    query database, bukan mengunduh seluruh tabel lalu disaring di klien."""
+    from app.services.postgres_store import PostgresStore
+
+    captured: dict[str, object] = {}
+
+    def fake_read(self, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(PostgresStore, "read_burned_area_summary", fake_read)
+    monkeypatch.setattr(PostgresStore, "latest_burned_area_period", lambda self: None)
+
+    client = _client(monkeypatch)
+    response = client.get("/api/burned-area/summary?polygon_ids=42854")
+
+    assert response.status_code == 200
+    assert captured["polygon_ids"] == [42854]
+
+
 def test_burned_area_refresh_requires_admin_key(monkeypatch) -> None:
     client = _client(monkeypatch)
     response = client.post("/api/burned-area/refresh?year=2026&month=4")

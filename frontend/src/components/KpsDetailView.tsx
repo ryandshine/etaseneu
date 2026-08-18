@@ -220,11 +220,13 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
     }
 
     let active = true;
-    fetch("/api/burned-area/summary")
+    // Difilter di server (polygon_ids), bukan unduh semua lalu saring di sini --
+    // tabelnya bisa puluhan ribu baris kalau seluruh KPS sudah dihitung.
+    fetch(`/api/burned-area/summary?polygon_ids=${polygonId}`)
       .then((response) => (response.ok ? response.json() : null))
       .then((payload: { rows?: BurnedAreaRow[] } | null) => {
         if (active && payload?.rows) {
-          setBurnedAreas(payload.rows.filter((row) => row.polygon_metadata_id === polygonId));
+          setBurnedAreas(payload.rows);
         }
       })
       .catch(() => {
