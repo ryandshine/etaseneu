@@ -33,12 +33,14 @@ class Settings(BaseSettings):
     gee_service_account_email: str = ""
     gee_service_account_key_path: str = ""
     gee_project_id: str = ""
-    # Auto-refresh burned area. Beda dari scheduler_interval_hours (hotspot,
-    # tiap 3 jam) -- produk MCD64A1/VNP64A1 terbit BULANAN, jadi mengecek
-    # tiap hari sia-sia. Default mingguan, coba ulang 3 bulan ke belakang
-    # tiap kali supaya begitu NASA merilis citra baru sistem otomatis
-    # menangkapnya tanpa perlu tahu persis tanggal rilisnya.
-    burned_area_scheduler_enabled: bool = True
+    # Auto-refresh burned area lewat Google Earth Engine (MODIS/VIIRS).
+    # Default MATI sejak sumber data dipindah ke rekap resmi KLHK (Areal
+    # Kebakaran Hutan dan Lahan, klasifikasi akurasi H/M/L) -- lihat
+    # burned_area_service.py untuk histori kenapa GEE dipakai sebelumnya.
+    # Kode & endpoint manual (/api/burned-area/refresh) tetap ada, cuma tidak
+    # lagi dipanggil otomatis. Set true secara eksplisit di env kalau nanti
+    # GEE mau dipakai lagi sebagai pelengkap.
+    burned_area_scheduler_enabled: bool = False
     burned_area_scheduler_interval_hours: float = 168.0
     burned_area_scheduler_lookback_months: int = 3
 
