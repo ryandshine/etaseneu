@@ -8,7 +8,7 @@ from shapely.ops import transform
 
 from app.core.config import get_settings
 from app.models.layers import LayerBounds, LayerFeature
-from app.services.geojson_sync_service import GeoJsonSyncService
+from app.services.geojson_sync_service import GeoJsonSyncService, _field_value
 from app.services.postgres_store import PostgresStore
 
 
@@ -415,11 +415,11 @@ def _extract_agencies(payload: dict) -> list[str]:
 
     for feature in payload.get("features", []):
         properties = feature.get("properties") or {}
-        agency = (
-            properties.get("LEMBAGA")
-            or properties.get("lembaga")
-            or properties.get("NAMA_KEC")
-            or properties.get("NAMA_KAB")
+        # NAMA_MHA/NAMOBJ dipakai dataset Hutan Adat -- tanpa alias ini,
+        # layer itu selalu punya daftar agencies kosong (lihat catatan yang
+        # sama di spatial_service.py._prepare_layers).
+        agency = _field_value(
+            properties, "LEMBAGA", "lembaga", "NAMA_MHA", "NAMOBJ", "NAMA_KEC", "NAMA_KAB"
         )
         if not agency:
             continue

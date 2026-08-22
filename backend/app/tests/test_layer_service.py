@@ -141,3 +141,33 @@ def test_layer_service_preview_layers_preserve_original_shape(tmp_path) -> None:
         [100.0, -0.5],
         [100.0, -2.0],
     ]
+
+
+def test_extract_agencies_falls_back_to_nama_mha_for_hutan_adat() -> None:
+    """Dataset Hutan Adat tidak punya kolom LEMBAGA -- tanpa alias NAMA_MHA/
+    NAMOBJ, _extract_agencies() selalu mengembalikan daftar kosong untuk
+    layer ini, walau datanya sendiri lengkap."""
+    from app.services.layer_service import _extract_agencies
+
+    payload = {
+        "features": [
+            {"properties": {"NAMA_MHA": "MHA Mukim Kunyet", "NAMOBJ": "Mukim Kunyet"}},
+            {"properties": {"NAMA_MHA": "MHA Mukim Paloh"}},
+        ]
+    }
+
+    assert _extract_agencies(payload) == ["MHA Mukim Kunyet", "MHA Mukim Paloh"]
+
+
+def test_extract_agencies_prefers_lembaga_over_hutan_adat_aliases() -> None:
+    """Kalau dataset punya LEMBAGA (Perhutanan Sosial), itu yang harus dipakai
+    -- alias Hutan Adat tidak boleh menggeser prioritas kolom yang sudah ada."""
+    from app.services.layer_service import _extract_agencies
+
+    payload = {
+        "features": [
+            {"properties": {"LEMBAGA": "LPHD Contoh", "NAMA_MHA": "Semestinya tidak dipakai"}},
+        ]
+    }
+
+    assert _extract_agencies(payload) == ["LPHD Contoh"]

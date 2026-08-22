@@ -3,6 +3,8 @@ import json
 
 from shapely.geometry import Point, shape
 
+from app.services.geojson_sync_service import _field_value
+
 
 _spatial_tree_cache: dict[str, tuple[list[dict], object]] = {}
 
@@ -70,13 +72,16 @@ def _prepare_layers(layers: list[dict]) -> list[dict]:
                 continue
 
             properties = feature.get("properties") or {}
-            label = (
-                properties.get("LEMBAGA")
-                or properties.get("lembaga")
-                or properties.get("NAMA_KEC")
-                or properties.get("NAMA_KAB")
-                or layer["id"]
-            )
+            # NAMA_MHA/NAMOBJ dipakai dataset Hutan Adat (kolom LEMBAGA-nya
+            # tidak ada sama sekali) -- tanpa alias ini, seluruh hotspot yang
+            # jatuh di kawasan Hutan Adat jatuh ke fallback layer["id"] (mis.
+            # "HUTAN_ADAT_APR26" tampil sebagai nama lembaga di laporan),
+            # padahal datanya sendiri lengkap. Sama pola dengan _field_value
+            # yang sudah dipakai geojson_sync_service.py untuk sinkronisasi
+            # KPS -- di sini dipakai lagi untuk pencocokan hotspot langsung.
+            label = _field_value(
+                properties, "LEMBAGA", "lembaga", "NAMA_MHA", "NAMOBJ", "NAMA_KEC", "NAMA_KAB"
+            ) or layer["id"]
             province_name = str(
                 properties.get("NAMA_PROV")
                 or properties.get("NAMA_PROVINSI")
