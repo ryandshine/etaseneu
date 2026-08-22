@@ -862,11 +862,16 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
             </Popup>
           </Marker>
         ))}
-        {/* Bekas terbakar di panel sendiri di bawah batas kawasan (overlayPane
-            400) supaya arsiran merahnya tidak menutupi garis batas KPS maupun
-            titik hotspot -- ia konteks latar, bukan fokus utama peta. */}
+        {/* Bekas terbakar di panel sendiri DI ATAS batas KPS (400) tapi di
+            bawah titik hotspot (450) -- sebelumnya di z:390 (di BAWAH batas
+            KPS), sehingga arsiran merahnya ketutup/berbaur dengan isian
+            hijau KPS dan nyaris tidak terlihat sama sekali, padahal justru
+            itu tujuan utama lapisan ini: menunjukkan kawasan mana yang
+            terdampak. Batas KPS & titik hotspot juga diberi pane eksplisit
+            (bukan default overlayPane) supaya urutannya pasti, tidak
+            bergantung urutan render React. */}
         {showBurnedArea && burnedArea.data ? (
-          <Pane name="bekas-terbakar" style={{ zIndex: 390 }}>
+          <Pane name="bekas-terbakar" style={{ zIndex: 420 }}>
             <GeoJSON
               key={`burned-overlay-${burnedArea.data.kps_count}`}
               data={burnedArea.data as never}
@@ -910,25 +915,28 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
             />
           </Pane>
         ) : null}
-        {layers
-          .filter((layer) => layer.active)
-          .map((layer) => (
-            <GeoJSON
-              key={layer.id}
-              data={layer.geojson as never}
-              interactive={false}
-              style={{
-                color: layer.color,
-                weight: 4,
-                opacity: 1,
-                fillColor: layer.color,
-                fillOpacity: 0.18,
-                dashArray: "6 5",
-                lineCap: "round",
-                lineJoin: "round"
-              }}
-            />
-          ))}
+        <Pane name="batas-kps" style={{ zIndex: 400 }}>
+          {layers
+            .filter((layer) => layer.active)
+            .map((layer) => (
+              <GeoJSON
+                key={layer.id}
+                data={layer.geojson as never}
+                interactive={false}
+                style={{
+                  color: layer.color,
+                  weight: 4,
+                  opacity: 1,
+                  fillColor: layer.color,
+                  fillOpacity: 0.18,
+                  dashArray: "6 5",
+                  lineCap: "round",
+                  lineJoin: "round"
+                }}
+              />
+            ))}
+        </Pane>
+        <Pane name="hotspot-titik" style={{ zIndex: 450 }}>
         {hotspots.map((hotspot) =>
           (hotspot.frp ?? 0) > HIGH_FRP_THRESHOLD ? (
             <Marker
@@ -958,6 +966,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
             </CircleMarker>
           )
         )}
+        </Pane>
       </MapContainer>
     </div>
   );

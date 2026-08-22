@@ -808,10 +808,14 @@ body {
   cursor: progress;
 }
 
-/* Menjawab "seberapa parah" tanpa harus mengklik satu per satu di peta. */
+/* Menjawab "seberapa parah" tanpa harus mengklik satu per satu di peta.
+   top dihitung dari bawah .burned-toggle (top:6.5rem + tinggi 34px) + jarak
+   0.6rem -- sebelumnya cuma top:8.9rem (jarak ~4px ke tombol di atasnya),
+   saking mepetnya sudut radius kedua elemen ini kelihatan menyatu/tumpang
+   tindih di layar, bukan dua kotak terpisah. */
 .burned-summary-chip {
   position: absolute;
-  top: 8.9rem;
+  top: calc(6.5rem + 34px + 0.6rem);
   left: 1rem;
   z-index: 1000;
   max-width: 15rem;
@@ -6114,7 +6118,8 @@ a + a {
   }
 
   .burned-summary-chip {
-    top: 148px;
+    /* .burned-toggle di mobile: top:108px + tinggi 34px + jarak 10px */
+    top: 152px;
     left: 1rem;
     right: 1rem;
     max-width: none;
