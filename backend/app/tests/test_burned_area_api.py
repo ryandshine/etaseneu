@@ -255,3 +255,84 @@ def test_burned_area_refresh_returns_503_when_not_configured(monkeypatch) -> Non
     response = client.post("/api/burned-area/refresh?year=2026&month=4")
 
     assert response.status_code == 503
+
+
+def test_burned_area_refresh_klhk_requires_admin_key(monkeypatch) -> None:
+    client = _client(monkeypatch)
+    response = client.post("/api/burned-area/refresh-klhk?file_name=burned.geojson")
+    assert response.status_code == 401
+
+
+def test_burned_area_refresh_klhk_calls_service(monkeypatch) -> None:
+    from app.core.auth import require_admin_key
+    from app.main import create_app
+    from fastapi.testclient import TestClient
+    import app.api.burned_area as burned_area_api
+
+    calls = []
+
+    def fake_refresh(file_path):
+        calls.append(file_path)
+        return {"file": "burned.geojson", "computed": 331}
+
+    monkeypatch.setattr(burned_area_api, "refresh_burned_area_from_klhk_file", fake_refresh)
+
+    app = create_app()
+    app.dependency_overrides[require_admin_key] = lambda: None
+    client = TestClient(app)
+
+    response = client.post("/api/burned-area/refresh-klhk?file_name=burned.geojson")
+
+    assert response.status_code == 200
+    assert response.json() == {"file": "burned.geojson", "computed": 331}
+    assert len(calls) == 1
+    assert calls[0].endswith("burned.geojson")
+
+
+def test_burned_area_refresh_klhk_sanitizes_path_traversal(monkeypatch) -> None:
+    """file_name datang dari input admin lewat query string -- harus tidak
+    bisa dipakai untuk keluar dari KLHK_BURNED_AREA_DIR (mis. ../../etc/passwd)."""
+    from app.core.auth import require_admin_key
+    from app.main import create_app
+    from fastapi.testclient import TestClient
+    from app.core.config import get_settings
+    import app.api.burned_area as burned_area_api
+
+    calls = []
+
+    def fake_refresh(file_path):
+        calls.append(file_path)
+        return {"file": "passwd", "computed": 0}
+
+    monkeypatch.setattr(burned_area_api, "refresh_burned_area_from_klhk_file", fake_refresh)
+
+    app = create_app()
+    app.dependency_overrides[require_admin_key] = lambda: None
+    client = TestClient(app)
+
+    client.post("/api/burned-area/refresh-klhk?file_name=../../../etc/passwd")
+
+    resolved_dir = str(get_settings().resolved_klhk_burned_area_dir)
+    assert calls[0].startswith(resolved_dir)
+    assert calls[0] == str(get_settings().resolved_klhk_burned_area_dir / "passwd")
+
+
+def test_burned_area_refresh_klhk_returns_404_when_file_missing(monkeypatch) -> None:
+    from app.core.auth import require_admin_key
+    from app.main import create_app
+    from fastapi.testclient import TestClient
+    from app.services.burned_area_klhk_service import BurnedAreaKlhkError
+    import app.api.burned_area as burned_area_api
+
+    def fake_refresh(file_path):
+        raise BurnedAreaKlhkError(f"File tidak ditemukan: {file_path}")
+
+    monkeypatch.setattr(burned_area_api, "refresh_burned_area_from_klhk_file", fake_refresh)
+
+    app = create_app()
+    app.dependency_overrides[require_admin_key] = lambda: None
+    client = TestClient(app)
+
+    response = client.post("/api/burned-area/refresh-klhk?file_name=tidak-ada.geojson")
+
+    assert response.status_code == 404

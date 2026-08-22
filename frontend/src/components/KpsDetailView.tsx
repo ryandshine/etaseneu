@@ -216,10 +216,10 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
     };
   }, [polygonId]);
 
-  // Luas kebakaran (MODIS MCD64A1) untuk polygon ini. Sengaja dibiarkan
-  // gagal diam-diam: produknya terbit bulanan dengan lag rilis beberapa
-  // bulan, jadi KPS yang datanya belum dihitung adalah kondisi normal --
-  // bukan error yang perlu ditampilkan sebagai kegagalan halaman.
+  // Luas kebakaran (overlay resmi KLHK) untuk polygon ini. Sengaja dibiarkan
+  // gagal diam-diam: rekapnya terbit tidak dengan jadwal tetap, jadi KPS
+  // yang datanya belum dihitung adalah kondisi normal -- bukan error yang
+  // perlu ditampilkan sebagai kegagalan halaman.
   const [burnedAreas, setBurnedAreas] = useState<BurnedAreaRow[]>([]);
   // Luas UNIK (ST_Union server-side) -- beda dari menjumlahkan burned_area_ha
   // per bulan, yang menghitung ganda lahan yang terbakar lebih dari sekali
@@ -460,7 +460,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                   </p>
                 )}
                 <p className="help-copy" style={{ marginTop: "0.5rem", fontSize: "0.72rem" }}>
-                  Sumber: MODIS MCD64A1 (resolusi 500 m, terbit bulanan dengan jeda beberapa bulan).
+                  Sumber: KLHK — Areal Kebakaran Hutan dan Lahan (akurasi H/M, terverifikasi hotspot).
                 </p>
               </div>
             )}
@@ -495,9 +495,10 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                 />
               </>
             ) : null}
-            {/* Jejak area terbakar (MCD64A1). Di panel sendiri di antara batas
-                KPS (overlayPane, 400) dan titik hotspot (450) supaya arsiran
-                merahnya menimpa batas kawasan tapi tidak menutupi titik. */}
+            {/* Jejak area terbakar (overlay resmi KLHK). Di panel sendiri di
+                antara batas KPS (overlayPane, 400) dan titik hotspot (450)
+                supaya arsiran merahnya menimpa batas kawasan tapi tidak
+                menutupi titik. */}
             {burnedGeometry && (
               <Pane name="area-terbakar" style={{ zIndex: 420 }}>
                 <GeoJSON
@@ -510,11 +511,12 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                     fillOpacity: 0.45,
                     interactive: true
                   }}
-                  // Baris tanpa geometry (piksel MODIS-nya cuma menyerempet
-                  // tepi KPS, reduceToVectors tidak menghasilkan bentuk sama
-                  // sekali) dikirim server sebagai titik centroid, is_estimated
-                  // true -- digambar sebagai penanda putus-putus, bukan
-                  // disamakan dengan bentuk presisi hasil vektorisasi asli.
+                  // Baris tanpa geometry dikirim server sebagai titik centroid,
+                  // is_estimated true -- digambar sebagai penanda putus-putus,
+                  // bukan disamakan dengan bentuk presisi. Overlay KLHK (vektor
+                  // ke vektor) selalu punya bentuk presisi, jadi jalur ini
+                  // praktis tidak lagi terpakai -- dipertahankan untuk sumber
+                  // data lama/masa depan yang mungkin tidak selalu bergeometri.
                   pointToLayer={(_feature, latlng) =>
                     buildLeafletCircleMarker(latlng, {
                       radius: 9,

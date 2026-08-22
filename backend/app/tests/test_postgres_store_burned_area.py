@@ -4,11 +4,12 @@ import contextlib
 
 
 class FakeCursor:
-    def __init__(self, fetchall_result=None, fetchone_result=None) -> None:
+    def __init__(self, fetchall_result=None, fetchone_result=None, rowcount: int = 0) -> None:
         self._fetchall_result = fetchall_result or []
         self._fetchone_result = fetchone_result
         self.executed: list[tuple[str, object]] = []
         self.executemany_calls: list[tuple[str, list]] = []
+        self.rowcount = rowcount
 
     def __enter__(self):
         return self
@@ -55,6 +56,75 @@ def _store_with_fake_cursor(monkeypatch, **cursor_kwargs):
 
     monkeypatch.setattr(store, "connection", fake_connection)
     return store, cursor
+
+
+def test_clear_burned_area_summary_deletes_all_rows(monkeypatch) -> None:
+    store, cursor = _store_with_fake_cursor(monkeypatch, rowcount=36565)
+
+    result = store.clear_burned_area_summary()
+
+    assert result == 36565
+    query, _params = cursor.executed[0]
+    assert "DELETE FROM burned_area_summary" in query
+
+
+def test_refresh_burned_area_from_klhk_overlays_and_upserts(monkeypatch) -> None:
+    """Overlay per (year, month) -- poligon terbakar bulan yang sama harus
+    di-ST_Union dulu sebelum di-intersect ke KPS, supaya kebakaran yang
+    tumpang tindih di sumber KLHK sendiri tidak dihitung dobel."""
+    fake_overlay_rows = [
+        {
+            "polygon_metadata_id": 1,
+            "layer_key": "psagustus2026",
+            "year": 2026,
+            "month": 5,
+            "burned_area_ha": 12.5,
+            "geometry_json": {"type": "MultiPolygon", "coordinates": []},
+        },
+        {
+            "polygon_metadata_id": 2,
+            "layer_key": "HUTAN_ADAT_APR26",
+            "year": 2026,
+            "month": 6,
+            "burned_area_ha": 3.2,
+            "geometry_json": {"type": "MultiPolygon", "coordinates": []},
+        },
+    ]
+    store, cursor = _store_with_fake_cursor(monkeypatch, fetchall_result=fake_overlay_rows)
+
+    features = [
+        (2026, 5, {"type": "MultiPolygon", "coordinates": []}),
+        (2026, 5, {"type": "MultiPolygon", "coordinates": []}),
+        (2026, 6, {"type": "MultiPolygon", "coordinates": []}),
+    ]
+    computed = store.refresh_burned_area_from_klhk(features, source="KLHK - Areal Kebakaran Hutan dan Lahan")
+
+    assert computed == 2
+
+    insert_calls = [c for c in cursor.executemany_calls if "klhk_burned_features" in c[0]]
+    assert len(insert_calls) == 1
+    assert len(insert_calls[0][1]) == 3
+
+    overlay_query = next(q for q, _p in cursor.executed if "monthly_union" in q)
+    assert "ST_Union(geom)" in overlay_query
+    assert "GROUP BY year, month" in overlay_query
+    assert "ST_Intersects(p.geometry, m.geom)" in overlay_query
+    assert "WHERE p.is_active" in overlay_query
+
+    upsert_calls = [c for c in cursor.executemany_calls if "INSERT INTO burned_area_summary" in c[0]]
+    assert len(upsert_calls) == 1
+    params = upsert_calls[0][1]
+    assert len(params) == 2
+    assert params[0][:4] == (1, "psagustus2026", 2026, 5)
+    assert params[0][5] == "KLHK - Areal Kebakaran Hutan dan Lahan"
+
+
+def test_refresh_burned_area_from_klhk_handles_no_overlap(monkeypatch) -> None:
+    store, cursor = _store_with_fake_cursor(monkeypatch, fetchall_result=[])
+
+    computed = store.refresh_burned_area_from_klhk([(2026, 5, {"type": "MultiPolygon", "coordinates": []})])
+
+    assert computed == 0
 
 
 def test_upsert_burned_area_summary_writes_rows(monkeypatch) -> None:

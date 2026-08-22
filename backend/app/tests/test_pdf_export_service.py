@@ -174,13 +174,13 @@ def test_section_burned_area_lists_kps_and_totals() -> None:
 
 
 def test_section_burned_area_warns_units_are_not_additive_with_hotspot_counts() -> None:
-    """Hektar (citra bulanan, jeda rilis 1-3 bulan) dan jumlah titik panas
+    """Hektar (rekap resmi KLHK, tanpa jadwal tetap) dan jumlah titik panas
     (sinkron tiap 3 jam) bukan besaran sebanding -- laporan harus menyatakan
     itu, bukan menaruh dua angka berdampingan tanpa penjelasan."""
     text = _burned_section_text(_BURNED_REPORT)
 
     assert "tidak dapat dijumlahkan langsung" in text
-    assert "MCD64A1" in text
+    assert "KLHK" in text
 
 
 def test_section_burned_area_marks_estimated_rows() -> None:

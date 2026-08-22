@@ -752,17 +752,17 @@ def _write_burned_area_sheet(sheet, report: dict) -> None:
     """Lampiran luas bekas terbakar: rekap per skema + rincian per KPS.
 
     Angka hektar di sini TIDAK sebanding dengan jumlah titik hotspot di sheet
-    lain -- sumbernya citra bulanan MODIS/VIIRS (jeda rilis 1-3 bulan), bukan
-    deteksi near-real-time. Peringatan itu ditulis di sheet supaya pembaca
-    yang cuma membuka lampiran ini tidak salah menyimpulkan.
+    lain -- sumbernya rekap resmi KLHK yang terbit tidak dengan jadwal tetap,
+    bukan deteksi near-real-time. Peringatan itu ditulis di sheet supaya
+    pembaca yang cuma membuka lampiran ini tidak salah menyimpulkan.
     """
     sheet["A1"] = "REKAP LUAS BEKAS TERBAKAR PADA KAWASAN PERHUTANAN SOSIAL"
     sheet["A1"].font = Font(bold=True, size=14, color=_BURN)
     sheet["A2"] = (
-        "Luas area terbakar hasil analisis citra satelit MODIS MCD64A1 / VIIRS VNP64A1 "
-        "(resolusi 500 m, terbit bulanan dengan jeda rilis 1-3 bulan). Luas dihitung sekali "
-        "per kawasan walau terbakar berulang, sehingga tidak dapat dijumlahkan langsung "
-        "dengan jumlah titik hotspot."
+        "Luas area terbakar hasil overlay batas KPS dengan poligon resmi KLHK "
+        "\"Areal Kebakaran Hutan dan Lahan\" (akurasi H/M -- terverifikasi hotspot, sesuai "
+        "kriteria KLHK). Luas dihitung sekali per kawasan walau terbakar berulang, sehingga "
+        "tidak dapat dijumlahkan langsung dengan jumlah titik hotspot."
     )
     sheet["A2"].font = Font(size=9.5, color=_MUTED, italic=True)
     sheet["A2"].alignment = Alignment(wrap_text=True, vertical="top")

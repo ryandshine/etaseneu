@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     burned_area_scheduler_enabled: bool = False
     burned_area_scheduler_interval_hours: float = 168.0
     burned_area_scheduler_lookback_months: int = 3
+    # Direktori tempat admin men-SFTP file resmi KLHK (Areal Kebakaran Hutan
+    # dan Lahan) sebelum memicu /api/burned-area/refresh-klhk -- sama pola
+    # dengan SHP_DIR, bukan upload lewat HTTP (filenya bisa ratusan MB).
+    klhk_burned_area_dir: str = "../burned_area_klhk"
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
@@ -53,6 +57,10 @@ class Settings(BaseSettings):
     @property
     def resolved_shp_dir(self) -> Path:
         return (BACKEND_DIR / self.shp_dir).resolve()
+
+    @property
+    def resolved_klhk_burned_area_dir(self) -> Path:
+        return (BACKEND_DIR / self.klhk_burned_area_dir).resolve()
 
     @property
     def resolved_cache_dir(self) -> Path:

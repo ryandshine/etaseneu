@@ -1251,12 +1251,12 @@ def create_burned_area_bar_chart(
 
 
 def _section_burned_area(burned_area_report: dict | None, styles: dict) -> list:
-    """SECTION 2E: rekap luas bekas terbakar (citra MODIS/VIIRS bulanan).
+    """SECTION 2E: rekap luas bekas terbakar (overlay resmi KLHK).
 
     Ditempatkan setelah rekap hotspot dan diberi peringatan eksplisit karena
-    satuannya beda (hektar vs jumlah titik) dan kesegarannya beda jauh
-    (bulanan dengan jeda rilis 1-3 bulan vs sinkron tiap 3 jam) -- tanpa itu
-    pembaca mudah menjumlahkan dua angka yang tidak sebanding.
+    satuannya beda (hektar vs jumlah titik) dan kesegarannya beda jauh (rekap
+    resmi tanpa jadwal tetap vs sinkron tiap 3 jam) -- tanpa itu pembaca
+    mudah menjumlahkan dua angka yang tidak sebanding.
 
     Kalau tidak ada data (fitur belum dikonfigurasi, atau tidak ada kawasan
     terbakar pada filter laporan), seksi ini dilewati sama sekali supaya
@@ -1274,12 +1274,12 @@ def _section_burned_area(burned_area_report: dict | None, styles: dict) -> list:
         f"{item['skema']} {item['total_ha']:,.1f} Ha ({item['kps_count']} KPS)" for item in by_skema
     )
     narrative = (
-        f"Analisis citra satelit mendeteksi <b>{total_ha:,.1f} hektar</b> area bekas terbakar "
-        f"pada <b>{kps_count} kawasan perhutanan sosial</b>. Rincian per skema: {skema_phrase}. "
-        "Angka ini berasal dari produk burned area MODIS MCD64A1 / VIIRS VNP64A1 (resolusi 500 m, "
-        "terbit bulanan dengan jeda rilis 1-3 bulan) dan dihitung sekali per kawasan meskipun "
-        "terbakar berulang, sehingga <b>tidak dapat dijumlahkan langsung dengan jumlah titik "
-        "panas</b> pada bagian sebelumnya."
+        f"Overlay batas KPS dengan poligon resmi KLHK mendeteksi <b>{total_ha:,.1f} hektar</b> "
+        f"area bekas terbakar pada <b>{kps_count} kawasan perhutanan sosial</b>. Rincian per "
+        f"skema: {skema_phrase}. Angka ini berasal dari rekap resmi KLHK \"Areal Kebakaran Hutan "
+        "dan Lahan\" (akurasi H/M -- terverifikasi hotspot, sesuai kriteria KLHK sendiri) dan "
+        "dihitung sekali per kawasan meskipun terbakar berulang, sehingga <b>tidak dapat "
+        "dijumlahkan langsung dengan jumlah titik panas</b> pada bagian sebelumnya."
     )
 
     story: list = [

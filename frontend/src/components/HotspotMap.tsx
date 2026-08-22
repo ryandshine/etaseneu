@@ -738,7 +738,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
         title={
           showBurnedArea
             ? "Sembunyikan kawasan bekas terbakar"
-            : "Tampilkan kawasan bekas terbakar (citra satelit bulanan)"
+            : "Tampilkan kawasan bekas terbakar (sumber: KLHK, akurasi H/M)"
         }
         aria-pressed={showBurnedArea}
       >
@@ -753,7 +753,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
         <div className="burned-summary-chip">
           <strong>{formatNumber(Math.round(burnedArea.data.total_ha))} Ha</strong>
           <span>
-            di {burnedArea.data.kps_count} KPS · citra bulanan, jeda rilis 1–3 bulan
+            di {burnedArea.data.kps_count} KPS · sumber: KLHK (akurasi H/M)
           </span>
         </div>
       ) : null}

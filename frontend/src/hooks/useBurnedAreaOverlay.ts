@@ -30,10 +30,10 @@ export type BurnedAreaOverlay = {
  * Lapisan "kawasan terdampak kebakaran" untuk peta utama.
  *
  * Sengaja tidak ikut `hotspots`/filter waktu: hotspot itu deteksi titik api
- * near-real-time (tiap 3 jam), sedangkan burned area adalah citra bulanan
- * yang terbit dengan jeda 1-3 bulan. Menyamakan rentang waktunya akan bikin
- * lapisan ini nyaris selalu kosong saat pengguna melihat rentang beberapa
- * hari terakhir. Default: sepanjang tahun berjalan.
+ * near-real-time (tiap 3 jam), sedangkan burned area adalah rekap resmi KLHK
+ * yang terbit tidak dengan jadwal tetap. Menyamakan rentang waktunya akan
+ * bikin lapisan ini nyaris selalu kosong saat pengguna melihat rentang
+ * beberapa hari terakhir. Default: sepanjang tahun berjalan.
  */
 export function useBurnedAreaOverlay(enabled: boolean, year?: number) {
   const [data, setData] = useState<BurnedAreaOverlay | null>(null);

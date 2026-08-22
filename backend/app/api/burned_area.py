@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.auth import require_admin_key
+from app.services.burned_area_klhk_service import BurnedAreaKlhkError, refresh_burned_area_from_klhk_file
 from app.services.burned_area_service import BurnedAreaService, BurnedAreaServiceError
 from app.services.postgres_store import PostgresStore
 from app.core.config import get_settings
@@ -160,3 +162,25 @@ async def burned_area_refresh(
         return service.refresh_burned_area(year, month, layer_keys=layer_ids or None)
     except BurnedAreaServiceError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/burned-area/refresh-klhk")
+async def burned_area_refresh_klhk(
+    file_name: str,
+    _: None = Depends(require_admin_key),
+) -> dict[str, object]:
+    """Proses file resmi KLHK "Areal Kebakaran Hutan dan Lahan" (AKURASI H/M)
+    yang sudah ditaruh admin di KLHK_BURNED_AREA_DIR (lewat SFTP, bukan
+    upload HTTP -- filenya bisa ratusan MB), overlay ke KPS aktif, simpan
+    ke burned_area_summary. Ini jalur utama pengganti GEE.
+    """
+    settings = get_settings()
+    # Path(file_name).name membuang komponen direktori apa pun -- sama pola
+    # dengan sanitasi nama file di /api/geojson/upload -- supaya file_name
+    # tidak bisa dipakai untuk keluar dari KLHK_BURNED_AREA_DIR.
+    safe_path = settings.resolved_klhk_burned_area_dir / Path(file_name).name
+
+    try:
+        return refresh_burned_area_from_klhk_file(str(safe_path))
+    except BurnedAreaKlhkError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

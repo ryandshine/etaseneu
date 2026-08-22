@@ -1,17 +1,131 @@
-"""Luas kebakaran per poligon KPS per bulan (MODIS MCD64A1 via Google Earth Engine).
+"""Luas kebakaran per poligon KPS per bulan.
 
-Granularitas bulanan -- beda dari hotspot yang sub-harian -- karena itu
-cadence terbit produknya (lihat `burned_area_service.py`).
+Sumber: overlay resmi KLHK "Areal Kebakaran Hutan dan Lahan" (lihat
+`refresh_burned_area_from_klhk`). Sebelumnya MODIS/VIIRS via Google Earth
+Engine (`burned_area_service.py`, sekarang tidak dipakai lagi) -- histori
+kenapa diganti ada di situ. Granularitas bulanan -- beda dari hotspot yang
+sub-harian -- karena itu cadence terbit rekap resminya.
 """
 
 import json
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import datetime
 
 from ._base import Json, _safe_json
 
 
 class _BurnedAreaMixin:
+    def refresh_burned_area_from_klhk(
+        self,
+        features: Iterable[tuple[int, int, dict]],
+        *,
+        source: str = "KLHK - Areal Kebakaran Hutan dan Lahan",
+    ) -> int:
+        """Overlay poligon resmi KLHK (AKURASI H/M, sudah difilter pemanggil)
+        terhadap KPS aktif di `polygon_metadata`, lalu upsert hasilnya ke
+        `burned_area_summary`.
+
+        `features` adalah iterable (year, month, geometry_geojson) -- month
+        didapat dari kolom PERIODE (nama bulan) di file resmi. Poligon
+        terbakar dalam BULAN YANG SAMA di-ST_Union dulu sebelum di-intersect
+        ke tiap KPS, supaya kebakaran yang tumpang tindih di sumbernya
+        sendiri tidak dihitung dobel -- perilaku yang sama seperti dedup
+        lintas-bulan di `burned_area_unique_ha()`.
+
+        Hektarnya dihitung lewat ST_Area(...::geography) di database, bukan
+        di Python, supaya konsisten dengan semua fungsi burned-area lain di
+        modul ini.
+        """
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    CREATE TEMP TABLE IF NOT EXISTS klhk_burned_features (
+                        year INT,
+                        month INT,
+                        geom GEOMETRY(MultiPolygon, 4326)
+                    ) ON COMMIT PRESERVE ROWS
+                    """
+                )
+                cur.execute("TRUNCATE klhk_burned_features")
+
+            batch: list[tuple[int, int, str]] = []
+            for year, month, geometry_geojson in features:
+                batch.append((int(year), int(month), json.dumps(geometry_geojson, default=float)))
+                if len(batch) >= 500:
+                    self._insert_klhk_batch(conn, batch)
+                    batch = []
+            if batch:
+                self._insert_klhk_batch(conn, batch)
+
+            with conn.cursor() as cur:
+                cur.execute("CREATE INDEX IF NOT EXISTS klhk_burned_features_geom_idx ON klhk_burned_features USING GIST (geom)")
+                cur.execute("ANALYZE klhk_burned_features")
+
+                cur.execute(
+                    """
+                    WITH monthly_union AS (
+                        SELECT year, month, ST_Union(geom) AS geom
+                        FROM klhk_burned_features
+                        GROUP BY year, month
+                    ),
+                    overlay AS (
+                        SELECT
+                            p.id AS polygon_metadata_id,
+                            p.layer_key,
+                            m.year,
+                            m.month,
+                            ST_Intersection(p.geometry, m.geom) AS clip_geom
+                        FROM polygon_metadata p
+                        JOIN monthly_union m ON ST_Intersects(p.geometry, m.geom)
+                        WHERE p.is_active
+                    )
+                    SELECT
+                        polygon_metadata_id, layer_key, year, month,
+                        ST_Area(clip_geom::geography) / 10000 AS burned_area_ha,
+                        ST_AsGeoJSON(clip_geom)::json AS geometry_json
+                    FROM overlay
+                    WHERE ST_Area(clip_geom::geography) > 0
+                    """
+                )
+                overlay_rows = cur.fetchall()
+                cur.execute("DROP TABLE klhk_burned_features")
+
+        rows = [
+            {
+                "polygon_metadata_id": row["polygon_metadata_id"],
+                "layer_key": row["layer_key"],
+                "year": row["year"],
+                "month": row["month"],
+                "burned_area_ha": float(row["burned_area_ha"]),
+                "geometry_geojson": row["geometry_json"],
+                "source": source,
+            }
+            for row in overlay_rows
+        ]
+        return self.upsert_burned_area_summary(rows)
+
+    def _insert_klhk_batch(self, conn, batch: list[tuple[int, int, str]]) -> None:
+        with conn.cursor() as cur:
+            cur.executemany(
+                """
+                INSERT INTO klhk_burned_features (year, month, geom)
+                VALUES (%s, %s,
+                    ST_Multi(ST_MakeValid(ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON(%s::text), 4326)))))
+                """,
+                batch,
+            )
+
+    def clear_burned_area_summary(self) -> int:
+        """Kosongkan seluruh rekap burned area -- dipakai sekali saat pindah
+        sumber data (GEE -> overlay KLHK) supaya baris lama yang terikat ke
+        polygon_metadata_id dari layer yang sudah nonaktif (mis. PS_FEB_26
+        lama) tidak nyangkut diam-diam di agregat."""
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM burned_area_summary")
+                return cur.rowcount
+
     def upsert_burned_area_summary(self, rows: Sequence[dict[str, object]]) -> int:
         """Simpan/perbarui luas terbakar per poligon per bulan.
 

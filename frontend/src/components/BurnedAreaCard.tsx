@@ -205,7 +205,7 @@ export function BurnedAreaCard({ provinceFilter, skemaFilter, onSelectSkema }: B
           </div>
 
           <p className="help-copy" style={{ marginTop: "0.6rem", fontSize: "0.68rem" }}>
-            Sumber: MODIS MCD64A1 / VIIRS VNP64A1 (500 m, bulanan, jeda rilis 1–3 bulan). Luas
+            Sumber: KLHK — Areal Kebakaran Hutan dan Lahan (akurasi H/M, terverifikasi hotspot). Luas
             dihitung sekali per kawasan walau terbakar berulang, jadi tidak bisa dijumlahkan langsung
             dengan jumlah titik hotspot.
           </p>
