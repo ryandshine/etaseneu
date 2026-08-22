@@ -43,6 +43,14 @@ COLOR_WHITE = colors.HexColor("#ffffff")
 # jadi penambahan diambil dari kolom lain yang masih longgar.
 HOTSPOT_TABLE_COL_WIDTHS = [30, 136, 110, 68, 92, 56, 56, 62, 46, 46, 67]
 
+# reportlab Table dengan puluhan ribu baris (tiap sel dibungkus Paragraph)
+# butuh waktu jauh di luar wajar untuk di-layout -- ditemukan lewat laporan
+# rentang penuh setahun: 16.872 baris = ~148 detik cuma untuk seksi ini,
+# membuat seluruh permintaan PDF gagal total kena timeout reverse proxy
+# (Cloudflare 524) sebelum sempat terkirim. Rincian lengkap tetap ada di
+# lampiran Excel, yang tidak kena batas ini.
+HOTSPOT_DETAIL_TABLE_MAX_ROWS = 1500
+
 
 def _get_wib_date_str(detected_at: str) -> str:
     if not detected_at:
@@ -1546,8 +1554,18 @@ def _section_confidence_frp(hotspots: list[dict], styles: dict) -> list:
 
 
 def _section_detailed_table(hotspots: list[dict], styles: dict) -> list:
-    """SECTION 5: tabel rinci seluruh observasi hotspot, baris diwarnai per kategori FRP."""
-    detailed_rows = create_detailed_hotspot_rows(hotspots)
+    """SECTION 5: tabel rinci observasi hotspot, baris diwarnai per kategori FRP.
+
+    Dibatasi HOTSPOT_DETAIL_TABLE_MAX_ROWS -- lihat catatan di konstantanya.
+    Diurutkan FRP tertinggi dulu supaya kalau terpotong, titik yang paling
+    signifikan (bukan sekadar yang kebetulan pertama secara kronologis) yang
+    tetap masuk laporan ringkas ini.
+    """
+    ranked = sorted(hotspots, key=lambda h: float(h.get("frp") or 0), reverse=True)
+    truncated = len(ranked) > HOTSPOT_DETAIL_TABLE_MAX_ROWS
+    shown = ranked[:HOTSPOT_DETAIL_TABLE_MAX_ROWS]
+
+    detailed_rows = create_detailed_hotspot_rows(shown)
     hotspot_rows = [
         [Paragraph(cell, styles["tbl_header"]) for cell in detailed_rows[0]]
     ]
@@ -1565,7 +1583,7 @@ def _section_detailed_table(hotspots: list[dict], styles: dict) -> list:
         ('GRID', (0,0), (-1,-1), 0.5, COLOR_BORDER),
         ('PADDING', (0,0), (-1,-1), 4),
     ]
-    for i, h in enumerate(hotspots):
+    for i, h in enumerate(shown):
         row_idx = i + 1
         cat = _get_frp_cat(h)
         if cat == "Tinggi":
@@ -1579,11 +1597,18 @@ def _section_detailed_table(hotspots: list[dict], styles: dict) -> list:
     hotspots_table = Table(hotspot_rows, colWidths=HOTSPOT_TABLE_COL_WIDTHS, repeatRows=1)
     hotspots_table.setStyle(TableStyle(table_styles))
 
-    return [
-        Paragraph("Daftar Detail Observasi Titik Panas (Hotspot)", styles["section_heading"]),
-        hotspots_table,
-        Spacer(1, 10),
-    ]
+    story: list = [Paragraph("Daftar Detail Observasi Titik Panas (Hotspot)", styles["section_heading"])]
+    if truncated:
+        story.append(Paragraph(
+            f"Menampilkan {HOTSPOT_DETAIL_TABLE_MAX_ROWS:,} titik dengan FRP tertinggi dari total "
+            f"{len(hotspots):,} titik terdeteksi. Rincian lengkap tersedia di lampiran Excel "
+            "(sheet \"Data Hotspot\").",
+            styles["body"],
+        ))
+        story.append(Spacer(1, 6))
+    story.append(hotspots_table)
+    story.append(Spacer(1, 10))
+    return story
 
 
 def _section_signoff(styles: dict) -> list:

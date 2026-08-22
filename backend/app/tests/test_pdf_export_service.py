@@ -276,3 +276,86 @@ def test_section_burned_area_includes_chart_before_table() -> None:
     drawing_index = next(i for i, item in enumerate(story) if isinstance(item, Drawing))
     table_index = next(i for i, item in enumerate(story) if isinstance(item, Table))
     assert drawing_index < table_index
+
+
+def _make_hotspot(frp: float, idx: int) -> dict:
+    return {
+        "layer_name": f"KPS {idx}",
+        "source": "MODIS",
+        "detected_at": "2026-05-29T05:44:00Z",
+        "latitude": 1.0 + idx * 0.001,
+        "longitude": 100.0 + idx * 0.001,
+        "confidence": "n",
+        "brightness": 320.1,
+        "frp": frp,
+    }
+
+
+def test_section_detailed_table_caps_rows_for_large_datasets() -> None:
+    """reportlab Table dengan puluhan ribu baris butuh lebih dari 2 menit
+    untuk di-layout (ditemukan: 16.872 baris = ~148 detik, cukup untuk bikin
+    seluruh permintaan PDF timeout di reverse proxy manapun). Harus dibatasi
+    HOTSPOT_DETAIL_TABLE_MAX_ROWS, bukan menyertakan semuanya."""
+    from app.services.pdf_export_service import (
+        HOTSPOT_DETAIL_TABLE_MAX_ROWS,
+        _build_report_styles,
+        _section_detailed_table,
+    )
+    from reportlab.platypus import Table
+
+    hotspots = [_make_hotspot(frp=float(i), idx=i) for i in range(HOTSPOT_DETAIL_TABLE_MAX_ROWS + 50)]
+
+    story = _section_detailed_table(hotspots, _build_report_styles())
+    table = next(item for item in story if isinstance(item, Table))
+
+    # -1 baris header
+    assert len(table._cellvalues) - 1 == HOTSPOT_DETAIL_TABLE_MAX_ROWS
+
+
+def test_section_detailed_table_sorts_by_frp_descending_when_truncated() -> None:
+    from app.services.pdf_export_service import (
+        HOTSPOT_DETAIL_TABLE_MAX_ROWS,
+        _build_report_styles,
+        _section_detailed_table,
+    )
+    from reportlab.platypus import Table
+
+    hotspots = [_make_hotspot(frp=float(i), idx=i) for i in range(HOTSPOT_DETAIL_TABLE_MAX_ROWS + 50)]
+
+    story = _section_detailed_table(hotspots, _build_report_styles())
+    table = next(item for item in story if isinstance(item, Table))
+
+    first_data_row = table._cellvalues[1]
+    frp_cell = first_data_row[9]
+    # kolom FRP -- yang tertinggi (idx terbesar) harus muncul duluan
+    assert frp_cell.getPlainText() == f"{float(HOTSPOT_DETAIL_TABLE_MAX_ROWS + 49):.2f}"
+
+
+def test_section_detailed_table_shows_truncation_note_when_over_limit() -> None:
+    from app.services.pdf_export_service import (
+        HOTSPOT_DETAIL_TABLE_MAX_ROWS,
+        _build_report_styles,
+        _section_detailed_table,
+    )
+
+    hotspots = [_make_hotspot(frp=float(i), idx=i) for i in range(HOTSPOT_DETAIL_TABLE_MAX_ROWS + 50)]
+
+    story = _section_detailed_table(hotspots, _build_report_styles())
+    texts = [getattr(item, "text", "") for item in story]
+
+    assert any("Menampilkan" in text and "Excel" in text for text in texts)
+    assert any(f"{HOTSPOT_DETAIL_TABLE_MAX_ROWS:,}" in text for text in texts)
+
+
+def test_section_detailed_table_no_truncation_note_when_under_limit() -> None:
+    from app.services.pdf_export_service import _build_report_styles, _section_detailed_table
+    from reportlab.platypus import Table
+
+    hotspots = [_make_hotspot(frp=float(i), idx=i) for i in range(10)]
+
+    story = _section_detailed_table(hotspots, _build_report_styles())
+    texts = [getattr(item, "text", "") for item in story]
+    table = next(item for item in story if isinstance(item, Table))
+
+    assert not any("Menampilkan" in text for text in texts)
+    assert len(table._cellvalues) - 1 == 10
