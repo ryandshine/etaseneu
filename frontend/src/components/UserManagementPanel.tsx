@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AppUser, UserRole } from "../types/api";
+import { formatDateTimeWIB } from "../lib/date";
 
 type UserManagementPanelProps = {
   token: string;
@@ -8,21 +9,36 @@ type UserManagementPanelProps = {
 
 // Gaya inline (bukan class CSS) sengaja mengikuti konvensi file
 // SettingsPanel.tsx tempat panel ini dipasang -- lihat kartu-kartu lain di
-// file itu (upload GeoJSON, daftar layer) yang juga begitu.
+// file itu (upload GeoJSON, daftar layer) yang juga begitu. Class ".field"
+// dipakai untuk form supaya label-nya konsisten dengan FilterPanel.tsx
+// (label terlihat, bukan cuma placeholder -- lihat index.css).
 const cardStyle: React.CSSProperties = {
   background: "rgba(17, 24, 39, 0.5)",
   border: "1px solid rgba(255, 255, 255, 0.08)",
   borderRadius: "12px",
-  padding: "2rem"
+  padding: "2rem",
+  // Grid item di SettingsPanel (display:grid, gridTemplateColumns:"1fr")
+  // defaultnya min-width:auto -- menolak menyusut di bawah min-content
+  // tabelnya sendiri, jadi di layar sempit kartu ini melebar ke kanan dan
+  // terpotong diam-diam oleh .workspace-stage{overflow:hidden} (bukan
+  // scrollbar horizontal). Pola bug + fix yang sama persis sudah
+  // didokumentasikan untuk .matrix-ledger di index.css.
+  minWidth: 0
 };
 
-const inputStyle: React.CSSProperties = {
-  background: "rgba(255, 255, 255, 0.04)",
-  border: "1px solid rgba(255, 255, 255, 0.15)",
+// Dipakai untuk input password inline (mini-form "Ganti Password" per baris)
+// yang tidak dibungkus <label className="field"> -- disamakan ukurannya
+// dengan .filter-select-input/.field input (40px, 0.72rem) di index.css
+// supaya tetap konsisten walau tidak lewat class yang sama.
+const inlineInputStyle: React.CSSProperties = {
+  background: "rgba(255, 255, 255, 0.03)",
+  border: "1px solid rgba(255, 255, 255, 0.12)",
   color: "#fff",
-  padding: "0.5rem 0.7rem",
+  padding: "0.5rem 0.6rem",
   borderRadius: "6px",
-  fontSize: "0.82rem"
+  fontSize: "0.72rem",
+  height: "40px",
+  width: "140px"
 };
 
 const ghostButtonStyle: React.CSSProperties = {
@@ -32,13 +48,19 @@ const ghostButtonStyle: React.CSSProperties = {
   padding: "0.4rem 0.7rem",
   borderRadius: "6px",
   fontSize: "0.75rem",
-  cursor: "pointer"
+  cursor: "pointer",
+  whiteSpace: "nowrap"
 };
 
 const dangerButtonStyle: React.CSSProperties = {
   ...ghostButtonStyle,
   border: "1px solid rgba(239,68,68,0.35)",
   color: "#fca5a5"
+};
+
+const roleDotColor: Record<UserRole, string> = {
+  admin: "#f97316",
+  user: "#6b7280"
 };
 
 export function UserManagementPanel({ token, currentUsername }: UserManagementPanelProps) {
@@ -177,181 +199,224 @@ export function UserManagementPanel({ token, currentUsername }: UserManagementPa
 
   return (
     <div style={cardStyle}>
-      <h2 style={{ fontSize: "1.25rem", color: "#fff", fontWeight: 600, margin: "0 0 0.4rem" }}>
-        Manajemen User
-      </h2>
-      <p style={{ color: "#9ca3af", fontSize: "0.8rem", margin: "0 0 1.5rem" }}>
-        Tambah akun, ubah role, atau ganti password. Khusus role admin.
-      </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+        <div>
+          <h2 style={{ fontSize: "1.25rem", color: "#fff", fontWeight: 600, margin: "0 0 0.35rem" }}>
+            Manajemen User
+          </h2>
+          <p style={{ color: "#9ca3af", fontSize: "0.8rem", margin: 0 }}>
+            Tambah akun, ubah role, atau ganti password. Khusus role admin.
+          </p>
+        </div>
+        <span style={{ color: "#6b7280", fontSize: "0.72rem", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "999px", padding: "0.3rem 0.7rem", whiteSpace: "nowrap" }}>
+          {users.length} akun terdaftar
+        </span>
+      </div>
 
       {error ? (
-        <p style={{ color: "#fca5a5", fontSize: "0.8rem", marginBottom: "1rem" }}>{error}</p>
+        <p role="alert" style={{ color: "#fca5a5", fontSize: "0.8rem", marginBottom: "1.25rem", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "6px", padding: "0.6rem 0.8rem" }}>
+          {error}
+        </p>
       ) : null}
 
-      <form
-        onSubmit={handleCreate}
-        style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem", alignItems: "center", marginBottom: "1.5rem" }}
-      >
-        <input
-          type="text"
-          placeholder="Username"
-          value={newUsername}
-          onChange={(event) => setNewUsername(event.currentTarget.value)}
-          required
-          style={{ ...inputStyle, flex: "1 1 140px" }}
-        />
-        <input
-          type="password"
-          placeholder="Password (min. 6 karakter)"
-          value={newPassword}
-          onChange={(event) => setNewPassword(event.currentTarget.value)}
-          required
-          minLength={6}
-          style={{ ...inputStyle, flex: "1 1 180px" }}
-        />
-        <select
-          value={newRole}
-          onChange={(event) => setNewRole(event.currentTarget.value as UserRole)}
-          style={inputStyle}
-        >
-          <option value="user">User</option>
-          <option value="admin">Admin</option>
-        </select>
-        <button
-          type="submit"
-          disabled={creating}
-          style={{
-            background: "#ff4e00",
-            border: "1px solid #ff4e00",
-            color: "#0b0c10",
-            padding: "0.5rem 1rem",
-            borderRadius: "6px",
-            fontSize: "0.8rem",
-            fontWeight: 700,
-            cursor: creating ? "progress" : "pointer"
-          }}
-        >
-          {creating ? "Menambah..." : "+ Tambah User"}
-        </button>
+      <form onSubmit={handleCreate} style={{ marginBottom: "2rem", paddingBottom: "1.75rem", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+        <p style={{ color: "#e5e7eb", fontSize: "0.8rem", fontWeight: 600, margin: "0 0 0.85rem", letterSpacing: "0.02em" }}>
+          Tambah User Baru
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.75rem", alignItems: "end" }}>
+          <label className="field">
+            <span>Username</span>
+            <input
+              type="text"
+              value={newUsername}
+              onChange={(event) => setNewUsername(event.currentTarget.value)}
+              required
+            />
+          </label>
+          <label className="field">
+            <span>Password (min. 6 karakter)</span>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.currentTarget.value)}
+              required
+              minLength={6}
+            />
+          </label>
+          <label className="field">
+            <span>Role</span>
+            <select
+              value={newRole}
+              onChange={(event) => setNewRole(event.currentTarget.value as UserRole)}
+              className="filter-select-input"
+            >
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+          <button
+            type="submit"
+            disabled={creating}
+            style={{
+              background: "#ff4e00",
+              border: "1px solid #ff4e00",
+              color: "#0b0c10",
+              padding: "0.6rem 1.1rem",
+              borderRadius: "6px",
+              fontSize: "0.8rem",
+              fontWeight: 700,
+              cursor: creating ? "progress" : "pointer",
+              whiteSpace: "nowrap"
+            }}
+          >
+            {creating ? "Menambah..." : "+ Tambah"}
+          </button>
+        </div>
       </form>
 
       {loading ? (
         <p style={{ color: "#6b7280", fontSize: "0.85rem" }}>Memuat daftar user...</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-          {users.map((user) => {
-            const isSelf = user.username === currentUsername;
-            const isBusy = busyId === user.id;
-            return (
-              <div
-                key={user.id}
-                style={{
-                  background: "rgba(255, 255, 255, 0.02)",
-                  border: "1px solid rgba(255, 255, 255, 0.05)",
-                  borderRadius: "8px",
-                  padding: "0.85rem 1rem",
-                  display: "flex",
-                  flexWrap: "wrap",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: "0.6rem"
-                }}
-              >
-                <div>
-                  <strong style={{ color: "#fff", fontSize: "0.9rem" }}>{user.username}</strong>
-                  {isSelf ? (
-                    <span style={{ color: "#6b7280", fontSize: "0.72rem", marginLeft: "0.4rem" }}>(kamu)</span>
-                  ) : null}
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                  <select
-                    value={user.role}
-                    disabled={isBusy}
-                    onChange={(event) => handleRoleChange(user, event.currentTarget.value as UserRole)}
-                    style={inputStyle}
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+            <thead>
+              <tr>
+                {["Username", "Role", "Dibuat", "Aksi"].map((heading, i) => (
+                  <th
+                    key={heading}
+                    style={{
+                      textAlign: i === 3 ? "right" : "left",
+                      color: "#6b7280",
+                      fontSize: "0.7rem",
+                      fontWeight: 600,
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                      padding: "0 0 0.6rem",
+                      borderBottom: "1px solid rgba(255,255,255,0.08)"
+                    }}
                   >
-                    <option value="user">User</option>
-                    <option value="admin">Admin</option>
-                  </select>
+                    {heading}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((user) => {
+                const isSelf = user.username === currentUsername;
+                const isBusy = busyId === user.id;
+                return (
+                  <tr key={user.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                    <td style={{ padding: "0.85rem 0.5rem 0.85rem 0", verticalAlign: "middle" }}>
+                      <strong style={{ color: "#fff", fontSize: "0.9rem" }}>{user.username}</strong>
+                      {isSelf ? (
+                        <span style={{ color: "#6b7280", fontSize: "0.72rem", marginLeft: "0.4rem" }}>(kamu)</span>
+                      ) : null}
+                    </td>
+                    <td style={{ padding: "0.85rem 0.5rem", verticalAlign: "middle" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <span
+                          aria-hidden="true"
+                          style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: roleDotColor[user.role], flexShrink: 0 }}
+                        />
+                        <select
+                          aria-label={`Role untuk ${user.username}`}
+                          value={user.role}
+                          disabled={isBusy}
+                          onChange={(event) => handleRoleChange(user, event.currentTarget.value as UserRole)}
+                          className="filter-select-input"
+                          style={{ width: "auto" }}
+                        >
+                          <option value="user">User</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </div>
+                    </td>
+                    <td style={{ padding: "0.85rem 0.5rem", verticalAlign: "middle", color: "#9ca3af", fontSize: "0.78rem", whiteSpace: "nowrap" }}>
+                      {formatDateTimeWIB(user.created_at)}
+                    </td>
+                    <td style={{ padding: "0.85rem 0 0.85rem 0.5rem", verticalAlign: "middle" }}>
+                      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                        {passwordEditId === user.id ? (
+                          <>
+                            <input
+                              type="password"
+                              aria-label={`Password baru untuk ${user.username}`}
+                              placeholder="Password baru"
+                              value={passwordDraft}
+                              onChange={(event) => setPasswordDraft(event.currentTarget.value)}
+                              style={inlineInputStyle}
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => handlePasswordSave(user)}
+                              style={{ ...ghostButtonStyle, borderColor: "rgba(16,185,129,0.4)", color: "#6ee7b7" }}
+                            >
+                              Simpan
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => {
+                                setPasswordEditId(null);
+                                setPasswordDraft("");
+                              }}
+                              style={ghostButtonStyle}
+                            >
+                              Batal
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPasswordEditId(user.id);
+                              setPasswordDraft("");
+                            }}
+                            style={ghostButtonStyle}
+                          >
+                            Ganti Password
+                          </button>
+                        )}
 
-                  {passwordEditId === user.id ? (
-                    <>
-                      <input
-                        type="password"
-                        placeholder="Password baru"
-                        value={passwordDraft}
-                        onChange={(event) => setPasswordDraft(event.currentTarget.value)}
-                        style={inputStyle}
-                        autoFocus
-                      />
-                      <button
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => handlePasswordSave(user)}
-                        style={{ ...ghostButtonStyle, borderColor: "rgba(16,185,129,0.4)", color: "#6ee7b7" }}
-                      >
-                        Simpan
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => {
-                          setPasswordEditId(null);
-                          setPasswordDraft("");
-                        }}
-                        style={ghostButtonStyle}
-                      >
-                        Batal
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPasswordEditId(user.id);
-                        setPasswordDraft("");
-                      }}
-                      style={ghostButtonStyle}
-                    >
-                      Ganti Password
-                    </button>
-                  )}
-
-                  {confirmDeleteId === user.id ? (
-                    <>
-                      <button
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => handleDelete(user)}
-                        style={{ ...dangerButtonStyle, background: "#ef4444", color: "#fff" }}
-                      >
-                        {isBusy ? "Menghapus..." : "Yakin, Hapus"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => setConfirmDeleteId(null)}
-                        style={ghostButtonStyle}
-                      >
-                        Batal
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={isSelf}
-                      title={isSelf ? "Tidak bisa menghapus akun sendiri" : `Hapus ${user.username}`}
-                      onClick={() => setConfirmDeleteId(user.id)}
-                      style={{ ...dangerButtonStyle, opacity: isSelf ? 0.4 : 1, cursor: isSelf ? "not-allowed" : "pointer" }}
-                    >
-                      Hapus
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                        {confirmDeleteId === user.id ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => handleDelete(user)}
+                              style={{ ...dangerButtonStyle, background: "#ef4444", color: "#fff" }}
+                            >
+                              {isBusy ? "Menghapus..." : "Yakin?"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => setConfirmDeleteId(null)}
+                              style={ghostButtonStyle}
+                            >
+                              Batal
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={isSelf}
+                            title={isSelf ? "Tidak bisa menghapus akun sendiri" : `Hapus ${user.username}`}
+                            onClick={() => setConfirmDeleteId(user.id)}
+                            style={{ ...dangerButtonStyle, opacity: isSelf ? 0.35 : 1, cursor: isSelf ? "not-allowed" : "pointer" }}
+                          >
+                            Hapus
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

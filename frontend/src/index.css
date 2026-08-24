@@ -6687,12 +6687,32 @@ a + a {
 
 /* Tablet: 640px - 1023px */
 @media (min-width: 640px) and (max-width: 1023px) {
-  .side-rail {
-    width: 200px;
+  /* .mobile-overlay (backdrop drawer mobile) cuma diberi display:none di
+     dalam @media(max-width:639px) dan @media(min-width:1024px) -- celah
+     640-1023px ini TIDAK PERNAH menutupnya. Tanpa display:none, elemen ini
+     tetap block statis dan ikut jadi anak grid nyata di .app-frame,
+     "merebut" sel kolom pertama sebelum .side-rail, sehingga sidebar
+     ke-auto-place ke kolom kedua dan .workspace (konten utama) terlempar ke
+     baris baru di bawahnya alih-alih tampil di sebelah sidebar. Ini penyebab
+     utama layout tablet terlihat berantakan (bukan cuma soal lebar sidebar). */
+  .mobile-overlay {
+    display: none;
   }
 
-  .workspace {
-    grid-template-columns: 200px 1fr;
+  /* .app-frame (bukan .workspace) yang sebenarnya jadi grid 2 kolom
+     sidebar+konten (lihat definisi dasarnya: grid-template-columns: 18rem
+     minmax(0, 1fr)). Blok ini dulu menyempitkan .side-rail ke 200px tanpa
+     ikut menyempitkan kolom grid-nya (tetap 18rem/288px) dan menulis
+     grid-template-columns ke .workspace (yang display:flex, bukan grid --
+     jadi baris itu tidak pernah berpengaruh apa pun). Akibatnya sidebar
+     render 200px di dalam sel grid 288px, menyisakan celah kosong 88px dan
+     mendorong render konten utama jadi salah posisi di layar tablet. */
+  .app-frame {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+
+  .side-rail {
+    width: 200px;
   }
 
   .control-overlay--top-right {

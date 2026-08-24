@@ -70,6 +70,71 @@ def test_accepts_correct_key(protected_app):
     assert response.json() == {"ok": True}
 
 
+def test_accepts_admin_jwt_even_when_admin_key_not_configured(protected_app, monkeypatch):
+    """Sesi admin (JWT) adalah jalur otorisasi yang berdiri sendiri -- tidak
+    boleh ikut fail-closed 503 gara-gara ADMIN_API_KEY kosong, karena
+    tujuannya justru supaya admin yang sudah login tidak butuh key itu lagi."""
+    from app.core.auth import issue_token
+
+    app, _ = protected_app
+    monkeypatch.setenv("ADMIN_API_KEY", "")
+    monkeypatch.setenv("AUTH_JWT_SECRET", "test-secret")
+    get_settings.cache_clear()
+
+    token = issue_token(user_id=1, username="admin", role="admin")
+    client = TestClient(app)
+    response = client.post("/protected", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+
+
+def test_accepts_admin_jwt_without_x_admin_key_header(protected_app, monkeypatch):
+    from app.core.auth import issue_token
+
+    app, set_key = protected_app
+    set_key("s3cret")
+    monkeypatch.setenv("AUTH_JWT_SECRET", "test-secret")
+    get_settings.cache_clear()
+
+    token = issue_token(user_id=1, username="admin", role="admin")
+    client = TestClient(app)
+    response = client.post("/protected", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+
+
+def test_rejects_non_admin_jwt_and_falls_back_to_admin_key_check(protected_app, monkeypatch):
+    """Token JWT valid tapi role bukan admin tidak boleh membuka aksi admin --
+    harus jatuh ke pengecekan X-Admin-Key seperti biasa (yang di sini juga
+    tidak ada, jadi tetap 401)."""
+    from app.core.auth import issue_token
+
+    app, set_key = protected_app
+    set_key("s3cret")
+    monkeypatch.setenv("AUTH_JWT_SECRET", "test-secret")
+    get_settings.cache_clear()
+
+    token = issue_token(user_id=2, username="regular", role="user")
+    client = TestClient(app)
+    response = client.post("/protected", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+
+
+def test_falls_back_to_admin_key_when_bearer_token_is_garbage(protected_app):
+    app, set_key = protected_app
+    set_key("s3cret")
+
+    client = TestClient(app)
+    response = client.post(
+        "/protected",
+        headers={"Authorization": "Bearer not-a-real-token", "X-Admin-Key": "s3cret"},
+    )
+
+    assert response.status_code == 200
+
+
 def test_verify_endpoint_uses_same_dependency(monkeypatch):
     from app.main import create_app
 

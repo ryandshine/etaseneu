@@ -242,7 +242,11 @@ function withQuery(
 
 export function useDashboardData(
   activeView: "map" | "matrix" | "pointmatch" | "settings" | "kps" = "map",
-  adminKey: string | null = null
+  adminKey: string | null = null,
+  // Token sesi JWT (session.token dari App.tsx) -- jalur otorisasi admin
+  // yang setara dengan adminKey/X-Admin-Key sejak backend menerima sesi
+  // role admin di require_admin_key. Lihat core/auth.py.
+  authToken: string | null = null
 ) {
   const today = getCurrentDateWIB();
   const [layers, setLayers] = useState<DashboardLayer[]>([]);
@@ -725,11 +729,11 @@ export function useDashboardData(
 
     try {
       const historyYear = timeRange.endAt.getUTCFullYear() || parseInt(getTodayWIB().slice(0, 4), 10);
-      const response = await api.prewarmHistory({ ...queryParams, year: historyYear }, adminKey);
+      const response = await api.prewarmHistory({ ...queryParams, year: historyYear }, adminKey, authToken);
       setHistoryStatus(response);
     } catch {
       setExportError(
-        adminKey
+        adminKey || authToken
           ? "History prewarm is unavailable."
           : "Perlu masuk lewat menu Pengaturan dulu untuk memicu prewarm."
       );
@@ -743,11 +747,11 @@ export function useDashboardData(
     setSyncError(null);
 
     try {
-      await api.triggerManualSync(adminKey);
+      await api.triggerManualSync(adminKey, authToken);
       setClockTick((current) => current + 1);
     } catch {
       setSyncError(
-        adminKey
+        adminKey || authToken
           ? "Manual sync is unavailable."
           : "Perlu masuk lewat menu Pengaturan dulu untuk memicu sync manual."
       );

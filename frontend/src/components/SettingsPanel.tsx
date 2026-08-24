@@ -9,6 +9,17 @@ type SettingsPanelProps = {
 };
 
 export function SettingsPanel({ onRefreshLayers, adminKey, session }: SettingsPanelProps) {
+  // Akun role admin sudah login (JWT) -- backend menerima Bearer token role
+  // admin sebagai pengganti X-Admin-Key (lihat core/auth.py::require_admin_key),
+  // jadi aksi admin di sini tidak lagi bergantung pada adminKey/PasswordGateModal
+  // saat sesi admin ada.
+  const adminActionHeaders: Record<string, string> = {};
+  if (adminKey) {
+    adminActionHeaders["X-Admin-Key"] = adminKey;
+  }
+  if (session?.token) {
+    adminActionHeaders["Authorization"] = `Bearer ${session.token}`;
+  }
   const [registryStatus, setRegistryStatus] = useState<GeoJsonStatusResponse | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -153,8 +164,8 @@ export function SettingsPanel({ onRefreshLayers, adminKey, session }: SettingsPa
     });
 
     xhr.open("POST", "/api/geojson/upload");
-    if (adminKey) {
-      xhr.setRequestHeader("X-Admin-Key", adminKey);
+    for (const [name, value] of Object.entries(adminActionHeaders)) {
+      xhr.setRequestHeader(name, value);
     }
     xhr.send(formData);
   };
@@ -186,7 +197,7 @@ export function SettingsPanel({ onRefreshLayers, adminKey, session }: SettingsPa
     try {
       const response = await fetch(config.path(fileName), {
         method: config.method,
-        headers: adminKey ? { "X-Admin-Key": adminKey } : {},
+        headers: adminActionHeaders,
       });
       const body = await response.json().catch(() => null);
       if (response.ok) {
@@ -236,7 +247,14 @@ export function SettingsPanel({ onRefreshLayers, adminKey, session }: SettingsPa
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "2rem" }}>
+      {/* minmax(0, 1fr), bukan cuma "1fr" -- kolom grid bawaannya punya
+          auto-min sebesar konten terlebar di dalamnya (di sini: tabel
+          Manajemen User), jadi di layar sempit kartu ini melebar ke kanan
+          dan terpotong diam-diam oleh .workspace-stage{overflow:hidden}
+          alih-alih menyusut/scroll. Pola bug yang sama pernah didokumentasikan
+          untuk .matrix-ledger di index.css, fix-nya di level grid track ini
+          lebih tuntas daripada cuma min-width:0 di tiap kartu. */}
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2rem" }}>
         {/* Upload Card */}
         <div style={{ background: "rgba(17, 24, 39, 0.5)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "12px", padding: "2rem" }}>
           <h2 style={{ fontSize: "1.25rem", color: "#fff", marginBottom: "0.5rem", fontWeight: "600" }}>Unggah Berkas GeoJSON Baru</h2>

@@ -29,8 +29,33 @@ def verify_admin_key(x_admin_key: str | None) -> None:
         raise HTTPException(status_code=401, detail="Admin key tidak valid.")
 
 
-async def require_admin_key(x_admin_key: str | None = Header(default=None, alias="X-Admin-Key")) -> None:
-    """Dependency buat endpoint admin (upload geojson, trigger sync, dst)."""
+async def require_admin_key(
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+    authorization: str | None = Header(default=None),
+) -> None:
+    """Dependency buat endpoint admin (upload geojson, trigger sync, dst).
+
+    Menerima SALAH SATU dari dua jalur otorisasi:
+    - `X-Admin-Key` yang cocok dengan `ADMIN_API_KEY` (jalur lama -- masih
+      dipakai user role "user" yang diberi key manual, atau automation tanpa
+      sesi login).
+    - Sesi JWT valid dengan `role == "admin"` (`Authorization: Bearer <token>`)
+      -- supaya akun admin yang sudah login tidak perlu memasukkan password
+      admin KEDUA kalinya lewat PasswordGateModal untuk membuka Pengaturan.
+
+    Token JWT yang invalid/kadaluarsa di sini TIDAK melempar 401 langsung --
+    dianggap "coba jalur berikutnya" (X-Admin-Key), supaya endpoint ini tetap
+    fail-closed lewat `verify_admin_key` seperti sebelumnya kalau kedua jalur
+    gagal, bukan lewat exception dari decode_token yang beda pesan.
+    """
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+        if token:
+            try:
+                if decode_token(token).role == "admin":
+                    return
+            except HTTPException:
+                pass
     verify_admin_key(x_admin_key)
 
 

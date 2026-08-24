@@ -37,10 +37,21 @@ describe("App", () => {
 
       if (url === "/api/auth/login") {
         // Gerbang login (App.tsx) -- terpisah dari /api/auth/verify (gerbang
-        // Pengaturan). Kredensialnya tidak dicek di sini, cuma perlu lolos
-        // supaya konten di balik LoginPage bisa diuji.
+        // Pengaturan, cuma dipakai role non-admin sejak admin login otomatis
+        // melewatinya -- lihat App.tsx::handleViewChange). Password tidak
+        // dicek di sini; role ditentukan dari username yang dikirim supaya
+        // test yang butuh sesi non-admin (mis. tes gerbang password) bisa
+        // login lewat testHelpers.ts::loginThroughUI(username) dengan
+        // username selain "admin".
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        const isAdmin = body.username === "admin";
         return new Response(
-          JSON.stringify({ ok: true, token: "test-token", username: "admin", role: "admin" }),
+          JSON.stringify({
+            ok: true,
+            token: "test-token",
+            username: body.username ?? "admin",
+            role: isAdmin ? "admin" : "user"
+          }),
           { status: 200 }
         );
       }
@@ -499,8 +510,11 @@ describe("App", () => {
   });
 
   it("verifies the settings password against the backend instead of a hardcoded string", async () => {
+    // Role non-admin: gerbang password ADMIN_API_KEY (PasswordGateModal)
+    // cuma masih ditempuh oleh sesi non-admin sejak akun admin login
+    // otomatis melewatinya (lihat App.tsx::handleViewChange).
     render(<App />);
-    await loginThroughUI();
+    await loginThroughUI("regular-user");
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /pengaturan/i }));

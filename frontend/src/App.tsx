@@ -137,6 +137,15 @@ export default function App() {
 
   const handleViewChange = (view: AppView) => {
     if (view === "settings") {
+      // Akun role admin sudah membuktikan identitasnya lewat login (JWT) --
+      // tidak perlu password ADMIN_API_KEY kedua kalinya lewat modal ini.
+      // Backend (require_admin_key) menerima sesi JWT role admin sebagai
+      // jalur otorisasi yang setara dengan X-Admin-Key, lihat core/auth.py.
+      // Non-admin (role user) tetap lewat gerbang password lama.
+      if (session?.role === "admin") {
+        commitViewChange("settings");
+        return;
+      }
       setPasswordGateError(null);
       setPasswordGateOpen(true);
       return;
@@ -235,7 +244,7 @@ export default function App() {
     updateDate,
     initialLoading,
     retryInitialLoad
-  } = useDashboardData(activeView, adminKey);
+  } = useDashboardData(activeView, adminKey, session?.token ?? null);
 
   const provinceOptions = useMemo(() => {
     const provinces = hotspots

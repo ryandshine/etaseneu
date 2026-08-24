@@ -8,10 +8,10 @@ import { fireEvent, screen, waitForElementToBeRemoved } from "@testing-library/r
 // {ok:true, token, username, role} tanpa syarat -- ini cuma melewati
 // gerbangnya, bukan menguji login itu sendiri (itu sudah dites di backend
 // & di test khusus login kalau ada).
-export async function loginThroughUI(): Promise<void> {
+export async function loginThroughUI(username = "admin"): Promise<void> {
   const usernameInput = await screen.findByLabelText("Username");
   const passwordInput = screen.getByLabelText("Password");
-  fireEvent.change(usernameInput, { target: { value: "admin" } });
+  fireEvent.change(usernameInput, { target: { value: username } });
   fireEvent.change(passwordInput, { target: { value: "test-password" } });
   fireEvent.click(screen.getByRole("button", { name: /masuk/i }));
   await waitForElementToBeRemoved(() => screen.queryByLabelText("Username"));

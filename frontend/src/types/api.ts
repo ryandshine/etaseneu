@@ -209,10 +209,11 @@ export interface ApiClient {
   getHistoryStatus: (params: HotspotQueryParams & { year: number }) => Promise<HistoryStatusResponse>;
   prewarmHistory: (
     params: HotspotQueryParams & { year: number },
-    adminKey?: string | null
+    adminKey?: string | null,
+    authToken?: string | null
   ) => Promise<HistoryStatusResponse>;
   getGeojsonStatus: () => Promise<GeoJsonStatusResponse>;
   getStorageStatus: () => Promise<StorageStatusResponse>;
   getSchedulerMetrics: () => Promise<SchedulerMetricsResponse>;
-  triggerManualSync: (adminKey?: string | null) => Promise<ManualSyncResponse>;
+  triggerManualSync: (adminKey?: string | null, authToken?: string | null) => Promise<ManualSyncResponse>;
 }
