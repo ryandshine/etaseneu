@@ -7,6 +7,7 @@ import { PasswordGateModal } from "./components/PasswordGateModal";
 import { SidebarNav } from "./components/SidebarNav";
 import { useDashboardData } from "./hooks/useDashboardData";
 import { getTodayWIB, formatDateTimeWIB } from "./lib/date";
+import type { AppSession } from "./types/api";
 
 const HotspotMap = lazy(async () => {
   const module = await import("./components/HotspotMap");
@@ -111,7 +112,9 @@ export default function App() {
   // Sama seperti adminKey: sengaja di memori saja, bukan localStorage --
   // reload halaman = login ulang. Ini gerbang tampilan front-end saja;
   // endpoint baca publik (preview layer, dsb) tidak ikut terkunci olehnya.
-  const [loggedIn, setLoggedIn] = useState(false);
+  // session.role menentukan siapa yang lihat tab Manajemen User di
+  // Pengaturan (lihat SettingsPanel) -- bukan pembatas fitur dashboard lain.
+  const [session, setSession] = useState<AppSession | null>(null);
 
   const commitViewChange = (view: AppView) => {
     setActiveView(view);
@@ -473,8 +476,8 @@ export default function App() {
     return `${hours} jam ${mins} menit`;
   }, [latestHotspot, clockSec]);
 
-  if (!loggedIn) {
-    return <LoginPage onSuccess={() => setLoggedIn(true)} />;
+  if (!session) {
+    return <LoginPage onSuccess={setSession} />;
   }
 
   return (
@@ -503,7 +506,7 @@ export default function App() {
         }}
         onManualSync={() => void manualSync()}
         onPrewarmHistory={() => void prewarmHistory()}
-        onLogout={() => setLoggedIn(false)}
+        onLogout={() => setSession(null)}
         syncLabel={syncLabel}
         syncStatusLabel={syncStatusLabel}
         lastSyncLabel={isStorageLoading ? "memuat..." : lastHotspotSyncLabel}
@@ -761,7 +764,11 @@ export default function App() {
         ) : (
           <section aria-label="Settings workspace" className="workspace-stage">
             <Suspense fallback={<ViewLoader label="Memuat pengaturan..." />}>
-              <SettingsPanel onRefreshLayers={() => void retryInitialLoad()} adminKey={adminKey} />
+              <SettingsPanel
+                onRefreshLayers={() => void retryInitialLoad()}
+                adminKey={adminKey}
+                session={session}
+              />
             </Suspense>
           </section>
         )}

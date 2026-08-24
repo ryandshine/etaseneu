@@ -2,6 +2,23 @@ export interface HealthResponse {
   status: string;
 }
 
+// Sesi login (POST /api/auth/login) -- disimpan di memori React saja
+// (bukan localStorage), reload halaman = login ulang. Lihat App.tsx.
+export type UserRole = "admin" | "user";
+
+export interface AppSession {
+  token: string;
+  username: string;
+  role: UserRole;
+}
+
+export interface AppUser {
+  id: number;
+  username: string;
+  role: UserRole;
+  created_at: string;
+}
+
 export interface LayerBounds {
   min_lat: number;
   min_lon: number;

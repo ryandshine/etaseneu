@@ -1,13 +1,17 @@
 import { useState } from "react";
 import { Flame } from "lucide-react";
+import type { AppSession } from "../types/api";
 
 type LoginPageProps = {
-  onSuccess: () => void;
+  onSuccess: (session: AppSession) => void;
 };
 
 // Gerbang login untuk seluruh aplikasi -- terpisah dari PasswordGateModal
 // (yang menjaga aksi admin di menu Pengaturan). Password diverifikasi ke
 // backend (POST /api/auth/login), bukan dicocokkan ke string di sini.
+// Sejak Manajemen User ada, akun bisa lebih dari satu (role admin/user) --
+// backend yang memutuskan kredensial mana yang sah, respons-nya membawa
+// token + role balik ke sini.
 export function LoginPage({ onSuccess }: LoginPageProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -25,7 +29,8 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
         body: JSON.stringify({ username, password })
       });
       if (response.ok) {
-        onSuccess();
+        const data = await response.json();
+        onSuccess({ token: data.token, username: data.username, role: data.role });
         return;
       }
       setError(

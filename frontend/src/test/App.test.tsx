@@ -39,7 +39,10 @@ describe("App", () => {
         // Gerbang login (App.tsx) -- terpisah dari /api/auth/verify (gerbang
         // Pengaturan). Kredensialnya tidak dicek di sini, cuma perlu lolos
         // supaya konten di balik LoginPage bisa diuji.
-        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        return new Response(
+          JSON.stringify({ ok: true, token: "test-token", username: "admin", role: "admin" }),
+          { status: 200 }
+        );
       }
 
       if (url === "/api/auth/verify") {

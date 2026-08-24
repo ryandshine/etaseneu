@@ -36,7 +36,7 @@ Sebelum menjalankan skrip satu-kali (migrasi data, backfill, dsb.) terhadap DB i
 api/            # satu file per domain: hotspots, layers, polygons, burned_area,
                 # export, point_match, scheduler, stats, weather, wind, cache,
                 # metrics, auth. router.py merakit semuanya ke api_router (prefix /api).
-core/           # config.py (Settings via pydantic-settings), auth.py (admin API key, fail-closed)
+core/           # config.py (Settings via pydantic-settings), auth.py (admin API key + JWT multi-user)
 models/         # Pydantic models: hotspots, layers, polygons, query (HotspotQuery)
 services/       # logika bisnis (lihat di bawah)
 services/postgres_store/  # paket mixin (lihat di bawah)
@@ -174,20 +174,37 @@ endpoint) karena `ijson` terpasang di venv lokal tapi lupa ditambahkan ke `requi
 
 ## Autentikasi
 
-Dua gerbang password TERPISAH, jangan disamakan:
+Dua mekanisme TERPISAH, jangan disamakan:
 
 - **`ADMIN_API_KEY`** — melindungi endpoint admin per-request (upload geojson, trigger sync, refresh
   cache, prewarm, `/api/layers` mode penuh). Header `X-Admin-Key`, diverifikasi lewat
   `POST /api/auth/verify` (`core/auth.py::verify_admin_key`). Dipicu dari modal "Pengaturan"
-  (`PasswordGateModal.tsx`).
-- **`APP_LOGIN_PASSWORD`** — gerbang login SELURUH tampilan aplikasi (satu user bersama, "admin"),
-  ditambahkan 2026-08-24. Diverifikasi lewat `POST /api/auth/login`
-  (`core/auth.py::verify_login_password`). Dipicu dari `LoginPage.tsx`, di-render sebelum apa pun
-  lain di `App.tsx` kalau state `loggedIn` masih false.
+  (`PasswordGateModal.tsx`). Fail-closed (env kosong → 503).
+- **Login multi-user berbasis JWT** (gerbang SELURUH tampilan aplikasi) — awalnya satu password
+  bersama (`APP_LOGIN_PASSWORD`, 2026-08-24), sejak itu dikembangkan jadi sistem akun sungguhan
+  dengan tabel `app_users` (`id`, `username`, `password_hash` [bcrypt], `role` ∈ {`admin`,`user`},
+  `created_at`, `updated_at`) via mixin `postgres_store/_users.py`. Login (`POST /api/auth/login`,
+  `core/auth.py`) mem-verifikasi lewat `verify_password`, lalu menerbitkan JWT (`issue_token`, HS256,
+  24 jam) berisi klaim `sub`/`username`/`role`. Endpoint lain membaca token via header
+  `Authorization: Bearer <token>` lewat dependency `require_authenticated_user` /
+  `require_admin_role`.
+  - Saat tabel `app_users` masih kosong, login pertama otomatis mem-seed satu akun `admin` dari
+    `APP_LOGIN_PASSWORD` (`ensure_seed_admin`) — env ini sekarang cuma dipakai untuk seed awal,
+    bukan lagi dicek langsung tiap login.
+  - Manajemen user (list/create/ubah role/ganti password/hapus) ada di `GET/POST/PATCH/DELETE
+    /api/auth/users/*`, semuanya `Depends(require_admin_role)`, dirender di tab Pengaturan lewat
+    `UserManagementPanel.tsx` (cuma muncul kalau `session.role === "admin"`). Dua guard penting:
+    tidak bisa hapus akun sendiri, dan tidak bisa hapus/demote admin terakhir
+    (`count_admins() <= 1`).
+  - `AUTH_JWT_SECRET` — **beda sifat** dari `ADMIN_API_KEY`/`APP_LOGIN_PASSWORD`: kalau kosong,
+    `get_settings()` auto-generate secret random tiap restart server (bukan fail-closed 503).
+    Konsekuensinya cuma "semua sesi JWT jadi invalid, semua orang login ulang" — bukan seluruh situs
+    terkunci. Sengaja dibuat begini untuk menghindari mengulang insiden lockout produksi
+    `APP_LOGIN_PASSWORD` di bawah. Production sebaiknya tetap set nilai tetap biar sesi tidak hilang
+    tiap deploy, tapi ini opsional, bukan wajib.
 
-Keduanya fail-closed (env kosong → 503, bukan lolos) dan disimpan di memori React saja (bukan
-localStorage) — reload halaman = harus login ulang, konsisten dengan pola yang sudah ada duluan
-untuk `adminKey`.
+Session (token + username + role) disimpan di memori React saja (bukan localStorage) — reload
+halaman = harus login ulang, konsisten dengan pola `adminKey` yang sudah ada duluan.
 
 **Penting**: gerbang login ini HANYA mengunci tampilan front-end. Endpoint baca publik (mis.
 `/api/layers?view=preview`, `/api/hotspots`) TIDAK ikut terkunci olehnya — itu tetap seperti semula,
@@ -197,6 +214,8 @@ itu perubahan jauh lebih besar (butuh session/token di level API, bukan cuma ger
 Sama seperti `ADMIN_API_KEY` (lihat catatan di memory project), **jangan pernah asumsikan nilai
 `APP_LOGIN_PASSWORD` produksi dari sesi sebelumnya** — selalu konfirmasi ke user, dan set manual di
 `.env.dokploy` produksi (tidak ikut ke-copy otomatis dari `.env.dokploy.example`) sebelum redeploy.
+Ini insiden nyata: deploy gerbang login pertama kali (2026-08-24) tanpa `APP_LOGIN_PASSWORD`
+ter-set di produksi sempat bikin seluruh situs 503 untuk semua orang.
 
 ## Model data poligon
 

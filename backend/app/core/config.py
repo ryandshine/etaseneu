@@ -1,3 +1,4 @@
+import secrets
 from functools import lru_cache
 from pathlib import Path
 
@@ -20,8 +21,19 @@ class Settings(BaseSettings):
     admin_api_key: str = ""
     # Password gerbang login seluruh aplikasi (bukan aksi admin -- itu tetap
     # admin_api_key terpisah). Kosong = tolak semua percobaan login (fail
-    # closed), sama seperti admin_api_key.
+    # closed), sama seperti admin_api_key. Sejak tabel app_users ada, nilai
+    # ini cuma dipakai SEKALI sebagai password akun admin awal (seed) --
+    # setelahnya password sungguhan tersimpan (hash) di database, dikelola
+    # lewat menu Manajemen User.
     app_login_password: str = ""
+    # Kunci penandatanganan token sesi (JWT). BEDA sifat dari admin_api_key/
+    # app_login_password: kalau kosong, TIDAK fail-closed -- auto-generate
+    # random tiap proses start (lihat get_settings()). Konsekuensinya cuma
+    # "token jadi tidak valid tiap restart server, semua orang login ulang",
+    # bukan "situs terkunci total". Production sebaiknya tetap set nilai
+    # tetap supaya sesi tidak hilang tiap deploy, tapi lupa mengisinya tidak
+    # akan mengulang insiden lockout APP_LOGIN_PASSWORD.
+    auth_jwt_secret: str = ""
     shp_dir: str = "../shp"
     cache_dir: str = ".cache"
     cache_ttl_hours: int = 24
@@ -73,4 +85,8 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    if not settings.auth_jwt_secret:
+        # Sengaja tidak fail-closed -- lihat komentar di field-nya.
+        settings.auth_jwt_secret = secrets.token_urlsafe(48)
+    return settings

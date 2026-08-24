@@ -1,6 +1,10 @@
 import hmac
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 
-from fastapi import Header, HTTPException
+import bcrypt
+import jwt
+from fastapi import Depends, Header, HTTPException
 
 from app.core.config import get_settings
 
@@ -30,23 +34,84 @@ async def require_admin_key(x_admin_key: str | None = Header(default=None, alias
     verify_admin_key(x_admin_key)
 
 
-def verify_login_password(username: str | None, password: str | None) -> None:
-    """Validasi login gerbang aplikasi, lempar HTTPException kalau tidak sah.
+# ---------------------------------------------------------------------------
+# Akun aplikasi (gerbang login seluruh sistem) -- lihat postgres_store/_users.py
+# untuk tabelnya. Password di-hash dengan bcrypt; sesi dibawa lewat token JWT
+# bertanda tangan HS256 (auth_jwt_secret), BUKAN cookie/session server-side --
+# konsisten dengan pola "state login di memori klien saja" yang sudah dipakai
+# sejak LoginPage.tsx pertama dibuat.
+# ---------------------------------------------------------------------------
 
-    Terpisah dari verify_admin_key: ini gerbang MASUK aplikasi (satu user
-    bersama, "admin"), bukan aksi admin per-endpoint. Username tidak
-    menambah keamanan (cuma satu user), sekadar konsisten dengan bentuk
-    form login biasa -- kontrol sebenarnya ada di password.
+TOKEN_TTL = timedelta(hours=24)
 
-    Fail closed: APP_LOGIN_PASSWORD kosong -> semua percobaan login
-    ditolak, sama seperti verify_admin_key.
-    """
-    settings = get_settings()
-    if not settings.app_login_password:
-        raise HTTPException(status_code=503, detail="Login belum dikonfigurasi di server.")
 
-    if (username or "").strip().lower() != "admin":
-        raise HTTPException(status_code=401, detail="Username atau password salah.")
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-    if not password or not hmac.compare_digest(password, settings.app_login_password):
-        raise HTTPException(status_code=401, detail="Username atau password salah.")
+
+def verify_password(password: str, password_hash: str) -> bool:
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    except ValueError:
+        # Hash rusak/format tidak dikenal -- perlakukan sebagai tidak cocok,
+        # bukan error 500.
+        return False
+
+
+@dataclass
+class TokenClaims:
+    user_id: int
+    username: str
+    role: str
+
+
+def issue_token(*, user_id: int, username: str, role: str) -> str:
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": str(user_id),
+        "username": username,
+        "role": role,
+        "iat": now,
+        "exp": now + TOKEN_TTL,
+    }
+    return jwt.encode(payload, get_settings().auth_jwt_secret, algorithm="HS256")
+
+
+def decode_token(token: str) -> TokenClaims:
+    try:
+        payload = jwt.decode(token, get_settings().auth_jwt_secret, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Sesi sudah kadaluarsa, silakan login ulang.")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Sesi tidak valid, silakan login ulang.")
+
+    try:
+        return TokenClaims(
+            user_id=int(payload["sub"]),
+            username=str(payload["username"]),
+            role=str(payload["role"]),
+        )
+    except (KeyError, ValueError, TypeError):
+        raise HTTPException(status_code=401, detail="Sesi tidak valid, silakan login ulang.")
+
+
+async def require_authenticated_user(
+    authorization: str | None = Header(default=None),
+) -> TokenClaims:
+    """Dependency: butuh header 'Authorization: Bearer <token>' yang valid."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Belum login.")
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Belum login.")
+    return decode_token(token)
+
+
+async def require_admin_role(
+    claims: TokenClaims = Depends(require_authenticated_user),
+) -> TokenClaims:
+    """Dependency: butuh token valid DAN role admin -- untuk endpoint
+    Manajemen User (lihat api/auth.py)."""
+    if claims.role != "admin":
+        raise HTTPException(status_code=403, detail="Aksi ini khusus admin.")
+    return claims

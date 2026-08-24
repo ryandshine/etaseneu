@@ -174,7 +174,10 @@ describe("Hotspot map integration", () => {
       if (url === "/api/auth/login") {
         // Gerbang login (App.tsx) render sebelum konten dashboard mana pun --
         // lihat testHelpers.ts::loginThroughUI. Kredensial tidak dicek di sini.
-        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        return new Response(
+          JSON.stringify({ ok: true, token: "test-token", username: "admin", role: "admin" }),
+          { status: 200 }
+        );
       }
 
       if (url === "/api/layers?view=preview") {

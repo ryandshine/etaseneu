@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from "react";
-import type { GeoJsonStatusResponse } from "../types/api";
+import type { AppSession, GeoJsonStatusResponse } from "../types/api";
+import { UserManagementPanel } from "./UserManagementPanel";
 
 type SettingsPanelProps = {
   onRefreshLayers: () => void;
   adminKey: string | null;
+  session: AppSession | null;
 };
 
-export function SettingsPanel({ onRefreshLayers, adminKey }: SettingsPanelProps) {
+export function SettingsPanel({ onRefreshLayers, adminKey, session }: SettingsPanelProps) {
   const [registryStatus, setRegistryStatus] = useState<GeoJsonStatusResponse | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -501,6 +503,10 @@ export function SettingsPanel({ onRefreshLayers, adminKey }: SettingsPanelProps)
             </div>
           )}
         </div>
+
+        {session?.role === "admin" ? (
+          <UserManagementPanel token={session.token} currentUsername={session.username} />
+        ) : null}
       </div>
     </div>
   );

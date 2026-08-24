@@ -23,6 +23,7 @@ from ._polygons import _PolygonMetadataMixin
 from ._relations import _PolygonRelationMixin
 from ._scheduler import _SchedulerMetricsMixin
 from ._spatial import _SpatialMatchMixin
+from ._users import _UserAccountMixin
 
 __all__ = ["PostgresStore"]
 
@@ -38,5 +39,6 @@ class PostgresStore(
     _PolygonRelationMixin,
     _SpatialMatchMixin,
     _BurnedAreaMixin,
+    _UserAccountMixin,
 ):
     """Fasad tunggal ke semua tabel aplikasi -- lihat docstring modul ini."""
