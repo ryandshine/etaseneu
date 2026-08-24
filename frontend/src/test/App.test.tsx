@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "../App";
+import { loginThroughUI } from "./testHelpers";
 
 vi.mock("react-leaflet", () => ({
   CircleMarker: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
@@ -13,6 +14,10 @@ vi.mock("react-leaflet", () => ({
   MapContainer: ({ children }: { children?: ReactNode }) => (
     <div data-testid="leaflet-map">{children}</div>
   ),
+  // Ditambah bareng fitur pane z-index eksplisit di HotspotMap.tsx -- tanpa
+  // ini HotspotMap crash saat mount ("No Pane export"), lihat komentar sama
+  // di HotspotMap.test.tsx.
+  Pane: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Popup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   TileLayer: () => <div data-testid="tile-layer" />,
@@ -29,6 +34,13 @@ describe("App", () => {
     schedulerMetricsCallCount = 0;
     fetchMock.mockImplementation(async (input, init) => {
       const url = String(input);
+
+      if (url === "/api/auth/login") {
+        // Gerbang login (App.tsx) -- terpisah dari /api/auth/verify (gerbang
+        // Pengaturan). Kredensialnya tidak dicek di sini, cuma perlu lolos
+        // supaya konten di balik LoginPage bisa diuji.
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
 
       if (url === "/api/auth/verify") {
         const headers = new Headers(init?.headers);
@@ -303,6 +315,7 @@ describe("App", () => {
     });
 
     render(<App />);
+    await loginThroughUI();
 
     await act(async () => {
       await vi.dynamicImportSettled();
@@ -317,6 +330,7 @@ describe("App", () => {
   it("restores the matrix view from the URL on load", async () => {
     window.history.replaceState({}, "", "/?view=matrix");
     render(<App />);
+    await loginThroughUI();
 
     await act(async () => {
       await vi.dynamicImportSettled();
@@ -330,6 +344,7 @@ describe("App", () => {
     // sama saja menyediakan jalan pintas melewatinya.
     window.history.replaceState({}, "", "/?view=settings");
     render(<App />);
+    await loginThroughUI();
 
     await act(async () => {
       await vi.dynamicImportSettled();
@@ -340,6 +355,7 @@ describe("App", () => {
 
   it("writes the active view to the URL when navigating", async () => {
     render(<App />);
+    await loginThroughUI();
 
     await act(async () => {
       await vi.dynamicImportSettled();
@@ -362,6 +378,7 @@ describe("App", () => {
 
   it("renders the frontend shell heading", async () => {
     render(<App />);
+    await loginThroughUI();
 
     expect(screen.getAllByText("ETAseneu").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("button", { name: /matriks data/i })).toBeInTheDocument();
@@ -391,6 +408,7 @@ describe("App", () => {
 
   it("upgrades hotspot payload to full view when switching to matrix", async () => {
     render(<App />);
+    await loginThroughUI();
 
     await act(async () => {
       await vi.dynamicImportSettled();
@@ -411,8 +429,8 @@ describe("App", () => {
   });
 
   it("keeps the initial loading overlay hidden during background refresh", async () => {
-    vi.useFakeTimers();
     const { container } = render(<App />);
+    await loginThroughUI();
 
     await act(async () => {
       await vi.dynamicImportSettled();
@@ -421,6 +439,11 @@ describe("App", () => {
     expect(screen.getByTestId("leaflet-map")).toBeInTheDocument();
     expect(container.querySelector(".loading-screen-overlay")).not.toBeInTheDocument();
 
+    // Fake timers baru diaktifkan di sini, bukan dari awal test -- login
+    // (loginThroughUI) memakai waitForElementToBeRemoved yang butuh timer
+    // asli untuk polling; diaktifkan lebih awal bikin login gantung selamanya
+    // sampai test timeout.
+    vi.useFakeTimers();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
       await vi.dynamicImportSettled();
@@ -449,6 +472,7 @@ describe("App", () => {
 
   it("separates manual sync from prewarm history actions", async () => {
     render(<App />);
+    await loginThroughUI();
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /sync hotspot manual/i }));
@@ -473,6 +497,7 @@ describe("App", () => {
 
   it("verifies the settings password against the backend instead of a hardcoded string", async () => {
     render(<App />);
+    await loginThroughUI();
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /pengaturan/i }));

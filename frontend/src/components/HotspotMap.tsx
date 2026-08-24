@@ -733,7 +733,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
         type="button"
         className={`burned-toggle${showBurnedArea ? " burned-toggle--active" : ""}${
           burnedArea.loading ? " burned-toggle--loading" : ""
-        }`}
+        }${showBurnedArea && burnedArea.data ? " burned-toggle--merged" : ""}`}
         onClick={() => setShowBurnedArea((current) => !current)}
         title={
           showBurnedArea

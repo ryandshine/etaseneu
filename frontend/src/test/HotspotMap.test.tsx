@@ -10,6 +10,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "../App";
+import { loginThroughUI } from "./testHelpers";
 
 const fitBoundsMock = vi.fn();
 const mapContainerPropsMock = vi.fn();
@@ -26,6 +27,11 @@ vi.mock("react-leaflet", () => ({
     mapContainerPropsMock(props);
     return <div data-testid="leaflet-map">{children}</div>;
   },
+  // Ditambah bareng fitur pane z-index eksplisit di HotspotMap.tsx (batas
+  // KPS/bekas terbakar/hotspot masing-masing punya <Pane> sendiri) -- tanpa
+  // ini HotspotMap crash saat mount ("No Pane export"), ketangkap
+  // ErrorBoundary, dan leaflet-map tidak pernah muncul di test.
+  Pane: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Popup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   TileLayer: () => <div data-testid="tile-layer" />,
@@ -164,6 +170,12 @@ describe("Hotspot map integration", () => {
     mapZoomMock.mockReturnValue(5);
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
+
+      if (url === "/api/auth/login") {
+        // Gerbang login (App.tsx) render sebelum konten dashboard mana pun --
+        // lihat testHelpers.ts::loginThroughUI. Kredensial tidak dicek di sini.
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
 
       if (url === "/api/layers?view=preview") {
         return new Response(JSON.stringify(previewLayersResponse), {
@@ -328,6 +340,7 @@ describe("Hotspot map integration", () => {
 
   it("renders hotspot map content and downloads the export file", async () => {
     render(<App />);
+    await loginThroughUI();
 
     // Wait for dashboard content to appear (rendered only after isInitLoaded)
     expect(await screen.findByTestId("leaflet-map", {}, { timeout: 5000 })).toBeInTheDocument();
@@ -385,6 +398,7 @@ describe("Hotspot map integration", () => {
 
   it("does not load full geojson layers on initial map render", async () => {
     render(<App />);
+    await loginThroughUI();
 
     expect(await screen.findByTestId("leaflet-map", {}, { timeout: 5000 })).toBeInTheDocument();
 
@@ -400,6 +414,7 @@ describe("Hotspot map integration", () => {
 
   it("renders boundary layers as non-interactive so hotspot markers remain clickable", async () => {
     render(<App />);
+    await loginThroughUI();
 
     expect(await screen.findByTestId("leaflet-map", {}, { timeout: 5000 })).toBeInTheDocument();
 

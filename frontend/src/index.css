@@ -816,6 +816,20 @@ body {
   color: #fca5a5;
 }
 
+/* Saat ringkasan Ha di bawahnya ikut tampil (lihat .burned-summary-chip),
+   keduanya digabung jadi SATU kartu (sudut bawah tombol ini persegi, celah
+   dihapus, shadow dipindah seluruhnya ke bawah) -- bukan dua kotak
+   melayang terpisah dengan jarak tipis, yang di layar sempit gampang
+   kelihatan seperti nabrak/menumpuk apa pun besar jaraknya selama masih
+   samar-samar menempel. Kartu gabungan ini justru sengaja dibuat MENYATU
+   penuh (baris atas + bawah dipisah garis tipis), bukan dijauhkan. */
+.burned-toggle--merged {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom-color: transparent;
+  box-shadow: none;
+}
+
 .burned-toggle__count {
   display: inline-flex;
   align-items: center;
@@ -836,13 +850,13 @@ body {
 }
 
 /* Menjawab "seberapa parah" tanpa harus mengklik satu per satu di peta.
-   top dihitung dari bawah .burned-toggle (top:6.5rem + tinggi 34px) + jarak
-   0.6rem -- sebelumnya cuma top:8.9rem (jarak ~4px ke tombol di atasnya),
-   saking mepetnya sudut radius kedua elemen ini kelihatan menyatu/tumpang
-   tindih di layar, bukan dua kotak terpisah. */
+   Menyatu langsung di bawah .burned-toggle--merged (top pas di tepi bawah
+   tombol, tanpa celah) sebagai baris kedua dari kartu yang sama -- garis
+   pemisahnya cuma border-top redup, bukan border penuh warna merah supaya
+   tidak terbaca sebagai kotak kedua yang kebetulan nempel. */
 .burned-summary-chip {
   position: absolute;
-  top: calc(6.5rem + 34px + 0.6rem);
+  top: calc(6.5rem + 34px);
   left: 1rem;
   z-index: 1000;
   max-width: 15rem;
@@ -850,8 +864,10 @@ body {
   flex-direction: column;
   gap: 0.1rem;
   padding: 0.45rem 0.7rem;
-  border-radius: 0.5rem;
-  border: 1px solid rgba(220, 38, 38, 0.35);
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+  border: 1px solid rgba(220, 38, 38, 0.55);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(19, 21, 26, 0.94);
   backdrop-filter: blur(8px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -6246,14 +6262,24 @@ a + a {
 
   /* Baris sendiri, konsisten dengan versi desktop -- ikon hamburger 48px
      cuma menempati sudut sampai ~64px, jadi left:1rem di baris yang lebih
-     rendah ini aman, tidak ketiban hamburger atau tombol baris atas. */
+     rendah ini aman, tidak ketiban hamburger atau tombol baris atas.
+     Lebar dibuat penuh (right:1rem) supaya sisinya rata dengan
+     .burned-summary-chip di bawahnya saat keduanya menyatu jadi satu kartu
+     -- kalau tidak, tombol ini (isinya cuma ikon+angka di mobile, labelnya
+     disembunyikan) jauh lebih sempit dari panel ringkasan di bawahnya dan
+     "kartu gabungan"-nya kelihatan miring, bukan rata. Tinggi dinaikkan ke
+     44px (standar target sentuh minimum), bukan 34px seperti default. */
   .burned-toggle {
     top: 108px;
     left: 1rem;
+    right: 1rem;
+    height: 44px;
   }
 
   .burned-summary-chip {
-    /* .burned-toggle di mobile: top:108px + tinggi 34px + jarak 10px */
+    /* Menyatu persis di tepi bawah .burned-toggle di mobile (top:108px +
+       tinggi 44px), sama seperti versi desktop -- lihat komentar di
+       definisi dasarnya untuk alasan digabung, bukan dijauhkan. */
     top: 152px;
     left: 1rem;
     right: 1rem;
