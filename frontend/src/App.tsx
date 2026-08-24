@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FilterPanel } from "./components/FilterPanel";
+import { LoginPage } from "./components/LoginPage";
 import { PasswordGateModal } from "./components/PasswordGateModal";
 import { SidebarNav } from "./components/SidebarNav";
 import { useDashboardData } from "./hooks/useDashboardData";
@@ -107,6 +108,10 @@ export default function App() {
   // sync manual, prewarm). Backend yang beneran memvalidasi, bukan cuma
   // dicek string di JS seperti sebelumnya.
   const [adminKey, setAdminKey] = useState<string | null>(null);
+  // Sama seperti adminKey: sengaja di memori saja, bukan localStorage --
+  // reload halaman = login ulang. Ini gerbang tampilan front-end saja;
+  // endpoint baca publik (preview layer, dsb) tidak ikut terkunci olehnya.
+  const [loggedIn, setLoggedIn] = useState(false);
 
   const commitViewChange = (view: AppView) => {
     setActiveView(view);
@@ -467,6 +472,10 @@ export default function App() {
     if (hours === 0) return `${mins} menit`;
     return `${hours} jam ${mins} menit`;
   }, [latestHotspot, clockSec]);
+
+  if (!loggedIn) {
+    return <LoginPage onSuccess={() => setLoggedIn(true)} />;
+  }
 
   return (
     <div className="app-frame grid-lines">

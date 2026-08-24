@@ -172,6 +172,32 @@ Kalau menambah dependency Python baru yang dipakai backend, **jangan lupa tambah
 requirements.txt`) tidak otomatis sinkron. Ini pernah menyebabkan outage produksi (502 di semua
 endpoint) karena `ijson` terpasang di venv lokal tapi lupa ditambahkan ke `requirements.txt`.
 
+## Autentikasi
+
+Dua gerbang password TERPISAH, jangan disamakan:
+
+- **`ADMIN_API_KEY`** — melindungi endpoint admin per-request (upload geojson, trigger sync, refresh
+  cache, prewarm, `/api/layers` mode penuh). Header `X-Admin-Key`, diverifikasi lewat
+  `POST /api/auth/verify` (`core/auth.py::verify_admin_key`). Dipicu dari modal "Pengaturan"
+  (`PasswordGateModal.tsx`).
+- **`APP_LOGIN_PASSWORD`** — gerbang login SELURUH tampilan aplikasi (satu user bersama, "admin"),
+  ditambahkan 2026-08-24. Diverifikasi lewat `POST /api/auth/login`
+  (`core/auth.py::verify_login_password`). Dipicu dari `LoginPage.tsx`, di-render sebelum apa pun
+  lain di `App.tsx` kalau state `loggedIn` masih false.
+
+Keduanya fail-closed (env kosong → 503, bukan lolos) dan disimpan di memori React saja (bukan
+localStorage) — reload halaman = harus login ulang, konsisten dengan pola yang sudah ada duluan
+untuk `adminKey`.
+
+**Penting**: gerbang login ini HANYA mengunci tampilan front-end. Endpoint baca publik (mis.
+`/api/layers?view=preview`, `/api/hotspots`) TIDAK ikut terkunci olehnya — itu tetap seperti semula,
+bisa diakses langsung tanpa lewat halaman login sama sekali. Kalau nanti diminta "kunci semua data",
+itu perubahan jauh lebih besar (butuh session/token di level API, bukan cuma gerbang render React).
+
+Sama seperti `ADMIN_API_KEY` (lihat catatan di memory project), **jangan pernah asumsikan nilai
+`APP_LOGIN_PASSWORD` produksi dari sesi sebelumnya** — selalu konfirmasi ke user, dan set manual di
+`.env.dokploy` produksi (tidak ikut ke-copy otomatis dari `.env.dokploy.example`) sebelum redeploy.
+
 ## Model data poligon
 
 Dua layer aktif saat ini: `psagustus2026` (Perhutanan Sosial/KPS) dan `HUTAN_ADAT_APR26` (Hutan

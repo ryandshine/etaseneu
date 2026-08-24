@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     # Kosong secara default = tolak semua aksi admin (fail closed), bukan
     # izinkan semua. Endpoint yang butuh ini lihat app/core/auth.py.
     admin_api_key: str = ""
+    # Password gerbang login seluruh aplikasi (bukan aksi admin -- itu tetap
+    # admin_api_key terpisah). Kosong = tolak semua percobaan login (fail
+    # closed), sama seperti admin_api_key.
+    app_login_password: str = ""
     shp_dir: str = "../shp"
     cache_dir: str = ".cache"
     cache_ttl_hours: int = 24

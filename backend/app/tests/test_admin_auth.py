@@ -87,3 +87,69 @@ def test_verify_endpoint_uses_same_dependency(monkeypatch):
         assert ok.json() == {"ok": True}
     finally:
         get_settings.cache_clear()
+
+
+# --- /api/auth/login (gerbang login seluruh aplikasi, terpisah dari admin key) ---
+
+
+def test_login_fails_closed_when_password_not_configured(monkeypatch):
+    from app.main import create_app
+
+    # Sama seperti test admin key: diset kosong (bukan delenv) supaya .env
+    # developer lokal tidak ikut memengaruhi hasil test ini.
+    monkeypatch.setenv("APP_LOGIN_PASSWORD", "")
+    get_settings.cache_clear()
+
+    try:
+        app = create_app()
+        client = TestClient(app)
+        response = client.post("/api/auth/login", json={"username": "admin", "password": "context7"})
+        assert response.status_code == 503
+    finally:
+        get_settings.cache_clear()
+
+
+def test_login_rejects_wrong_password(monkeypatch):
+    from app.main import create_app
+
+    monkeypatch.setenv("APP_LOGIN_PASSWORD", "context7")
+    get_settings.cache_clear()
+
+    try:
+        app = create_app()
+        client = TestClient(app)
+        response = client.post("/api/auth/login", json={"username": "admin", "password": "wrong"})
+        assert response.status_code == 401
+    finally:
+        get_settings.cache_clear()
+
+
+def test_login_rejects_wrong_username(monkeypatch):
+    from app.main import create_app
+
+    monkeypatch.setenv("APP_LOGIN_PASSWORD", "context7")
+    get_settings.cache_clear()
+
+    try:
+        app = create_app()
+        client = TestClient(app)
+        response = client.post("/api/auth/login", json={"username": "someone-else", "password": "context7"})
+        assert response.status_code == 401
+    finally:
+        get_settings.cache_clear()
+
+
+def test_login_accepts_correct_credentials(monkeypatch):
+    from app.main import create_app
+
+    monkeypatch.setenv("APP_LOGIN_PASSWORD", "context7")
+    get_settings.cache_clear()
+
+    try:
+        app = create_app()
+        client = TestClient(app)
+        response = client.post("/api/auth/login", json={"username": "admin", "password": "context7"})
+        assert response.status_code == 200
+        assert response.json() == {"ok": True}
+    finally:
+        get_settings.cache_clear()
