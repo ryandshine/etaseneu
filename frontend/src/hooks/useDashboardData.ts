@@ -241,7 +241,7 @@ function withQuery(
 }
 
 export function useDashboardData(
-  activeView: "map" | "matrix" | "pointmatch" | "settings" | "kps" = "map",
+  activeView: "map" | "matrix" | "pointmatch" | "kompleks" | "settings" | "kps" = "map",
   adminKey: string | null = null,
   // Token sesi JWT (session.token dari App.tsx) -- jalur otorisasi admin
   // yang setara dengan adminKey/X-Admin-Key sejak backend menerima sesi

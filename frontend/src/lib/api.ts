@@ -1,8 +1,10 @@
 import type {
   ApiClient,
+  ClusterCollectionResponse,
   HealthResponse,
   HistoryStatusResponse,
   GeoJsonStatusResponse,
+  HotspotClusterQueryParams,
   HotspotCollectionResponse,
   HotspotQueryParams,
   LayerFeature,
@@ -103,6 +105,14 @@ function adminHeaders(adminKey?: string | null, authToken?: string | null): Reco
   return headers;
 }
 
+function toClusterQueryRecord(params: HotspotClusterQueryParams): Record<string, QueryValue> {
+  return {
+    start_at: params.start_at,
+    end_at: params.end_at,
+    sensitivity: params.sensitivity,
+  };
+}
+
 function toLayerQueryRecord(view?: "preview" | "full"): Record<string, QueryValue> | undefined {
   if (!view || view === "full") {
     return undefined;
@@ -117,6 +127,7 @@ export function createApiClient(baseUrl = "/api"): ApiClient {
     layers: `${baseUrl}/layers`,
     layer: (id: string) => `${baseUrl}/layers/${encodeURIComponent(id)}`,
     hotspots: `${baseUrl}/hotspots`,
+    hotspotClusters: `${baseUrl}/hotspots/clusters`,
     stats: `${baseUrl}/stats`,
     cacheHistoryStatus: `${baseUrl}/cache/history/status`,
     cacheHistoryPrewarm: `${baseUrl}/cache/history/prewarm`,
@@ -140,6 +151,10 @@ export function createApiClient(baseUrl = "/api"): ApiClient {
       ),
     getStats: (params: HotspotQueryParams) =>
       fetchJson<StatsResponse>(withQuery(endpoints.stats, toQueryRecord(params))),
+    getHotspotClusters: (params: HotspotClusterQueryParams) =>
+      fetchJson<ClusterCollectionResponse>(
+        withQuery(endpoints.hotspotClusters, toClusterQueryRecord(params)),
+      ),
     getHistoryStatus: (params) =>
       fetchJson<HistoryStatusResponse>(
         withQuery(endpoints.cacheHistoryStatus, toHistoryQueryRecord(params)),

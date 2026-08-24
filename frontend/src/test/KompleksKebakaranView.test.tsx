@@ -1,0 +1,183 @@
+import "@testing-library/jest-dom/vitest";
+import type { ReactNode } from "react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { KompleksKebakaranView } from "../components/KompleksKebakaranView";
+
+const flyToMock = vi.fn();
+
+vi.mock("react-leaflet", () => ({
+  CircleMarker: ({ children, eventHandlers }: { children?: ReactNode; eventHandlers?: { click?: () => void } }) => (
+    <div data-testid="cluster-bubble" onClick={() => eventHandlers?.click?.()}>
+      {children}
+    </div>
+  ),
+  MapContainer: ({ children }: { children?: ReactNode }) => <div data-testid="leaflet-map">{children}</div>,
+  Popup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  TileLayer: () => <div data-testid="tile-layer" />,
+  useMap: () => ({ flyTo: flyToMock, getZoom: () => 5 })
+}));
+
+// Mock CircleMarker/Popup di atas selalu merender children-nya (Leaflet asli
+// cuma merender isi Popup saat dibuka) -- jadi nama lembaga muncul dua kali
+// (popup peta + baris daftar). Query daftar harus di-scope ke panel daftar
+// saja lewat helper ini, bukan screen.findByText global.
+function getListPanel(): HTMLElement {
+  return screen.getByText("Kompleks Terbesar").closest(".kompleks-list") as HTMLElement;
+}
+
+describe("KompleksKebakaranView", () => {
+  const fetchMock = vi.fn<typeof fetch>();
+
+  beforeEach(() => {
+    flyToMock.mockClear();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("shows a loading state before data arrives", async () => {
+    fetchMock.mockImplementation(() => new Promise(() => {}));
+
+    render(<KompleksKebakaranView />);
+
+    expect(screen.getByText("Memuat daftar kompleks...")).toBeInTheDocument();
+  });
+
+  it("renders cluster summary and list once data loads", async () => {
+    const now = Date.now();
+    const recentlyActive = new Date(now - 3 * 60 * 60 * 1000).toISOString();
+    const longQuiet = new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString();
+
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          count: 2,
+          clusters: [
+            {
+              cluster_id: 1,
+              hotspot_count: 500,
+              centroid_lat: -1.5,
+              centroid_lon: 110.5,
+              first_detected_at: "2026-08-01T00:00:00Z",
+              last_detected_at: recentlyActive,
+              dominant_agency: "LPHD Kalibandung"
+            },
+            {
+              cluster_id: 2,
+              hotspot_count: 20,
+              centroid_lat: -2.0,
+              centroid_lon: 111.0,
+              first_detected_at: "2026-08-10T00:00:00Z",
+              last_detected_at: longQuiet,
+              dominant_agency: "KTH Contoh"
+            }
+          ],
+          stats: {
+            total_hotspots_in_range: 600,
+            clustered_hotspots: 520,
+            unclustered_hotspots: 80
+          },
+          sensitivity: "sedang",
+          range_start: "2026-08-01T00:00:00Z",
+          range_end: "2026-08-24T00:00:00Z"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    render(<KompleksKebakaranView />);
+
+    await waitFor(() => expect(getListPanel()).toBeInTheDocument());
+    const list = within(getListPanel());
+
+    expect(list.getByText("LPHD Kalibandung")).toBeInTheDocument();
+    expect(list.getByText("KTH Contoh")).toBeInTheDocument();
+
+    // Kompleks besar (>=400 titik) + masih aktif <24 jam harus terhitung di
+    // strip ringkasan atas.
+    await waitFor(() => {
+      expect(screen.getByText("Kompleks Besar (≥400 titik)").previousSibling?.textContent).toBe("1");
+    });
+    expect(screen.getByText("Masih Aktif <24 Jam").previousSibling?.textContent).toBe("1");
+
+    // "Aktif" juga muncul di teks penjelasan "Cara baca" di bawah daftar --
+    // scope ke baris pertama (LPHD Kalibandung, kompleks terbesar & aktif)
+    // supaya yang diuji betul-betul chip baris, bukan teks penjelasan.
+    const firstRow = getListPanel().querySelector(".kompleks-row") as HTMLElement;
+    expect(list.getByText("Besar")).toBeInTheDocument();
+    expect(within(firstRow).getByText("Aktif")).toBeInTheDocument();
+  });
+
+  it("shows an error message when the request fails", async () => {
+    fetchMock.mockRejectedValue(new Error("network down"));
+
+    render(<KompleksKebakaranView />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Gagal memuat data kompleks kebakaran. Coba lagi."
+    );
+  });
+
+  it("shows an empty state when no clusters are found", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          count: 0,
+          clusters: [],
+          stats: { total_hotspots_in_range: 0, clustered_hotspots: 0, unclustered_hotspots: 0 },
+          sensitivity: "sedang",
+          range_start: "2026-08-01T00:00:00Z",
+          range_end: "2026-08-24T00:00:00Z"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    render(<KompleksKebakaranView />);
+
+    expect(
+      await screen.findByText("Tidak ada kompleks terdeteksi pada rentang & kepekaan ini.")
+    ).toBeInTheDocument();
+  });
+
+  it("clicking a list row selects the corresponding cluster and pans the map", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          count: 1,
+          clusters: [
+            {
+              cluster_id: 7,
+              hotspot_count: 50,
+              centroid_lat: -3.1,
+              centroid_lon: 112.4,
+              first_detected_at: "2026-08-01T00:00:00Z",
+              last_detected_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+              dominant_agency: "LPHD Pantau"
+            }
+          ],
+          stats: { total_hotspots_in_range: 50, clustered_hotspots: 50, unclustered_hotspots: 0 },
+          sensitivity: "sedang",
+          range_start: "2026-08-01T00:00:00Z",
+          range_end: "2026-08-24T00:00:00Z"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    render(<KompleksKebakaranView />);
+
+    await waitFor(() => expect(getListPanel()).toBeInTheDocument());
+    const row = within(getListPanel()).getByText("LPHD Pantau");
+    fireEvent.click(row.closest("button") as HTMLElement);
+
+    await waitFor(() => {
+      expect(flyToMock).toHaveBeenCalledWith([-3.1, 112.4], 8, expect.objectContaining({ duration: 0.6 }));
+    });
+  });
+});

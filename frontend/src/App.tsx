@@ -29,6 +29,11 @@ const PointMatchView = lazy(async () => {
   return { default: module.PointMatchView };
 });
 
+const KompleksKebakaranView = lazy(async () => {
+  const module = await import("./components/KompleksKebakaranView");
+  return { default: module.KompleksKebakaranView };
+});
+
 const SettingsPanel = lazy(async () => {
   const module = await import("./components/SettingsPanel");
   return { default: module.SettingsPanel };
@@ -38,7 +43,7 @@ function isSchedulerFailureStatus(status?: string | null): boolean {
   return status === "failure" || status === "failed";
 }
 
-type AppView = "map" | "matrix" | "pointmatch" | "settings" | "kps";
+type AppView = "map" | "matrix" | "pointmatch" | "kompleks" | "settings" | "kps";
 
 /**
  * View aktif disimpan di query string supaya refresh dan tombol back tidak
@@ -68,6 +73,9 @@ function readViewFromUrl(): AppView {
   }
   if (view === "pointmatch") {
     return "pointmatch";
+  }
+  if (view === "kompleks") {
+    return "kompleks";
   }
   if (view === "kps" && params.get("kps")) {
     return "kps";
@@ -126,7 +134,7 @@ export default function App() {
     // melewati gerbang password di atas.
     const params = new URLSearchParams(window.location.search);
     params.delete("kps");
-    if (view === "matrix" || view === "pointmatch") {
+    if (view === "matrix" || view === "pointmatch" || view === "kompleks") {
       params.set("view", view);
     } else {
       params.delete("view");
@@ -754,6 +762,12 @@ export default function App() {
           <section aria-label="Cek titik ke KPS workspace" className="workspace-stage">
             <Suspense fallback={<ViewLoader label="Memuat alat cek titik..." />}>
               <PointMatchView />
+            </Suspense>
+          </section>
+        ) : activeView === "kompleks" ? (
+          <section aria-label="Kompleks Kebakaran workspace" className="workspace-stage workspace-stage--kompleks">
+            <Suspense fallback={<ViewLoader label="Memuat kompleks kebakaran..." />}>
+              <KompleksKebakaranView />
             </Suspense>
           </section>
         ) : activeView === "kps" ? (

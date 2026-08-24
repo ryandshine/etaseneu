@@ -104,6 +104,44 @@ export interface HotspotCollectionResponse {
 
 export type StatsResponse = StatsSummary;
 
+// Kompleks Kebakaran: kelompok titik hotspot yang berdekatan ruang & waktu
+// (ST-DBSCAN dihitung server-side lewat self-join PostGIS, lihat
+// backend/app/services/hotspot_cluster_service.py). "sensitivity" adalah
+// preset bahasa awam (ketat/sedang/longgar) -- parameter mentah (eps_km dst)
+// sengaja tidak diekspos ke frontend.
+export type ClusterSensitivity = "ketat" | "sedang" | "longgar";
+
+export interface ClusterRecord {
+  cluster_id: number;
+  hotspot_count: number;
+  centroid_lat: number;
+  centroid_lon: number;
+  first_detected_at: string;
+  last_detected_at: string;
+  dominant_agency: string | null;
+}
+
+export interface ClusterStats {
+  total_hotspots_in_range: number;
+  clustered_hotspots: number;
+  unclustered_hotspots: number;
+}
+
+export interface ClusterCollectionResponse {
+  count: number;
+  clusters: ClusterRecord[];
+  stats: ClusterStats;
+  sensitivity: ClusterSensitivity;
+  range_start: string;
+  range_end: string;
+}
+
+export interface HotspotClusterQueryParams {
+  start_at?: string;
+  end_at?: string;
+  sensitivity?: ClusterSensitivity;
+}
+
 export interface HistoryLayerStatus {
   layer_id: string;
   cached: boolean;
@@ -206,6 +244,7 @@ export interface ApiClient {
   getLayer: (id: string, view?: "preview" | "full") => Promise<LayerFeature>;
   getHotspots: (params: HotspotQueryParams) => Promise<HotspotCollectionResponse>;
   getStats: (params: HotspotQueryParams) => Promise<StatsResponse>;
+  getHotspotClusters: (params: HotspotClusterQueryParams) => Promise<ClusterCollectionResponse>;
   getHistoryStatus: (params: HotspotQueryParams & { year: number }) => Promise<HistoryStatusResponse>;
   prewarmHistory: (
     params: HotspotQueryParams & { year: number },

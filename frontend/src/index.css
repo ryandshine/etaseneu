@@ -529,6 +529,25 @@ body {
   background: transparent;
 }
 
+/* Peta di dalamnya butuh tinggi tetap (Leaflet), jadi TIDAK dibiarkan ikut
+   scroll satu halaman seperti --matrix/--kps -- panel daftar di kanan yang
+   punya scroll internal sendiri (lihat .kompleks-list-scroll), sama seperti
+   filosofi --map. */
+.workspace-stage--kompleks {
+  overflow: hidden;
+  padding: 0;
+  background: transparent;
+  /* .workspace-stage (dasar) TIDAK punya min-height:0, cuma min-width:0 --
+     wajar untuk --map/--matrix/--kps yang tidak punya rantai height:100%
+     bertingkat di dalamnya. Kompleks Kebakaran punya (.kompleks-shell ->
+     .kompleks-body -> .kompleks-map -> MapContainer, semua height:100%).
+     Tanpa ini, flex item (.workspace-stage) menolak menyusut di bawah
+     min-content-nya sendiri -- container Leaflet & <html>/<body> jadi ikut
+     membengkak tak terbatas (pernah terukur >35.000px). Pola bug yang sama
+     persis sudah dua kali ditemukan sesi ini (.app-frame, grid SettingsPanel). */
+  min-height: 0;
+}
+
 /* Sengaja TANPA height:100%/min-height:0 (yang dulu dipakai supaya
    .kps-detail-info punya scroll internal sendiri) -- sekarang seluruh
    halaman ini satu alur scroll milik .workspace-stage--kps, bukan
@@ -7036,5 +7055,286 @@ a + a {
 
   .pm-drop {
     padding: 1.6rem 1rem;
+  }
+}
+
+/* ============================================
+   KOMPLEKS KEBAKARAN
+   ============================================ */
+
+.kompleks-shell {
+  /* height:100% TIDAK resolve jadi angka pasti di sini -- .workspace-stage
+     cuma flex:1 (bukan height eksplisit), jadi ukurannya "indefinite" untuk
+     tujuan resolusi persentase walau visualnya kelihatan pas dengan
+     viewport. Terbukti lewat percobaan langsung: memaksa .kompleks-shell ke
+     tinggi tetap membuat SELURUH rantai di bawahnya (grid, list scroll)
+     langsung benar; tanpa itu 565 baris daftar leluasa mendorong tinggi
+     .kompleks-shell mengikuti kontennya sendiri (pernah terukur >35.000px,
+     ikut menyeret <html>/<body>). .workspace-stage sudah position:relative
+     (lihat definisi dasarnya), jadi inset:0 di sini memakai algoritma
+     containing-block absolute positioning yang tidak punya masalah
+     "indefinite size" seperti resolusi height:100% pada flex item. */
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  color: #f4f5f7;
+}
+
+.kompleks-topbar {
+  padding: 1.1rem 1.5rem 0.9rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+}
+
+.kompleks-topbar h2 {
+  margin: 0 0 0.3rem;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.kompleks-topbar p {
+  margin: 0;
+  max-width: 46ch;
+}
+
+.kompleks-controls {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.kompleks-controls .field {
+  min-width: 11rem;
+}
+
+.kompleks-alert {
+  margin: 0.75rem 1.5rem 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+  font-size: 0.8rem;
+}
+
+.kompleks-summary {
+  display: flex;
+  gap: 1.4rem;
+  padding: 0.85rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-wrap: wrap;
+}
+
+.kompleks-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.kompleks-stat strong {
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.kompleks-stat span {
+  font-size: 0.62rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.kompleks-stat--crit strong {
+  color: #ef4444;
+}
+
+.kompleks-stat--ok strong {
+  color: #10b981;
+}
+
+.kompleks-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) 22rem;
+  /* Wajib eksplisit -- baris grid implisit default "auto" (tinggi
+     mengikuti konten tertinggi), jadi .kompleks-map (yang cuma punya
+     height:100% tanpa tinggi dasar sendiri) tidak tahu 100% dari apa dan
+     Leaflet salah ukur kontainer (pernah terukur puluhan ribu piksel). */
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+.kompleks-map {
+  position: relative;
+  min-width: 0;
+  background: #05060a;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.kompleks-map-loading {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #6b7280;
+  font-size: 0.82rem;
+}
+
+.kompleks-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.kompleks-list-head {
+  padding: 0.85rem 1rem 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.kompleks-list-head h3 {
+  margin: 0 0 0.15rem;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.kompleks-list-head p {
+  margin: 0;
+  font-size: 0.7rem;
+}
+
+.kompleks-list-scroll {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 0.4rem;
+}
+
+.kompleks-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.65rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kompleks-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.kompleks-row--active {
+  background: rgba(255, 78, 0, 0.14);
+  border-color: rgba(255, 78, 0, 0.35);
+}
+
+.kompleks-row-rank {
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: #6b7280;
+  width: 1.2rem;
+  flex-shrink: 0;
+  padding-top: 0.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.kompleks-row-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.kompleks-row-top {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.kompleks-row-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 11rem;
+}
+
+.kompleks-row-meta {
+  font-size: 0.68rem;
+  color: #9ca3af;
+}
+
+.kompleks-row-meta b {
+  color: #f4f5f7;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.kompleks-chip {
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.kompleks-chip--besar {
+  background: rgba(239, 68, 68, 0.16);
+  color: #fca5a5;
+}
+
+.kompleks-chip--sedang {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fcd34d;
+}
+
+.kompleks-chip--kecil {
+  background: rgba(107, 114, 128, 0.2);
+  color: #d1d5db;
+}
+
+.kompleks-chip--live {
+  background: rgba(16, 185, 129, 0.16);
+  color: #6ee7b7;
+}
+
+.kompleks-explain {
+  margin: 0.6rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  font-size: 0.66rem;
+  color: #9ca3af;
+  line-height: 1.6;
+}
+
+.kompleks-explain b {
+  color: #f4f5f7;
+}
+
+@media (max-width: 900px) {
+  .kompleks-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(240px, 45vh) minmax(0, 1fr);
+  }
+
+  .kompleks-map {
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 }

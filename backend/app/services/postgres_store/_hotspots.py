@@ -1,6 +1,7 @@
 """Titik hotspot mentah dari NASA FIRMS: simpan, cari record-nya, dan baca terenrich metadata polygon."""
 
 from collections.abc import Sequence
+from datetime import datetime
 
 from ._base import Json, _safe_json
 
@@ -244,3 +245,59 @@ class _HotspotObservationMixin:
                 payload["polygon_metadata"] = merged_metadata
                 payloads.append(payload)
         return payloads
+
+    def get_hotspots_in_range(self, start_at: datetime, end_at: datetime) -> list[dict]:
+        """Titik hotspot mentah dalam rentang waktu -- dipakai HotspotClusterService
+        untuk menyusun ringkasan kompleks kebakaran (lihat find_proximity_edges
+        untuk daftar pasangan tetangganya)."""
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, latitude, longitude, detected_at, agency_name
+                    FROM hotspot_observations
+                    WHERE detected_at >= %s::timestamptz AND detected_at <= %s::timestamptz
+                    ORDER BY id ASC
+                    """,
+                    (start_at, end_at),
+                )
+                return cur.fetchall()
+
+    def find_proximity_edges(
+        self,
+        *,
+        start_at: datetime,
+        end_at: datetime,
+        eps_km: float,
+        eps_hours: float,
+    ) -> list[tuple[int, int]]:
+        """Pasangan id hotspot yang "bertetangga" -- dekat secara ruang DAN waktu
+        sekaligus -- dasar untuk pengelompokan graph-expansion (ST-DBSCAN) di
+        HotspotClusterService.
+
+        Threshold jarak dikonversi ke DERAJAT, bukan ST_DWithin(...::geography, ...):
+        cast geography per-baris pada self-join sebesar ini bisa menggagalkan
+        pemakaian index GIST yang sudah ada di kolom geom (geometry, SRID 4326).
+        Konversi kasar 1 derajat ~= 111.32km cukup akurat untuk threshold
+        skala kilometer-tunggal di rentang lintang Indonesia (-11 s.d. 6 derajat) --
+        distorsi longitude akibat proyeksi di lintang ini di bawah 2%.
+        """
+        eps_degrees = eps_km / 111.32
+        eps_seconds = eps_hours * 3600
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT a.id AS id_a, b.id AS id_b
+                    FROM hotspot_observations a
+                    JOIN hotspot_observations b
+                      ON a.id < b.id
+                     AND ST_DWithin(a.geom, b.geom, %s)
+                     AND abs(extract(epoch FROM a.detected_at - b.detected_at)) <= %s
+                    WHERE a.detected_at >= %s::timestamptz AND a.detected_at <= %s::timestamptz
+                      AND b.detected_at >= %s::timestamptz AND b.detected_at <= %s::timestamptz
+                    """,
+                    (eps_degrees, eps_seconds, start_at, end_at, start_at, end_at),
+                )
+                rows = cur.fetchall()
+        return [(row["id_a"], row["id_b"]) for row in rows]
