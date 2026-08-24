@@ -33,9 +33,9 @@ Sebelum menjalankan skrip satu-kali (migrasi data, backfill, dsb.) terhadap DB i
 ## Arsitektur Backend (`backend/app/`)
 
 ```
-api/            # satu file per domain: hotspots, layers, polygons, burned_area,
-                # export, point_match, scheduler, stats, weather, wind, cache,
-                # metrics, auth. router.py merakit semuanya ke api_router (prefix /api).
+api/            # satu file per domain: hotspots, hotspot_clusters, layers, polygons,
+                # burned_area, export, point_match, scheduler, stats, weather, wind,
+                # cache, metrics, auth. router.py merakit semuanya ke api_router (prefix /api).
 core/           # config.py (Settings via pydantic-settings), auth.py (admin API key + JWT multi-user)
 models/         # Pydantic models: hotspots, layers, polygons, query (HotspotQuery)
 services/       # logika bisnis (lihat di bawah)
@@ -97,6 +97,14 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
 - `nasa_client.py` — wrapper httpx async ke NASA FIRMS CSV API. Sengaja LOG error mentah (bukan
   re-raise ke client) karena URL FIRMS menyertakan `MAP_KEY` rahasia di path-nya.
 - `burned_area_service.py` — jalur GEE/MODIS/VIIRS **lama, sudah tidak dipakai** (lihat bahaya #2).
+- `hotspot_cluster_service.py` — menu "Kompleks Kebakaran": mengelompokkan titik hotspot yang
+  berdekatan ruang (~2km) DAN waktu (~48 jam) sekaligus jadi satu "kompleks" (ST-DBSCAN), dipanggil
+  dari `GET /api/hotspots/clusters` (preset `sensitivity` ketat/sedang/longgar, bukan eps/min_samples
+  mentah). Pasangan tetangga dihitung via self-join `ST_DWithin` di Postgres
+  (`postgres_store/_hotspots.py::find_proximity_edges` — sengaja pakai derajat, BUKAN cast
+  `::geography`, supaya index GIST di kolom `geom` tetap kepakai), lalu ekspansi klaster murni Python
+  stdlib (BFS di `_graph_cluster`) — sengaja TIDAK pakai numpy/scipy/scikit-learn walau itu yang
+  dipakai di prototipe awal, supaya `requirements.txt` tidak nambah dependency berat.
 
 ## ⚠️ Bahaya #2: GEE sudah digantikan KLHK untuk luas bekas terbakar
 
@@ -117,7 +125,10 @@ serialize geometry hasil parsingnya ke JSON, wajib `json.dumps(geom, default=flo
 ```
 components/   HotspotMap.tsx (peta Leaflet, pane z-index: KPS=400, bekas terbakar=420,
               hotspot=450), HotspotMatrix.tsx ("Matriks Data"), KpsDetailView.tsx,
-              FilterPanel.tsx, SidebarNav.tsx, BurnedAreaCard.tsx, WeatherOverlay.tsx, dll.
+              KompleksKebakaranView.tsx ("Kompleks Kebakaran" — peta+daftar klaster
+              hotspot ST-DBSCAN, self-contained fetch sendiri lewat lib/api.ts, TIDAK
+              lewat useDashboardData), FilterPanel.tsx, SidebarNav.tsx, BurnedAreaCard.tsx,
+              WeatherOverlay.tsx, dll.
 hooks/        useDashboardData.ts (hook utama, ~800 baris — lihat di bawah),
               useBurnedAreaOverlay.ts
 lib/          api.ts (client fetch bertipe), date.ts (helper WIB/Asia-Jakarta), hotspotDisplay.ts
