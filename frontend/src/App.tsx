@@ -503,6 +503,7 @@ export default function App() {
         }}
         onManualSync={() => void manualSync()}
         onPrewarmHistory={() => void prewarmHistory()}
+        onLogout={() => setLoggedIn(false)}
         syncLabel={syncLabel}
         syncStatusLabel={syncStatusLabel}
         lastSyncLabel={isStorageLoading ? "memuat..." : lastHotspotSyncLabel}

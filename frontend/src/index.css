@@ -255,6 +255,33 @@ body {
   /* Line-height removed to allow natural vertical alignment */
 }
 
+/* Aksi keluar sengaja beda dari .side-nav-link -- ini bukan tujuan
+   navigasi, jadi tidak ikut ditandai aktif/nonaktif seperti nav item. */
+.side-logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(100% - 1.5rem);
+  height: 40px;
+  margin: 0.3rem 0.75rem 0.1rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: transparent;
+  color: rgba(252, 165, 165, 0.75);
+  cursor: pointer;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.side-logout-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #fecaca;
+}
+
 .side-footer {
   margin-top: auto;
   display: grid;

@@ -19,6 +19,7 @@ type SidebarNavProps = {
   onChangeView: (view: "map" | "matrix" | "pointmatch" | "settings") => void;
   onManualSync: () => void;
   onPrewarmHistory: () => void;
+  onLogout: () => void;
   syncLabel: string;
   syncStatusLabel: string;
   lastSyncLabel: string;
@@ -70,6 +71,7 @@ export function SidebarNav({
   onChangeView,
   onManualSync,
   onPrewarmHistory,
+  onLogout,
   syncLabel,
   syncStatusLabel,
   lastSyncLabel,
@@ -116,6 +118,10 @@ export function SidebarNav({
             Pengaturan
           </NavButton>
         </nav>
+
+        <button type="button" className="side-logout-btn" onClick={onLogout}>
+          Keluar
+        </button>
 
         {filterSlot ? <div className="side-filter">{filterSlot}</div> : null}
       </div>
