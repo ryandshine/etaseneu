@@ -278,16 +278,17 @@ def _escape(value: Any) -> str:
 def _summary_table_html(title: str, label_header: str, data: list[dict[str, Any]], total: int) -> str:
     if not data:
         return ""
+    # Semua baris ditampilkan -- sebelumnya dipotong 15 baris + "... dan N
+    # lainnya", tapi jumlah entitas (KPS/Balai PS/Provinsi) selalu jauh lebih
+    # kecil dari jumlah titik hotspot, jadi tidak ada risiko tabel meledak
+    # seperti kalau ini daftar titik mentah.
     rows = "".join(
         "<tr>"
         f"<td>{_escape(item['label'])}</td>"
         f"<td class='num'>{item['count']}</td>"
         f"<td class='num'>{(item['count'] / total * 100 if total else 0):.1f}%</td>"
         "</tr>"
-        for item in data[:15]
-    )
-    more = (
-        f"<p class='more'>... dan {len(data) - 15} lainnya</p>" if len(data) > 15 else ""
+        for item in data
     )
     return f"""
     <h2>{_escape(title)}</h2>
@@ -295,7 +296,6 @@ def _summary_table_html(title: str, label_header: str, data: list[dict[str, Any]
       <thead><tr><th>{_escape(label_header)}</th><th class='num'>Jumlah</th><th class='num'>%</th></tr></thead>
       <tbody>{rows}</tbody>
     </table>
-    {more}
     """
 
 
@@ -392,8 +392,13 @@ def _kps_map_svg(
     )
 
 
-def _kps_maps_html(outcome: MatchOutcome, limit: int = 12) -> str:
-    """Satu kartu peta per KPS, diurutkan dari yang titiknya terbanyak."""
+def _kps_maps_html(outcome: MatchOutcome) -> str:
+    """Satu kartu peta per KPS, diurutkan dari yang titiknya terbanyak.
+
+    Semua KPS terdampak ditampilkan -- sebelumnya dipotong 12 kartu teratas
+    + catatan "menampilkan N dari M", tapi jumlah KPS terdampak per unggahan
+    selalu jauh lebih kecil dari jumlah titik, jadi aman ditampilkan penuh.
+    """
     if not outcome.polygon_geometries:
         return ""
 
@@ -411,7 +416,7 @@ def _kps_maps_html(outcome: MatchOutcome, limit: int = 12) -> str:
 
     ranked = sorted(grouped.items(), key=lambda kv: (-len(kv[1]), names.get(kv[0], "")))
     cards = []
-    for polygon_id, points in ranked[:limit]:
+    for polygon_id, points in ranked:
         geometry = outcome.polygon_geometries.get(polygon_id)
         if not geometry:
             continue
@@ -430,13 +435,6 @@ def _kps_maps_html(outcome: MatchOutcome, limit: int = 12) -> str:
     if not cards:
         return ""
 
-    more = ""
-    if len(ranked) > len(cards):
-        more = (
-            f"<p class='more'>Menampilkan {len(cards)} KPS dengan hotspot terbanyak "
-            f"dari {len(ranked)} KPS terdampak.</p>"
-        )
-
     # Bagian peta selalu dimulai di halaman baru. Kartu peta berukuran tetap dan
     # tidak bisa dipotong, jadi kalau dibiarkan mengalir ia hampir selalu tidak
     # muat di sisa halaman dan meninggalkan judulnya sendirian di bawah.
@@ -445,7 +443,7 @@ def _kps_maps_html(outcome: MatchOutcome, limit: int = 12) -> str:
         "<h2>Peta Sebaran Hotspot per KPS</h2>"
         "<p class='more'>Area hijau = batas kawasan KPS; titik oranye = hotspot di dalamnya. "
         "Skala tiap peta menyesuaikan luas kawasannya masing-masing.</p>"
-        f"<div class='mapgrid'>{''.join(cards)}</div>{more}"
+        f"<div class='mapgrid'>{''.join(cards)}</div>"
         "</div>"
     )
 
