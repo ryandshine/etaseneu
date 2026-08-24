@@ -15,6 +15,7 @@ from openpyxl.chart import BarChart, Reference
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
+from app.services.hotspot_categories import confidence_category, frp_category
 from app.services.point_match_service import MatchOutcome
 
 WIB = timezone(timedelta(hours=7))
@@ -39,6 +40,8 @@ BASE_HEADERS = [
     "Latitude",
     "Longitude",
     "Status",
+    "Kategori Confidence",
+    "Kategori FRP",
     "KPS (Lembaga)",
     "Balai PS",
     "Provinsi",
@@ -65,6 +68,36 @@ _KPS_FIELD_BY_HEADER = {
 STATUS_INSIDE = "Masuk KPS"
 STATUS_OUTSIDE = "Di luar KPS"
 
+# Nama kolom confidence/FRP tidak seragam antar sumber berkas (mis. "confidence"
+# vs "Confidence", "frp" vs "FRP (MW)"), jadi dicari tanpa peduli besar-kecil
+# huruf/spasi alih-alih mengharuskan nama kolom persis.
+_CONFIDENCE_KEYS = ("confidence", "conf")
+_FRP_KEYS = ("frp", "frp_mw", "frpmw")
+
+
+def _find_property(properties: dict[str, Any], candidates: tuple[str, ...]) -> Any:
+    lowered = {str(key).strip().lower().replace(" ", "").replace("_", ""): value for key, value in properties.items()}
+    for candidate in candidates:
+        key = candidate.replace("_", "")
+        if key in lowered and lowered[key] not in (None, ""):
+            return lowered[key]
+    return None
+
+
+def _confidence_and_frp_category(properties: dict[str, Any]) -> tuple[str, str]:
+    """Kategori confidence & FRP dari properti asli titik, kalau ada.
+
+    Memakai ambang batas yang sama dengan dashboard utama (hotspot_categories.py)
+    supaya konsisten. Kalau berkas yang diunggah tidak punya kolom confidence/FRP
+    sama sekali, hasilnya "-" -- BUKAN dianggap "Rendah", karena "tidak ada data"
+    dan "nilainya rendah" adalah dua hal berbeda.
+    """
+    confidence_raw = _find_property(properties, _CONFIDENCE_KEYS)
+    frp_raw = _find_property(properties, _FRP_KEYS)
+    confidence = confidence_category({"confidence": confidence_raw}) if confidence_raw is not None else "-"
+    frp = frp_category({"frp": frp_raw}) if frp_raw is not None else "-"
+    return confidence, frp
+
 
 def _stringify(value: Any) -> Any:
     if value is None:
@@ -78,13 +111,16 @@ def build_report_rows(outcome: MatchOutcome) -> list[list[Any]]:
     rows: list[list[Any]] = []
     for index, point in enumerate(outcome.points, start=1):
         kps = point.kps or {}
+        kategori_confidence, kategori_frp = _confidence_and_frp_category(point.properties)
         row: list[Any] = [
             index,
             round(point.latitude, 6),
             round(point.longitude, 6),
             STATUS_INSIDE if point.inside_kps else STATUS_OUTSIDE,
+            kategori_confidence,
+            kategori_frp,
         ]
-        for header in BASE_HEADERS[4:]:
+        for header in BASE_HEADERS[6:]:
             row.append(_stringify(kps.get(_KPS_FIELD_BY_HEADER[header])))
         for column in outcome.property_columns:
             row.append(_stringify(point.properties.get(column)))
@@ -473,11 +509,19 @@ def build_pdf_file(outcome: MatchOutcome, source_name: str) -> bytes:
         f"<td class='num'>{index}</td>"
         f"<td class='num'>{point.latitude:.5f}</td>"
         f"<td class='num'>{point.longitude:.5f}</td>"
+        f"<td>{_escape(kategori_confidence)}</td>"
+        f"<td>{_escape(kategori_frp)}</td>"
         f"<td>{_escape((point.kps or {}).get('lembaga'))}</td>"
         f"<td>{_escape((point.kps or {}).get('wilker_bps'))}</td>"
         f"<td>{_escape((point.kps or {}).get('nama_prov'))}</td>"
         "</tr>"
-        for index, point in enumerate(inside_points[:detail_limit], start=1)
+        for index, (point, kategori_confidence, kategori_frp) in enumerate(
+            (
+                (point, *_confidence_and_frp_category(point.properties))
+                for point in inside_points[:detail_limit]
+            ),
+            start=1,
+        )
     )
     detail_note = (
         f"<p class='more'>Menampilkan {detail_limit} dari {len(inside_points):,} hotspot di KPS. "
@@ -487,7 +531,7 @@ def build_pdf_file(outcome: MatchOutcome, source_name: str) -> bytes:
     )
     if not inside_points:
         detail_rows = (
-            "<tr><td colspan='6' class='empty'>"
+            "<tr><td colspan='8' class='empty'>"
             "Tidak ada hotspot yang masuk kawasan KPS."
             "</td></tr>"
         )
@@ -552,7 +596,7 @@ def build_pdf_file(outcome: MatchOutcome, source_name: str) -> bytes:
   <h2>Rincian Hotspot di KPS</h2>
   <table>
     <thead><tr><th class="num">No</th><th class="num">Latitude</th><th class="num">Longitude</th>
-    <th>KPS</th><th>Balai PS</th><th>Provinsi</th></tr></thead>
+    <th>Confidence</th><th>FRP</th><th>KPS</th><th>Balai PS</th><th>Provinsi</th></tr></thead>
     <tbody>{detail_rows}</tbody>
   </table>
   {detail_note}
