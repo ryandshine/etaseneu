@@ -174,10 +174,81 @@ describe("KompleksKebakaranView", () => {
 
     await waitFor(() => expect(getListPanel()).toBeInTheDocument());
     const row = within(getListPanel()).getByText("LPHD Pantau");
-    fireEvent.click(row.closest("button") as HTMLElement);
+    fireEvent.click(row.closest('[role="button"]') as HTMLElement);
 
     await waitFor(() => {
       expect(flyToMock).toHaveBeenCalledWith([-3.1, 112.4], 8, expect.objectContaining({ duration: 0.6 }));
     });
+  });
+
+  it("clicking 'Lihat Detail KPS' on a row opens the KPS detail without also selecting the row", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          count: 1,
+          clusters: [
+            {
+              cluster_id: 9,
+              hotspot_count: 30,
+              centroid_lat: -1.1,
+              centroid_lon: 113.2,
+              first_detected_at: "2026-08-01T00:00:00Z",
+              last_detected_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+              dominant_agency: "LD LINGAT"
+            }
+          ],
+          stats: { total_hotspots_in_range: 30, clustered_hotspots: 30, unclustered_hotspots: 0 },
+          sensitivity: "sedang",
+          range_start: "2026-08-01T00:00:00Z",
+          range_end: "2026-08-24T00:00:00Z"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const onOpenKpsDetail = vi.fn();
+    render(<KompleksKebakaranView onOpenKpsDetail={onOpenKpsDetail} />);
+
+    await waitFor(() => expect(getListPanel()).toBeInTheDocument());
+    const row = getListPanel().querySelector(".kompleks-row") as HTMLElement;
+    const detailBtn = within(row).getByText("Lihat Detail KPS →");
+
+    fireEvent.click(detailBtn);
+
+    expect(onOpenKpsDetail).toHaveBeenCalledWith("LD LINGAT");
+    // Klik tombol detail tidak boleh ikut memicu flyTo (seleksi baris) --
+    // pengguna sedang berpindah halaman, bukan menjelajah peta.
+    expect(flyToMock).not.toHaveBeenCalled();
+  });
+
+  it("hides 'Lihat Detail KPS' when a cluster has no dominant agency", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          count: 1,
+          clusters: [
+            {
+              cluster_id: 10,
+              hotspot_count: 12,
+              centroid_lat: -1.1,
+              centroid_lon: 113.2,
+              first_detected_at: "2026-08-01T00:00:00Z",
+              last_detected_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+              dominant_agency: null
+            }
+          ],
+          stats: { total_hotspots_in_range: 12, clustered_hotspots: 12, unclustered_hotspots: 0 },
+          sensitivity: "sedang",
+          range_start: "2026-08-01T00:00:00Z",
+          range_end: "2026-08-24T00:00:00Z"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    render(<KompleksKebakaranView onOpenKpsDetail={vi.fn()} />);
+
+    await waitFor(() => expect(getListPanel()).toBeInTheDocument());
+    expect(screen.queryByText("Lihat Detail KPS →")).not.toBeInTheDocument();
   });
 });

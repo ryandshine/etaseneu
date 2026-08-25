@@ -7323,6 +7323,27 @@ a + a {
   font-weight: 700;
 }
 
+.kompleks-row-detail-btn {
+  align-self: flex-start;
+  margin-top: 0.1rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 142, 66, 0.35);
+  background: rgba(255, 142, 66, 0.1);
+  color: #ff8c42;
+  font-size: 0.64rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.kompleks-row-detail-btn:hover,
+.kompleks-row-detail-btn:focus-visible {
+  background: rgba(255, 142, 66, 0.2);
+  border-color: rgba(255, 142, 66, 0.55);
+  outline: none;
+}
+
 .kompleks-chip {
   font-size: 0.56rem;
   font-weight: 800;

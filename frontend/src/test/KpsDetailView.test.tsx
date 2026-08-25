@@ -172,4 +172,39 @@ describe("KpsDetailView", () => {
     await waitFor(() => expect(screen.getByText("2 titik")).toBeInTheDocument());
     expect(screen.getByText("Mengikuti rentang waktu dashboard saat ini.")).toBeInTheDocument();
   });
+
+  it("clicking a time preset (7 Hari) fills Dari/Ke with the matching date range and fetches", async () => {
+    vi.setSystemTime(new Date("2026-08-25T12:00:00+07:00"));
+
+    render(
+      <KpsDetailView
+        agency="LD LINGAT"
+        hotspots={[buildHotspot()]}
+        onClose={() => undefined}
+        onExportPdf={() => undefined}
+        isExportingPdf={false}
+      />
+    );
+
+    await screen.findByText("1 titik");
+    fireEvent.click(screen.getByText("7 Hari"));
+
+    const dateInputs = document.querySelectorAll<HTMLInputElement>('input[type="date"]');
+    // "Hari ini" WIB tetap 2026-08-25 walau system time diset ke 12:00 WIB --
+    // 7 Hari = 6 hari ke belakang + hari ini.
+    expect(dateInputs[0].value).toBe("2026-08-19");
+    expect(dateInputs[1].value).toBe("2026-08-25");
+
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([input]) => String(input).startsWith("/api/hotspots"))).toBe(true)
+    );
+    const hotspotCall = fetchMock.mock.calls.find(([input]) => String(input).startsWith("/api/hotspots"));
+    const calledUrl = String(hotspotCall?.[0]);
+    // "2026-08-19" 00:00 WIB (UTC+7) = "2026-08-18T17:00:00.000Z"; "2026-08-25"
+    // 23:59:59 WIB = "2026-08-25T16:59:59.000Z".
+    expect(calledUrl).toContain(encodeURIComponent("2026-08-18T17:00:00.000Z"));
+    expect(calledUrl).toContain(encodeURIComponent("2026-08-25T16:59:59.000Z"));
+
+    vi.useRealTimers();
+  });
 });

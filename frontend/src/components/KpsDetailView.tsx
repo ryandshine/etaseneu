@@ -5,9 +5,12 @@ import { circleMarker as buildLeafletCircleMarker, geoJSON as buildLeafletGeoJSO
 import type { LayerGroup as LLayerGroup } from "leaflet";
 
 import { SATELLITE_OPTIONS } from "../constants/satellites";
+import { TIME_PRESET_OPTIONS } from "../constants/time-windows";
 import type { DashboardHotspot } from "../hooks/useDashboardData";
 import { createApiClient } from "../lib/api";
+import { getTodayWIB } from "../lib/date";
 import type { PolygonDetail } from "../types/api";
+import { HotspotPopupContent } from "./HotspotPopupContent";
 import { WeatherConditionCard } from "./WeatherConditionCard";
 import {
   buildComparison,
@@ -80,6 +83,21 @@ function isPeriodInRange(year: number, month: number, startDate: string, endDate
   const [startYear, startMonth] = startDate.split("-").map(Number);
   const [endYear, endMonth] = endDate.split("-").map(Number);
   return period >= startYear * 100 + startMonth && period <= endYear * 100 + endMonth;
+}
+
+// Preset "24 Jam/48 Jam/dst" dari dashboard (constants/time-windows.ts), tanpa
+// "Custom" -- di halaman ini field Dari/Ke sendiri SUDAH jadi jalur custom-nya,
+// jadi tidak perlu tombol "Custom" terpisah.
+const HOTSPOT_DAY_PRESETS = TIME_PRESET_OPTIONS.filter((preset) => preset.value !== "custom");
+
+// Tanggal "YYYY-MM-DD" mundur `days` hari kalender dari tanggal acuan --
+// aritmetika tanggal murni (bukan waktu presisi jam), jadi aman dari isu
+// DST/offset karena dikerjakan di "tanggal pura-pura UTC", bukan waktu asli.
+function subtractDaysFromDateString(dateStr: string, days: number): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const base = new Date(Date.UTC(year, month - 1, day));
+  base.setUTCDate(base.getUTCDate() - days);
+  return base.toISOString().slice(0, 10);
 }
 
 // Peta polygon detail dimulai dari view Indonesia lalu di-fit ke batas
@@ -175,6 +193,25 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
   const [customLoading, setCustomLoading] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
   const isCustomRangeActive = Boolean(customStartDate && customEndDate);
+
+  // Isi otomatis Dari/Ke dari preset waktu (24 Jam/48 Jam/dst), berpatokan ke
+  // hari ini (WIB) -- klik ulang preset yang sama sesudah mengubah tanggal
+  // manual mengembalikannya ke rentang preset itu lagi.
+  const applyTimePreset = (hours: number) => {
+    const days = Math.max(1, Math.round(hours / 24));
+    const today = getTodayWIB();
+    setCustomEndDate(today);
+    setCustomStartDate(subtractDaysFromDateString(today, days - 1));
+  };
+
+  const isTimePresetActive = (hours: number): boolean => {
+    if (!customStartDate || !customEndDate) {
+      return false;
+    }
+    const days = Math.max(1, Math.round(hours / 24));
+    const today = getTodayWIB();
+    return customEndDate === today && customStartDate === subtractDaysFromDateString(today, days - 1);
+  };
 
   // Semua titik hotspot milik KPS ini sudah tersedia dari dataset yang sama
   // dipakai Buku Besar -- tidak perlu endpoint tambahan, tinggal disaring
@@ -516,6 +553,20 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
 
       <section className="panel kps-detail-info" style={{ marginBottom: "1rem" }}>
         <p className="filter-group-label">Filter Waktu Halaman Ini</p>
+        <div className="filter-preset-grid" style={{ marginBottom: "0.65rem" }}>
+          {HOTSPOT_DAY_PRESETS.map((preset) => (
+            <button
+              key={preset.value}
+              type="button"
+              className={`chip chip--button filter-preset-btn${
+                isTimePresetActive(preset.hours) ? " chip--active" : ""
+              }`}
+              onClick={() => applyTimePreset(preset.hours)}
+            >
+              <span>{preset.label}</span>
+            </button>
+          ))}
+        </div>
         <div className="filter-date-grid">
           <label className="field">
             <span>Dari</span>
@@ -806,11 +857,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                     eventHandlers={{ click: () => setSelectedDetectionId(hotspot.id) }}
                   >
                     <Popup>
-                      <div style={{ fontSize: "12px", fontFamily: "sans-serif" }}>
-                        <strong>{hotspot.source}</strong> ({hotspot.satellite})
-                        <div>FRP: {hotspot.frp?.toFixed(2) ?? "Tidak tersedia"}</div>
-                        <div>{new Date(hotspot.detectedAt).toLocaleString("id-ID")}</div>
-                      </div>
+                      <HotspotPopupContent hotspot={hotspot} />
                     </Popup>
                   </CircleMarker>
                 ))}

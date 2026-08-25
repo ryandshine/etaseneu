@@ -61,7 +61,11 @@ function FlyToCluster({ cluster }: { cluster: ClusterRecord | null }) {
   return null;
 }
 
-export function KompleksKebakaranView() {
+type KompleksKebakaranViewProps = {
+  onOpenKpsDetail?: (agency: string) => void;
+};
+
+export function KompleksKebakaranView({ onOpenKpsDetail }: KompleksKebakaranViewProps) {
   const [timeRangeDays, setTimeRangeDays] = useState(30);
   const [sensitivity, setSensitivity] = useState<ClusterSensitivity>("sedang");
   const [data, setData] = useState<ClusterCollectionResponse | null>(null);
@@ -223,6 +227,30 @@ export function KompleksKebakaranView() {
                       {formatSpanDays(cluster.first_detected_at, cluster.last_detected_at)} hari
                       <br />
                       {formatActivity(cluster.last_detected_at).text}
+                      {cluster.dominant_agency && onOpenKpsDetail ? (
+                        // Popup Leaflet pakai skin bawaan terang, bukan tema gelap
+                        // aplikasi -- gaya inline di sini (bukan class global)
+                        // supaya kontras tetap benar di atas latar terang itu,
+                        // pola yang sama dipakai popup lain di HotspotMap.tsx.
+                        <button
+                          type="button"
+                          onClick={() => onOpenKpsDetail(cluster.dominant_agency as string)}
+                          style={{
+                            display: "block",
+                            marginTop: "8px",
+                            padding: 0,
+                            border: "none",
+                            background: "none",
+                            color: "#ea580c",
+                            fontWeight: 700,
+                            fontSize: "12px",
+                            textDecoration: "underline",
+                            cursor: "pointer"
+                          }}
+                        >
+                          Lihat Detail KPS &rarr;
+                        </button>
+                      ) : null}
                     </Popup>
                   </CircleMarker>
                 );
@@ -251,11 +279,22 @@ export function KompleksKebakaranView() {
                 const activity = formatActivity(cluster.last_detected_at);
                 const isSelected = cluster.cluster_id === selectedId;
                 return (
-                  <button
-                    type="button"
+                  // div, bukan <button>, karena butuh tombol "Lihat Detail KPS"
+                  // sungguhan di dalamnya -- <button> di dalam <button> tidak
+                  // valid HTML. Aksesibilitas (fokus, Enter/Space) diisi manual,
+                  // pola yang sama dipakai `.detect-row` di KpsDetailView.tsx.
+                  <div
                     key={cluster.cluster_id}
                     className={`kompleks-row${isSelected ? " kompleks-row--active" : ""}`}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelectedId(cluster.cluster_id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedId(cluster.cluster_id);
+                      }
+                    }}
                   >
                     <span className="kompleks-row-rank">{index + 1}</span>
                     <span className="kompleks-row-body">
@@ -275,8 +314,20 @@ export function KompleksKebakaranView() {
                         <b>{formatSpanDays(cluster.first_detected_at, cluster.last_detected_at)}</b>{" "}
                         hari &middot; {activity.text}
                       </span>
+                      {cluster.dominant_agency && onOpenKpsDetail ? (
+                        <button
+                          type="button"
+                          className="kompleks-row-detail-btn"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenKpsDetail(cluster.dominant_agency as string);
+                          }}
+                        >
+                          Lihat Detail KPS &rarr;
+                        </button>
+                      ) : null}
                     </span>
-                  </button>
+                  </div>
                 );
               })
             )}
