@@ -85,6 +85,37 @@ function isPeriodInRange(year: number, month: number, startDate: string, endDate
   return period >= startYear * 100 + startMonth && period <= endYear * 100 + endMonth;
 }
 
+// Titik tengah (bounding-box midpoint) dari geometry GeoJSON apa pun --
+// Point, Polygon, atau MultiPolygon -- dipakai utk tombol "Salin
+// koordinat"/"Google Maps" di popup area terbakar. Bukan centroid presisi
+// (cukup utk "buka titik ini di peta lain", bukan perhitungan luas).
+function geometryCenter(geometry: { type: string; coordinates: unknown }): { lat: number; lon: number } | null {
+  const points: Array<[number, number]> = [];
+
+  function collect(coords: unknown): void {
+    if (!Array.isArray(coords)) {
+      return;
+    }
+    if (typeof coords[0] === "number" && typeof coords[1] === "number") {
+      points.push([coords[0], coords[1]]);
+      return;
+    }
+    coords.forEach(collect);
+  }
+
+  collect(geometry?.coordinates);
+  if (points.length === 0) {
+    return null;
+  }
+
+  const lons = points.map((p) => p[0]);
+  const lats = points.map((p) => p[1]);
+  return {
+    lat: (Math.min(...lats) + Math.max(...lats)) / 2,
+    lon: (Math.min(...lons) + Math.max(...lons)) / 2
+  };
+}
+
 // Preset "24 Jam/48 Jam/dst" dari dashboard (constants/time-windows.ts), tanpa
 // "Custom" -- di halaman ini field Dari/Ke sendiri SUDAH jadi jalur custom-nya,
 // jadi tidak perlu tombol "Custom" terpisah.
@@ -829,44 +860,81 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                       burned_area_ha: number;
                       is_estimated: boolean;
                     };
-                    const note = props.is_estimated
-                      ? `<div style="margin-top:6px;font-size:11px;font-style:italic">Perkiraan lokasi -- luas di bawah resolusi piksel citra satelit</div>`
-                      : "";
 
-                    // KPS ini bisa punya lebih dari satu bidang bekas terbakar
-                    // tercatat di bulan berbeda -- daripada cuma menunjukkan
-                    // bulan yang diklik (seperti sebelumnya), popup ikut
-                    // mendaftar periode lain yang tersedia, mirip info
-                    // "Terdeteksi: X bulan" di popup Bekas Kebakaran peta utama,
-                    // tapi dirinci per tanggal karena di sini datanya memang
-                    // sudah per-bulan (bukan agregat satu angka).
-                    const otherMonths = effectiveBurnedAreas
-                      .filter((row) => !(row.year === props.year && row.month === props.month))
-                      .sort((a, b) => b.year - a.year || b.month - a.month);
-                    const shownOtherMonths = otherMonths.slice(0, 6);
-                    const otherMonthsHtml =
-                      otherMonths.length > 0
-                        ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(27,15,10,0.12);font-size:11px">
-                             <div style="font-weight:700;margin-bottom:4px;color:rgba(27,15,10,0.62);text-transform:uppercase;letter-spacing:0.04em;font-size:10px">Periode lain KPS ini</div>
-                             ${shownOtherMonths
-                               .map(
-                                 (row) =>
-                                   `<div style="display:flex;justify-content:space-between;gap:10px"><span>${MONTH_LABELS[row.month - 1]} ${row.year}</span><strong>${formatNumber(Math.round(row.burned_area_ha * 10) / 10)} Ha</strong></div>`
-                               )
-                               .join("")}
-                             ${otherMonths.length > shownOtherMonths.length ? `<div style="margin-top:2px;opacity:0.7">+${otherMonths.length - shownOtherMonths.length} periode lainnya</div>` : ""}
-                           </div>`
-                        : "";
+                    // Dibangun sebagai elemen DOM sungguhan (bukan string HTML
+                    // + atribut onclick) supaya tombol "Salin koordinat" bisa
+                    // pakai addEventListener asli -- lebih aman & tidak
+                    // tergantung inline script diizinkan atau tidak.
+                    const container = document.createElement("div");
+                    container.className = "popup-card";
+                    container.style.minWidth = "190px";
+                    container.style.fontSize = "12px";
+                    container.style.fontFamily = "sans-serif";
 
-                    layer.bindPopup(
-                      `<div style="font-size:12px;font-family:sans-serif;min-width:190px">
-                         <strong style="color:#dc2626">Area Terbakar</strong>
-                         <div style="margin-top:6px">${MONTH_LABELS[props.month - 1]} ${props.year}</div>
-                         <div style="margin-top:4px">Luas: <strong>${formatNumber(Math.round(props.burned_area_ha * 10) / 10)} Ha</strong></div>
-                         ${note}
-                         ${otherMonthsHtml}
-                       </div>`
-                    );
+                    const title = document.createElement("strong");
+                    title.style.color = "#dc2626";
+                    title.textContent = "Area Terbakar";
+                    container.appendChild(title);
+
+                    const periodLine = document.createElement("div");
+                    periodLine.style.marginTop = "6px";
+                    periodLine.textContent = `${MONTH_LABELS[props.month - 1]} ${props.year}`;
+                    container.appendChild(periodLine);
+
+                    const haLabel = document.createElement("div");
+                    haLabel.style.marginTop = "4px";
+                    haLabel.append("Luas: ");
+                    const haValue = document.createElement("strong");
+                    haValue.textContent = `${formatNumber(Math.round(props.burned_area_ha * 10) / 10)} Ha`;
+                    haLabel.appendChild(haValue);
+                    container.appendChild(haLabel);
+
+                    if (props.is_estimated) {
+                      const note = document.createElement("div");
+                      note.style.marginTop = "6px";
+                      note.style.fontSize = "11px";
+                      note.style.fontStyle = "italic";
+                      note.textContent = "Perkiraan lokasi -- luas di bawah resolusi piksel citra satelit";
+                      container.appendChild(note);
+                    }
+
+                    const center = geometryCenter(feature.geometry as { type: string; coordinates: unknown });
+                    if (center) {
+                      const actions = document.createElement("div");
+                      actions.className = "coord-actions";
+
+                      const copyBtn = document.createElement("button");
+                      copyBtn.type = "button";
+                      copyBtn.className = "coord-action-btn";
+                      copyBtn.textContent = "Salin koordinat";
+                      copyBtn.addEventListener("click", () => {
+                        navigator.clipboard
+                          .writeText(`${center.lat.toFixed(5)}, ${center.lon.toFixed(5)}`)
+                          .then(() => {
+                            copyBtn.textContent = "Disalin!";
+                            window.setTimeout(() => {
+                              copyBtn.textContent = "Salin koordinat";
+                            }, 1500);
+                          })
+                          .catch(() => {
+                            // Clipboard API tidak didukung di browser/webview ini --
+                            // diamkan, tidak ada fallback yang bermakna.
+                          });
+                      });
+                      actions.appendChild(copyBtn);
+
+                      const mapsLink = document.createElement("a");
+                      mapsLink.href = `https://www.google.com/maps?q=${center.lat},${center.lon}`;
+                      mapsLink.target = "_blank";
+                      mapsLink.rel = "noopener noreferrer";
+                      mapsLink.className = "coord-action-btn";
+                      mapsLink.textContent = "Google Maps";
+                      actions.appendChild(mapsLink);
+
+                      container.appendChild(actions);
+                    }
+
+                    layer.bindPopup(container);
                   }}
                 />
               )}
