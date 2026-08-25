@@ -6,6 +6,7 @@ import {
   Circle,
   CircleMarker,
   GeoJSON,
+  LayerGroup,
   MapContainer,
   Pane,
   Popup,
@@ -15,6 +16,7 @@ import {
   ZoomControl
 } from "react-leaflet";
 import { canvas, circleMarker as buildLeafletCircleMarker, latLngBounds, divIcon } from "leaflet";
+import type { LayerGroup as LLayerGroup } from "leaflet";
 
 import { useBurnedAreaOverlay } from "../hooks/useBurnedAreaOverlay";
 import type { BurnedAreaOverlayFeature } from "../hooks/useBurnedAreaOverlay";
@@ -638,6 +640,35 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
   const [showBurnedArea, setShowBurnedArea] = useState(true);
   const burnedArea = useBurnedAreaOverlay(showBurnedArea);
 
+  // Polygon bekas terbakar & titik hotspot BERBAGI satu Pane/renderer (lihat
+  // JSX di bawah) supaya polygonnya bisa diklik sungguhan. Canvas renderer
+  // Leaflet memasang listener klik langsung di elemen <canvas>-nya sendiri
+  // (bukan di peta) -- kalau dipisah ke Pane berbeda seperti sebelumnya, Pane
+  // dengan z-index lebih tinggi (titik hotspot, 450) menutupi Pane di
+  // bawahnya (bekas terbakar, 420) secara utuh di DOM, sehingga SEMUA klik di
+  // area itu tertelan oleh canvas teratas walau tidak ada bentuk tergambar di
+  // titik itu -- polygon di Pane bawah jadi TIDAK PERNAH bisa diklik sama
+  // sekali (popup `onEachFeature`-nya tidak pernah terpicu), bukan cuma
+  // tertutup separuh. Menyatukan renderer membuat Leaflet memilih target klik
+  // lewat uji geometri tiap bentuk, bukan lewat susunan DOM.
+  //
+  // Supaya urutan gambar (dan karenanya prioritas klik saat tumpang tindih)
+  // tetap deterministik walau data bekas terbakar datang belakangan lewat
+  // fetch async, titik hotspot selalu dipaksa `bringToFront()` ulang tiap
+  // kali daftarnya atau data bekas terbakar berubah.
+  const hotspotLayerGroupRef = useRef<LLayerGroup | null>(null);
+  useEffect(() => {
+    const group = hotspotLayerGroupRef.current;
+    if (!group) {
+      return;
+    }
+    group.eachLayer((layer) => {
+      if ("bringToFront" in layer && typeof layer.bringToFront === "function") {
+        layer.bringToFront();
+      }
+    });
+  }, [hotspots, burnedArea.data]);
+
   useEffect(() => {
     const activeLayers = layers.filter(l => l.active);
     if (activeLayers.length === 0) {
@@ -862,16 +893,40 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
             </Popup>
           </Marker>
         ))}
-        {/* Bekas terbakar di panel sendiri DI ATAS batas KPS (400) tapi di
-            bawah titik hotspot (450) -- sebelumnya di z:390 (di BAWAH batas
-            KPS), sehingga arsiran merahnya ketutup/berbaur dengan isian
-            hijau KPS dan nyaris tidak terlihat sama sekali, padahal justru
-            itu tujuan utama lapisan ini: menunjukkan kawasan mana yang
-            terdampak. Batas KPS & titik hotspot juga diberi pane eksplisit
-            (bukan default overlayPane) supaya urutannya pasti, tidak
-            bergantung urutan render React. */}
-        {showBurnedArea && burnedArea.data ? (
-          <Pane name="bekas-terbakar" style={{ zIndex: 420 }}>
+        <Pane name="batas-kps" style={{ zIndex: 400 }}>
+          {layers
+            .filter((layer) => layer.active)
+            .map((layer) => (
+              <GeoJSON
+                key={layer.id}
+                data={layer.geojson as never}
+                interactive={false}
+                style={{
+                  color: layer.color,
+                  weight: 4,
+                  opacity: 1,
+                  fillColor: layer.color,
+                  fillOpacity: 0.18,
+                  dashArray: "6 5",
+                  lineCap: "round",
+                  lineJoin: "round"
+                }}
+              />
+            ))}
+        </Pane>
+        {/* Bekas terbakar & titik hotspot BERBAGI satu Pane (lihat catatan
+            `hotspotLayerGroupRef` di atas) supaya polygon bekas terbakar bisa
+            sungguhan diklik -- Pane terpisah membuat canvas dengan z-index
+            lebih tinggi menelan semua klik di Pane bawahnya walau tidak ada
+            bentuk tergambar di titik itu. Batas KPS tetap di Pane sendiri
+            (400, di bawah) karena non-interactive, urutannya tidak
+            berpengaruh ke klik. Urutan gambar di sini (polygon dulu, titik
+            belakangan + dipaksa bringToFront tiap render) yang menjaga titik
+            hotspot tetap terlihat di atas arsiran merah -- sebelumnya dijamin
+            lewat z-index Pane terpisah (390 sempat dicoba, ketutup isian
+            hijau KPS, makanya sekarang di atas batas KPS juga). */}
+        <Pane name="kps-interaktif" style={{ zIndex: 420 }}>
+          {showBurnedArea && burnedArea.data ? (
             <GeoJSON
               key={`burned-overlay-${burnedArea.data.kps_count}`}
               data={burnedArea.data as never}
@@ -913,59 +968,38 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
                 );
               }}
             />
-          </Pane>
-        ) : null}
-        <Pane name="batas-kps" style={{ zIndex: 400 }}>
-          {layers
-            .filter((layer) => layer.active)
-            .map((layer) => (
-              <GeoJSON
-                key={layer.id}
-                data={layer.geojson as never}
-                interactive={false}
-                style={{
-                  color: layer.color,
-                  weight: 4,
-                  opacity: 1,
-                  fillColor: layer.color,
-                  fillOpacity: 0.18,
-                  dashArray: "6 5",
-                  lineCap: "round",
-                  lineJoin: "round"
-                }}
-              />
-            ))}
-        </Pane>
-        <Pane name="hotspot-titik" style={{ zIndex: 450 }}>
-        {hotspots.map((hotspot) =>
-          (hotspot.frp ?? 0) > HIGH_FRP_THRESHOLD ? (
-            <Marker
-              key={hotspot.id}
-              position={[hotspot.latitude, hotspot.longitude]}
-              icon={getHighIntensityIcon(sourceColor(hotspot.source))}
-            >
-              <Popup>
-                <HotspotPopupContent hotspot={hotspot} />
-              </Popup>
-            </Marker>
-          ) : (
-            <CircleMarker
-              key={hotspot.id}
-              center={[hotspot.latitude, hotspot.longitude]}
-              radius={7}
-              pathOptions={{
-                color: "#1b120d",
-                weight: 2,
-                fillColor: sourceColor(hotspot.source),
-                fillOpacity: 0.98
-              }}
-            >
-              <Popup>
-                <HotspotPopupContent hotspot={hotspot} />
-              </Popup>
-            </CircleMarker>
-          )
-        )}
+          ) : null}
+          <LayerGroup ref={hotspotLayerGroupRef}>
+            {hotspots.map((hotspot) =>
+              (hotspot.frp ?? 0) > HIGH_FRP_THRESHOLD ? (
+                <Marker
+                  key={hotspot.id}
+                  position={[hotspot.latitude, hotspot.longitude]}
+                  icon={getHighIntensityIcon(sourceColor(hotspot.source))}
+                >
+                  <Popup>
+                    <HotspotPopupContent hotspot={hotspot} />
+                  </Popup>
+                </Marker>
+              ) : (
+                <CircleMarker
+                  key={hotspot.id}
+                  center={[hotspot.latitude, hotspot.longitude]}
+                  radius={7}
+                  pathOptions={{
+                    color: "#1b120d",
+                    weight: 2,
+                    fillColor: sourceColor(hotspot.source),
+                    fillOpacity: 0.98
+                  }}
+                >
+                  <Popup>
+                    <HotspotPopupContent hotspot={hotspot} />
+                  </Popup>
+                </CircleMarker>
+              )
+            )}
+          </LayerGroup>
         </Pane>
       </MapContainer>
     </div>

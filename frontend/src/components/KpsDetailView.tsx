@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Download } from "lucide-react";
-import { CircleMarker, GeoJSON, MapContainer, Pane, Popup, TileLayer, useMap } from "react-leaflet";
+import { CircleMarker, GeoJSON, LayerGroup, MapContainer, Pane, Popup, TileLayer, useMap } from "react-leaflet";
 import { circleMarker as buildLeafletCircleMarker, geoJSON as buildLeafletGeoJSON } from "leaflet";
+import type { LayerGroup as LLayerGroup } from "leaflet";
 
 import { SATELLITE_OPTIONS } from "../constants/satellites";
 import type { DashboardHotspot } from "../hooks/useDashboardData";
@@ -407,6 +408,22 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
     return { displayHa, isAccumulated, latest: sorted[0], months: sorted, periodeTerbakar };
   }, [effectiveBurnedAreas, burnedAreas.length, uniqueHa, isCustomRangeActive]);
 
+  // Dipakai cuma untuk pesan "tidak ada data di rentang ini" -- supaya rentang
+  // kustom yang tidak overlap dengan bulan manapun di riwayat KLHK KPS ini
+  // menampilkan penjelasan, bukan menghilangkan seluruh section "Luas
+  // terbakar" tanpa keterangan (dulu terlihat seperti data hilang/bug).
+  const fullBurnedHistoryRange = useMemo(() => {
+    if (burnedAreas.length === 0) {
+      return null;
+    }
+    const sorted = [...burnedAreas].sort((a, b) => a.year - b.year || a.month - b.month);
+    return {
+      earliest: sorted[0],
+      latest: sorted[sorted.length - 1],
+      periodeTerbakar: new Set(burnedAreas.map((row) => `${row.year}-${row.month}`)).size
+    };
+  }, [burnedAreas]);
+
   const stats = useMemo(() => {
     let tinggi = 0;
     let sedang = 0;
@@ -446,6 +463,35 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
     () => buildComparison(hotspots, selectedDetection),
     [hotspots, selectedDetection]
   );
+
+  // Titik hotspot & polygon bekas terbakar HARUS berbagi satu Pane/renderer
+  // Leaflet yang sama. Canvas renderer memasang listener klik langsung di
+  // elemen <canvas>-nya sendiri (bukan di peta) -- kalau keduanya dipisah ke
+  // Pane berbeda (seperti sebelumnya), Pane dengan z-index lebih tinggi
+  // menutupi Pane di bawahnya secara utuh di DOM, sehingga SEMUA klik di area
+  // itu tertelan oleh canvas teratas walau tidak ada bentuk tergambar di titik
+  // itu -- polygon bekas terbakar di Pane bawah jadi TIDAK PERNAH bisa diklik
+  // sama sekali, bukan cuma tertutup separuh. Menyatukan renderer membuat
+  // Leaflet memilih target klik lewat uji geometri tiap bentuk (lingkaran
+  // kecil vs polygon besar), bukan lewat susunan DOM.
+  //
+  // Supaya urutan gambar (dan karenanya prioritas klik) tetap deterministik
+  // walau data bekas terbakar datang belakangan lewat fetch async, titik
+  // hotspot selalu dipaksa `bringToFront()` ulang tiap kali daftarnya atau
+  // geometry bekas terbakar berubah -- tanpa ini, urutan menang bisa terbalik
+  // tergantung siapa yang lebih dulu selesai fetch.
+  const hotspotLayerGroupRef = useRef<LLayerGroup | null>(null);
+  useEffect(() => {
+    const group = hotspotLayerGroupRef.current;
+    if (!group) {
+      return;
+    }
+    group.eachLayer((layer) => {
+      if ("bringToFront" in layer && typeof layer.bringToFront === "function") {
+        layer.bringToFront();
+      }
+    });
+  }, [kpsHotspots, effectiveBurnedGeometry]);
 
   return (
     <div className="kps-detail">
@@ -561,6 +607,21 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
               <p className="help-copy">Satelit: {stats.satellites.join(", ")}</p>
             )}
 
+            {!burnedAreaStats && isCustomRangeActive && fullBurnedHistoryRange && (
+              <div style={{ marginTop: "1rem", paddingTop: "0.85rem", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                <p className="help-copy">
+                  Tidak ada data luas terbakar (KLHK) pada rentang tanggal ini.
+                </p>
+                <p className="help-copy" style={{ marginTop: "0.3rem" }}>
+                  Riwayat penuh KPS ini: {MONTH_LABELS[fullBurnedHistoryRange.earliest.month - 1]}{" "}
+                  {fullBurnedHistoryRange.earliest.year} &ndash;{" "}
+                  {MONTH_LABELS[fullBurnedHistoryRange.latest.month - 1]} {fullBurnedHistoryRange.latest.year}
+                  {" "}({fullBurnedHistoryRange.periodeTerbakar}&times; periode). Ubah rentang tanggal di atas
+                  supaya mencakup salah satu bulan itu untuk melihat datanya.
+                </p>
+              </div>
+            )}
+
             {burnedAreaStats && (
               <div style={{ marginTop: "1rem", paddingTop: "0.85rem", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
                 <div className="control-metric">
@@ -671,12 +732,16 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                 />
               </>
             ) : null}
-            {/* Jejak area terbakar (overlay resmi KLHK). Di panel sendiri di
-                antara batas KPS (overlayPane, 400) dan titik hotspot (450)
-                supaya arsiran merahnya menimpa batas kawasan tapi tidak
-                menutupi titik. */}
-            {effectiveBurnedGeometry && effectiveBurnedGeometry.features.length > 0 && (
-              <Pane name="area-terbakar" style={{ zIndex: 420 }}>
+            {/* Polygon bekas terbakar + titik hotspot BERBAGI satu Pane (lihat
+                catatan `hotspotLayerGroupRef` di atas) supaya keduanya bisa
+                sama-sama diklik -- Pane terpisah membuat canvas yang lebih
+                tinggi z-index-nya menelan semua klik di Pane bawahnya,
+                walaupun tidak ada bentuk tergambar di titik itu. Urutan
+                gambar di sini (polygon dulu, titik belakangan + dipaksa
+                bringToFront tiap render) yang menjaga titik hotspot tetap
+                terlihat di atas arsiran merah, bukan lagi z-index Pane. */}
+            <Pane name="kps-interaktif" style={{ zIndex: 420 }}>
+              {effectiveBurnedGeometry && effectiveBurnedGeometry.features.length > 0 && (
                 <GeoJSON
                   // Disertakan rentang kustom di key -- GeoJSON react-leaflet
                   // tidak mendiff ulang `data` di render berikutnya, jadi tanpa
@@ -725,34 +790,31 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                     );
                   }}
                 />
-              </Pane>
-            )}
-            {/* Panel sendiri di atas overlayPane (z-index 400) supaya titik
-                hotspot tidak tertutup arsiran polygon, apa pun urutan
-                datangnya data. */}
-            <Pane name="hotspot-titik" style={{ zIndex: 450 }}>
-              {kpsHotspots.map((hotspot) => (
-                <CircleMarker
-                  key={hotspot.id}
-                  center={[hotspot.latitude, hotspot.longitude]}
-                  radius={6}
-                  pathOptions={{
-                    color: "#1b120d",
-                    weight: 2,
-                    fillColor: sourceColor(hotspot.source),
-                    fillOpacity: 0.95
-                  }}
-                  eventHandlers={{ click: () => setSelectedDetectionId(hotspot.id) }}
-                >
-                  <Popup>
-                    <div style={{ fontSize: "12px", fontFamily: "sans-serif" }}>
-                      <strong>{hotspot.source}</strong> ({hotspot.satellite})
-                      <div>FRP: {hotspot.frp?.toFixed(2) ?? "Tidak tersedia"}</div>
-                      <div>{new Date(hotspot.detectedAt).toLocaleString("id-ID")}</div>
-                    </div>
-                  </Popup>
-                </CircleMarker>
-              ))}
+              )}
+              <LayerGroup ref={hotspotLayerGroupRef}>
+                {kpsHotspots.map((hotspot) => (
+                  <CircleMarker
+                    key={hotspot.id}
+                    center={[hotspot.latitude, hotspot.longitude]}
+                    radius={6}
+                    pathOptions={{
+                      color: "#1b120d",
+                      weight: 2,
+                      fillColor: sourceColor(hotspot.source),
+                      fillOpacity: 0.95
+                    }}
+                    eventHandlers={{ click: () => setSelectedDetectionId(hotspot.id) }}
+                  >
+                    <Popup>
+                      <div style={{ fontSize: "12px", fontFamily: "sans-serif" }}>
+                        <strong>{hotspot.source}</strong> ({hotspot.satellite})
+                        <div>FRP: {hotspot.frp?.toFixed(2) ?? "Tidak tersedia"}</div>
+                        <div>{new Date(hotspot.detectedAt).toLocaleString("id-ID")}</div>
+                      </div>
+                    </Popup>
+                  </CircleMarker>
+                ))}
+              </LayerGroup>
             </Pane>
           </MapContainer>
         </div>

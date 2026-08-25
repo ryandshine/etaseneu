@@ -18,6 +18,12 @@ vi.mock("react-leaflet", () => ({
   // ini HotspotMap crash saat mount ("No Pane export"), lihat komentar sama
   // di HotspotMap.test.tsx.
   Pane: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  // Titik hotspot dibungkus <LayerGroup> supaya bisa di-bringToFront() di
+  // atas polygon bekas terbakar (satu Pane/renderer yang sama) -- lihat
+  // catatan di HotspotMap.tsx & KpsDetailView.tsx.
+  LayerGroup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Marker: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Circle: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Popup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   TileLayer: () => <div data-testid="tile-layer" />,
