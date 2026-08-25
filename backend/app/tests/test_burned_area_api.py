@@ -179,6 +179,22 @@ def test_burned_area_by_skema_is_public(monkeypatch) -> None:
     assert body["total_ha"] == pytest.approx(2413.9 + 1866.5 + 24.8)
 
 
+def test_burned_area_frequency_is_public(monkeypatch) -> None:
+    from app.services.postgres_store import PostgresStore
+
+    fake_rows = [
+        {"lembaga": "LD LINGAT", "periode_terbakar": 4, "pertama": "2026-04-01", "terakhir": "2026-07-01", "total_ha": 1027.4},
+        {"lembaga": "LPHD AMBARAWA", "periode_terbakar": 1, "pertama": "2026-03-01", "terakhir": "2026-03-01", "total_ha": 12.0},
+    ]
+    monkeypatch.setattr(PostgresStore, "burn_frequency_by_lembaga", lambda self: fake_rows)
+
+    client = _client(monkeypatch)
+    response = client.get("/api/burned-area/frequency")
+
+    assert response.status_code == 200
+    assert response.json() == {"rows": fake_rows}
+
+
 def test_burned_area_refresh_requires_admin_key(monkeypatch) -> None:
     client = _client(monkeypatch)
     response = client.post("/api/burned-area/refresh?year=2026&month=4")

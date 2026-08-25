@@ -485,6 +485,39 @@ class _BurnedAreaMixin:
             for r in rows
         ]
 
+    def burn_frequency_by_lembaga(self) -> list[dict[str, object]]:
+        """Berapa PERIODE (bulan) TERPISAH tiap KPS pernah tercatat luas bekas
+        terbakar resmi KLHK -- dasar kolom "Frekuensi" di Buku Besar. Beda
+        dari `burned_area_unique_ha`/`burned_area_by_skema`: di sini yang
+        dihitung jumlah BULANnya (deteksi kebakaran berulang), bukan luas
+        presisi, jadi tidak perlu union geometry -- COUNT DISTINCT (year,
+        month) sudah cukup."""
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT p.lembaga,
+                           COUNT(DISTINCT (b.year, b.month)) AS periode_terbakar,
+                           MIN(make_date(b.year, b.month, 1)) AS pertama,
+                           MAX(make_date(b.year, b.month, 1)) AS terakhir,
+                           SUM(b.burned_area_ha) AS total_ha
+                    FROM burned_area_summary b
+                    JOIN polygon_metadata p ON p.id = b.polygon_metadata_id
+                    GROUP BY p.lembaga
+                    """
+                )
+                rows = cur.fetchall()
+        return [
+            {
+                "lembaga": r["lembaga"],
+                "periode_terbakar": int(r["periode_terbakar"]),
+                "pertama": r["pertama"].isoformat() if r["pertama"] else None,
+                "terakhir": r["terakhir"].isoformat() if r["terakhir"] else None,
+                "total_ha": float(r["total_ha"]) if r["total_ha"] is not None else 0.0,
+            }
+            for r in rows
+        ]
+
     def _ensure_burned_area_scheduler_state_table(self, conn) -> None:
         with conn.cursor() as cur:
             cur.execute(

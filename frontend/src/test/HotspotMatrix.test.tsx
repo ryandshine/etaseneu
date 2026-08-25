@@ -1,8 +1,29 @@
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HotspotMatrix } from "../components/HotspotMatrix";
+
+// HotspotMatrix sekarang fetch sendiri /api/burned-area/frequency saat mount
+// (Frekuensi Kebakaran, data KLHK -- terpisah dari `hotspots` yang datang
+// lewat props). Tanpa mock ini, ketiga test di bawah akan gagal begitu
+// komponennya coba fetch di jsdom (tidak ada network sungguhan).
+const fetchMock = vi.fn<typeof fetch>();
+
+beforeEach(() => {
+  fetchMock.mockImplementation(async (input) => {
+    if (String(input).includes("/api/burned-area/frequency")) {
+      return new Response(JSON.stringify({ rows: [] }), { status: 200 });
+    }
+    throw new Error(`Unexpected fetch: ${String(input)}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 const hotspot = {
   id: "hotspot-1",
@@ -36,7 +57,7 @@ const hotspot = {
 };
 
 describe("HotspotMatrix", () => {
-  it("renders geojson registry status and grouped query stack", () => {
+  it("renders geojson registry status and grouped query stack", async () => {
     render(
       <HotspotMatrix
         hotspots={[hotspot]}
@@ -79,6 +100,7 @@ describe("HotspotMatrix", () => {
       />
     );
 
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(screen.getByText("Matriks Intersep")).toBeInTheDocument();
     // Rentang tanggal kini dua input berlabel "Dari"/"Ke", bukan satu label
     // tunggal "Rentang Tanggal".
@@ -93,7 +115,7 @@ describe("HotspotMatrix", () => {
     expect(screen.getByText("KPS")).toBeInTheDocument();
   });
 
-  it("opens the dedicated KPS detail page instead of an inline drawer when a row is clicked", () => {
+  it("opens the dedicated KPS detail page instead of an inline drawer when a row is clicked", async () => {
     const onOpenKpsDetail = vi.fn();
     render(
       <HotspotMatrix
@@ -118,6 +140,7 @@ describe("HotspotMatrix", () => {
       />
     );
 
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     fireEvent.click(screen.getByText("28-05-2026 07:10 WIB"));
 
     expect(onOpenKpsDetail).toHaveBeenCalledWith("LPHD Demo");
@@ -126,7 +149,7 @@ describe("HotspotMatrix", () => {
     expect(screen.queryByText("Laporan deteksi spesifik")).not.toBeInTheDocument();
   });
 
-  it("renders the skema x provinsi crosstab and filters everything when a skema is picked", () => {
+  it("renders the skema x provinsi crosstab and filters everything when a skema is picked", async () => {
     const onExport = vi.fn();
     const otherSkema = {
       ...hotspot,
@@ -159,6 +182,7 @@ describe("HotspotMatrix", () => {
       />
     );
 
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(screen.getByText("Hotspot per Skema per Provinsi")).toBeInTheDocument();
     expect(screen.getByText("Skema Filter")).toBeInTheDocument();
     expect(screen.getByText("2 skema · 2 provinsi · 2 titik")).toBeInTheDocument();
@@ -173,5 +197,76 @@ describe("HotspotMatrix", () => {
     // yang terlihat di layar.
     fireEvent.click(screen.getByText("Ekspor XLSX"));
     expect(onExport).toHaveBeenCalledWith(expect.objectContaining({ skema: "PKK" }));
+  });
+
+  it("shows the Frekuensi Kebakaran chip once KLHK data loads, matched by trimmed lembaga name", async () => {
+    // Nama lembaga dari data KLHK kadang punya whitespace tersisa -- baris
+    // ini harus tetap cocok ke grup "LPHD Demo" dari `hotspots`.
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input).includes("/api/burned-area/frequency")) {
+        return new Response(
+          JSON.stringify({
+            rows: [
+              { lembaga: "LPHD Demo\r\n", periode_terbakar: 4, pertama: "2026-04-01", terakhir: "2026-07-01", total_ha: 120.5 }
+            ]
+          }),
+          { status: 200 }
+        );
+      }
+      throw new Error(`Unexpected fetch: ${String(input)}`);
+    });
+
+    render(
+      <HotspotMatrix
+        hotspots={[hotspot]}
+        geojsonStatus={null}
+        onExport={() => undefined}
+        isExporting={false}
+        onExportPdf={() => undefined}
+        isExportingPdf={false}
+        onDateChange={() => undefined}
+        startDate="2026-05-27"
+        endDate="2026-05-28"
+        timeRange={{
+          startAt: new Date("2026-05-27T00:00:00Z"),
+          endAt: new Date("2026-05-28T00:00:00Z"),
+          label: "Hari ini"
+        }}
+        dateRangeLabel="Hari ini"
+        timePreset="24h"
+        onTimePresetChange={() => undefined}
+      />
+    );
+
+    expect(await screen.findByText("4×")).toBeInTheDocument();
+    expect(screen.getByText("Apr 2026 – Jul 2026")).toBeInTheDocument();
+  });
+
+  it("shows a dash in the Frekuensi column for KPS with no KLHK burned-area record", async () => {
+    render(
+      <HotspotMatrix
+        hotspots={[hotspot]}
+        geojsonStatus={null}
+        onExport={() => undefined}
+        isExporting={false}
+        onExportPdf={() => undefined}
+        isExportingPdf={false}
+        onDateChange={() => undefined}
+        startDate="2026-05-27"
+        endDate="2026-05-28"
+        timeRange={{
+          startAt: new Date("2026-05-27T00:00:00Z"),
+          endAt: new Date("2026-05-28T00:00:00Z"),
+          label: "Hari ini"
+        }}
+        dateRangeLabel="Hari ini"
+        timePreset="24h"
+        onTimePresetChange={() => undefined}
+      />
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const dashes = await screen.findAllByText("-");
+    expect(dashes.length).toBeGreaterThan(0);
   });
 });

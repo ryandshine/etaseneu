@@ -142,6 +142,22 @@ export interface HotspotClusterQueryParams {
   sensitivity?: ClusterSensitivity;
 }
 
+// Frekuensi Kebakaran per KPS: berapa periode (bulan) terpisah tiap KPS
+// pernah tercatat luas bekas terbakar resmi KLHK (bukan dari hotspot NASA
+// FIRMS) -- dipakai kolom "Frekuensi" di Buku Besar dan badge di halaman
+// Detail KPS. Lihat backend/app/services/postgres_store/_burned_area.py::burn_frequency_by_lembaga.
+export interface BurnFrequencyRecord {
+  lembaga: string;
+  periode_terbakar: number;
+  pertama: string | null;
+  terakhir: string | null;
+  total_ha: number;
+}
+
+export interface BurnFrequencyResponse {
+  rows: BurnFrequencyRecord[];
+}
+
 export interface HistoryLayerStatus {
   layer_id: string;
   cached: boolean;
@@ -245,6 +261,7 @@ export interface ApiClient {
   getHotspots: (params: HotspotQueryParams) => Promise<HotspotCollectionResponse>;
   getStats: (params: HotspotQueryParams) => Promise<StatsResponse>;
   getHotspotClusters: (params: HotspotClusterQueryParams) => Promise<ClusterCollectionResponse>;
+  getBurnFrequency: () => Promise<BurnFrequencyResponse>;
   getHistoryStatus: (params: HotspotQueryParams & { year: number }) => Promise<HistoryStatusResponse>;
   prewarmHistory: (
     params: HotspotQueryParams & { year: number },

@@ -1,5 +1,6 @@
 import type {
   ApiClient,
+  BurnFrequencyResponse,
   ClusterCollectionResponse,
   HealthResponse,
   HistoryStatusResponse,
@@ -128,6 +129,7 @@ export function createApiClient(baseUrl = "/api"): ApiClient {
     layer: (id: string) => `${baseUrl}/layers/${encodeURIComponent(id)}`,
     hotspots: `${baseUrl}/hotspots`,
     hotspotClusters: `${baseUrl}/hotspots/clusters`,
+    burnFrequency: `${baseUrl}/burned-area/frequency`,
     stats: `${baseUrl}/stats`,
     cacheHistoryStatus: `${baseUrl}/cache/history/status`,
     cacheHistoryPrewarm: `${baseUrl}/cache/history/prewarm`,
@@ -155,6 +157,7 @@ export function createApiClient(baseUrl = "/api"): ApiClient {
       fetchJson<ClusterCollectionResponse>(
         withQuery(endpoints.hotspotClusters, toClusterQueryRecord(params)),
       ),
+    getBurnFrequency: () => fetchJson<BurnFrequencyResponse>(endpoints.burnFrequency),
     getHistoryStatus: (params) =>
       fetchJson<HistoryStatusResponse>(
         withQuery(endpoints.cacheHistoryStatus, toHistoryQueryRecord(params)),

@@ -4448,6 +4448,31 @@ body {
   background: rgba(125, 211, 252, 0.08);
 }
 
+/* Frekuensi Kebakaran (Buku Besar) -- berapa periode terpisah tercatat KLHK. */
+.confidence-pill--freq-tinggi {
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.confidence-pill--freq-sedang {
+  color: #fcd34d;
+  border-color: rgba(245, 158, 11, 0.2);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.confidence-pill--freq-rendah {
+  color: #d1d5db;
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.td-periode__range {
+  font-size: 0.76rem;
+  color: rgba(255, 255, 255, 0.65);
+  white-space: nowrap;
+}
+
 .masthead {
   padding: 1.4rem 1.5rem;
   display: grid;
@@ -6414,6 +6439,7 @@ a + a {
       "num kps   jumlah"
       "num balai prov"
       "num waktu koord"
+      "num freq  periode"
       "num frp   satelit";
     gap: 0.28rem 0.5rem;
     align-items: center;
@@ -6544,6 +6570,20 @@ a + a {
   .matrix-ledger .matrix-table .td-satelit__sub {
     font-size: 0.62rem;
     color: rgba(209, 213, 219, 0.4);
+  }
+
+  .matrix-ledger .matrix-table .td-frekuensi {
+    grid-area: freq;
+  }
+
+  .matrix-ledger .matrix-table .td-periode {
+    grid-area: periode;
+    justify-self: end;
+    color: rgba(209, 213, 219, 0.55);
+  }
+
+  .matrix-ledger .matrix-table .td-periode .td-periode__range {
+    font-size: 0.68rem;
   }
 
   /* Footer: hitungan di kiri, penomoran halaman di kanan, tetap satu baris.

@@ -64,6 +64,17 @@ async def burned_area_by_skema(
     }
 
 
+@router.get("/burned-area/frequency")
+async def burned_area_frequency() -> dict[str, object]:
+    """Berapa periode (bulan) terpisah tiap KPS pernah tercatat terbakar
+    resmi KLHK -- dipakai kolom "Frekuensi" di Buku Besar (Matriks Data).
+    Tidak terikat filter waktu dashboard, dipanggil sekali saat halaman
+    dibuka."""
+    store = PostgresStore(get_settings().database_url)
+    rows = store.burn_frequency_by_lembaga()
+    return {"rows": rows}
+
+
 @router.get("/burned-area/geometry")
 async def burned_area_geometry(
     polygon_ids: list[int] = Query(default=[]),

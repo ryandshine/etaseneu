@@ -3,8 +3,9 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, Re
 import { Download } from "lucide-react";
 
 import { BurnedAreaCard } from "./BurnedAreaCard";
-import type { GeoJsonStatusResponse, PolygonDetail } from "../types/api";
+import type { BurnFrequencyRecord, GeoJsonStatusResponse, PolygonDetail } from "../types/api";
 import { formatDateWIB, getTodayWIB } from "../lib/date";
+import { createApiClient } from "../lib/api";
 import { TIME_PRESET_OPTIONS, type TimePreset } from "../constants/time-windows";
 import type { TimeRange } from "../hooks/useDashboardData";
 import {
@@ -14,6 +15,19 @@ import {
   getFrpCategory,
   normalizeFrpCategoryLabel
 } from "../lib/hotspotDisplay";
+
+const api = createApiClient();
+
+const BULAN_PENDEK = [
+  "", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"
+];
+
+function formatPeriodeSingkat(iso: string | null): string {
+  if (!iso) return "-";
+  const [year, month] = iso.split("-");
+  const m = Number(month);
+  return `${BULAN_PENDEK[m] ?? month} ${year}`;
+}
 
 type MatrixHotspot = {
   id: string;
@@ -862,6 +876,40 @@ export function HotspotMatrix({
   const [downloadingKpsKey, setDownloadingKpsKey] = useState<string | null>(null);
   const [kpsDownloadError, setKpsDownloadError] = useState<string | null>(null);
 
+  // Frekuensi Kebakaran (data KLHK burned_area_summary) -- sumbernya beda
+  // total dari `hotspots` (NASA FIRMS) yang dipakai groupedRows di bawah,
+  // dan tidak terikat filter waktu/satelit dashboard, jadi di-fetch sendiri
+  // sekali saat mount (bukan lewat useDashboardData).
+  const [burnFrequency, setBurnFrequency] = useState<BurnFrequencyRecord[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getBurnFrequency()
+      .then((response) => {
+        if (!cancelled) {
+          setBurnFrequency(response.rows);
+        }
+      })
+      .catch(() => {
+        /* diamkan -- kolom Frekuensi cukup tampil "-" kalau gagal, bukan
+           kegagalan yang layak menghentikan seluruh Buku Besar */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Nama lembaga di data KLHK kadang punya whitespace tersisa (mis. "\r\n"
+  // di akhir) -- di-trim di kedua sisi supaya tetap cocok dengan key dari
+  // groupedRows (yang sumbernya beda tabel/pipeline sama sekali).
+  const burnFrequencyByLembaga = useMemo(() => {
+    const map = new Map<string, BurnFrequencyRecord>();
+    burnFrequency.forEach((row) => {
+      map.set(row.lembaga.trim(), row);
+    });
+    return map;
+  }, [burnFrequency]);
+
   // Cascading filter: Province options only show provinces that have hotspots
   // matching the current wilkerFilter (and confidence). So picking a Wilker
   // narrows down which Provinces appear, and vice-versa.
@@ -1484,12 +1532,15 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                       <th scope="col">Provinsi</th>
                       <th scope="col">FRP</th>
                       <th scope="col">Satelit</th>
+                      <th scope="col">Frekuensi</th>
+                      <th scope="col">Periode</th>
                       <th className="th-aksi" scope="col">Aksi</th>
                     </tr>
                   </thead>
                   <tbody>
                     {groupedRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((group, index) => {
                       const hotspot = group.representativeHotspot;
+                      const freq = burnFrequencyByLembaga.get(group.key.trim());
                       const rowNumber = (currentPage - 1) * PAGE_SIZE + index + 1;
 
                       return (
@@ -1543,6 +1594,35 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                                 <span className="td-satelit__sub">{hotspot.satellite}</span>
                               )}
                             </div>
+                          </td>
+                          <td className="td-frekuensi" data-label="Frekuensi">
+                            {freq ? (
+                              <span
+                                className={`confidence-pill confidence-pill--freq-${
+                                  freq.periode_terbakar >= 4
+                                    ? "tinggi"
+                                    : freq.periode_terbakar >= 2
+                                      ? "sedang"
+                                      : "rendah"
+                                }`}
+                              >
+                                {freq.periode_terbakar}&times;
+                              </span>
+                            ) : (
+                              <span className="muted-copy">-</span>
+                            )}
+                          </td>
+                          <td className="td-periode" data-label="Periode">
+                            {freq ? (
+                              <span className="td-periode__range">
+                                {formatPeriodeSingkat(freq.pertama)}
+                                {freq.pertama !== freq.terakhir && (
+                                  <> &ndash; {formatPeriodeSingkat(freq.terakhir)}</>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="muted-copy">-</span>
+                            )}
                           </td>
                           <td className="td-aksi" data-label="Aksi">
                             <button

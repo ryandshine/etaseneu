@@ -285,7 +285,11 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
     // tidak disalahartikan sebagai luas area sesungguhnya.
     const displayHa = uniqueHa ?? accumulatedHa;
     const isAccumulated = uniqueHa === null;
-    return { displayHa, isAccumulated, latest: sorted[0], months: sorted };
+    // Periode (bulan) TERPISAH KPS ini tercatat terbakar -- beda dari
+    // `burnedAreas.length`/`months.length` yang bisa lebih dari satu baris
+    // untuk bulan yang sama (mis. beberapa bidang bekas terbakar sekaligus).
+    const periodeTerbakar = new Set(burnedAreas.map((row) => `${row.year}-${row.month}`)).size;
+    return { displayHa, isAccumulated, latest: sorted[0], months: sorted, periodeTerbakar };
   }, [burnedAreas, uniqueHa]);
 
   const stats = useMemo(() => {
@@ -402,6 +406,17 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                   <span>{burnedAreaStats.isAccumulated ? "Luas terbakar (akumulasi bulanan):" : "Luas terbakar (area unik):"}</span>
                   <strong>{formatNumber(Math.round(burnedAreaStats.displayHa * 10) / 10)} Ha</strong>
                 </div>
+                {burnedAreaStats.periodeTerbakar > 1 && (
+                  <p className="help-copy" style={{ marginTop: "0.4rem" }}>
+                    <span
+                      className={`confidence-pill confidence-pill--freq-${
+                        burnedAreaStats.periodeTerbakar >= 4 ? "tinggi" : "sedang"
+                      }`}
+                    >
+                      Terbakar berulang &middot; {burnedAreaStats.periodeTerbakar}&times; periode
+                    </span>
+                  </p>
+                )}
                 {burnedAreaStats.isAccumulated && (
                   <p className="help-copy" style={{ marginTop: "0.3rem", color: "#f59e0b" }}>
                     Jumlah angka per bulan -- lahan yang terbakar lebih dari sekali
