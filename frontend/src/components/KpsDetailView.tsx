@@ -3,7 +3,9 @@ import { ArrowLeft, Download } from "lucide-react";
 import { CircleMarker, GeoJSON, MapContainer, Pane, Popup, TileLayer, useMap } from "react-leaflet";
 import { circleMarker as buildLeafletCircleMarker, geoJSON as buildLeafletGeoJSON } from "leaflet";
 
+import { SATELLITE_OPTIONS } from "../constants/satellites";
 import type { DashboardHotspot } from "../hooks/useDashboardData";
+import { createApiClient } from "../lib/api";
 import type { PolygonDetail } from "../types/api";
 import { WeatherConditionCard } from "./WeatherConditionCard";
 import {
@@ -13,8 +15,11 @@ import {
   formatTimestamp,
   getFrpCategory,
   getStatusLabel,
+  mapHotspotRecordToDashboardHotspot,
   normalizeFrpCategoryLabel
 } from "../lib/hotspotDisplay";
+
+const api = createApiClient();
 
 const DETECTION_PAGE_SIZE = 10;
 
@@ -57,6 +62,23 @@ function sourceColor(source: string): string {
     return "#facc15";
   }
   return "#ffd7a8";
+}
+
+// Batas hari kalender WIB (UTC+7) untuk tanggal "YYYY-MM-DD" dari <input
+// type="date">. Dipakai cuma di sini karena inputnya selalu tanggal valid
+// (bukan input mengetik-bebas seperti di FilterPanel), jadi tidak perlu
+// penjagaan tanggal-tidak-valid seperti `getWibDate` di useDashboardData.ts.
+function wibDateBoundaryIso(dateStr: string, endOfDay: boolean): string {
+  return new Date(`${dateStr}T${endOfDay ? "23:59:59" : "00:00:00"}+07:00`).toISOString();
+}
+
+// Perbandingan "YYYYMM" supaya baris/riwayat KLHK bisa disaring ke rentang
+// kustom halaman ini tanpa perlu ubah endpoint backend (datanya kecil per-KPS).
+function isPeriodInRange(year: number, month: number, startDate: string, endDate: string): boolean {
+  const period = year * 100 + month;
+  const [startYear, startMonth] = startDate.split("-").map(Number);
+  const [endYear, endMonth] = endDate.split("-").map(Number);
+  return period >= startYear * 100 + startMonth && period <= endYear * 100 + endMonth;
 }
 
 // Peta polygon detail dimulai dari view Indonesia lalu di-fit ke batas
@@ -141,23 +163,44 @@ const INFO_FIELDS: Array<[label: string, key: keyof PolygonDetail]> = [
 ];
 
 export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExportingPdf }: KpsDetailViewProps) {
+  // Filter waktu independen, khusus halaman ini -- kosong (default) berarti
+  // "ikuti apa pun rentang dashboard yang aktif" (perilaku lama, tidak
+  // berubah). Begitu keduanya terisi, `customHotspots` menggantikan `hotspots`
+  // sebagai sumber data (lihat `kpsHotspots` di bawah), dan riwayat KLHK ikut
+  // disaring ke rentang yang sama di titik pemakaiannya.
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
+  const [customHotspots, setCustomHotspots] = useState<DashboardHotspot[] | null>(null);
+  const [customLoading, setCustomLoading] = useState(false);
+  const [customError, setCustomError] = useState<string | null>(null);
+  const isCustomRangeActive = Boolean(customStartDate && customEndDate);
+
   // Semua titik hotspot milik KPS ini sudah tersedia dari dataset yang sama
   // dipakai Buku Besar -- tidak perlu endpoint tambahan, tinggal disaring
   // pakai nama KPS (LEMBAGA/agencyName), yang selalu ada di tiap baris
   // (beda dari polygon_metadata_id yang bisa saja belum ke-link).
   const kpsHotspots = useMemo(
     () =>
-      hotspots
+      (customHotspots ?? hotspots)
         .filter((hotspot) => formatMetadataValue(hotspot.polygonMetadata.LEMBAGA || hotspot.agencyName) === agency)
         .sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime()),
-    [hotspots, agency]
+    [hotspots, customHotspots, agency]
   );
 
   // Cari ID polygon dari hotspot MANAPUN di grup ini yang sudah ke-link --
   // bukan cuma yang terbaru, supaya satu-dua titik yang belum sempat
   // ke-spatial-join tidak bikin seluruh halaman kehilangan polygon-nya.
+  //
+  // Sengaja pakai `hotspots` (prop dashboard, tidak disaring rentang
+  // kustom), BUKAN `kpsHotspots` -- polygon KPS adalah entitas tetap,
+  // resolusinya tidak boleh hilang cuma karena rentang waktu kustom
+  // kebetulan tidak berisi titik untuk KPS ini (yang bikin seluruh info
+  // panel + riwayat KLHK ikut kosong padahal cuma titik hotspotnya yang nol).
   const polygonId = useMemo(() => {
-    for (const hotspot of kpsHotspots) {
+    for (const hotspot of hotspots) {
+      if (formatMetadataValue(hotspot.polygonMetadata.LEMBAGA || hotspot.agencyName) !== agency) {
+        continue;
+      }
       const raw = hotspot.polygonMetadata.polygon_metadata_id;
       const parsed = raw ? Number(raw) : NaN;
       if (Number.isFinite(parsed)) {
@@ -165,7 +208,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
       }
     }
     return null;
-  }, [kpsHotspots]);
+  }, [hotspots, agency]);
 
   const [detail, setDetail] = useState<PolygonDetail | null>(null);
   const [loading, setLoading] = useState(polygonId !== null);
@@ -215,6 +258,50 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
       active = false;
     };
   }, [polygonId]);
+
+  // Fetch khusus halaman ini untuk rentang kustom -- lepas dari filter waktu
+  // dashboard. Discope ke layer dataset KPS ini (`detail.layer_key`, PS atau
+  // Hutan Adat) lalu disaring per-agency di `kpsHotspots` di atas, sama
+  // seperti cara `hotspots` dari dashboard sudah diperlakukan.
+  useEffect(() => {
+    if (!isCustomRangeActive || !detail?.layer_key) {
+      setCustomHotspots(null);
+      setCustomLoading(false);
+      setCustomError(null);
+      return;
+    }
+
+    let active = true;
+    setCustomLoading(true);
+    setCustomError(null);
+
+    api
+      .getHotspots({
+        start_at: wibDateBoundaryIso(customStartDate, false),
+        end_at: wibDateBoundaryIso(customEndDate, true),
+        satellites: SATELLITE_OPTIONS.map((option) => option.value),
+        active_layers: [detail.layer_key],
+        view: "full"
+      })
+      .then((response) => {
+        if (!active) return;
+        setCustomHotspots(response.hotspots.map(mapHotspotRecordToDashboardHotspot));
+      })
+      .catch(() => {
+        if (!active) return;
+        setCustomHotspots([]);
+        setCustomError("Gagal memuat data hotspot untuk rentang ini.");
+      })
+      .finally(() => {
+        if (active) {
+          setCustomLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isCustomRangeActive, customStartDate, customEndDate, detail?.layer_key]);
 
   // Luas kebakaran (overlay resmi KLHK) untuk polygon ini. Sengaja dibiarkan
   // gagal diam-diam: rekapnya terbit tidak dengan jadwal tetap, jadi KPS
@@ -271,26 +358,54 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
     };
   }, [polygonId]);
 
+  // Riwayat KLHK disaring ke rentang kustom (kalau aktif) di titik pemakaian
+  // ini -- fetch-nya sendiri (di atas) tetap ambil SELURUH riwayat sekali
+  // saja, datanya kecil per-KPS jadi tidak perlu bolak-balik ke server tiap
+  // ganti tanggal.
+  const effectiveBurnedAreas = useMemo(() => {
+    if (!isCustomRangeActive) {
+      return burnedAreas;
+    }
+    return burnedAreas.filter((row) => isPeriodInRange(row.year, row.month, customStartDate, customEndDate));
+  }, [burnedAreas, isCustomRangeActive, customStartDate, customEndDate]);
+
+  // Overlay peta (jejak area terbakar) mengikuti saringan rentang kustom yang
+  // sama -- supaya arsiran merah di peta konsisten dengan daftar & badge di
+  // sidebar, bukan selalu menampilkan seluruh riwayat.
+  const effectiveBurnedGeometry = useMemo(() => {
+    if (!burnedGeometry || !isCustomRangeActive) {
+      return burnedGeometry;
+    }
+    return {
+      ...burnedGeometry,
+      features: burnedGeometry.features.filter((feature) =>
+        isPeriodInRange(feature.properties.year, feature.properties.month, customStartDate, customEndDate)
+      )
+    };
+  }, [burnedGeometry, isCustomRangeActive, customStartDate, customEndDate]);
+
   const burnedAreaStats = useMemo(() => {
-    if (burnedAreas.length === 0) {
+    if (effectiveBurnedAreas.length === 0) {
       return null;
     }
-    const accumulatedHa = burnedAreas.reduce((sum, row) => sum + (row.burned_area_ha ?? 0), 0);
-    const sorted = [...burnedAreas].sort(
+    const accumulatedHa = effectiveBurnedAreas.reduce((sum, row) => sum + (row.burned_area_ha ?? 0), 0);
+    const sorted = [...effectiveBurnedAreas].sort(
       (a, b) => b.year - a.year || b.month - a.month
     );
-    // uniqueHa (dari ST_Union server) adalah luas area yang benar -- dipakai
-    // kalau tersedia. accumulatedHa cuma fallback untuk KPS yang belum punya
-    // geometry tersimpan, dan diberi label "akumulasi" (bukan "total") supaya
-    // tidak disalahartikan sebagai luas area sesungguhnya.
-    const displayHa = uniqueHa ?? accumulatedHa;
-    const isAccumulated = uniqueHa === null;
+    // uniqueHa (dari ST_Union server) dihitung utk SELURUH riwayat polygon --
+    // kalau rentang kustom aktif dan tidak mencakup semua periode, angka itu
+    // jadi tidak representatif utk subset yang sedang ditampilkan, jadi ikut
+    // jatuh ke akumulasi bulanan (subset) juga, sama seperti fallback KPS yang
+    // belum punya geometry tersimpan.
+    const coversFullHistory = !isCustomRangeActive || effectiveBurnedAreas.length === burnedAreas.length;
+    const displayHa = uniqueHa !== null && coversFullHistory ? uniqueHa : accumulatedHa;
+    const isAccumulated = !(uniqueHa !== null && coversFullHistory);
     // Periode (bulan) TERPISAH KPS ini tercatat terbakar -- beda dari
     // `burnedAreas.length`/`months.length` yang bisa lebih dari satu baris
     // untuk bulan yang sama (mis. beberapa bidang bekas terbakar sekaligus).
-    const periodeTerbakar = new Set(burnedAreas.map((row) => `${row.year}-${row.month}`)).size;
+    const periodeTerbakar = new Set(effectiveBurnedAreas.map((row) => `${row.year}-${row.month}`)).size;
     return { displayHa, isAccumulated, latest: sorted[0], months: sorted, periodeTerbakar };
-  }, [burnedAreas, uniqueHa]);
+  }, [effectiveBurnedAreas, burnedAreas.length, uniqueHa, isCustomRangeActive]);
 
   const stats = useMemo(() => {
     let tinggi = 0;
@@ -352,6 +467,52 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
           </button>
         </div>
       </header>
+
+      <section className="panel kps-detail-info" style={{ marginBottom: "1rem" }}>
+        <p className="filter-group-label">Filter Waktu Halaman Ini</p>
+        <div className="filter-date-grid">
+          <label className="field">
+            <span>Dari</span>
+            <input
+              type="date"
+              className="filter-date-input"
+              value={customStartDate}
+              onChange={(event) => setCustomStartDate(event.currentTarget.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Ke</span>
+            <input
+              type="date"
+              className="filter-date-input"
+              value={customEndDate}
+              onChange={(event) => setCustomEndDate(event.currentTarget.value)}
+            />
+          </label>
+        </div>
+        <p className="help-copy" style={{ marginTop: "0.5rem" }}>
+          {customError
+            ? customError
+            : !isCustomRangeActive
+              ? "Mengikuti rentang waktu dashboard saat ini."
+              : customLoading
+                ? "Memuat data untuk rentang ini..."
+                : "Menampilkan titik hotspot & riwayat bekas terbakar untuk rentang kustom ini saja."}
+        </p>
+        {isCustomRangeActive && (
+          <button
+            type="button"
+            className="kps-detail-back"
+            style={{ marginTop: "0.6rem" }}
+            onClick={() => {
+              setCustomStartDate("");
+              setCustomEndDate("");
+            }}
+          >
+            Kembali ke rentang dashboard
+          </button>
+        )}
+      </section>
 
       {error ? <p className="toast-error toast-error--inline">{error}</p> : null}
 
@@ -443,7 +604,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                     ))}
                   </div>
                 )}
-                {burnedGeometry && (
+                {effectiveBurnedGeometry && effectiveBurnedGeometry.features.length > 0 && (
                   <p className="help-copy" style={{ marginTop: "0.5rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
                     <span
                       style={{
@@ -458,7 +619,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                     Area merah di peta = jejak lahan terbakar.
                   </p>
                 )}
-                {burnedGeometry?.features.some((feature) => feature.properties.is_estimated) && (
+                {effectiveBurnedGeometry?.features.some((feature) => feature.properties.is_estimated) && (
                   <p className="help-copy" style={{ marginTop: "0.3rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
                     <span
                       style={{
@@ -514,11 +675,14 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                 antara batas KPS (overlayPane, 400) dan titik hotspot (450)
                 supaya arsiran merahnya menimpa batas kawasan tapi tidak
                 menutupi titik. */}
-            {burnedGeometry && (
+            {effectiveBurnedGeometry && effectiveBurnedGeometry.features.length > 0 && (
               <Pane name="area-terbakar" style={{ zIndex: 420 }}>
                 <GeoJSON
-                  key={`burned-${polygonId}`}
-                  data={burnedGeometry as never}
+                  // Disertakan rentang kustom di key -- GeoJSON react-leaflet
+                  // tidak mendiff ulang `data` di render berikutnya, jadi tanpa
+                  // ini overlay tidak ikut menyempit saat filter diganti.
+                  key={`burned-${polygonId}-${customStartDate}-${customEndDate}`}
+                  data={effectiveBurnedGeometry as never}
                   style={{
                     color: "#dc2626",
                     weight: 1,

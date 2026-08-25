@@ -2,6 +2,66 @@
 // (tabel Buku Besar) dan KpsDetailView (halaman detail KPS) -- dipisah ke
 // sini supaya kedua tempat itu tidak punya salinan logika yang bisa mencar.
 
+import type { HotspotRecord } from "../types/api";
+
+export function normalizeLembagaName(name: string): string {
+  if (!name) return name;
+  if (name.toLowerCase() === "lphd nyuai peningun") return "Areal Perhutanan Sosial";
+  return name;
+}
+
+// Bentuk hasil transformasi ini sengaja tidak diimpor dari useDashboardData.ts
+// (akan bikin import siklik) -- KpsDetailView & useDashboardData sama-sama
+// punya `DashboardHotspot` yang cocok dengan tipe balik fungsi ini secara
+// struktural.
+export type MappedDashboardHotspot = {
+  id: string;
+  latitude: number;
+  longitude: number;
+  source: string;
+  satellite: string;
+  layerName: string;
+  agencyName: string;
+  provinceName: string;
+  brightness: number | null;
+  frp: number | null;
+  confidence: string;
+  daynight: string;
+  detectedAt: string;
+  polygonMetadata: Record<string, string>;
+};
+
+export function mapHotspotRecordToDashboardHotspot(
+  hotspot: HotspotRecord,
+  index: number
+): MappedDashboardHotspot {
+  return {
+    id: String(hotspot.id ?? `${hotspot.latitude}-${hotspot.longitude}-${index}`),
+    latitude: Number(hotspot.latitude ?? 0),
+    longitude: Number(hotspot.longitude ?? 0),
+    source: String(hotspot.source ?? "Unknown"),
+    satellite: String(hotspot.satellite ?? "Unknown"),
+    layerName: normalizeLembagaName(String(hotspot.layer_name ?? "Unassigned")),
+    agencyName: normalizeLembagaName(String(hotspot.agency_name ?? hotspot.layer_name ?? "Unassigned")),
+    provinceName: String(hotspot.province_name ?? ""),
+    polygonMetadata: Object.entries(hotspot.polygon_metadata ?? {}).reduce<Record<string, string>>(
+      (accumulator, [key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          accumulator[key] = key === "LEMBAGA" ? normalizeLembagaName(String(value)) : String(value);
+        }
+        return accumulator;
+      },
+      {}
+    ),
+    brightness:
+      hotspot.brightness === null || hotspot.brightness === undefined ? null : Number(hotspot.brightness),
+    frp: hotspot.frp === null || hotspot.frp === undefined ? null : Number(hotspot.frp),
+    confidence: String(hotspot.confidence ?? "Unknown"),
+    daynight: String(hotspot.daynight ?? ""),
+    detectedAt: String(hotspot.detected_at ?? "")
+  };
+}
+
 export type HotspotLike = {
   source: string;
   satellite: string;

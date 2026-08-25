@@ -4,6 +4,7 @@ import { SATELLITE_OPTIONS } from "../constants/satellites";
 import { type TimePreset } from "../constants/time-windows";
 import { createApiClient } from "../lib/api";
 import { getCurrentDateWIB, formatDateWIB, getTodayWIB } from "../lib/date";
+import { mapHotspotRecordToDashboardHotspot, normalizeLembagaName } from "../lib/hotspotDisplay";
 import type {
   GeoJsonStatusResponse,
   HistoryStatusResponse,
@@ -49,12 +50,6 @@ export type TimeRange = {
   endAt: Date;
   label: string;
 };
-
-function normalizeLembagaName(name: string): string {
-  if (!name) return name;
-  if (name.toLowerCase() === "lphd nyuai peningun") return "Areal Perhutanan Sosial";
-  return name;
-}
 
 function mapLayerResponse(layer: LayerFeature): DashboardLayer {
   return {
@@ -318,36 +313,7 @@ export function useDashboardData(
       };
       const hotspotsRes = await api.getHotspots(initialQueryParams);
 
-      const mappedHotspots = hotspotsRes.hotspots.map((hotspot, index) => ({
-        id: String(hotspot.id ?? `${hotspot.latitude}-${hotspot.longitude}-${index}`),
-        latitude: Number(hotspot.latitude ?? 0),
-        longitude: Number(hotspot.longitude ?? 0),
-        source: String(hotspot.source ?? "Unknown"),
-        satellite: String(hotspot.satellite ?? "Unknown"),
-        layerName: normalizeLembagaName(String(hotspot.layer_name ?? "Unassigned")),
-        agencyName: normalizeLembagaName(String(hotspot.agency_name ?? hotspot.layer_name ?? "Unassigned")),
-        provinceName: String(hotspot.province_name ?? ""),
-        polygonMetadata: Object.entries(hotspot.polygon_metadata ?? {}).reduce<Record<string, string>>(
-          (accumulator, [key, value]) => {
-            if (value !== undefined && value !== null && value !== "") {
-              accumulator[key] = key === "LEMBAGA" ? normalizeLembagaName(String(value)) : String(value);
-            }
-            return accumulator;
-          },
-          {},
-        ),
-        brightness:
-          hotspot.brightness === null || hotspot.brightness === undefined
-            ? null
-            : Number(hotspot.brightness),
-        frp:
-          hotspot.frp === null || hotspot.frp === undefined
-            ? null
-            : Number(hotspot.frp),
-        confidence: String(hotspot.confidence ?? "Unknown"),
-        daynight: String(hotspot.daynight ?? ""),
-        detectedAt: String(hotspot.detected_at ?? "")
-      }));
+      const mappedHotspots = hotspotsRes.hotspots.map(mapHotspotRecordToDashboardHotspot);
 
       setLayers(mappedLayers);
       setSchedulerMetrics(schedulerRes);
@@ -482,38 +448,7 @@ export function useDashboardData(
         .getHotspots(hotspotQueryParams)
         .then((response) => {
           if (!isMounted) return;
-          setHotspots(
-            response.hotspots.map((hotspot, index) => ({
-              id: String(hotspot.id ?? `${hotspot.latitude}-${hotspot.longitude}-${index}`),
-              latitude: Number(hotspot.latitude ?? 0),
-              longitude: Number(hotspot.longitude ?? 0),
-              source: String(hotspot.source ?? "Unknown"),
-              satellite: String(hotspot.satellite ?? "Unknown"),
-              layerName: normalizeLembagaName(String(hotspot.layer_name ?? "Unassigned")),
-              agencyName: normalizeLembagaName(String(hotspot.agency_name ?? hotspot.layer_name ?? "Unassigned")),
-              provinceName: String(hotspot.province_name ?? ""),
-              polygonMetadata: Object.entries(hotspot.polygon_metadata ?? {}).reduce<Record<string, string>>(
-                (accumulator, [key, value]) => {
-                  if (value !== undefined && value !== null && value !== "") {
-                    accumulator[key] = key === "LEMBAGA" ? normalizeLembagaName(String(value)) : String(value);
-                  }
-                  return accumulator;
-                },
-                {},
-              ),
-              brightness:
-                hotspot.brightness === null || hotspot.brightness === undefined
-                  ? null
-                  : Number(hotspot.brightness),
-              frp:
-                hotspot.frp === null || hotspot.frp === undefined
-                  ? null
-                  : Number(hotspot.frp),
-              confidence: String(hotspot.confidence ?? "Unknown"),
-              daynight: String(hotspot.daynight ?? ""),
-              detectedAt: String(hotspot.detected_at ?? "")
-            })),
-          );
+          setHotspots(response.hotspots.map(mapHotspotRecordToDashboardHotspot));
           setRemoteStats(response.stats);
           setLoadError(null);
         })
