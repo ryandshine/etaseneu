@@ -830,13 +830,41 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                       is_estimated: boolean;
                     };
                     const note = props.is_estimated
-                      ? `<br/><em>Perkiraan lokasi -- luas di bawah resolusi piksel citra satelit</em>`
+                      ? `<div style="margin-top:6px;font-size:11px;font-style:italic">Perkiraan lokasi -- luas di bawah resolusi piksel citra satelit</div>`
                       : "";
+
+                    // KPS ini bisa punya lebih dari satu bidang bekas terbakar
+                    // tercatat di bulan berbeda -- daripada cuma menunjukkan
+                    // bulan yang diklik (seperti sebelumnya), popup ikut
+                    // mendaftar periode lain yang tersedia, mirip info
+                    // "Terdeteksi: X bulan" di popup Bekas Kebakaran peta utama,
+                    // tapi dirinci per tanggal karena di sini datanya memang
+                    // sudah per-bulan (bukan agregat satu angka).
+                    const otherMonths = effectiveBurnedAreas
+                      .filter((row) => !(row.year === props.year && row.month === props.month))
+                      .sort((a, b) => b.year - a.year || b.month - a.month);
+                    const shownOtherMonths = otherMonths.slice(0, 6);
+                    const otherMonthsHtml =
+                      otherMonths.length > 0
+                        ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(27,15,10,0.12);font-size:11px">
+                             <div style="font-weight:700;margin-bottom:4px;color:rgba(27,15,10,0.62);text-transform:uppercase;letter-spacing:0.04em;font-size:10px">Periode lain KPS ini</div>
+                             ${shownOtherMonths
+                               .map(
+                                 (row) =>
+                                   `<div style="display:flex;justify-content:space-between;gap:10px"><span>${MONTH_LABELS[row.month - 1]} ${row.year}</span><strong>${formatNumber(Math.round(row.burned_area_ha * 10) / 10)} Ha</strong></div>`
+                               )
+                               .join("")}
+                             ${otherMonths.length > shownOtherMonths.length ? `<div style="margin-top:2px;opacity:0.7">+${otherMonths.length - shownOtherMonths.length} periode lainnya</div>` : ""}
+                           </div>`
+                        : "";
+
                     layer.bindPopup(
-                      `<div style="font-size:12px;font-family:sans-serif">
-                         <strong>Area terbakar</strong><br/>
-                         ${MONTH_LABELS[props.month - 1]} ${props.year}<br/>
-                         ${formatNumber(Math.round(props.burned_area_ha * 10) / 10)} Ha${note}
+                      `<div style="font-size:12px;font-family:sans-serif;min-width:190px">
+                         <strong style="color:#dc2626">Area Terbakar</strong>
+                         <div style="margin-top:6px">${MONTH_LABELS[props.month - 1]} ${props.year}</div>
+                         <div style="margin-top:4px">Luas: <strong>${formatNumber(Math.round(props.burned_area_ha * 10) / 10)} Ha</strong></div>
+                         ${note}
+                         ${otherMonthsHtml}
                        </div>`
                     );
                   }}
