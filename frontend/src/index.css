@@ -7122,11 +7122,11 @@ a + a {
 .kompleks-topbar {
   padding: 1.1rem 1.5rem 0.9rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  /* Kolom: blok judul+deskripsi lalu baris kontrol di bawahnya -- bukan lagi
+     kontrol yang dijejalkan ke pojok kanan-atas (hint-nya meluber di sana). */
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1.2rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 0.9rem;
 }
 
 .kompleks-topbar h2 {
@@ -7142,13 +7142,20 @@ a + a {
 
 .kompleks-controls {
   display: flex;
-  gap: 0.6rem;
+  gap: 1rem 1.25rem;
   flex-wrap: wrap;
+  align-items: flex-start;
 }
 
 .kompleks-controls .field {
-  min-width: 11rem;
-  max-width: 20rem;
+  flex: 0 1 auto;
+  min-width: 12rem;
+  max-width: 21rem;
+}
+
+/* Select-nya sendiri tetap ringkas walau kolom field-nya melebar demi hint. */
+.kompleks-controls .field .filter-select-input {
+  max-width: 14rem;
 }
 
 .field-hint {

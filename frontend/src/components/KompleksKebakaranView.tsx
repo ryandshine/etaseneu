@@ -163,10 +163,8 @@ export function KompleksKebakaranView({ onOpenKpsDetail }: KompleksKebakaranView
               ))}
             </select>
             <small className="field-hint">
-              {SENSITIVITY_OPTIONS.find((o) => o.value === sensitivity)?.hint}. Ambang
-              &ldquo;seberapa dekat&rdquo; dua titik panas (jarak &amp; jeda waktu antar-deteksi)
-              supaya dianggap satu kejadian &mdash; <b>bukan</b> jendela data yang dianalisis
-              (itu &ldquo;Rentang Waktu&rdquo; di atas).
+              {SENSITIVITY_OPTIONS.find((o) => o.value === sensitivity)?.hint}. Ambang penggabungan
+              titik &mdash; <b>bukan</b> Rentang Waktu.
             </small>
           </label>
         </div>
