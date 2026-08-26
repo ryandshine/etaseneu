@@ -153,17 +153,14 @@ export default function App() {
 
   const handleViewChange = (view: AppView) => {
     if (view === "settings") {
-      // Akun role admin sudah membuktikan identitasnya lewat login (JWT) --
-      // tidak perlu password ADMIN_API_KEY kedua kalinya lewat modal ini.
-      // Backend (require_admin_key) menerima sesi JWT role admin sebagai
-      // jalur otorisasi yang setara dengan X-Admin-Key, lihat core/auth.py.
-      // Non-admin (role user) tetap lewat gerbang password lama.
+      // Menu Pengaturan khusus admin -- tombolnya disembunyikan di SidebarNav
+      // untuk role user; guard ini menutup jalur lain (mis. state lama).
+      // Admin sudah membuktikan identitas lewat login JWT, jadi tidak perlu
+      // password ADMIN_API_KEY kedua kalinya (require_admin_key menerima sesi
+      // JWT role admin, lihat core/auth.py).
       if (session?.role === "admin") {
         commitViewChange("settings");
-        return;
       }
-      setPasswordGateError(null);
-      setPasswordGateOpen(true);
       return;
     }
     commitViewChange(view);
@@ -548,6 +545,7 @@ export default function App() {
         latestHotspotTimeLabel={latestHotspotTimeLabel}
         dataAgeLabel={dataAgeLabel}
         hasLatestHotspot={!!latestHotspot}
+        isAdmin={session?.role === "admin"}
         mobileOpen={mobileMenuOpen}
         filterSlot={activeView === "map" ? (
           <FilterPanel

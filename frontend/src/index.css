@@ -106,20 +106,34 @@ body {
   overflow: hidden;
 }
 
-/* Dibatasi setinggi layar supaya .side-scroll punya batas untuk menyusut.
-   Induknya (.app-frame) memakai min-height, jadi tanpa batas ini sidebar ikut
-   tumbuh mengikuti isi filter dan blok status sinkronisasi di bawah terdorong
-   keluar layar -- sementara .app-frame { overflow: hidden } membuatnya tidak
-   bisa digulir sama sekali. */
+/* SATU area gulir untuk seluruh isi sidebar (brand + nav + filter + status).
+   Sebelumnya cuma bagian tengah (.side-scroll) yang menggulir sementara brand
+   & footer status dipatok -- di layar pendek itu menyisakan jendela filter
+   yang sempit dan terasa seperti "scroll di dalam scroll". Sekarang semuanya
+   mengalir dalam satu gulungan di sini. .app-frame { overflow: hidden } jadi
+   batas tingginya. */
 .side-rail {
   display: flex;
   flex-direction: column;
   min-width: 0;
   max-height: 100vh;
   max-height: 100dvh;
+  overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(19, 21, 26, 0.96);
+}
+
+.side-rail::-webkit-scrollbar {
+  width: 6px;
+}
+
+.side-rail::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
 }
 
 .side-brand {
@@ -158,26 +172,12 @@ body {
   text-transform: uppercase;
 }
 
-/* Area tengah sidebar (navigasi + filter). `min-height: 0` wajib: tanpa itu
-   flex item menolak menyusut di bawah tinggi kontennya, sehingga blok status
-   sinkronisasi di bawah akan terdorong keluar layar alih-alih memunculkan
-   scrollbar di sini. */
+/* Dulu container gulir tersendiri; sekarang cuma pembungkus biasa -- gulir
+   ditangani .side-rail (satu gulungan untuk semua isi sidebar). */
 .side-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
-}
-
-.side-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-
-.side-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16);
-  border-radius: 999px;
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
 }
 
 /* Padding horizontal diserahkan ke .panel--filters (1rem) supaya tidak dobel. */
@@ -283,7 +283,6 @@ body {
 }
 
 .side-footer {
-  margin-top: auto;
   display: grid;
   gap: 0.8rem;
   padding: 1rem 1rem 1.15rem;

@@ -558,41 +558,21 @@ describe("App", () => {
     ).toBe(true);
   });
 
-  it("verifies the settings password against the backend instead of a hardcoded string", async () => {
-    // Role non-admin: gerbang password ADMIN_API_KEY (PasswordGateModal)
-    // cuma masih ditempuh oleh sesi non-admin sejak akun admin login
-    // otomatis melewatinya (lihat App.tsx::handleViewChange).
+  it("menyembunyikan menu Pengaturan + tombol Sync/Prewarm untuk role user", async () => {
     render(<App />);
     await loginThroughUI("regular-user");
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /pengaturan/i }));
-    });
+    expect(screen.queryByRole("button", { name: /pengaturan/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /sync hotspot/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /prewarm/i })).not.toBeInTheDocument();
+  });
 
-    const passwordInput = screen.getByLabelText("Password");
-    const submitButton = screen.getByRole("button", { name: /lanjut/i });
+  it("menampilkan menu Pengaturan + tombol Sync/Prewarm untuk role admin", async () => {
+    render(<App />);
+    await loginThroughUI("admin");
 
-    await act(async () => {
-      fireEvent.change(passwordInput, { target: { value: "wrong-guess" } });
-      fireEvent.click(submitButton);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(
-      fetchMock.mock.calls.some(([input]) => String(input) === "/api/auth/verify")
-    ).toBe(true);
-    expect(await screen.findByText("Password salah!")).toBeInTheDocument();
-    // Belum masuk ke Pengaturan -- gerbangnya menolak dengan benar.
-    expect(screen.queryByText("Unggah Berkas GeoJSON Baru")).not.toBeInTheDocument();
-
-    await act(async () => {
-      fireEvent.change(passwordInput, { target: { value: "correct-admin-key" } });
-      fireEvent.click(screen.getByRole("button", { name: /lanjut/i }));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(await screen.findByText("Unggah Berkas GeoJSON Baru")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /pengaturan/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sync hotspot/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /prewarm/i })).toBeInTheDocument();
   });
 });

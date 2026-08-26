@@ -36,6 +36,9 @@ type SidebarNavProps = {
   latestHotspotTimeLabel: string;
   dataAgeLabel: string;
   hasLatestHotspot: boolean;
+  /** Role admin: menampilkan menu Pengaturan + tombol Sync/Prewarm. Role
+   *  user tidak melihatnya sama sekali (endpoint-nya juga admin-only). */
+  isAdmin: boolean;
   mobileOpen?: boolean;
   /**
    * Panel filter peta. Dirender sebagai slot, bukan diimpor langsung, supaya
@@ -88,6 +91,7 @@ export function SidebarNav({
   latestHotspotTimeLabel,
   dataAgeLabel,
   hasLatestHotspot,
+  isAdmin,
   mobileOpen,
   filterSlot
 }: SidebarNavProps) {
@@ -117,9 +121,11 @@ export function SidebarNav({
           <NavButton active={activeView === "kompleks"} onClick={() => onChangeView("kompleks")}>
             Kompleks Kebakaran
           </NavButton>
-          <NavButton active={activeView === "settings"} onClick={() => onChangeView("settings")}>
-            Pengaturan
-          </NavButton>
+          {isAdmin ? (
+            <NavButton active={activeView === "settings"} onClick={() => onChangeView("settings")}>
+              Pengaturan
+            </NavButton>
+          ) : null}
         </nav>
 
         <button type="button" className="side-logout-btn" onClick={onLogout}>
@@ -183,6 +189,7 @@ export function SidebarNav({
           </div>
         </div>
 
+        {isAdmin ? (
         <div className="side-sync-actions" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
           <button
             type="button"
@@ -221,6 +228,7 @@ export function SidebarNav({
             ) : null}
           </button>
         </div>
+        ) : null}
       </div>
     </aside>
   );
