@@ -123,8 +123,13 @@ serialize geometry hasil parsingnya ke JSON, wajib `json.dumps(geom, default=flo
 ## Frontend (`frontend/src/`)
 
 ```
-components/   HotspotMap.tsx (peta Leaflet, pane z-index: KPS=400, bekas terbakar=420,
-              hotspot=450), HotspotMatrix.tsx ("Matriks Data"), KpsDetailView.tsx,
+components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interaktif;
+              `kps-interaktif` z420 dipakai BERSAMA polygon bekas terbakar + titik
+              hotspot supaya polygon tetap bisa diklik. Titik hotspot dipaksa
+              `bringToFront()` tiap render. KONSEKUENSI: `<Popup>` di dalam pane itu
+              mewarisi pane z420 dan ketutup marker -> WAJIB `pane="popupPane"` di tiap
+              `<Popup>` hotspot, kalau tidak tombol di dalamnya tidak bisa diklik),
+              HotspotMatrix.tsx ("Matriks Data"), KpsDetailView.tsx,
               KompleksKebakaranView.tsx ("Kompleks Kebakaran" — peta+daftar klaster
               hotspot ST-DBSCAN, self-contained fetch sendiri lewat lib/api.ts, TIDAK
               lewat useDashboardData), FilterPanel.tsx, SidebarNav.tsx, BurnedAreaCard.tsx,
