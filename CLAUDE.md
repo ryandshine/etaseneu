@@ -228,8 +228,11 @@ Sengaja begini supaya menambah/melepas captcha tidak bisa mengunci situs (beda d
 kegagalan jaringan → tolak). Cek captcha jalan **sebelum** cek password. `index.html` memuat
 `challenges.cloudflare.com/turnstile/v0/api.js` (async defer) tanpa syarat — kalau nanti ada CSP,
 `script-src` **dan** `frame-src` harus mengizinkan `https://challenges.cloudflare.com`. Test key resmi
-Cloudflare (selalu lolos) ada di kedua `.env.example`. Set key produksi di `.env.dokploy` +
-env build frontend sebelum redeploy — sebelum diisi, captcha otomatis non-aktif.
+Cloudflare (selalu lolos) ada di kedua `.env.example`. Di produksi: `TURNSTILE_SECRET_KEY` masuk
+`.env.dokploy` (dibaca `api` lewat `env_file`), sedangkan `VITE_TURNSTILE_SITE_KEY` di-*pass* sebagai
+**build arg** (`docker-compose.dokploy.yml` `web.build.args` → `Dockerfile.web` `ARG` → `ENV` sebelum
+`npm run build`) — isi nilainya di bagian **Environment stack Dokploy** supaya `${VITE_TURNSTILE_SITE_KEY}`
+ter-interpolasi. Sebelum kedua-duanya diisi, captcha otomatis non-aktif.
 
 **Penting**: gerbang login ini HANYA mengunci tampilan front-end. Endpoint baca publik (mis.
 `/api/layers?view=preview`, `/api/hotspots`) TIDAK ikut terkunci olehnya — itu tetap seperti semula,

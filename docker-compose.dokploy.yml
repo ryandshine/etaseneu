@@ -19,6 +19,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.web
+      args:
+        # Diisi dari environment stack Dokploy. Kosong = captcha non-aktif.
+        VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-}
     restart: unless-stopped
     depends_on:
       - api

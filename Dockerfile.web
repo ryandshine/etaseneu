@@ -7,6 +7,12 @@ RUN npm ci --no-update-notifier
 
 COPY frontend /app/frontend
 
+# Site key (publik) widget Cloudflare Turnstile -- Vite meng-inline var VITE_*
+# saat build, jadi harus tersedia DI SINI (bukan runtime). Kosong = widget
+# tidak dirender di halaman login (lihat frontend/src/components/LoginPage.tsx).
+ARG VITE_TURNSTILE_SITE_KEY=""
+ENV VITE_TURNSTILE_SITE_KEY=$VITE_TURNSTILE_SITE_KEY
+
 RUN npm run build --no-update-notifier
 
 FROM nginx:alpine
