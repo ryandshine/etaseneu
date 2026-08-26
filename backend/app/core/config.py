@@ -1,3 +1,4 @@
+import logging
 import secrets
 from functools import lru_cache
 from pathlib import Path
@@ -95,5 +96,9 @@ def get_settings() -> Settings:
     settings = Settings()
     if not settings.auth_jwt_secret:
         # Sengaja tidak fail-closed -- lihat komentar di field-nya.
+        logging.getLogger("hotspot.config").warning(
+            "AUTH_JWT_SECRET kosong -- secret di-generate acak tiap start proses; "
+            "semua sesi login jadi invalid tiap restart. Set nilai tetap di produksi."
+        )
         settings.auth_jwt_secret = secrets.token_urlsafe(48)
     return settings
