@@ -132,14 +132,18 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               HotspotMatrix.tsx ("Matriks Data"), KpsDetailView.tsx,
               KompleksKebakaranView.tsx ("Kompleks Kebakaran" — peta+daftar klaster
               hotspot ST-DBSCAN, self-contained fetch sendiri lewat lib/api.ts, TIDAK
-              lewat useDashboardData), FilterPanel.tsx, SidebarNav.tsx, BurnedAreaCard.tsx,
-              WeatherOverlay.tsx, dll.
+              lewat useDashboardData), FilterPanel.tsx, SidebarNav.tsx (satu area gulir
+              di `.side-rail`; prop `isAdmin` → role user tidak lihat menu Pengaturan
+              & tombol Sync/Prewarm), BurnedAreaCard.tsx, WeatherOverlay.tsx, dll.
 hooks/        useDashboardData.ts (hook utama, ~800 baris — lihat di bawah),
               useBurnedAreaOverlay.ts
 lib/          api.ts (client fetch bertipe; `authFetch`/`downloadWithAuth` untuk panggilan
               /api langsung — WAJIB dipakai ganti `fetch` mentah supaya token JWT ikut saat
               API_REQUIRE_AUTH menyala), date.ts (helper WIB/Asia-Jakarta), hotspotDisplay.ts
-constants/    satellites.ts, time-windows.ts (TimePreset: 24h/48h/3d/7d/30d/custom)
+constants/    satellites.ts, time-windows.ts (TimePreset: 24h/48h/3d/7d/30d/custom),
+              map.ts (`SMOOTH_ZOOM_MAP_PROPS` dipakai di 3 peta: scrollWheelZoom off +
+              smoothWheelZoom on lewat lib/leaflet-smooth-wheel-zoom.ts [vendor, MIT];
+              zoomSnap 0.25/zoomDelta 0.5 untuk pinch/tombol/fitBounds)
 test/         Vitest — *.test.tsx
 ```
 
