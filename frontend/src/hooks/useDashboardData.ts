@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 
 import { SATELLITE_OPTIONS } from "../constants/satellites";
 import { type TimePreset } from "../constants/time-windows";
-import { createApiClient } from "../lib/api";
+import { createApiClient, setAuthToken } from "../lib/api";
 import { getCurrentDateWIB, formatDateWIB, getTodayWIB } from "../lib/date";
 import { mapHotspotRecordToDashboardHotspot, normalizeLembagaName } from "../lib/hotspotDisplay";
 import type {
@@ -243,6 +243,13 @@ export function useDashboardData(
   // role admin di require_admin_key. Lihat core/auth.py.
   authToken: string | null = null
 ) {
+  // Alirkan token ke modul lib/api supaya SEMUA panggilan (baca & admin)
+  // membawa Authorization: Bearer -- dibutuhkan saat backend API_REQUIRE_AUTH
+  // menyala. `api` di sini singleton modul, jadi cukup set di satu tempat.
+  useEffect(() => {
+    setAuthToken(authToken ?? null);
+  }, [authToken]);
+
   const today = getCurrentDateWIB();
   const [layers, setLayers] = useState<DashboardLayer[]>([]);
   const [hotspots, setHotspots] = useState<DashboardHotspot[]>([]);
