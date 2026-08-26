@@ -356,10 +356,21 @@ export function KompleksKebakaranView({ onOpenKpsDetail }: KompleksKebakaranView
             )}
           </div>
           <p className="kompleks-explain">
-            <b>Cara baca:</b> "Kompleks" = kumpulan titik hotspot yang saling berdekatan dan
-            terdeteksi dalam rentang waktu berdekatan (sesuai Kepekaan Pengelompokan). Chip hijau{" "}
-            <b style={{ color: "#6ee7b7" }}>Aktif</b> berarti titik terakhirnya terdeteksi &lt;24 jam
-            lalu.
+            <b>Cara baca</b>
+            <br />
+            <b>Rentang Waktu</b> = jendela data. <b>24 Jam</b> = titik panas hari ini (pantauan
+            harian); <b>7 Hari</b> = minggu ini; <b>30 Hari</b> = rekap bulanan. Makin lebar
+            jendelanya, kompleks makin sedikit tapi makin besar dan rentang harinya memanjang &mdash;
+            itu area yang sama berulang menyala, bukan satu api menyala terus.
+            <br />
+            <b>Kompleks</b> = kumpulan titik hotspot yang berdekatan lokasi &amp; waktu (sesuai
+            Kepekaan Pengelompokan). Contoh baris <i>&ldquo;344 titik &middot; 18.5 hari &middot;
+            Aktif &middot; 7.7 jam lalu&rdquo;</i> = 344 deteksi; jarak deteksi pertama ke terakhir
+            18.5 hari; terakhir terdeteksi 7.7 jam lalu.
+            <br />
+            Chip <b style={{ color: "#6ee7b7" }}>Aktif</b> = deteksi terakhirnya &lt;24 jam lalu
+            (tidak ikut berubah oleh Rentang Waktu). Chip <b>Besar/Sedang/Kecil</b> hanya sebanding
+            dalam jendela yang sama.
           </p>
         </div>
       </div>
