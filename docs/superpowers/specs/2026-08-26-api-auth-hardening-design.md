@@ -255,6 +255,31 @@ Docs: `CLAUDE.md` (bagian Autentikasi + Deploy).
 | Test lama pecah karena gate | `conftest.py` autouse mematikan `API_REQUIRE_AUTH` untuk semua test lama |
 | Automation X-Admin-Key putus | Router admin tidak ditumpuk gate baca; test #4 menjaga ini |
 
+## Hasil audit dependency (2026-08-26)
+
+**Frontend (`npm audit --omit=dev`)**: 0 kerentanan di dependency produksi.
+Dependency dev/build (vite, vitest, esbuild, postcss, nanoid, form-data) punya
+8 advisory → `npm audit fix` (tanpa `--force`) menurunkan ke 5; sisanya butuh
+mayor bump vite/vitest (breaking) → follow-up. Tidak ikut ke bundle produksi.
+Build + 44 test frontend hijau setelah `npm audit fix`.
+
+**Backend (`pip-audit -r requirements.txt`)**:
+- `PyJWT 2.10.1` → **di-bump `2.13.0`** (PYSEC-2025-183, PYSEC-2026-120/175-179).
+  Kita pakai langsung untuk token sesi — prioritas. API stabil, 297 test hijau.
+- `python-multipart 0.0.20` → **di-bump `0.0.31`** (PYSEC-2026-1852/3036-3040,
+  DoS parsing multipart). Dipakai Starlette untuk upload. 297 test hijau.
+- `starlette 0.46.2` (PYSEC-2026-161/248/249/1941/1942/2280/2281) → **ditunda**.
+  Fix (`>=0.47`) di luar rentang pin `fastapi==0.115.12`; butuh upgrade FastAPI
+  (perubahan lebih besar, tidak masuk scope ini). Sebagian CVE multipart-DoS
+  ter-mitigasi `client_max_body_size` nginx + `limit_req` baru. Follow-up:
+  upgrade FastAPI + Starlette bersamaan.
+- `pytest 8.3.5` (PYSEC-2026-1845) → **ditunda**, test-only, tidak dikirim ke
+  produksi; pytest 9 berpotensi breaking.
+
+Catatan: PyJWT 2.13.0 memunculkan `InsecureKeyLengthWarning` pada test yang
+memakai secret pendek (`"test-secret"`). Tidak muncul di produksi selama
+`AUTH_JWT_SECRET` ≥ 32 byte (contoh di `.env.example` = `openssl rand -base64 48`).
+
 ## Di luar scope (follow-up terpisah)
 
 - IP-allowlist `/api/metrics` untuk Prometheus.
