@@ -241,7 +241,12 @@ export function useDashboardData(
   // Token sesi JWT (session.token dari App.tsx) -- jalur otorisasi admin
   // yang setara dengan adminKey/X-Admin-Key sejak backend menerima sesi
   // role admin di require_admin_key. Lihat core/auth.py.
-  authToken: string | null = null
+  authToken: string | null = null,
+  // Baru boleh memuat data setelah user login. Kalau backend
+  // API_REQUIRE_AUTH menyala, fetch sebelum login akan 401 dan tidak
+  // pernah diulang (guard hasStartedInitialLoadRef). Default true supaya
+  // pemakaian/test yang tidak meneruskan argumen ini tidak berubah.
+  ready: boolean = true
 ) {
   // Alirkan token ke modul lib/api supaya SEMUA panggilan (baca & admin)
   // membawa Authorization: Bearer -- dibutuhkan saat backend API_REQUIRE_AUTH
@@ -347,13 +352,13 @@ export function useDashboardData(
   }, []);
 
   useEffect(() => {
-    if (hasStartedInitialLoadRef.current) {
+    if (!ready || hasStartedInitialLoadRef.current) {
       return;
     }
 
     hasStartedInitialLoadRef.current = true;
     void loadInitialData();
-  }, [loadInitialData]);
+  }, [ready, loadInitialData]);
 
   useEffect(() => {
     if (!isInitLoaded) return;

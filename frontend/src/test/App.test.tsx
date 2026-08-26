@@ -347,6 +347,20 @@ describe("App", () => {
     expect(screen.queryByText("never")).not.toBeInTheDocument();
   });
 
+  it("tidak memuat data dashboard sebelum login", async () => {
+    render(<App />);
+    // LoginPage tampil, belum login.
+    expect(await screen.findByLabelText("Username")).toBeInTheDocument();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    const dashboardCalls = fetchMock.mock.calls
+      .map(([input]) => String(input))
+      .filter((url) => url !== "/api/auth/login");
+    expect(dashboardCalls).toEqual([]);
+  });
+
   it("kembali ke LoginPage saat panggilan API balas 401 (sesi kadaluarsa)", async () => {
     render(<App />);
     await loginThroughUI();
