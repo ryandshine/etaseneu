@@ -347,6 +347,35 @@ describe("App", () => {
     expect(screen.queryByText("never")).not.toBeInTheDocument();
   });
 
+  it("kembali ke LoginPage saat panggilan API balas 401 (sesi kadaluarsa)", async () => {
+    render(<App />);
+    await loginThroughUI();
+    await act(async () => {
+      await vi.dynamicImportSettled();
+    });
+    // Dashboard sudah termuat (semua fetch 200 dari mock default).
+    expect(await screen.findByTestId("leaflet-map")).toBeInTheDocument();
+
+    // Mulai sekarang, refetch hotspot balas 401.
+    const baseImpl = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => {
+      const url = String(input);
+      if (url.startsWith("/api/hotspots")) {
+        return Promise.resolve(new Response("unauthorized", { status: 401 }));
+      }
+      return baseImpl(input, init);
+    });
+
+    // Ubah filter waktu -> memicu refetch hotspot -> 401 -> handler di App.tsx
+    // -> setSession(null) -> LoginPage kembali.
+    const presetButtons = screen.getAllByRole("button", { name: /hari|jam/i });
+    fireEvent.click(presetButtons[presetButtons.length - 1]);
+
+    expect(
+      await screen.findByLabelText("Username", {}, { timeout: 3000 })
+    ).toBeInTheDocument();
+  });
+
   it("restores the matrix view from the URL on load", async () => {
     window.history.replaceState({}, "", "/?view=matrix");
     render(<App />);

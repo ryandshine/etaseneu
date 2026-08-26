@@ -75,19 +75,41 @@ function toHistoryQueryRecord(
   };
 }
 
+// Token sesi JWT & handler 401 disimpan di level modul: hanya ada satu sesi
+// aktif per tab, dan `api` di useDashboardData.ts adalah singleton modul.
+// App.tsx memanggil setAuthToken() saat login/logout dan
+// setUnauthorizedHandler() sekali saat mount.
+let authToken: string | null = null;
+let unauthorizedHandler: (() => void) | null = null;
+
+export function setAuthToken(token: string | null): void {
+  authToken = token;
+}
+
+export function setUnauthorizedHandler(fn: (() => void) | null): void {
+  unauthorizedHandler = fn;
+}
+
 async function fetchJson<T>(
   path: string,
   method = "GET",
   extraHeaders?: Record<string, string>
 ): Promise<T> {
-  const response = await fetch(path, {
-    method,
-    headers: {
-      Accept: "application/json",
-      ...extraHeaders
-    }
-  });
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    ...extraHeaders
+  };
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
 
+  const response = await fetch(path, { method, headers });
+
+  if (response.status === 401) {
+    // Sesi habis / token invalid -- paksa kembali ke halaman login.
+    unauthorizedHandler?.();
+    throw new Error("unauthorized");
+  }
   if (!response.ok) {
     throw new Error(`API request failed with status ${response.status}`);
   }

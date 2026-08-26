@@ -6,6 +6,7 @@ import { LoginPage } from "./components/LoginPage";
 import { PasswordGateModal } from "./components/PasswordGateModal";
 import { SidebarNav } from "./components/SidebarNav";
 import { useDashboardData } from "./hooks/useDashboardData";
+import { setUnauthorizedHandler } from "./lib/api";
 import { getTodayWIB, formatDateTimeWIB } from "./lib/date";
 import type { AppSession } from "./types/api";
 
@@ -123,6 +124,13 @@ export default function App() {
   // session.role menentukan siapa yang lihat tab Manajemen User di
   // Pengaturan (lihat SettingsPanel) -- bukan pembatas fitur dashboard lain.
   const [session, setSession] = useState<AppSession | null>(null);
+
+  // Kalau ada panggilan API balas 401 (mis. backend API_REQUIRE_AUTH menyala
+  // dan token kadaluarsa), buang sesi -> kembali ke LoginPage.
+  useEffect(() => {
+    setUnauthorizedHandler(() => setSession(null));
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   const commitViewChange = (view: AppView) => {
     setActiveView(view);

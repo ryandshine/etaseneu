@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 
-from app.core.auth import require_admin_key
+from app.core.auth import require_admin_key, require_session_if_enabled
 from app.core.config import get_settings
 from app.services import scheduler as scheduler_service
 from app.services import burned_area_scheduler as burned_area_scheduler_service
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/scheduler", tags=["scheduler"])
 
 
 @router.get("/status")
-async def scheduler_status() -> dict:
+async def scheduler_status(_: object = Depends(require_session_if_enabled)) -> dict:
     """Status scheduler dan hasil sync terakhir."""
     settings = get_settings()
     metrics = scheduler_service.get_scheduler_metrics_snapshot()
@@ -38,7 +38,7 @@ async def scheduler_status() -> dict:
 
 
 @router.get("/metrics")
-async def scheduler_metrics() -> dict[str, object]:
+async def scheduler_metrics(_: object = Depends(require_session_if_enabled)) -> dict[str, object]:
     settings = get_settings()
     metrics = scheduler_service.get_scheduler_metrics_snapshot()
     return {
@@ -89,7 +89,9 @@ async def trigger_manual_sync(_: None = Depends(require_admin_key)) -> dict:
 
 
 @router.get("/burned-area/status")
-async def burned_area_scheduler_status() -> dict:
+async def burned_area_scheduler_status(
+    _: object = Depends(require_session_if_enabled),
+) -> dict:
     """Status auto-refresh burned area (MCD64A1 + fallback VNP64A1)."""
     settings = get_settings()
     metrics = burned_area_scheduler_service.get_burned_area_scheduler_metrics_snapshot()

@@ -183,6 +183,15 @@ Kalau menambah dependency Python baru yang dipakai backend, **jangan lupa tambah
 requirements.txt`) tidak otomatis sinkron. Ini pernah menyebabkan outage produksi (502 di semua
 endpoint) karena `ijson` terpasang di venv lokal tapi lupa ditambahkan ke `requirements.txt`.
 
+`deploy/nginx/etaseneu.conf` (disalin ke `web` saat build, di-`include` nginx pada konteks `http`)
+memasang: security header (`X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`,
+`Permissions-Policy`, HSTS) — diulang di `location` yang punya `add_header` sendiri karena nginx
+mengganti bukan menggabung; **CSP `Content-Security-Policy-Report-Only`** (belum enforce — flip nama
+header ke `Content-Security-Policy` setelah console browser bersih); `limit_req` (login 5r/m,
+`point-match/analyze` & `export` 10r/m, umum 20r/s burst 40) + `real_ip` dari `X-Forwarded-For` (wajib
+di belakang Traefik). Ubah file ini → rebuild `web`. Uji `nginx -t` via
+`docker run --rm --add-host api:127.0.0.1 -v $PWD/deploy/nginx/etaseneu.conf:/etc/nginx/conf.d/default.conf:ro nginx:alpine nginx -t`.
+
 ## Autentikasi
 
 Dua mekanisme TERPISAH, jangan disamakan:
@@ -239,10 +248,20 @@ verifikasi backend non-aktif (widget tetap tampil dari site key yang di-*commit*
 apakah enforcement hidup: `POST /api/auth/login` tanpa `turnstile_token` → **400** kalau aktif, **401**
 kalau masih fail-open.
 
-**Penting**: gerbang login ini HANYA mengunci tampilan front-end. Endpoint baca publik (mis.
-`/api/layers?view=preview`, `/api/hotspots`) TIDAK ikut terkunci olehnya — itu tetap seperti semula,
-bisa diakses langsung tanpa lewat halaman login sama sekali. Kalau nanti diminta "kunci semua data",
-itu perubahan jauh lebih besar (butuh session/token di level API, bukan cuma gerbang render React).
+**Gate auth API baca** (`API_REQUIRE_AUTH`, default `false`). Historisnya gerbang login HANYA
+mengunci tampilan front-end — endpoint baca publik bisa diakses tanpa login. Sejak fitur ini: kalau
+`API_REQUIRE_AUTH=true`, SEMUA router baca (`hotspots`, `layers` termasuk `view=preview`, `polygons`,
+`stats`, `burned_area`, `hotspot_clusters`, `point_match`, `export`, `wind`, `weather`, GET
+`scheduler/status|metrics|burned-area/status`) butuh `Authorization: Bearer <jwt>` sah lewat
+dependency `core/auth.require_session_if_enabled`. Selalu publik apa pun nilainya: `/api/health`,
+`/api/auth/*`, `/api/metrics` (Prometheus). Router admin (`cache`, `scheduler` POST `/sync`) TIDAK
+ketumpuk gate ini — tetap `require_admin_key` (X-Admin-Key ATAU JWT admin), supaya automation
+X-Admin-Key-only tidak putus. Frontend `lib/api.ts` melampirkan token ke semua request via
+`setAuthToken`; `App.tsx` `setUnauthorizedHandler` → 401 dari API mana pun memaksa logout ke
+LoginPage. Di produksi `API_REQUIRE_AUTH` diisi di tab Environment Dokploy (di-*forward* ke container
+`api` lewat `docker-compose.dokploy.yml` `environment:`). Rollback = set `false` + redeploy `api`,
+tanpa revert kode. Cek cepat: `GET /api/stats` tanpa token → **401** kalau aktif, **200** kalau tidak.
+Test lama tetap hijau karena `app/tests/conftest.py` (autouse) mematikan flag ini.
 
 Sama seperti `ADMIN_API_KEY` (lihat catatan di memory project), **jangan pernah asumsikan nilai
 `APP_LOGIN_PASSWORD` produksi dari sesi sebelumnya** — selalu konfirmasi ke user, dan set manual di

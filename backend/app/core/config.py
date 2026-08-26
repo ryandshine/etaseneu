@@ -1,3 +1,4 @@
+import logging
 import secrets
 from functools import lru_cache
 from pathlib import Path
@@ -41,6 +42,14 @@ class Settings(BaseSettings):
     # Cloudflare (lihat services/turnstile_service.py). Site key (publik)
     # dipasang terpisah di frontend lewat VITE_TURNSTILE_SITE_KEY.
     turnstile_secret_key: str = ""
+    # Kalau True, SEMUA endpoint baca API butuh header Authorization: Bearer
+    # <jwt> yang sah (lihat core/auth.require_session_if_enabled). Default
+    # False = perilaku lama (endpoint baca publik) supaya deploy tidak
+    # langsung mengunci situs; dinyalakan manual di Dokploy setelah frontend
+    # terverifikasi mengirim token. Router admin TIDAK terpengaruh ini
+    # (tetap require_admin_key). Selalu publik: /api/health, /api/auth/*,
+    # /api/metrics.
+    api_require_auth: bool = False
     shp_dir: str = "../shp"
     cache_dir: str = ".cache"
     cache_ttl_hours: int = 24
@@ -95,5 +104,9 @@ def get_settings() -> Settings:
     settings = Settings()
     if not settings.auth_jwt_secret:
         # Sengaja tidak fail-closed -- lihat komentar di field-nya.
+        logging.getLogger("hotspot.config").warning(
+            "AUTH_JWT_SECRET kosong -- secret di-generate acak tiap start proses; "
+            "semua sesi login jadi invalid tiap restart. Set nilai tetap di produksi."
+        )
         settings.auth_jwt_secret = secrets.token_urlsafe(48)
     return settings
