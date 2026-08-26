@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.core.auth import (
@@ -11,6 +11,7 @@ from app.core.auth import (
 )
 from app.core.config import get_settings
 from app.services.postgres_store import PostgresStore
+from app.services.turnstile_service import verify_turnstile
 
 
 router = APIRouter()
@@ -39,10 +40,18 @@ async def verify_admin_key_endpoint(_: None = Depends(require_admin_key)) -> dic
 class LoginRequest(BaseModel):
     username: str
     password: str
+    # Token dari widget Cloudflare Turnstile di halaman login. Wajib &
+    # diverifikasi HANYA kalau TURNSTILE_SECRET_KEY terisi di server; kalau
+    # tidak, field ini diabaikan (fail-open, lihat config.py).
+    turnstile_token: str | None = None
 
 
 @router.post("/auth/login")
-async def login(payload: LoginRequest, store: PostgresStore = Depends(get_store)) -> dict[str, object]:
+async def login(
+    payload: LoginRequest,
+    request: Request,
+    store: PostgresStore = Depends(get_store),
+) -> dict[str, object]:
     """Login gerbang aplikasi -- lihat postgres_store/_users.py.
 
     Kalau tabel app_users masih kosong (baru migrasi dari APP_LOGIN_PASSWORD),
@@ -50,6 +59,20 @@ async def login(payload: LoginRequest, store: PostgresStore = Depends(get_store)
     dipakai produksi tetap jalan tanpa langkah manual di server.
     """
     settings = get_settings()
+
+    # Cek captcha sebelum menyentuh kredensial -- percobaan brute-force
+    # ditolak lebih awal, dan pesan errornya tidak membocorkan apakah
+    # username/password-nya benar.
+    if settings.turnstile_secret_key:
+        remote_ip = request.client.host if request.client else None
+        if not payload.turnstile_token or not await verify_turnstile(
+            payload.turnstile_token,
+            secret=settings.turnstile_secret_key,
+            remote_ip=remote_ip,
+        ):
+            raise HTTPException(
+                status_code=400, detail="Verifikasi captcha gagal, coba lagi."
+            )
 
     if settings.app_login_password:
         store.ensure_seed_admin(

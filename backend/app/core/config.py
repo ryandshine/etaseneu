@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     # tetap supaya sesi tidak hilang tiap deploy, tapi lupa mengisinya tidak
     # akan mengulang insiden lockout APP_LOGIN_PASSWORD.
     auth_jwt_secret: str = ""
+    # Secret key widget Cloudflare Turnstile di halaman login. Sama sifat
+    # dengan auth_jwt_secret: kalau KOSONG, verifikasi captcha dilewati total
+    # (fail-open) -- halaman login jalan seperti biasa tanpa widget. Diisi =
+    # login wajib mengirim turnstile_token yang lolos verifikasi ke server
+    # Cloudflare (lihat services/turnstile_service.py). Site key (publik)
+    # dipasang terpisah di frontend lewat VITE_TURNSTILE_SITE_KEY.
+    turnstile_secret_key: str = ""
     shp_dir: str = "../shp"
     cache_dir: str = ".cache"
     cache_ttl_hours: int = 24

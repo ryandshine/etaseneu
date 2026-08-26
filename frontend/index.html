@@ -8,6 +8,13 @@
       content="width=device-width, initial-scale=1.0"
     />
     <title>ETA Seneu KPS</title>
+    <!-- Widget verifikasi manusia di halaman login. Aktif hanya kalau
+         VITE_TURNSTILE_SITE_KEY diisi saat build (lihat LoginPage.tsx). -->
+    <script
+      src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+      async
+      defer
+    ></script>
   </head>
   <body>
     <div id="root"></div>

@@ -5805,6 +5805,12 @@ body {
   box-shadow: 0 0 0 3px rgba(255, 142, 66, 0.15);
 }
 
+.login-turnstile {
+  display: flex;
+  justify-content: center;
+  min-height: 65px;
+}
+
 .login-error {
   margin: 0;
   color: #fecaca;

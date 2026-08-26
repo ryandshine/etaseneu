@@ -217,6 +217,20 @@ Dua mekanisme TERPISAH, jangan disamakan:
 Session (token + username + role) disimpan di memori React saja (bukan localStorage) — reload
 halaman = harus login ulang, konsisten dengan pola `adminKey` yang sudah ada duluan.
 
+**Cloudflare Turnstile di halaman login** (widget "verifikasi manusia"). Dua env terpisah:
+`TURNSTILE_SECRET_KEY` (backend, `.env`) + `VITE_TURNSTILE_SITE_KEY` (frontend, di-*bake* saat `vite
+build` — bukan runtime). **Sifat fail-open, sama seperti `AUTH_JWT_SECRET`**: kalau
+`TURNSTILE_SECRET_KEY` kosong, `POST /api/auth/login` melewati cek captcha sepenuhnya; kalau
+`VITE_TURNSTILE_SITE_KEY` kosong, `LoginPage.tsx` tidak merender widget & tombol tidak diblok.
+Sengaja begini supaya menambah/melepas captcha tidak bisa mengunci situs (beda dari insiden
+`APP_LOGIN_PASSWORD` di bawah). Backend memverifikasi `turnstile_token` ke
+`challenges.cloudflare.com/turnstile/v0/siteverify` lewat `services/turnstile_service.py` (semua
+kegagalan jaringan → tolak). Cek captcha jalan **sebelum** cek password. `index.html` memuat
+`challenges.cloudflare.com/turnstile/v0/api.js` (async defer) tanpa syarat — kalau nanti ada CSP,
+`script-src` **dan** `frame-src` harus mengizinkan `https://challenges.cloudflare.com`. Test key resmi
+Cloudflare (selalu lolos) ada di kedua `.env.example`. Set key produksi di `.env.dokploy` +
+env build frontend sebelum redeploy — sebelum diisi, captcha otomatis non-aktif.
+
 **Penting**: gerbang login ini HANYA mengunci tampilan front-end. Endpoint baca publik (mis.
 `/api/layers?view=preview`, `/api/hotspots`) TIDAK ikut terkunci olehnya — itu tetap seperti semula,
 bisa diakses langsung tanpa lewat halaman login sama sekali. Kalau nanti diminta "kunci semua data",

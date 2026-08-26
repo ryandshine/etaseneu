@@ -237,6 +237,10 @@ def auth_app(monkeypatch):
     from app.main import create_app
 
     monkeypatch.setenv("APP_LOGIN_PASSWORD", "context7")
+    # Kosongkan eksplisit: kalau .env developer berisi TURNSTILE_SECRET_KEY,
+    # env var kosong menang -- test login ini menguji kode, bukan konfigurasi
+    # lokal siapa pun (pola sama seperti ADMIN_API_KEY di atas).
+    monkeypatch.setenv("TURNSTILE_SECRET_KEY", "")
     get_settings.cache_clear()
 
     app = create_app()
@@ -273,6 +277,7 @@ def test_login_rejects_unknown_user_when_nothing_seeded(monkeypatch):
     from app.main import create_app
 
     monkeypatch.setenv("APP_LOGIN_PASSWORD", "")
+    monkeypatch.setenv("TURNSTILE_SECRET_KEY", "")
     get_settings.cache_clear()
 
     app = create_app()
