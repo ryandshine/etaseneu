@@ -7,11 +7,14 @@ services:
     env_file:
       - .env.dokploy
     environment:
-      # Secret key Turnstile diisi dari tab Environment stack Dokploy (sama
-      # tempat dengan VITE_TURNSTILE_SITE_KEY). Kosong = verifikasi captcha
-      # login dilewati (fail-open). JANGAN taruh var ini di .env.dokploy juga
-      # -- interpolasi kosong di sini akan menimpanya.
+      # Var berikut diisi dari tab Environment stack Dokploy (BUKAN
+      # .env.dokploy -- interpolasi kosong di sini akan menimpa nilai
+      # env_file).
+      # TURNSTILE_SECRET_KEY kosong = verifikasi captcha login dilewati.
+      # API_REQUIRE_AUTH false/kosong = endpoint baca API publik (perilaku
+      # lama); true = butuh Authorization: Bearer <jwt>.
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      API_REQUIRE_AUTH: ${API_REQUIRE_AUTH:-false}
     volumes:
       - ${HOST_SHP_DIR:-/etc/dokploy/data/etaseneu/shp}:/app/shp:ro
       - ${HOST_GEE_KEY_PATH:-/etc/dokploy/data/etaseneu/gee-service-account-key.json}:/app/secrets/gee-service-account-key.json:ro
