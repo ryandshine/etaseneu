@@ -7212,6 +7212,37 @@ a + a {
   max-width: 13rem;
 }
 
+.kompleks-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 32px;
+  padding: 0 0.7rem;
+  border: 1px solid rgba(255, 142, 66, 0.42);
+  border-radius: 6px;
+  background: rgba(255, 142, 66, 0.1);
+  color: #ffb173;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.kompleks-copy-btn:hover:not(:disabled),
+.kompleks-copy-btn:focus-visible:not(:disabled) {
+  background: rgba(255, 142, 66, 0.2);
+  border-color: rgba(255, 142, 66, 0.7);
+  color: #ffd0a8;
+  outline: none;
+}
+
+.kompleks-copy-btn:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
 .kompleks-alert {
   margin: 0.6rem 1.25rem 0;
   padding: 0.55rem 0.8rem;

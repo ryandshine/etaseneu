@@ -114,6 +114,54 @@ describe("KompleksKebakaranView", () => {
     expect(within(firstRow).getByText("Aktif")).toBeInTheDocument();
   });
 
+  it("copies a WhatsApp-ready report using the active 24-hour and medium filters", async () => {
+    const response = (rangeStart: string, rangeEnd: string) =>
+      new Response(
+        JSON.stringify({
+          count: 1,
+          clusters: [
+            {
+              cluster_id: 1,
+              hotspot_count: 155,
+              centroid_lat: -1.234567,
+              centroid_lon: 110.765432,
+              first_detected_at: rangeStart,
+              last_detected_at: rangeEnd,
+              dominant_agency: "LPHD Uji"
+            }
+          ],
+          stats: { total_hotspots_in_range: 155, clustered_hotspots: 155, unclustered_hotspots: 0 },
+          sensitivity: "sedang",
+          range_start: rangeStart,
+          range_end: rangeEnd
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+
+    fetchMock
+      .mockResolvedValueOnce(response("2026-08-01T00:00:00Z", "2026-08-30T00:00:00Z"))
+      .mockResolvedValueOnce(response("2026-08-30T00:00:00Z", "2026-08-31T00:00:00Z"));
+
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+
+    render(<KompleksKebakaranView />);
+    await waitFor(() => expect(getListPanel()).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Rentang"), { target: { value: "1" } });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(screen.getByRole("button", { name: "Salin laporan WhatsApp" }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const report = writeText.mock.calls[0][0] as string;
+    expect(report).toContain("*LAPORAN KOMPLEKS KEBAKARAN*");
+    expect(report).toContain("Periode: *24 Jam*");
+    expect(report).toContain("Kepekaan: *Sedang*");
+    expect(report).toContain("*LPHD Uji* — 155 titik (Sedang)");
+    expect(report).toContain("Titik tengah: -1.23457, 110.76543");
+  });
+
   it("shows an error message when the request fails", async () => {
     fetchMock.mockRejectedValue(new Error("network down"));
 

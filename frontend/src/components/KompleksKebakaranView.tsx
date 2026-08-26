@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Check, Copy } from "lucide-react";
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet";
 import { createApiClient } from "../lib/api";
 import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
@@ -27,6 +28,7 @@ const SENSITIVITY_OPTIONS: {
 const BESAR_THRESHOLD = 400;
 const SEDANG_THRESHOLD = 150;
 const AKTIF_THRESHOLD_HOURS = 24;
+const WIB_TIME_ZONE = "Asia/Jakarta";
 
 type Severity = { key: "besar" | "sedang" | "kecil"; label: string; color: string };
 
@@ -54,6 +56,103 @@ function formatSpanDays(firstDetectedAt: string, lastDetectedAt: string): number
   return Math.round((spanMs / (1000 * 60 * 60 * 24)) * 10) / 10;
 }
 
+function formatWibDateTime(isoDate: string): string {
+  return `${new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: WIB_TIME_ZONE
+  }).format(new Date(isoDate))} WIB`;
+}
+
+function formatWibTime(isoDate: string): string {
+  return new Intl.DateTimeFormat("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: WIB_TIME_ZONE
+  }).format(new Date(isoDate));
+}
+
+function formatCoordinate(value: number): string {
+  return value.toFixed(5);
+}
+
+function buildWhatsAppReport(
+  response: ClusterCollectionResponse,
+  clusters: ClusterRecord[],
+  timeRangeDays: number,
+  sensitivity: ClusterSensitivity
+): string {
+  const timeRange = TIME_RANGE_OPTIONS.find((option) => option.days === timeRangeDays);
+  const sensitivityOption = SENSITIVITY_OPTIONS.find((option) => option.value === sensitivity);
+  const rangeLabel = timeRange?.label.replace(" Terakhir", "") ?? `${timeRangeDays} Hari`;
+  const sensitivityLabel = sensitivityOption?.label.replace(" (disarankan)", "") ?? sensitivity;
+  const activeCount = clusters.filter(
+    (cluster) => hoursSince(cluster.last_detected_at) < AKTIF_THRESHOLD_HOURS
+  ).length;
+  const largeCount = clusters.filter((cluster) => cluster.hotspot_count >= BESAR_THRESHOLD).length;
+  const reportTime = formatWibDateTime(new Date().toISOString());
+
+  const lines = [
+    "*LAPORAN KOMPLEKS KEBAKARAN*",
+    `Periode: *${rangeLabel}*`,
+    `Kepekaan: *${sensitivityLabel}*`,
+    `Data: ${formatWibDateTime(response.range_start)} s.d. ${formatWibDateTime(response.range_end)}`,
+    `Dibuat: ${reportTime}`,
+    "",
+    "*RINGKASAN*",
+    `• Total kompleks: *${clusters.length.toLocaleString("id-ID")}*`,
+    `• Total titik hotspot: *${response.stats.total_hotspots_in_range.toLocaleString("id-ID")}*`,
+    `• Titik tergabung: ${response.stats.clustered_hotspots.toLocaleString("id-ID")}`,
+    `• Titik tidak tergabung: ${response.stats.unclustered_hotspots.toLocaleString("id-ID")}`,
+    `• Kompleks aktif <24 jam: *${activeCount.toLocaleString("id-ID")}*`,
+    `• Kompleks besar (≥${BESAR_THRESHOLD} titik): ${largeCount.toLocaleString("id-ID")}`,
+    "",
+    clusters.length > 0 ? "*DAFTAR KOMPLEKS*" : "*DAFTAR KOMPLEKS*\nTidak ada kompleks terdeteksi.",
+  ];
+
+  clusters.forEach((cluster, index) => {
+    const severity = severityOf(cluster.hotspot_count);
+    const activity = formatActivity(cluster.last_detected_at);
+    const status = activity.live
+      ? `Aktif; deteksi terakhir ${formatWibTime(cluster.last_detected_at)} WIB`
+      : activity.text;
+    lines.push(
+      `${index + 1}. *${cluster.dominant_agency ?? "Tanpa lembaga"}* — ${cluster.hotspot_count.toLocaleString("id-ID")} titik (${severity.label})`,
+      `   Status: ${status}`,
+      `   Rentang deteksi: ${formatSpanDays(cluster.first_detected_at, cluster.last_detected_at)} hari`,
+      `   Titik tengah: ${formatCoordinate(cluster.centroid_lat)}, ${formatCoordinate(cluster.centroid_lon)}`
+    );
+  });
+
+  lines.push("", "Sumber: ETA SEUNEU");
+  return lines.join("\n");
+}
+
+async function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!copied) {
+    throw new Error("Clipboard tidak tersedia");
+  }
+}
+
 function FlyToCluster({ cluster }: { cluster: ClusterRecord | null }) {
   const map = useMap();
   useEffect(() => {
@@ -77,6 +176,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail }: KompleksKebakaranView
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [copyState, setCopyState] = useState<"idle" | "copying" | "copied" | "error">("idle");
 
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +223,19 @@ export function KompleksKebakaranView({ onOpenKpsDetail }: KompleksKebakaranView
   const besarCount = clusters.filter((c) => c.hotspot_count >= BESAR_THRESHOLD).length;
   const aktifCount = clusters.filter((c) => hoursSince(c.last_detected_at) < AKTIF_THRESHOLD_HOURS).length;
   const totalTergabung = data?.stats.clustered_hotspots ?? 0;
+
+  const handleCopyReport = async () => {
+    if (!data || loading) return;
+    setCopyState("copying");
+    try {
+      await copyToClipboard(buildWhatsAppReport(data, clusters, timeRangeDays, sensitivity));
+      setCopyState("copied");
+      window.setTimeout(() => setCopyState("idle"), 2200);
+    } catch {
+      setCopyState("error");
+      window.setTimeout(() => setCopyState("idle"), 3000);
+    }
+  };
 
   return (
     <section className="kompleks-shell" aria-label="Kompleks Kebakaran">
@@ -180,6 +293,22 @@ export function KompleksKebakaranView({ onOpenKpsDetail }: KompleksKebakaranView
                 ))}
               </select>
             </label>
+            <button
+              type="button"
+              className="kompleks-copy-btn"
+              onClick={handleCopyReport}
+              disabled={!data || loading || copyState === "copying"}
+              aria-live="polite"
+            >
+              {copyState === "copied" ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+              {copyState === "copied"
+                ? "Tersalin"
+                : copyState === "error"
+                  ? "Gagal menyalin"
+                  : copyState === "copying"
+                    ? "Menyalin..."
+                    : "Salin laporan WhatsApp"}
+            </button>
           </div>
         </div>
         <div className="kompleks-summary">
