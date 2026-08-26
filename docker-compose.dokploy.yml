@@ -6,6 +6,12 @@ services:
     restart: unless-stopped
     env_file:
       - .env.dokploy
+    environment:
+      # Secret key Turnstile diisi dari tab Environment stack Dokploy (sama
+      # tempat dengan VITE_TURNSTILE_SITE_KEY). Kosong = verifikasi captcha
+      # login dilewati (fail-open). JANGAN taruh var ini di .env.dokploy juga
+      # -- interpolasi kosong di sini akan menimpanya.
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
     volumes:
       - ${HOST_SHP_DIR:-/etc/dokploy/data/etaseneu/shp}:/app/shp:ro
       - ${HOST_GEE_KEY_PATH:-/etc/dokploy/data/etaseneu/gee-service-account-key.json}:/app/secrets/gee-service-account-key.json:ro

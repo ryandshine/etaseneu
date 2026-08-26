@@ -228,11 +228,16 @@ Sengaja begini supaya menambah/melepas captcha tidak bisa mengunci situs (beda d
 kegagalan jaringan → tolak). Cek captcha jalan **sebelum** cek password. `index.html` memuat
 `challenges.cloudflare.com/turnstile/v0/api.js` (async defer) tanpa syarat — kalau nanti ada CSP,
 `script-src` **dan** `frame-src` harus mengizinkan `https://challenges.cloudflare.com`. Test key resmi
-Cloudflare (selalu lolos) ada di kedua `.env.example`. Di produksi: `TURNSTILE_SECRET_KEY` masuk
-`.env.dokploy` (dibaca `api` lewat `env_file`), sedangkan `VITE_TURNSTILE_SITE_KEY` di-*pass* sebagai
-**build arg** (`docker-compose.dokploy.yml` `web.build.args` → `Dockerfile.web` `ARG` → `ENV` sebelum
-`npm run build`) — isi nilainya di bagian **Environment stack Dokploy** supaya `${VITE_TURNSTILE_SITE_KEY}`
-ter-interpolasi. Sebelum kedua-duanya diisi, captcha otomatis non-aktif.
+Cloudflare (selalu lolos) ada di kedua `.env.example`. Di produksi **kedua var diisi di tab
+Environment stack Dokploy, BUKAN di `.env.dokploy`**: `TURNSTILE_SECRET_KEY` di-*forward* ke container
+`api` lewat `environment: TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}` di
+`docker-compose.dokploy.yml` (service `api` cuma `env_file` → var tab Environment tidak otomatis masuk
+container, itu sebabnya perlu baris `environment:` ini); `VITE_TURNSTILE_SITE_KEY` jadi build arg
+image `web` (`web.build.args` → `Dockerfile.web` `ARG` → `.env.production.local`, menimpa default
+`frontend/.env.production` yang sudah berisi site key produksi). Sebelum `TURNSTILE_SECRET_KEY` diisi,
+verifikasi backend non-aktif (widget tetap tampil dari site key yang di-*commit*). Cara cek cepat
+apakah enforcement hidup: `POST /api/auth/login` tanpa `turnstile_token` → **400** kalau aktif, **401**
+kalau masih fail-open.
 
 **Penting**: gerbang login ini HANYA mengunci tampilan front-end. Endpoint baca publik (mis.
 `/api/layers?view=preview`, `/api/hotspots`) TIDAK ikut terkunci olehnya — itu tetap seperti semula,
