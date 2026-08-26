@@ -585,10 +585,20 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
             />
           </>
         ) : (
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          />
+          <>
+            <TileLayer
+              attribution="Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={16}
+            />
+            {/* Base gelap Esri tanpa label; layer referensi Esri ini menaruh
+                nama tempat/batas di atasnya. Menggantikan basemap CARTO
+                dark_all yang kini butuh API key. */}
+            <TileLayer
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={16}
+            />
+          </>
         )}
         <ZoomControl position="bottomleft" />
         <MapViewport hotspots={hotspots} layers={layers} selectedProvince={selectedProvince} />
