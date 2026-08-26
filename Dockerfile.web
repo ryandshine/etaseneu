@@ -7,11 +7,16 @@ RUN npm ci --no-update-notifier
 
 COPY frontend /app/frontend
 
-# Site key (publik) widget Cloudflare Turnstile -- Vite meng-inline var VITE_*
-# saat build, jadi harus tersedia DI SINI (bukan runtime). Kosong = widget
-# tidak dirender di halaman login (lihat frontend/src/components/LoginPage.tsx).
+# Site key (publik) widget Cloudflare Turnstile. Nilai default sudah ada di
+# frontend/.env.production (di-commit -- site key memang tampil di HTML, bukan
+# rahasia). Build arg ini OPSIONAL: kalau diisi dari environment stack Dokploy
+# ia menimpa lewat .env.production.local (prioritas lebih tinggi di Vite).
+# Sengaja tidak pakai `ENV ...=$ARG` supaya arg kosong tidak menimpa
+# .env.production dengan string kosong. Vite meng-inline var VITE_* saat build.
 ARG VITE_TURNSTILE_SITE_KEY=""
-ENV VITE_TURNSTILE_SITE_KEY=$VITE_TURNSTILE_SITE_KEY
+RUN if [ -n "$VITE_TURNSTILE_SITE_KEY" ]; then \
+      printf 'VITE_TURNSTILE_SITE_KEY=%s\n' "$VITE_TURNSTILE_SITE_KEY" > .env.production.local; \
+    fi
 
 RUN npm run build --no-update-notifier
 
