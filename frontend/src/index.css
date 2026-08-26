@@ -7119,61 +7119,102 @@ a + a {
   color: #f4f5f7;
 }
 
+/* Header padat: satu baris judul + kontrol, lalu satu baris ringkasan.
+   Deskripsi panjang dipindah ke tooltip .info-dot supaya tidak makan 3 baris
+   ruang di atas peta. */
 .kompleks-topbar {
-  padding: 1.1rem 1.5rem 0.9rem;
+  padding: 0.55rem 1.25rem 0.6rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  /* Kolom: blok judul+deskripsi lalu baris kontrol di bawahnya -- bukan lagi
-     kontrol yang dijejalkan ke pojok kanan-atas (hint-nya meluber di sana). */
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: 0.4rem;
+}
+
+.kompleks-topbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1.5rem;
+  flex-wrap: wrap;
+}
+
+.kompleks-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .kompleks-topbar h2 {
-  margin: 0 0 0.3rem;
-  font-size: 1.2rem;
+  margin: 0;
+  font-size: 1rem;
   font-weight: 800;
+  letter-spacing: 0.01em;
 }
 
-.kompleks-topbar p {
-  margin: 0;
-  max-width: 46ch;
+.info-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 50%;
+  border: 1px solid rgba(244, 245, 247, 0.32);
+  color: rgba(244, 245, 247, 0.6);
+  font-size: 0.58rem;
+  font-weight: 700;
+  font-style: normal;
+  line-height: 1;
+  cursor: help;
+  flex-shrink: 0;
+}
+
+.info-dot:hover,
+.info-dot:focus-visible {
+  border-color: rgba(255, 142, 66, 0.6);
+  color: #ffb173;
+  outline: none;
 }
 
 .kompleks-controls {
   display: flex;
-  gap: 1rem 1.25rem;
+  gap: 0.5rem 1rem;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
 }
 
-.kompleks-controls .field {
-  flex: 0 1 auto;
-  min-width: 12rem;
-  max-width: 21rem;
+.field--inline {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
 }
 
-/* Select-nya sendiri tetap ringkas walau kolom field-nya melebar demi hint. */
-.kompleks-controls .field .filter-select-input {
-  max-width: 14rem;
-}
-
-.field-hint {
-  display: block;
-  margin-top: 0.3rem;
-  font-size: 0.64rem;
-  line-height: 1.4;
-  color: rgba(244, 245, 247, 0.5);
-}
-
-.field-hint b {
-  color: rgba(244, 245, 247, 0.72);
+.field--inline > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  font-size: 0.6rem;
   font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(244, 245, 247, 0.5);
+  white-space: nowrap;
+}
+
+.field--inline .filter-select-input {
+  width: auto;
+  min-height: 32px;
+  height: 32px;
+  padding: 0 0.55rem;
+  font-size: 0.76rem;
+  min-width: 8.5rem;
+  max-width: 13rem;
 }
 
 .kompleks-alert {
-  margin: 0.75rem 1.5rem 0;
-  padding: 0.6rem 0.8rem;
+  margin: 0.6rem 1.25rem 0;
+  padding: 0.55rem 0.8rem;
   border-radius: 6px;
   background: rgba(239, 68, 68, 0.08);
   border: 1px solid rgba(239, 68, 68, 0.25);
@@ -7183,36 +7224,37 @@ a + a {
 
 .kompleks-summary {
   display: flex;
-  gap: 1.4rem;
-  padding: 0.85rem 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  color: rgba(244, 245, 247, 0.6);
 }
 
-.kompleks-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
+.kompleks-summary > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
 }
 
-.kompleks-stat strong {
-  font-size: 1.15rem;
+.kompleks-summary > span:not(:last-child)::after {
+  content: "·";
+  margin-left: 0.35rem;
+  color: rgba(244, 245, 247, 0.28);
+}
+
+.kompleks-summary strong {
+  font-size: 0.95rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  color: #f4f5f7;
 }
 
-.kompleks-stat span {
-  font-size: 0.62rem;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.kompleks-stat--crit strong {
+.kompleks-summary .crit strong {
   color: #ef4444;
 }
 
-.kompleks-stat--ok strong {
+.kompleks-summary .ok strong {
   color: #10b981;
 }
 

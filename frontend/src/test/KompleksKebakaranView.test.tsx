@@ -100,10 +100,11 @@ describe("KompleksKebakaranView", () => {
 
     // Kompleks besar (>=400 titik) + masih aktif <24 jam harus terhitung di
     // strip ringkasan atas.
+    const norm = (el: Element | null) => el?.textContent?.replace(/\s+/g, " ").trim();
     await waitFor(() => {
-      expect(screen.getByText("Kompleks Besar (≥400 titik)").previousSibling?.textContent).toBe("1");
+      expect(norm(screen.getByText(/besar \(≥400\)/))).toBe("1 besar (≥400)");
     });
-    expect(screen.getByText("Masih Aktif <24 Jam").previousSibling?.textContent).toBe("1");
+    expect(norm(screen.getByText(/aktif <24 jam/i))).toBe("1 aktif <24 jam");
 
     // "Aktif" juga muncul di teks penjelasan "Cara baca" di bawah daftar --
     // scope ke baris pertama (LPHD Kalibandung, kompleks terbesar & aktif)

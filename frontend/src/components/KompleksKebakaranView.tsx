@@ -127,46 +127,74 @@ export function KompleksKebakaranView({ onOpenKpsDetail }: KompleksKebakaranView
   return (
     <section className="kompleks-shell" aria-label="Kompleks Kebakaran">
       <header className="kompleks-topbar">
-        <div>
-          <h2>Kompleks Kebakaran</h2>
-          <p className="muted-copy">
-            Titik-titik hotspot yang berdekatan waktu &amp; lokasi digabung jadi satu kejadian, supaya
-            jumlah yang dilihat mencerminkan kejadian nyata &mdash; bukan jumlah titik satelit.
-          </p>
+        <div className="kompleks-topbar-row">
+          <div className="kompleks-title">
+            <h2>Kompleks Kebakaran</h2>
+            <span
+              className="info-dot"
+              tabIndex={0}
+              role="img"
+              aria-label="Info"
+              title="Titik-titik hotspot yang berdekatan waktu & lokasi digabung jadi satu kejadian, supaya jumlah yang dilihat mencerminkan kejadian nyata — bukan jumlah titik satelit."
+            >
+              i
+            </span>
+          </div>
+          <div className="kompleks-controls">
+            <label className="field field--inline">
+              <span>Rentang</span>
+              <select
+                className="filter-select-input"
+                value={timeRangeDays}
+                onChange={(event) => setTimeRangeDays(Number(event.currentTarget.value))}
+              >
+                {TIME_RANGE_OPTIONS.map((opt) => (
+                  <option key={opt.days} value={opt.days}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field field--inline">
+              <span>
+                Kepekaan
+                <span
+                  className="info-dot"
+                  tabIndex={0}
+                  role="img"
+                  aria-label="Info kepekaan"
+                  title={`${SENSITIVITY_OPTIONS.find((o) => o.value === sensitivity)?.hint}. Ambang penggabungan titik (jarak & jeda antar-deteksi) — bukan Rentang Waktu (jendela data).`}
+                >
+                  i
+                </span>
+              </span>
+              <select
+                className="filter-select-input"
+                value={sensitivity}
+                onChange={(event) => setSensitivity(event.currentTarget.value as ClusterSensitivity)}
+              >
+                {SENSITIVITY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
-        <div className="kompleks-controls">
-          <label className="field">
-            <span>Rentang Waktu</span>
-            <select
-              className="filter-select-input"
-              value={timeRangeDays}
-              onChange={(event) => setTimeRangeDays(Number(event.currentTarget.value))}
-            >
-              {TIME_RANGE_OPTIONS.map((opt) => (
-                <option key={opt.days} value={opt.days}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Kepekaan Pengelompokan</span>
-            <select
-              className="filter-select-input"
-              value={sensitivity}
-              onChange={(event) => setSensitivity(event.currentTarget.value as ClusterSensitivity)}
-            >
-              {SENSITIVITY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <small className="field-hint">
-              {SENSITIVITY_OPTIONS.find((o) => o.value === sensitivity)?.hint}. Ambang penggabungan
-              titik &mdash; <b>bukan</b> Rentang Waktu.
-            </small>
-          </label>
+        <div className="kompleks-summary">
+          <span>
+            <strong>{loading ? "–" : clusters.length}</strong> kompleks
+          </span>
+          <span className="crit">
+            <strong>{loading ? "–" : besarCount}</strong> besar (&ge;{BESAR_THRESHOLD})
+          </span>
+          <span className="ok">
+            <strong>{loading ? "–" : aktifCount}</strong> aktif &lt;24 jam
+          </span>
+          <span>
+            <strong>{loading ? "–" : totalTergabung.toLocaleString("id-ID")}</strong> titik tergabung
+          </span>
         </div>
       </header>
 
@@ -175,25 +203,6 @@ export function KompleksKebakaranView({ onOpenKpsDetail }: KompleksKebakaranView
           {error}
         </p>
       ) : null}
-
-      <div className="kompleks-summary">
-        <div className="kompleks-stat">
-          <strong>{loading ? "–" : clusters.length}</strong>
-          <span>Kompleks Terdeteksi</span>
-        </div>
-        <div className="kompleks-stat kompleks-stat--crit">
-          <strong>{loading ? "–" : besarCount}</strong>
-          <span>Kompleks Besar (&ge;{BESAR_THRESHOLD} titik)</span>
-        </div>
-        <div className="kompleks-stat kompleks-stat--ok">
-          <strong>{loading ? "–" : aktifCount}</strong>
-          <span>Masih Aktif &lt;24 Jam</span>
-        </div>
-        <div className="kompleks-stat">
-          <strong>{loading ? "–" : totalTergabung.toLocaleString("id-ID")}</strong>
-          <span>Titik Tergabung</span>
-        </div>
-      </div>
 
       <div className="kompleks-body">
         <div className="kompleks-map">
