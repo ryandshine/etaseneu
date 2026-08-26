@@ -523,7 +523,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
           title={
             showBurnedArea
               ? "Sembunyikan kawasan bekas terbakar"
-              : "Tampilkan kawasan bekas terbakar (sumber: KLHK, akurasi H/M)"
+              : "Tampilkan kawasan bekas terbakar (sumber: Kementerian Kehutanan, akurasi H/M)"
           }
           aria-pressed={showBurnedArea}
         >
@@ -542,7 +542,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
             <p className="burned-summary-chip__scope">
               {formatHectares(burnedArea.data.kps_count)} KPS terdampak
             </p>
-            <p className="burned-summary-chip__source">Sumber KLHK · akurasi H/M</p>
+            <p className="burned-summary-chip__source">Sumber Kementerian Kehutanan · akurasi H/M</p>
           </div>
         ) : null}
       </div>
@@ -745,7 +745,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
                   position={[hotspot.latitude, hotspot.longitude]}
                   icon={getHighIntensityIcon(sourceColor(hotspot.source))}
                 >
-                  <Popup>
+                  <Popup pane="popupPane">
                     <HotspotPopupContent hotspot={hotspot} />
                   </Popup>
                 </Marker>
@@ -761,7 +761,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
                     fillOpacity: 0.98
                   }}
                 >
-                  <Popup>
+                  <Popup pane="popupPane">
                     <HotspotPopupContent hotspot={hotspot} />
                   </Popup>
                 </CircleMarker>

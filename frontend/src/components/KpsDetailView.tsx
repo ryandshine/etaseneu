@@ -692,7 +692,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
             {!burnedAreaStats && isCustomRangeActive && fullBurnedHistoryRange && (
               <div style={{ marginTop: "1rem", paddingTop: "0.85rem", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
                 <p className="help-copy">
-                  Tidak ada data luas terbakar (KLHK) pada rentang tanggal ini.
+                  Tidak ada data luas terbakar (Kementerian Kehutanan) pada rentang tanggal ini.
                 </p>
                 <p className="help-copy" style={{ marginTop: "0.3rem" }}>
                   Riwayat penuh KPS ini: {MONTH_LABELS[fullBurnedHistoryRange.earliest.month - 1]}{" "}
@@ -779,7 +779,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                   </p>
                 )}
                 <p className="help-copy" style={{ marginTop: "0.5rem", fontSize: "0.72rem" }}>
-                  Sumber: KLHK — Areal Kebakaran Hutan dan Lahan (akurasi H/M, terverifikasi hotspot).
+                  Sumber: Kementerian Kehutanan — Areal Kebakaran Hutan dan Lahan (akurasi H/M, terverifikasi hotspot).
                 </p>
               </div>
             )}
@@ -957,7 +957,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                     }}
                     eventHandlers={{ click: () => setSelectedDetectionId(hotspot.id) }}
                   >
-                    <Popup>
+                    <Popup pane="popupPane">
                       <HotspotPopupContent hotspot={hotspot} />
                     </Popup>
                   </CircleMarker>

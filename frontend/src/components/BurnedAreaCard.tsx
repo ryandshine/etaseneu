@@ -206,7 +206,7 @@ export function BurnedAreaCard({ provinceFilter, skemaFilter, onSelectSkema }: B
           </div>
 
           <p className="help-copy" style={{ marginTop: "0.6rem", fontSize: "0.68rem" }}>
-            Sumber: KLHK — Areal Kebakaran Hutan dan Lahan (akurasi H/M, terverifikasi hotspot). Luas
+            Sumber: Kementerian Kehutanan — Areal Kebakaran Hutan dan Lahan (akurasi H/M, terverifikasi hotspot). Luas
             dihitung sekali per kawasan walau terbakar berulang, jadi tidak bisa dijumlahkan langsung
             dengan jumlah titik hotspot.
           </p>
