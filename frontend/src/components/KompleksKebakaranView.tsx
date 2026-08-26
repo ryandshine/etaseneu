@@ -14,10 +14,14 @@ const TIME_RANGE_OPTIONS: TimeRangeOption[] = [
   { label: "24 Jam", days: 1 }
 ];
 
-const SENSITIVITY_OPTIONS: { value: ClusterSensitivity; label: string }[] = [
-  { value: "sedang", label: "Sedang (2km / 48 jam)" },
-  { value: "longgar", label: "Longgar (5km / 72 jam)" },
-  { value: "ketat", label: "Ketat (1km / 12 jam)" }
+const SENSITIVITY_OPTIONS: {
+  value: ClusterSensitivity;
+  label: string;
+  hint: string;
+}[] = [
+  { value: "ketat", label: "Ketat", hint: "radius 1 km, jeda antar-deteksi 12 jam" },
+  { value: "sedang", label: "Sedang (disarankan)", hint: "radius 2 km, jeda antar-deteksi 48 jam" },
+  { value: "longgar", label: "Longgar", hint: "radius 5 km, jeda antar-deteksi 72 jam" }
 ];
 
 const BESAR_THRESHOLD = 400;
@@ -158,6 +162,12 @@ export function KompleksKebakaranView({ onOpenKpsDetail }: KompleksKebakaranView
                 </option>
               ))}
             </select>
+            <small className="field-hint">
+              {SENSITIVITY_OPTIONS.find((o) => o.value === sensitivity)?.hint}. Ambang
+              &ldquo;seberapa dekat&rdquo; dua titik panas (jarak &amp; jeda waktu antar-deteksi)
+              supaya dianggap satu kejadian &mdash; <b>bukan</b> jendela data yang dianalisis
+              (itu &ldquo;Rentang Waktu&rdquo; di atas).
+            </small>
           </label>
         </div>
       </header>

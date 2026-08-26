@@ -7148,6 +7148,20 @@ a + a {
 
 .kompleks-controls .field {
   min-width: 11rem;
+  max-width: 20rem;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.64rem;
+  line-height: 1.4;
+  color: rgba(244, 245, 247, 0.5);
+}
+
+.field-hint b {
+  color: rgba(244, 245, 247, 0.72);
+  font-weight: 700;
 }
 
 .kompleks-alert {
@@ -7387,13 +7401,40 @@ a + a {
 }
 
 @media (max-width: 900px) {
+  /* Peta di samping daftar tidak muat di layar sempit: topbar (judul +
+     paragraf + 2 select) + ringkasan sudah makan hampir seluruh tinggi,
+     menyisakan jendela daftar ~0 -> daftar KPS "hilang". Di sini seluruh
+     panel jadi SATU gulir: topbar -> ringkasan -> peta (tinggi tetap) ->
+     daftar (mengalir penuh). */
+  .kompleks-shell {
+    /* block, bukan flex-column: container gulir flex-column memotong ujung
+       anak terakhir dari area gulir (sama seperti .side-rail). */
+    display: block;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
   .kompleks-body {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(240px, 45vh) minmax(0, 1fr);
+    display: block;
+    flex: none;
+    min-height: auto;
   }
 
   .kompleks-map {
+    height: 55vh;
+    min-height: 300px;
     border-right: none;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .kompleks-list {
+    min-height: auto;
+  }
+
+  /* Tanpa scroll internal -- gulir ditangani .kompleks-shell (satu gulir). */
+  .kompleks-list-scroll {
+    flex: none;
+    min-height: auto;
+    overflow: visible;
   }
 }
