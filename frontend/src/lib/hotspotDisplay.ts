@@ -124,6 +124,21 @@ export function formatNumber(value: number | null, digits = 2): string {
   return value.toFixed(digits);
 }
 
+const INTEGER_GROUPED = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
+
+/**
+ * Bilangan bulat dengan pemisah ribuan gaya Indonesia (10.056), untuk angka
+ * besar yang harus terbaca sekilas -- mis. total luas bekas terbakar di
+ * overlay peta. `formatNumber` (toFixed) tetap dipakai di tempat lain yang
+ * butuh desimal tetap.
+ */
+export function formatHectares(value: number | null): string {
+  if (value === null || Number.isNaN(value)) {
+    return "–";
+  }
+  return INTEGER_GROUPED.format(Math.round(value));
+}
+
 export function formatMetadataValue(value?: string): string {
   return value && value.trim() ? value : "-";
 }

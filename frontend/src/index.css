@@ -790,27 +790,34 @@ body {
   height: 11px;
 }
 
-/* Baris SENDIRI di bawah "Lokasi Saya" + peralihan Peta/Satelit -- awalnya
-   ditumpuk sebaris di top:1rem, tapi lebar tombol ini (variabel, tergantung
-   teks + badge jumlah KPS) ternyata menabrak posisi tetap peralihan
-   Peta/Satelit yang mengasumsikan cuma "Lokasi Saya" di kirinya. Baris baru
-   ini menghindari itu sepenuhnya, apa pun lebar kontennya. */
-.burned-toggle {
+/* Kontrol "Bekas Terbakar": tombol on/off + (saat aktif) panel ringkasan
+   luas, sebagai SATU kolom melayang. Dibungkus satu wadah berposisi supaya
+   panel menempel di bawah tombol lewat aliran normal -- bukan lagi dua
+   elemen absolute yang posisinya disamakan dengan calc() dan angka px yang
+   harus diulang per breakpoint.
+   Baris sendiri di bawah "Lokasi Saya" + peralihan Peta/Satelit: top 6.5rem
+   memberi jarak dari .locate-error-toast (kondisional, di left:1rem, bisa
+   2-3 baris). */
+.burned-control {
   position: absolute;
-  /* 6.5rem, bukan langsung di bawah baris ikon (top:1rem) -- .locate-error-toast
-     juga muncul di left:1rem (kondisional, saat izin lokasi gagal) dan bisa
-     2-3 baris teks panjang ("Izin lokasi ditolak. Aktifkan izin lokasi untuk
-     situs ini di pengaturan browser."). Jarak ini dipilih supaya lolos dari
-     toast itu di kasus umum, bukan cuma dari baris ikon di atasnya. */
   top: 6.5rem;
   left: 1rem;
   z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: max-content;
+  max-width: 15rem;
+}
+
+.burned-toggle {
+  align-self: stretch;
   height: 34px;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0 0.7rem;
-  border-radius: 0.5rem;
+  gap: 0.45rem;
+  padding: 0 0.75rem;
+  border-radius: 0.6rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(19, 21, 26, 0.92);
   color: #f5efe6;
@@ -820,7 +827,7 @@ body {
   letter-spacing: 0.01em;
   backdrop-filter: blur(8px);
   cursor: pointer;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
   transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
 }
 
@@ -830,18 +837,13 @@ body {
 }
 
 .burned-toggle--active {
-  border-color: rgba(220, 38, 38, 0.55);
-  background: rgba(220, 38, 38, 0.18);
+  border-color: rgba(220, 38, 38, 0.5);
+  background: rgba(220, 38, 38, 0.16);
   color: #fca5a5;
 }
 
-/* Saat ringkasan Ha di bawahnya ikut tampil (lihat .burned-summary-chip),
-   keduanya digabung jadi SATU kartu (sudut bawah tombol ini persegi, celah
-   dihapus, shadow dipindah seluruhnya ke bawah) -- bukan dua kotak
-   melayang terpisah dengan jarak tipis, yang di layar sempit gampang
-   kelihatan seperti nabrak/menumpuk apa pun besar jaraknya selama masih
-   samar-samar menempel. Kartu gabungan ini justru sengaja dibuat MENYATU
-   penuh (baris atas + bawah dipisah garis tipis), bukan dijauhkan. */
+/* Tombol + panel menyatu jadi satu kartu: sudut bawah tombol lurus, garis
+   bawahnya diserahkan ke garis-pisah panel, shadow pindah ke panel. */
 .burned-toggle--merged {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
@@ -849,68 +851,64 @@ body {
   box-shadow: none;
 }
 
-.burned-toggle__count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  padding: 0 0.3rem;
-  border-radius: 999px;
-  background: rgba(220, 38, 38, 0.9);
-  color: #fff;
-  font-size: 0.65rem;
-  font-weight: 700;
-}
-
 .burned-toggle--loading {
   opacity: 0.7;
   cursor: progress;
 }
 
-/* Menjawab "seberapa parah" tanpa harus mengklik satu per satu di peta.
-   Menyatu langsung di bawah .burned-toggle--merged (top pas di tepi bawah
-   tombol, tanpa celah) sebagai baris kedua dari kartu yang sama -- garis
-   pemisahnya cuma border-top redup, bukan border penuh warna merah supaya
-   tidak terbaca sebagai kotak kedua yang kebetulan nempel. */
 .burned-summary-chip {
-  position: absolute;
-  top: calc(6.5rem + 34px);
-  left: 1rem;
-  z-index: 1000;
-  max-width: 15rem;
+  align-self: stretch;
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
-  padding: 0.45rem 0.7rem;
-  border-bottom-left-radius: 0.5rem;
-  border-bottom-right-radius: 0.5rem;
-  border: 1px solid rgba(220, 38, 38, 0.55);
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  gap: 0.3rem;
+  padding: 0.6rem 0.8rem 0.65rem;
+  border: 1px solid rgba(220, 38, 38, 0.5);
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom-left-radius: 0.6rem;
+  border-bottom-right-radius: 0.6rem;
   background: rgba(19, 21, 26, 0.94);
   backdrop-filter: blur(8px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
 }
 
-.burned-summary-chip strong {
-  font-size: 0.9rem;
+.burned-summary-chip__figure {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
   color: #fca5a5;
-  line-height: 1.1;
 }
 
-.burned-summary-chip span {
-  font-size: 0.63rem;
+.burned-summary-chip__value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.015em;
+  font-variant-numeric: tabular-nums;
+}
+
+.burned-summary-chip__unit {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(252, 165, 165, 0.65);
+}
+
+.burned-summary-chip__scope {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 500;
   line-height: 1.3;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(245, 239, 230, 0.78);
+  font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 640px) {
-  /* Di layar sempit label teksnya dibuang -- ikonnya sudah cukup dan
-     tombolnya sekarang di baris sendiri (lihat override top/left di blok
-     @media (max-width: 639px)), jadi lebar penuh tidak lagi jadi soal. */
-  .burned-toggle span:not(.burned-toggle__count) {
-    display: none;
-  }
+.burned-summary-chip__source {
+  margin: 0;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(245, 239, 230, 0.5);
 }
 
 /* Tombol "Lokasi Saya" sengaja diletakkan di pojok kiri atas peta -- satu-
@@ -6310,30 +6308,20 @@ a + a {
     max-width: none;
   }
 
-  /* Baris sendiri, konsisten dengan versi desktop -- ikon hamburger 48px
-     cuma menempati sudut sampai ~64px, jadi left:1rem di baris yang lebih
-     rendah ini aman, tidak ketiban hamburger atau tombol baris atas.
-     Lebar dibuat penuh (right:1rem) supaya sisinya rata dengan
-     .burned-summary-chip di bawahnya saat keduanya menyatu jadi satu kartu
-     -- kalau tidak, tombol ini (isinya cuma ikon+angka di mobile, labelnya
-     disembunyikan) jauh lebih sempit dari panel ringkasan di bawahnya dan
-     "kartu gabungan"-nya kelihatan miring, bukan rata. Tinggi dinaikkan ke
-     44px (standar target sentuh minimum), bukan 34px seperti default. */
-  .burned-toggle {
+  /* Baris sendiri, konsisten dengan versi desktop. Ikon hamburger 48px cuma
+     menempati sudut sampai ~64px, jadi left:1rem di baris yang lebih rendah
+     ini aman. Kolomnya dibuat selebar layar (right:1rem) supaya tombol +
+     panel rata sisi; target sentuh tombol dinaikkan ke 44px. */
+  .burned-control {
     top: 108px;
     left: 1rem;
     right: 1rem;
-    height: 44px;
+    width: auto;
+    max-width: none;
   }
 
-  .burned-summary-chip {
-    /* Menyatu persis di tepi bawah .burned-toggle di mobile (top:108px +
-       tinggi 44px), sama seperti versi desktop -- lihat komentar di
-       definisi dasarnya untuk alasan digabung, bukan dijauhkan. */
-    top: 152px;
-    left: 1rem;
-    right: 1rem;
-    max-width: none;
+  .burned-toggle {
+    height: 44px;
   }
 
   /* Tetap di baris atas yang sama (bukan ditumpuk ke bawah) supaya tidak

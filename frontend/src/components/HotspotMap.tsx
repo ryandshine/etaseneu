@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { authFetch } from "../lib/api";
+import { formatHectares } from "../lib/hotspotDisplay";
 import { Flame, LocateFixed } from "lucide-react";
 import { WindLayer } from "./WindLayer";
 import { WeatherOverlay } from "./WeatherOverlay";
@@ -512,34 +513,39 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
         <LocateFixed size={16} />
       </button>
 
-      <button
-        type="button"
-        className={`burned-toggle${showBurnedArea ? " burned-toggle--active" : ""}${
-          burnedArea.loading ? " burned-toggle--loading" : ""
-        }${showBurnedArea && burnedArea.data ? " burned-toggle--merged" : ""}`}
-        onClick={() => setShowBurnedArea((current) => !current)}
-        title={
-          showBurnedArea
-            ? "Sembunyikan kawasan bekas terbakar"
-            : "Tampilkan kawasan bekas terbakar (sumber: KLHK, akurasi H/M)"
-        }
-        aria-pressed={showBurnedArea}
-      >
-        <Flame size={15} />
-        <span>Bekas Terbakar</span>
-        {showBurnedArea && burnedArea.data ? (
-          <span className="burned-toggle__count">{burnedArea.data.kps_count}</span>
-        ) : null}
-      </button>
+      <div className="burned-control">
+        <button
+          type="button"
+          className={`burned-toggle${showBurnedArea ? " burned-toggle--active" : ""}${
+            burnedArea.loading ? " burned-toggle--loading" : ""
+          }${showBurnedArea && burnedArea.data ? " burned-toggle--merged" : ""}`}
+          onClick={() => setShowBurnedArea((current) => !current)}
+          title={
+            showBurnedArea
+              ? "Sembunyikan kawasan bekas terbakar"
+              : "Tampilkan kawasan bekas terbakar (sumber: KLHK, akurasi H/M)"
+          }
+          aria-pressed={showBurnedArea}
+        >
+          <Flame size={15} />
+          <span>Bekas Terbakar</span>
+        </button>
 
-      {showBurnedArea && burnedArea.data ? (
-        <div className="burned-summary-chip">
-          <strong>{formatNumber(Math.round(burnedArea.data.total_ha))} Ha</strong>
-          <span>
-            di {burnedArea.data.kps_count} KPS · sumber: KLHK (akurasi H/M)
-          </span>
-        </div>
-      ) : null}
+        {showBurnedArea && burnedArea.data ? (
+          <div className="burned-summary-chip">
+            <p className="burned-summary-chip__figure">
+              <span className="burned-summary-chip__value">
+                {formatHectares(burnedArea.data.total_ha)}
+              </span>
+              <span className="burned-summary-chip__unit">Ha</span>
+            </p>
+            <p className="burned-summary-chip__scope">
+              {formatHectares(burnedArea.data.kps_count)} KPS terdampak
+            </p>
+            <p className="burned-summary-chip__source">Sumber KLHK · akurasi H/M</p>
+          </div>
+        ) : null}
+      </div>
       {userLocation.error ? <p className="locate-error-toast">{userLocation.error}</p> : null}
 
       <div className="basemap-switcher" role="group" aria-label="Gaya peta">
