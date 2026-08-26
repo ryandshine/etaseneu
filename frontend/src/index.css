@@ -113,11 +113,13 @@ body {
    mengalir dalam satu gulungan di sini. .app-frame { overflow: hidden } jadi
    batas tingginya. */
 .side-rail {
-  display: flex;
-  flex-direction: column;
+  /* block, BUKAN flex: container gulir flex-column punya bug klasik yang
+     memotong ujung anak terakhir dari area gulir. Anak-anaknya (brand,
+     nav+filter, footer status) toh cuma perlu menumpuk biasa. */
+  display: block;
   min-width: 0;
-  max-height: 100vh;
-  max-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
@@ -285,7 +287,10 @@ body {
 .side-footer {
   display: grid;
   gap: 0.8rem;
-  padding: 1rem 1rem 1.15rem;
+  /* padding-bottom longgar: ini elemen terakhir di area gulir sidebar, beri
+     ruang agar tombol/teks terakhir tidak mepet tepi bawah layar (atau
+     ketutup chrome OS seperti taskbar). */
+  padding: 1rem 1rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
