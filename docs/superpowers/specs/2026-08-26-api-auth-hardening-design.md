@@ -1,7 +1,10 @@
 # Desain: Pengamanan API ETA SENEU (auth + hardening)
 
 Tanggal: 2026-08-26
-Status: draft, menunggu review user sebelum implementasi plan.
+Status: Batch A + B TERIMPLEMENTASI di branch `feat/api-auth-hardening`
+(plan: `docs/superpowers/plans/2026-08-26-api-auth-hardening.md`).
+`API_REQUIRE_AUTH` masih `false` (belum di-enforce di produksi); CSP masih
+`Report-Only`. Langkah aktivasi: lihat Task B7 + B8 di plan.
 
 ## Latar belakang & tujuan
 
