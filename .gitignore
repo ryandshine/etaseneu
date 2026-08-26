@@ -13,3 +13,4 @@ frontend/dist/
 # Artefak run Playwright/tooling: ditulis ulang tiap kali dijalankan, bukan
 # sumber kebenaran apa pun. Sebelumnya ter-track dan bikin `git status` kotor.
 output/
+eta-seuneu-hotspots*.xlsx
