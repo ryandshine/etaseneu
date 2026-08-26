@@ -155,11 +155,8 @@ def _is_active_admin_session(token: str, claims: TokenClaims) -> bool:
     return claims.role == "admin"
 
 
-async def require_authenticated_user(
-    authorization: str | None = Header(default=None),
-    store = Depends(get_auth_store),
-) -> TokenClaims:
-    """Dependency: butuh header 'Authorization: Bearer <token>' yang valid."""
+def _authenticate_bearer_token(authorization: str | None, store) -> TokenClaims:
+    """Validate a bearer token against the injected session store."""
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Belum login.")
     token = authorization.split(" ", 1)[1].strip()
@@ -177,8 +174,17 @@ async def require_authenticated_user(
     return claims
 
 
+async def require_authenticated_user(
+    authorization: str | None = Header(default=None),
+    store = Depends(get_auth_store),
+) -> TokenClaims:
+    """Dependency: butuh header 'Authorization: Bearer <token>' yang valid."""
+    return _authenticate_bearer_token(authorization, store)
+
+
 async def require_session_if_enabled(
     authorization: str | None = Header(default=None),
+    store = Depends(get_auth_store),
 ) -> TokenClaims | None:
     """Gate baca opsional untuk endpoint publik-baca.
 
@@ -186,15 +192,15 @@ async def require_session_if_enabled(
       publik (perilaku lama). Dipakai supaya deploy tidak langsung mengunci
       situs; flag dinyalakan manual di produksi setelah frontend terbukti
       mengirim token.
-    - True -> wajib `Authorization: Bearer <jwt>` valid (delegasi ke
-      `require_authenticated_user`, 401 kalau tidak ada / invalid / kadaluarsa).
+    - True -> wajib `Authorization: Bearer <jwt>` valid (401 kalau tidak ada /
+      invalid / kadaluarsa).
 
     JANGAN pasang ini menumpuk `require_admin_key` -- automation yang cuma
     pakai `X-Admin-Key` (tanpa sesi JWT) akan putus.
     """
     if not get_settings().api_require_auth:
         return None
-    return await require_authenticated_user(authorization)
+    return _authenticate_bearer_token(authorization, store)
 
 
 async def require_admin_role(

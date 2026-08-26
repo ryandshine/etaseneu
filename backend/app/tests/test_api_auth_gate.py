@@ -6,6 +6,9 @@ Tidak menyentuh Postgres produksi: hanya hit `/api/scheduler/status`
 `app.routes` -- tanpa mengeksekusi endpoint admin yang berefek samping.
 """
 
+import asyncio
+from types import SimpleNamespace
+
 import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
@@ -45,6 +48,25 @@ def test_read_endpoint_200_when_flag_on_with_valid_token(make_app):
         "/api/scheduler/status", headers={"Authorization": f"Bearer {token}"}
     )
     assert resp.status_code == 200
+
+
+def test_read_gate_validates_persisted_token_with_injected_store(monkeypatch):
+    monkeypatch.setenv("API_REQUIRE_AUTH", "true")
+    monkeypatch.setenv("AUTH_JWT_SECRET", "gate-test-secret-min-32-bytes-long!!")
+    get_settings.cache_clear()
+
+    token = issue_token(user_id=1, username="admin", role="admin", persist_session=True)
+    store = SimpleNamespace(
+        enabled=True,
+        validate_session=lambda token_hash, user_id: {"username": "admin", "role": "admin"},
+    )
+
+    claims = asyncio.run(require_session_if_enabled(f"Bearer {token}", store))
+
+    assert claims is not None
+    assert claims.session_id
+    assert claims.role == "admin"
+    get_settings.cache_clear()
 
 
 def test_health_always_public_even_when_flag_on(make_app):
