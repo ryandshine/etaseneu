@@ -68,17 +68,63 @@ function formatWibDateTime(isoDate: string): string {
   }).format(new Date(isoDate))} WIB`;
 }
 
-function formatWibTime(isoDate: string): string {
-  return new Intl.DateTimeFormat("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: WIB_TIME_ZONE
-  }).format(new Date(isoDate));
+type AgencySummary = {
+  name: string;
+  clusterCount: number;
+  hotspotCount: number;
+  activeCount: number;
+  largestClusterCount: number;
+  lastDetectedAt: string;
+  centroidLat: number;
+  centroidLon: number;
+};
+
+function summarizeByAgency(clusters: ClusterRecord[]): AgencySummary[] {
+  const summaries = new Map<string, AgencySummary>();
+
+  clusters.forEach((cluster) => {
+    const name = cluster.dominant_agency ?? "Tanpa lembaga teridentifikasi";
+    const current = summaries.get(name);
+    const active = hoursSince(cluster.last_detected_at) < AKTIF_THRESHOLD_HOURS;
+    if (current) {
+      const previousHotspotCount = current.hotspotCount;
+      const nextHotspotCount = previousHotspotCount + cluster.hotspot_count;
+      current.clusterCount += 1;
+      current.hotspotCount = nextHotspotCount;
+      current.activeCount += active ? 1 : 0;
+      current.largestClusterCount = Math.max(current.largestClusterCount, cluster.hotspot_count);
+      current.centroidLat =
+        (current.centroidLat * previousHotspotCount + cluster.centroid_lat * cluster.hotspot_count) /
+        nextHotspotCount;
+      current.centroidLon =
+        (current.centroidLon * previousHotspotCount + cluster.centroid_lon * cluster.hotspot_count) /
+        nextHotspotCount;
+      if (new Date(cluster.last_detected_at).getTime() > new Date(current.lastDetectedAt).getTime()) {
+        current.lastDetectedAt = cluster.last_detected_at;
+      }
+      return;
+    }
+
+    summaries.set(name, {
+      name,
+      clusterCount: 1,
+      hotspotCount: cluster.hotspot_count,
+      activeCount: active ? 1 : 0,
+      largestClusterCount: cluster.hotspot_count,
+      lastDetectedAt: cluster.last_detected_at,
+      centroidLat: cluster.centroid_lat,
+      centroidLon: cluster.centroid_lon
+    });
+  });
+
+  return Array.from(summaries.values()).sort(
+    (left, right) => right.hotspotCount - left.hotspotCount || right.clusterCount - left.clusterCount
+  );
 }
 
-function formatCoordinate(value: number): string {
-  return value.toFixed(5);
+function buildGoogleMapsUrl(latitude: number, longitude: number): string {
+  const query = `${latitude.toFixed(5)},${longitude.toFixed(5)}`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
 function buildWhatsAppReport(
@@ -95,6 +141,11 @@ function buildWhatsAppReport(
     (cluster) => hoursSince(cluster.last_detected_at) < AKTIF_THRESHOLD_HOURS
   ).length;
   const largeCount = clusters.filter((cluster) => cluster.hotspot_count >= BESAR_THRESHOLD).length;
+  const agencySummaries = summarizeByAgency(clusters);
+  const identifiedAgencyCount = agencySummaries.filter(
+    (summary) => summary.name !== "Tanpa lembaga teridentifikasi"
+  ).length;
+  const unidentifiedClusterCount = clusters.filter((cluster) => !cluster.dominant_agency).length;
   const reportTime = formatWibDateTime(new Date().toISOString());
 
   const lines = [
@@ -105,27 +156,29 @@ function buildWhatsAppReport(
     `Dibuat: ${reportTime}`,
     "",
     "*RINGKASAN*",
+    `• KPS/lembaga teridentifikasi: *${identifiedAgencyCount.toLocaleString("id-ID")}*`,
     `• Total kompleks: *${clusters.length.toLocaleString("id-ID")}*`,
     `• Total titik hotspot: *${response.stats.total_hotspots_in_range.toLocaleString("id-ID")}*`,
     `• Titik tergabung: ${response.stats.clustered_hotspots.toLocaleString("id-ID")}`,
     `• Titik tidak tergabung: ${response.stats.unclustered_hotspots.toLocaleString("id-ID")}`,
     `• Kompleks aktif <24 jam: *${activeCount.toLocaleString("id-ID")}*`,
     `• Kompleks besar (≥${BESAR_THRESHOLD} titik): ${largeCount.toLocaleString("id-ID")}`,
+    ...(unidentifiedClusterCount > 0
+      ? [`• Kompleks tanpa lembaga dominan: ${unidentifiedClusterCount.toLocaleString("id-ID")}`]
+      : []),
     "",
-    clusters.length > 0 ? "*DAFTAR KOMPLEKS*" : "*DAFTAR KOMPLEKS*\nTidak ada kompleks terdeteksi.",
+    agencySummaries.length > 0 ? "*REKAP KPS/LEMBAGA*" : "*REKAP KPS/LEMBAGA*\nTidak ada kompleks terdeteksi.",
   ];
 
-  clusters.forEach((cluster, index) => {
-    const severity = severityOf(cluster.hotspot_count);
-    const activity = formatActivity(cluster.last_detected_at);
-    const status = activity.live
-      ? `Aktif; deteksi terakhir ${formatWibTime(cluster.last_detected_at)} WIB`
-      : activity.text;
+  agencySummaries.forEach((summary, index) => {
     lines.push(
-      `${index + 1}. *${cluster.dominant_agency ?? "Tanpa lembaga"}* — ${cluster.hotspot_count.toLocaleString("id-ID")} titik (${severity.label})`,
-      `   Status: ${status}`,
-      `   Rentang deteksi: ${formatSpanDays(cluster.first_detected_at, cluster.last_detected_at)} hari`,
-      `   Titik tengah: ${formatCoordinate(cluster.centroid_lat)}, ${formatCoordinate(cluster.centroid_lon)}`
+      `${index + 1}. *${summary.name}*`,
+      `   • Jumlah kompleks: ${summary.clusterCount.toLocaleString("id-ID")}`,
+      `   • Jumlah titik: *${summary.hotspotCount.toLocaleString("id-ID")}*`,
+      `   • Kompleks aktif <24 jam: ${summary.activeCount.toLocaleString("id-ID")}`,
+      `   • Kompleks terbesar: ${summary.largestClusterCount.toLocaleString("id-ID")} titik`,
+      `   • Deteksi terakhir: ${formatWibDateTime(summary.lastDetectedAt)}`,
+      `   📍 Google Maps: ${buildGoogleMapsUrl(summary.centroidLat, summary.centroidLon)}`
     );
   });
 

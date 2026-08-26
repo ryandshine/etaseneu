@@ -158,8 +158,14 @@ describe("KompleksKebakaranView", () => {
     expect(report).toContain("*LAPORAN KOMPLEKS KEBAKARAN*");
     expect(report).toContain("Periode: *24 Jam*");
     expect(report).toContain("Kepekaan: *Sedang*");
-    expect(report).toContain("*LPHD Uji* — 155 titik (Sedang)");
-    expect(report).toContain("Titik tengah: -1.23457, 110.76543");
+    expect(report).toContain("KPS/lembaga teridentifikasi: *1*");
+    expect(report).toContain("*LPHD Uji*");
+    expect(report).toContain("• Jumlah kompleks: 1");
+    expect(report).toContain("• Jumlah titik: *155*");
+    expect(report).toContain(
+      "📍 Google Maps: https://www.google.com/maps/search/?api=1&query=-1.23457%2C110.76543"
+    );
+    expect(report).not.toContain("Titik tengah:");
   });
 
   it("shows an error message when the request fails", async () => {
