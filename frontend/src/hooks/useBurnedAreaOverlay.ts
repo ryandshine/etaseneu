@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { authFetch } from "../lib/api";
 
 export type BurnedAreaOverlayFeature = {
   type: "Feature";
@@ -52,7 +53,7 @@ export function useBurnedAreaOverlay(enabled: boolean, year?: number) {
     let active = true;
     setLoading(true);
     const query = year ? `?year=${year}` : "";
-    fetch(`/api/burned-area/map-overlay${query}`)
+    authFetch(`/api/burned-area/map-overlay${query}`)
       .then((response) => (response.ok ? response.json() : null))
       .then((payload: BurnedAreaOverlay | null) => {
         if (active && payload?.features) {

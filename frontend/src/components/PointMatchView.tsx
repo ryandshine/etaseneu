@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { authFetch, downloadWithAuth } from "../lib/api";
 import { Download, FileSpreadsheet, FileText, UploadCloud, X } from "lucide-react";
 
 type SummaryItem = { label: string; count: number };
@@ -110,7 +111,7 @@ export function PointMatchView() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const response = await fetch("/api/point-match/analyze", {
+      const response = await authFetch("/api/point-match/analyze", {
         method: "POST",
         body: formData
       });
@@ -159,20 +160,32 @@ export function PointMatchView() {
         </div>
         {result && (
           <div className="matrix-header-actions">
-            <a
+            <button
+              type="button"
               className="matrix-header-action matrix-header-action--ghost"
-              href={`/api/point-match/${result.token}/export.xlsx`}
+              onClick={() =>
+                void downloadWithAuth(
+                  `/api/point-match/${result.token}/export.xlsx`,
+                  "cek-titik-ke-kps.xlsx"
+                )
+              }
             >
               <FileSpreadsheet size={14} />
               Unduh Excel
-            </a>
-            <a
+            </button>
+            <button
+              type="button"
               className="matrix-header-action matrix-header-action--ghost"
-              href={`/api/point-match/${result.token}/export.pdf`}
+              onClick={() =>
+                void downloadWithAuth(
+                  `/api/point-match/${result.token}/export.pdf`,
+                  "cek-titik-ke-kps.pdf"
+                )
+              }
             >
               <FileText size={14} />
               Unduh PDF
-            </a>
+            </button>
           </div>
         )}
       </div>

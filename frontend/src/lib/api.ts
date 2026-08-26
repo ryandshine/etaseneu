@@ -90,6 +90,46 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
   unauthorizedHandler = fn;
 }
 
+/**
+ * `fetch` untuk endpoint /api yang dipanggil langsung (bukan lewat
+ * createApiClient) -- mis. unduh Excel/PDF, overlay peta, cuaca, detail
+ * polygon. Menyisipkan `Authorization: Bearer <token>` kalau ada sesi, dan
+ * memicu handler logout saat 401. Wajib dipakai menggantikan `fetch` mentah
+ * ke /api supaya tidak putus saat backend API_REQUIRE_AUTH menyala.
+ */
+export async function authFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  if (authToken && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${authToken}`);
+  }
+  const response = await fetch(input, { ...init, headers });
+  if (response.status === 401) {
+    unauthorizedHandler?.();
+  }
+  return response;
+}
+
+/**
+ * Unduh berkas dari endpoint /api yang butuh sesi. `<a href="/api/...">` biasa
+ * tidak bisa membawa header Authorization, jadi tarik sebagai blob lalu klik
+ * anchor sementara. Dipakai untuk tombol unduh Excel/PDF.
+ */
+export async function downloadWithAuth(url: string, filename: string): Promise<void> {
+  const response = await authFetch(url);
+  if (!response.ok) {
+    throw new Error(`Download failed with status ${response.status}`);
+  }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 100);
+}
+
 async function fetchJson<T>(
   path: string,
   method = "GET",

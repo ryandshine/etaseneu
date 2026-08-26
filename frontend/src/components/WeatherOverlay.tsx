@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { authFetch } from "../lib/api";
 import { Rectangle, Tooltip, useMap } from "react-leaflet";
 
 type WeatherGridData = {
@@ -106,7 +107,7 @@ export function WeatherOverlay({ parameter }: WeatherOverlayProps) {
     let active = true;
     setLoading(true);
 
-    fetch(`/api/weather/grid?parameter=${parameter}`)
+    authFetch(`/api/weather/grid?parameter=${parameter}`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch weather grid");
         return res.json() as Promise<WeatherGridData>;

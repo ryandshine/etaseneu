@@ -364,15 +364,11 @@ describe("Hotspot map integration", () => {
     fireEvent.click(exportBtn);
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining("/api/export.xlsx?"),
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            Accept:
-              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          })
-        })
-      );
+      expect(
+        fetchMock.mock.calls.some(([url]) =>
+          String(url).startsWith("/api/export.xlsx?")
+        )
+      ).toBe(true);
     });
 
     const exportCall = fetchMock.mock.calls.find(([url]) =>
@@ -380,6 +376,10 @@ describe("Hotspot map integration", () => {
     );
 
     expect(exportCall).toBeDefined();
+    // authFetch (lib/api) meneruskan header lewat Headers, bukan objek polos.
+    expect(
+      new Headers((exportCall?.[1] as RequestInit | undefined)?.headers).get("Accept")
+    ).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     expect(String(exportCall?.[0])).toContain("start_at=");
     expect(String(exportCall?.[0])).toContain("end_at=");
     expect(String(exportCall?.[0])).toContain("start_date=");

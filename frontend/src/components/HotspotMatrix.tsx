@@ -5,7 +5,7 @@ import { Download } from "lucide-react";
 import { BurnedAreaCard } from "./BurnedAreaCard";
 import type { BurnFrequencyRecord, GeoJsonStatusResponse, PolygonDetail } from "../types/api";
 import { formatDateWIB, getTodayWIB } from "../lib/date";
-import { createApiClient } from "../lib/api";
+import { authFetch, createApiClient } from "../lib/api";
 import { TIME_PRESET_OPTIONS, type TimePreset } from "../constants/time-windows";
 import type { TimeRange } from "../hooks/useDashboardData";
 import {
@@ -1091,7 +1091,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
       const polygonId = findLinkedPolygonId(group.hotspots);
 
       if (polygonId !== null) {
-        const response = await fetch(`/api/polygons/${polygonId}`);
+        const response = await authFetch(`/api/polygons/${polygonId}`);
         if (response.ok) {
           const detail = (await response.json()) as PolygonDetail;
           features.unshift(polygonDetailToGeoJsonFeature(detail));

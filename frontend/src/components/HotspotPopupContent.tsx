@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { authFetch } from "../lib/api";
 import { Check, Copy, ExternalLink } from "lucide-react";
 
 // Popup detail titik hotspot -- dipakai bareng oleh HotspotMap (peta utama)
@@ -142,7 +143,7 @@ export function HotspotWeatherPopup({ lat, lon }: { lat: number; lon: number }) 
     setLoading(true);
     setError(false);
 
-    fetch(`/api/weather/spot?lat=${lat}&lon=${lon}`)
+    authFetch(`/api/weather/spot?lat=${lat}&lon=${lon}`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed");
         return res.json() as Promise<SpotWeather>;

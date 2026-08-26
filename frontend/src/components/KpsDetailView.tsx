@@ -7,7 +7,7 @@ import type { LayerGroup as LLayerGroup } from "leaflet";
 import { SATELLITE_OPTIONS } from "../constants/satellites";
 import { TIME_PRESET_OPTIONS } from "../constants/time-windows";
 import type { DashboardHotspot } from "../hooks/useDashboardData";
-import { createApiClient } from "../lib/api";
+import { authFetch, createApiClient } from "../lib/api";
 import { getTodayWIB } from "../lib/date";
 import type { PolygonDetail } from "../types/api";
 import { HotspotPopupContent } from "./HotspotPopupContent";
@@ -296,7 +296,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
     setError(null);
     setDetail(null);
 
-    fetch(`/api/polygons/${polygonId}`)
+    authFetch(`/api/polygons/${polygonId}`)
       .then((response) => {
         if (!response.ok) {
           throw new Error(
@@ -398,7 +398,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
     let active = true;
     // Difilter di server (polygon_ids), bukan unduh semua lalu saring di sini --
     // tabelnya bisa puluhan ribu baris kalau seluruh KPS sudah dihitung.
-    fetch(`/api/burned-area/summary?polygon_ids=${polygonId}`)
+    authFetch(`/api/burned-area/summary?polygon_ids=${polygonId}`)
       .then((response) => (response.ok ? response.json() : null))
       .then((payload: { rows?: BurnedAreaRow[]; unique_ha?: number | null } | null) => {
         if (!active || !payload?.rows) {
@@ -411,7 +411,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
         /* diamkan -- lihat komentar di atas */
       });
 
-    fetch(`/api/burned-area/geometry?polygon_ids=${polygonId}`)
+    authFetch(`/api/burned-area/geometry?polygon_ids=${polygonId}`)
       .then((response) => (response.ok ? response.json() : null))
       .then((payload: BurnedAreaFeatureCollection | null) => {
         if (active && payload?.features?.length) {

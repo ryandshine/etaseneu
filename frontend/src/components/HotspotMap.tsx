@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { authFetch } from "../lib/api";
 import { Flame, LocateFixed } from "lucide-react";
 import { WindLayer } from "./WindLayer";
 import { WeatherOverlay } from "./WeatherOverlay";
@@ -442,7 +443,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
 
     let active = true;
     const fetchRain = () => {
-      fetch(`/api/weather/rain-check?coords=${encodeURIComponent(coordsParam)}`)
+      authFetch(`/api/weather/rain-check?coords=${encodeURIComponent(coordsParam)}`)
         .then(res => {
           if (!res.ok) throw new Error("Failed");
           return res.json();

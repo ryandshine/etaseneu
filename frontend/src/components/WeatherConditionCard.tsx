@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { authFetch } from "../lib/api";
 
 type SpotWeatherDetail = {
   current: {
@@ -38,7 +39,7 @@ export function WeatherConditionCard({ lat, lon }: { lat: number; lon: number })
     setLoading(true);
     setError(false);
 
-    fetch(`/api/weather/spot?lat=${lat}&lon=${lon}`)
+    authFetch(`/api/weather/spot?lat=${lat}&lon=${lon}`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed");
         return res.json() as Promise<SpotWeatherDetail>;

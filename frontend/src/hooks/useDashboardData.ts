@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 
 import { SATELLITE_OPTIONS } from "../constants/satellites";
 import { type TimePreset } from "../constants/time-windows";
-import { createApiClient, setAuthToken } from "../lib/api";
+import { authFetch, createApiClient, setAuthToken } from "../lib/api";
 import { getCurrentDateWIB, formatDateWIB, getTodayWIB } from "../lib/date";
 import { mapHotspotRecordToDashboardHotspot, normalizeLembagaName } from "../lib/hotspotDisplay";
 import type {
@@ -601,7 +601,7 @@ export function useDashboardData(
         ...(filters?.confidence ? { confidence: filters.confidence } : {}),
         ...(filters?.skema ? { skema: filters.skema } : {})
       };
-      const response = await fetch(withQuery(`${api.baseUrl}/export.xlsx`, params), {
+      const response = await authFetch(withQuery(`${api.baseUrl}/export.xlsx`, params), {
         headers: {
           Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         }
@@ -641,7 +641,7 @@ export function useDashboardData(
         ...(filters?.skema ? { skema: filters.skema } : {}),
         ...(filters?.agency ? { agency: filters.agency } : {})
       };
-      const response = await fetch(withQuery(`${api.baseUrl}/export.pdf`, params), {
+      const response = await authFetch(withQuery(`${api.baseUrl}/export.pdf`, params), {
         headers: {
           Accept: "application/pdf"
         }

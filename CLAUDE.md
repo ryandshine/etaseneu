@@ -131,7 +131,9 @@ components/   HotspotMap.tsx (peta Leaflet, pane z-index: KPS=400, bekas terbaka
               WeatherOverlay.tsx, dll.
 hooks/        useDashboardData.ts (hook utama, ~800 baris — lihat di bawah),
               useBurnedAreaOverlay.ts
-lib/          api.ts (client fetch bertipe), date.ts (helper WIB/Asia-Jakarta), hotspotDisplay.ts
+lib/          api.ts (client fetch bertipe; `authFetch`/`downloadWithAuth` untuk panggilan
+              /api langsung — WAJIB dipakai ganti `fetch` mentah supaya token JWT ikut saat
+              API_REQUIRE_AUTH menyala), date.ts (helper WIB/Asia-Jakarta), hotspotDisplay.ts
 constants/    satellites.ts, time-windows.ts (TimePreset: 24h/48h/3d/7d/30d/custom)
 test/         Vitest — *.test.tsx
 ```

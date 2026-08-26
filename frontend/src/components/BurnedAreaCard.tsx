@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { authFetch } from "../lib/api";
 import { Bar, BarChart, Cell, LabelList, ResponsiveContainer, XAxis, YAxis } from "recharts";
 
 import type { BurnedAreaOverlayFeature } from "../hooks/useBurnedAreaOverlay";
@@ -34,7 +35,7 @@ export function BurnedAreaCard({ provinceFilter, skemaFilter, onSelectSkema }: B
     let active = true;
     // Satu panggilan untuk semua: rekap per skema DAN peringkat KPS di bawah
     // dihitung dari data yang sama, jadi tidak perlu dua endpoint terpisah.
-    fetch("/api/burned-area/map-overlay")
+    authFetch("/api/burned-area/map-overlay")
       .then((response) => (response.ok ? response.json() : null))
       .then((payload: { features?: BurnedAreaOverlayFeature[] } | null) => {
         if (!active) {
