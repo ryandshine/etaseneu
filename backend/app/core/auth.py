@@ -132,6 +132,26 @@ async def require_authenticated_user(
     return decode_token(token)
 
 
+async def require_session_if_enabled(
+    authorization: str | None = Header(default=None),
+) -> TokenClaims | None:
+    """Gate baca opsional untuk endpoint publik-baca.
+
+    - `Settings.api_require_auth` False (default) -> no-op, endpoint tetap
+      publik (perilaku lama). Dipakai supaya deploy tidak langsung mengunci
+      situs; flag dinyalakan manual di produksi setelah frontend terbukti
+      mengirim token.
+    - True -> wajib `Authorization: Bearer <jwt>` valid (delegasi ke
+      `require_authenticated_user`, 401 kalau tidak ada / invalid / kadaluarsa).
+
+    JANGAN pasang ini menumpuk `require_admin_key` -- automation yang cuma
+    pakai `X-Admin-Key` (tanpa sesi JWT) akan putus.
+    """
+    if not get_settings().api_require_auth:
+        return None
+    return await require_authenticated_user(authorization)
+
+
 async def require_admin_role(
     claims: TokenClaims = Depends(require_authenticated_user),
 ) -> TokenClaims:

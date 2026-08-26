@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     # Cloudflare (lihat services/turnstile_service.py). Site key (publik)
     # dipasang terpisah di frontend lewat VITE_TURNSTILE_SITE_KEY.
     turnstile_secret_key: str = ""
+    # Kalau True, SEMUA endpoint baca API butuh header Authorization: Bearer
+    # <jwt> yang sah (lihat core/auth.require_session_if_enabled). Default
+    # False = perilaku lama (endpoint baca publik) supaya deploy tidak
+    # langsung mengunci situs; dinyalakan manual di Dokploy setelah frontend
+    # terverifikasi mengirim token. Router admin TIDAK terpengaruh ini
+    # (tetap require_admin_key). Selalu publik: /api/health, /api/auth/*,
+    # /api/metrics.
+    api_require_auth: bool = False
     shp_dir: str = "../shp"
     cache_dir: str = ".cache"
     cache_ttl_hours: int = 24
