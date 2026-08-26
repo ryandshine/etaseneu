@@ -81,7 +81,12 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
       });
       if (response.ok) {
         const data = await response.json();
-        onSuccess({ token: data.token, username: data.username, role: data.role });
+        onSuccess({
+          token: data.token,
+          username: data.username,
+          role: data.role,
+          expiresAt: data.expires_at ?? null
+        });
         return;
       }
       // Token Turnstile sekali pakai -- apa pun hasil submit yang tidak

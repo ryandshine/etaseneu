@@ -133,8 +133,9 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               KompleksKebakaranView.tsx ("Kompleks Kebakaran" — peta+daftar klaster
               hotspot ST-DBSCAN, self-contained fetch sendiri lewat lib/api.ts, TIDAK
               lewat useDashboardData), FilterPanel.tsx, SidebarNav.tsx (satu area gulir
-              di `.side-rail`; prop `isAdmin` → role user tidak lihat menu Pengaturan
-              & tombol Sync/Prewarm), BurnedAreaCard.tsx, WeatherOverlay.tsx, dll.
+              di `.side-rail`; menu Pengaturan menampilkan info akun untuk semua role,
+              prop `isAdmin` → role user hanya tidak melihat tombol Sync/Prewarm),
+              BurnedAreaCard.tsx, WeatherOverlay.tsx, dll.
 hooks/        useDashboardData.ts (hook utama, ~800 baris — lihat di bawah),
               useBurnedAreaOverlay.ts
 lib/          api.ts (client fetch bertipe; `authFetch`/`downloadWithAuth` untuk panggilan
@@ -216,7 +217,8 @@ Dua mekanisme TERPISAH, jangan disamakan:
   dengan tabel `app_users` (`id`, `username`, `password_hash` [bcrypt], `role` ∈ {`admin`,`user`},
   `created_at`, `updated_at`) via mixin `postgres_store/_users.py`. Login (`POST /api/auth/login`,
   `core/auth.py`) mem-verifikasi lewat `verify_password`, lalu menerbitkan JWT (`issue_token`, HS256,
-  24 jam) berisi klaim `sub`/`username`/`role`. Endpoint lain membaca token via header
+  30 hari) berisi klaim `sub`/`username`/`role`. Token login dicatat sebagai hash di tabel
+  `app_sessions` agar bisa diverifikasi dan direvoke per akun. Endpoint lain membaca token via header
   `Authorization: Bearer <token>` lewat dependency `require_authenticated_user` /
   `require_admin_role`.
   - Saat tabel `app_users` masih kosong, login pertama otomatis mem-seed satu akun `admin` dari
@@ -224,7 +226,9 @@ Dua mekanisme TERPISAH, jangan disamakan:
     bukan lagi dicek langsung tiap login.
   - Manajemen user (list/create/ubah role/ganti password/hapus) ada di `GET/POST/PATCH/DELETE
     /api/auth/users/*`, semuanya `Depends(require_admin_role)`, dirender di tab Pengaturan lewat
-    `UserManagementPanel.tsx` (cuma muncul kalau `session.role === "admin"`). Dua guard penting:
+    `UserManagementPanel.tsx` (cuma muncul kalau `session.role === "admin"`). Tersedia jumlah sesi
+    aktif dan endpoint revoke seluruh sesi akun (untuk akun sendiri, sesi yang sedang dipakai dipertahankan).
+    Dua guard penting:
     tidak bisa hapus akun sendiri, dan tidak bisa hapus/demote admin terakhir
     (`count_admins() <= 1`).
   - `AUTH_JWT_SECRET` — **beda sifat** dari `ADMIN_API_KEY`/`APP_LOGIN_PASSWORD`: kalau kosong,
@@ -234,8 +238,10 @@ Dua mekanisme TERPISAH, jangan disamakan:
     `APP_LOGIN_PASSWORD` di bawah. Production sebaiknya tetap set nilai tetap biar sesi tidak hilang
     tiap deploy, tapi ini opsional, bukan wajib.
 
-Session (token + username + role) disimpan di memori React saja (bukan localStorage) — reload
-halaman = harus login ulang, konsisten dengan pola `adminKey` yang sudah ada duluan.
+Session (token + username + role) disimpan di localStorage agar reload/reset halaman tidak memaksa
+login ulang. Saat aplikasi dibuka, token diverifikasi ulang lewat `GET /api/auth/session`; logout
+lokal juga memanggil `POST /api/auth/logout`. `AUTH_JWT_SECRET` harus tetap di produksi agar token
+tidak invalid saat container restart.
 
 **Cloudflare Turnstile di halaman login** (widget "verifikasi manusia"). Dua env terpisah:
 `TURNSTILE_SECRET_KEY` (backend, `.env`) + `VITE_TURNSTILE_SITE_KEY` (frontend, di-*bake* saat `vite

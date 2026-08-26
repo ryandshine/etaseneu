@@ -1,4 +1,6 @@
 import hmac
+import hashlib
+import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -7,6 +9,7 @@ import jwt
 from fastapi import Depends, Header, HTTPException
 
 from app.core.config import get_settings
+from app.core.session_store import get_auth_store
 
 
 def verify_admin_key(x_admin_key: str | None) -> None:
@@ -52,7 +55,8 @@ async def require_admin_key(
         token = authorization.split(" ", 1)[1].strip()
         if token:
             try:
-                if decode_token(token).role == "admin":
+                claims = decode_token(token)
+                if _is_active_admin_session(token, claims):
                     return
             except HTTPException:
                 pass
@@ -62,12 +66,17 @@ async def require_admin_key(
 # ---------------------------------------------------------------------------
 # Akun aplikasi (gerbang login seluruh sistem) -- lihat postgres_store/_users.py
 # untuk tabelnya. Password di-hash dengan bcrypt; sesi dibawa lewat token JWT
-# bertanda tangan HS256 (auth_jwt_secret), BUKAN cookie/session server-side --
-# konsisten dengan pola "state login di memori klien saja" yang sudah dipakai
-# sejak LoginPage.tsx pertama dibuat.
+# bertanda tangan HS256 (auth_jwt_secret) dan, untuk token login aplikasi,
+# dicatat sebagai hash di app_sessions supaya bisa diperpanjang/revoke.
 # ---------------------------------------------------------------------------
 
-TOKEN_TTL = timedelta(hours=24)
+TOKEN_TTL = timedelta(days=30)
+
+
+def hash_session_token(token: str) -> str:
+    """Hash a bearer token before it is persisted in PostgreSQL."""
+
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def hash_password(password: str) -> str:
@@ -88,17 +97,23 @@ class TokenClaims:
     user_id: int
     username: str
     role: str
+    expires_at: datetime | None = None
+    session_id: str | None = None
 
 
-def issue_token(*, user_id: int, username: str, role: str) -> str:
+def issue_token(*, user_id: int, username: str, role: str, persist_session: bool = False) -> str:
     now = datetime.now(timezone.utc)
+    session_id = secrets.token_urlsafe(24)
     payload = {
         "sub": str(user_id),
         "username": username,
         "role": role,
+        "jti": session_id,
         "iat": now,
         "exp": now + TOKEN_TTL,
     }
+    if persist_session:
+        payload["sid"] = session_id
     return jwt.encode(payload, get_settings().auth_jwt_secret, algorithm="HS256")
 
 
@@ -115,13 +130,34 @@ def decode_token(token: str) -> TokenClaims:
             user_id=int(payload["sub"]),
             username=str(payload["username"]),
             role=str(payload["role"]),
+            expires_at=datetime.fromtimestamp(float(payload["exp"]), tz=timezone.utc),
+            session_id=str(payload["sid"]) if payload.get("sid") else None,
         )
-    except (KeyError, ValueError, TypeError):
+    except (KeyError, ValueError, TypeError, OverflowError):
         raise HTTPException(status_code=401, detail="Sesi tidak valid, silakan login ulang.")
+
+
+def _is_active_admin_session(token: str, claims: TokenClaims) -> bool:
+    """Validate persisted admin sessions while preserving legacy JWT support."""
+
+    if not claims.session_id:
+        return claims.role == "admin"
+
+    store = get_auth_store()
+    validator = getattr(store, "validate_session", None)
+    if not store.enabled or validator is None:
+        return claims.role == "admin"
+    session_user = validator(hash_session_token(token), claims.user_id)
+    if not session_user:
+        return False
+    if isinstance(session_user, dict):
+        return session_user.get("role") == "admin"
+    return claims.role == "admin"
 
 
 async def require_authenticated_user(
     authorization: str | None = Header(default=None),
+    store = Depends(get_auth_store),
 ) -> TokenClaims:
     """Dependency: butuh header 'Authorization: Bearer <token>' yang valid."""
     if not authorization or not authorization.lower().startswith("bearer "):
@@ -129,7 +165,16 @@ async def require_authenticated_user(
     token = authorization.split(" ", 1)[1].strip()
     if not token:
         raise HTTPException(status_code=401, detail="Belum login.")
-    return decode_token(token)
+    claims = decode_token(token)
+    validator = getattr(store, "validate_session", None)
+    if claims.session_id and store.enabled and validator is not None:
+        session_user = validator(hash_session_token(token), claims.user_id)
+        if not session_user:
+            raise HTTPException(status_code=401, detail="Sesi sudah dicabut, silakan login lagi.")
+        if isinstance(session_user, dict):
+            claims.username = str(session_user.get("username", claims.username))
+            claims.role = str(session_user.get("role", claims.role))
+    return claims
 
 
 async def require_session_if_enabled(

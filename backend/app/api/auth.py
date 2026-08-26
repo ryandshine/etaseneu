@@ -1,15 +1,21 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.core.auth import (
+    TOKEN_TTL,
     TokenClaims,
     hash_password,
+    hash_session_token,
     issue_token,
     require_admin_key,
     require_admin_role,
+    require_authenticated_user,
     verify_password,
 )
 from app.core.config import get_settings
+from app.core.session_store import get_auth_store
 from app.services.postgres_store import PostgresStore
 from app.services.turnstile_service import verify_turnstile
 
@@ -19,16 +25,9 @@ router = APIRouter()
 VALID_ROLES = ("admin", "user")
 
 
-def get_store() -> PostgresStore:
-    """Dependency (bukan dipanggil langsung) supaya test bisa override lewat
-    app.dependency_overrides -- proyek ini tidak punya database test
-    terpisah (lihat CLAUDE.md), jadi endpoint yang menulis kredensial login
-    WAJIB bisa diuji tanpa menyentuh database produksi sungguhan."""
-    settings = get_settings()
-    store = PostgresStore(settings.database_url)
-    if not store.enabled:
-        raise HTTPException(status_code=503, detail="Database belum dikonfigurasi di server.")
-    return store
+# Alias dependency bersama: require_authenticated_user memakai objek dependency
+# yang sama, sehingga override test dan store sesi produksi tetap konsisten.
+get_store = get_auth_store
 
 
 @router.post("/auth/verify")
@@ -58,6 +57,9 @@ async def login(
     seed satu akun admin dari env itu dulu, supaya kredensial yang sudah
     dipakai produksi tetap jalan tanpa langkah manual di server.
     """
+    if not store.enabled:
+        raise HTTPException(status_code=503, detail="Database belum dikonfigurasi di server.")
+
     settings = get_settings()
 
     # Cek captcha sebelum menyentuh kredensial -- percobaan brute-force
@@ -84,8 +86,56 @@ async def login(
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Username atau password salah.")
 
-    token = issue_token(user_id=user["id"], username=user["username"], role=user["role"])
-    return {"ok": True, "token": token, "username": user["username"], "role": user["role"]}
+    token = issue_token(
+        user_id=user["id"],
+        username=user["username"],
+        role=user["role"],
+        persist_session=True,
+    )
+    create_session = getattr(store, "create_session", None)
+    if create_session is not None:
+        now = datetime.now(timezone.utc)
+        create_session(
+            user_id=user["id"],
+            token_hash=hash_session_token(token),
+            created_at=now,
+            expires_at=now + TOKEN_TTL,
+            user_agent=request.headers.get("user-agent"),
+            ip_address=request.client.host if request.client else None,
+        )
+    return {
+        "ok": True,
+        "token": token,
+        "username": user["username"],
+        "role": user["role"],
+        "expires_at": (datetime.now(timezone.utc) + TOKEN_TTL).isoformat(),
+    }
+
+
+@router.get("/auth/session")
+async def get_current_session(
+    claims: TokenClaims = Depends(require_authenticated_user),
+) -> dict[str, object]:
+    return {
+        "ok": True,
+        "username": claims.username,
+        "role": claims.role,
+        "expires_at": claims.expires_at.isoformat() if claims.expires_at else None,
+    }
+
+
+@router.post("/auth/logout")
+async def logout(
+    request: Request,
+    claims: TokenClaims = Depends(require_authenticated_user),
+    store: PostgresStore = Depends(get_store),
+) -> dict[str, bool]:
+    authorization = request.headers.get("authorization", "")
+    token = authorization.split(" ", 1)[1].strip() if authorization.lower().startswith("bearer ") else ""
+    revoke_session = getattr(store, "revoke_session", None)
+    if token and revoke_session is not None:
+        revoke_session(hash_session_token(token), claims.user_id)
+    return {"ok": True}
 
 
 class UserOut(BaseModel):
@@ -93,6 +143,7 @@ class UserOut(BaseModel):
     username: str
     role: str
     created_at: str
+    active_sessions: int = 0
 
 
 def _serialize_user(row: dict) -> UserOut:
@@ -101,6 +152,7 @@ def _serialize_user(row: dict) -> UserOut:
         username=row["username"],
         role=row["role"],
         created_at=str(row["created_at"]),
+        active_sessions=int(row.get("active_sessions", 0)),
     )
 
 
@@ -108,7 +160,33 @@ def _serialize_user(row: dict) -> UserOut:
 async def list_users(
     store: PostgresStore = Depends(get_store), _: TokenClaims = Depends(require_admin_role)
 ) -> list[UserOut]:
-    return [_serialize_user(row) for row in store.list_users()]
+    rows = store.list_users()
+    count_sessions = getattr(store, "count_active_sessions", None)
+    if count_sessions is not None:
+        for row in rows:
+            row["active_sessions"] = count_sessions(row["id"])
+    return [_serialize_user(row) for row in rows]
+
+
+@router.post("/auth/users/{user_id}/sessions/revoke")
+async def revoke_user_sessions(
+    user_id: int,
+    request: Request,
+    claims: TokenClaims = Depends(require_admin_role),
+    store: PostgresStore = Depends(get_store),
+) -> dict[str, int]:
+    target = store.get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User tidak ditemukan.")
+
+    revoke_all = getattr(store, "revoke_user_sessions", None)
+    if revoke_all is None:
+        return {"revoked": 0}
+
+    authorization = request.headers.get("authorization", "")
+    token = authorization.split(" ", 1)[1].strip() if authorization.lower().startswith("bearer ") else ""
+    except_hash = hash_session_token(token) if target["id"] == claims.user_id and token else None
+    return {"revoked": int(revoke_all(user_id, except_token_hash=except_hash))}
 
 
 class CreateUserRequest(BaseModel):

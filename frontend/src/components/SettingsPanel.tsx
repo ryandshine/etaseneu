@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 import type { AppSession, GeoJsonStatusResponse } from "../types/api";
+import { formatDateTimeWIB } from "../lib/date";
 import { UserManagementPanel } from "./UserManagementPanel";
 
 type SettingsPanelProps = {
   onRefreshLayers: () => void;
   adminKey: string | null;
   session: AppSession | null;
+  onLogout: () => void;
 };
 
-export function SettingsPanel({ onRefreshLayers, adminKey, session }: SettingsPanelProps) {
+export function SettingsPanel({ onRefreshLayers, adminKey, session, onLogout }: SettingsPanelProps) {
   // Akun role admin sudah login (JWT) -- backend menerima Bearer token role
   // admin sebagai pengganti X-Admin-Key (lihat core/auth.py::require_admin_key),
   // jadi aksi admin di sini tidak lagi bergantung pada adminKey/PasswordGateModal
@@ -51,8 +53,10 @@ export function SettingsPanel({ onRefreshLayers, adminKey, session }: SettingsPa
   };
 
   useEffect(() => {
-    fetchStatus();
-  }, []);
+    if (session?.role === "admin") {
+      fetchStatus();
+    }
+  }, [session?.role]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -226,11 +230,41 @@ export function SettingsPanel({ onRefreshLayers, adminKey, session }: SettingsPa
   return (
     <div className="view-content-scroll" style={{ padding: "2rem", maxWidth: "900px", margin: "0 auto" }}>
       <div className="monitoring-header" style={{ marginBottom: "2rem" }}>
-        <h1>Pengaturan Sistem</h1>
+        <h1>Pengaturan</h1>
         <p className="monitoring-header-subtitle">
-          Kelola dataset wilayah perhutanan sosial (GeoJSON) dan koordinasi intersect data spasial.
+          Informasi akun dan kontrol operasional ETA SENEU.
         </p>
       </div>
+
+      <section className="account-settings-card" aria-labelledby="account-settings-title">
+        <div className="account-settings-heading">
+          <div>
+            <p className="account-settings-kicker">AKUN AKTIF</p>
+            <h2 id="account-settings-title">Informasi akun</h2>
+          </div>
+          <span className={`account-role-badge account-role-badge--${session?.role ?? "user"}`}>
+            {session?.role === "admin" ? "ADMIN" : "USER"}
+          </span>
+        </div>
+        <div className="account-settings-grid">
+          <div>
+            <span>Username</span>
+            <strong>{session?.username ?? "—"}</strong>
+          </div>
+          <div>
+            <span>Status sesi</span>
+            <strong className="account-session-status"><i aria-hidden="true" /> Aktif & tersimpan</strong>
+          </div>
+          <div>
+            <span>Berlaku sampai</span>
+            <strong>{session?.expiresAt ? formatDateTimeWIB(session.expiresAt) : "30 hari sejak login"}</strong>
+          </div>
+        </div>
+        <div className="account-settings-footer">
+          <p>Perangkat ini akan mengingat sesi saat halaman di-reset. Admin dapat mencabut sesi akun dari Manajemen User.</p>
+          <button type="button" className="account-logout-btn" onClick={onLogout}>Keluar dari perangkat ini</button>
+        </div>
+      </section>
 
       {feedback && (
         <div 
@@ -247,6 +281,8 @@ export function SettingsPanel({ onRefreshLayers, adminKey, session }: SettingsPa
         </div>
       )}
 
+      {session?.role === "admin" ? (
+      <>
       {/* minmax(0, 1fr), bukan cuma "1fr" -- kolom grid bawaannya punya
           auto-min sebesar konten terlebar di dalamnya (di sini: tabel
           Manajemen User), jadi di layar sempit kartu ini melebar ke kanan
@@ -526,6 +562,8 @@ export function SettingsPanel({ onRefreshLayers, adminKey, session }: SettingsPa
           <UserManagementPanel token={session.token} currentUsername={session.username} />
         ) : null}
       </div>
+      </>
+      ) : null}
     </div>
   );
 }

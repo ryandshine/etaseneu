@@ -76,6 +76,7 @@ export function UserManagementPanel({ token, currentUsername }: UserManagementPa
   const [passwordEditId, setPasswordEditId] = useState<number | null>(null);
   const [passwordDraft, setPasswordDraft] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [confirmRevokeId, setConfirmRevokeId] = useState<number | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
 
   const authHeaders = {
@@ -197,6 +198,27 @@ export function UserManagementPanel({ token, currentUsername }: UserManagementPa
     }
   };
 
+  const handleRevokeSessions = async (user: AppUser) => {
+    setBusyId(user.id);
+    setError(null);
+    try {
+      const response = await fetch(`/api/auth/users/${user.id}/sessions/revoke`, {
+        method: "POST",
+        headers: authHeaders
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.detail || "Gagal mencabut sesi.");
+      }
+      setConfirmRevokeId(null);
+      await fetchUsers();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal mencabut sesi.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <div style={cardStyle}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
@@ -205,7 +227,7 @@ export function UserManagementPanel({ token, currentUsername }: UserManagementPa
             Manajemen User
           </h2>
           <p style={{ color: "#9ca3af", fontSize: "0.8rem", margin: 0 }}>
-            Tambah akun, ubah role, atau ganti password. Khusus role admin.
+            Tambah akun, ubah role, ganti password, dan cabut sesi perangkat. Khusus role admin.
           </p>
         </div>
         <span style={{ color: "#6b7280", fontSize: "0.72rem", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "999px", padding: "0.3rem 0.7rem", whiteSpace: "nowrap" }}>
@@ -281,11 +303,11 @@ export function UserManagementPanel({ token, currentUsername }: UserManagementPa
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
             <thead>
               <tr>
-                {["Username", "Role", "Dibuat", "Aksi"].map((heading, i) => (
+                {["Username", "Role", "Sesi aktif", "Dibuat", "Aksi"].map((heading, i) => (
                   <th
                     key={heading}
                     style={{
-                      textAlign: i === 3 ? "right" : "left",
+                      textAlign: i === 4 ? "right" : "left",
                       color: "#6b7280",
                       fontSize: "0.7rem",
                       fontWeight: 600,
@@ -330,6 +352,9 @@ export function UserManagementPanel({ token, currentUsername }: UserManagementPa
                           <option value="admin">Admin</option>
                         </select>
                       </div>
+                    </td>
+                    <td style={{ padding: "0.85rem 0.5rem", verticalAlign: "middle", color: (user.active_sessions ?? 0) > 0 ? "#86efac" : "#6b7280", fontSize: "0.78rem", whiteSpace: "nowrap" }}>
+                      {user.active_sessions ?? 0}
                     </td>
                     <td style={{ padding: "0.85rem 0.5rem", verticalAlign: "middle", color: "#9ca3af", fontSize: "0.78rem", whiteSpace: "nowrap" }}>
                       {formatDateTimeWIB(user.created_at)}
@@ -377,6 +402,37 @@ export function UserManagementPanel({ token, currentUsername }: UserManagementPa
                             style={ghostButtonStyle}
                           >
                             Ganti Password
+                          </button>
+                        )}
+
+                        {confirmRevokeId === user.id ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => void handleRevokeSessions(user)}
+                              style={{ ...dangerButtonStyle, background: "rgba(239,68,68,0.2)" }}
+                            >
+                              {isBusy ? "Mencabut..." : "Yakin?"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => setConfirmRevokeId(null)}
+                              style={ghostButtonStyle}
+                            >
+                              Batal
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={(user.active_sessions ?? 0) <= (isSelf ? 1 : 0) || isBusy}
+                            title={isSelf ? "Cabut sesi lain, sesi ini dipertahankan" : `Revoke semua sesi ${user.username}`}
+                            onClick={() => setConfirmRevokeId(user.id)}
+                            style={{ ...dangerButtonStyle, opacity: (user.active_sessions ?? 0) <= (isSelf ? 1 : 0) ? 0.35 : 1, cursor: (user.active_sessions ?? 0) <= (isSelf ? 1 : 0) ? "not-allowed" : "pointer" }}
+                          >
+                            {isSelf ? "Revoke sesi lain" : "Revoke sesi"}
                           </button>
                         )}
 

@@ -46,6 +46,45 @@ function isSchedulerFailureStatus(status?: string | null): boolean {
 
 type AppView = "map" | "matrix" | "pointmatch" | "kompleks" | "settings" | "kps";
 
+const PERSISTED_SESSION_KEY = "etaseneu.session.v1";
+
+function readPersistedSession(): AppSession | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const raw = window.localStorage.getItem(PERSISTED_SESSION_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<AppSession>;
+    if (
+      typeof value.token !== "string" ||
+      typeof value.username !== "string" ||
+      (value.role !== "admin" && value.role !== "user")
+    ) {
+      window.localStorage.removeItem(PERSISTED_SESSION_KEY);
+      return null;
+    }
+    return {
+      token: value.token,
+      username: value.username,
+      role: value.role,
+      expiresAt: typeof value.expiresAt === "string" ? value.expiresAt : null
+    };
+  } catch {
+    window.localStorage.removeItem(PERSISTED_SESSION_KEY);
+    return null;
+  }
+}
+
+function persistSession(session: AppSession | null): void {
+  if (typeof window === "undefined") return;
+  if (!session) {
+    window.localStorage.removeItem(PERSISTED_SESSION_KEY);
+    return;
+  }
+  window.localStorage.setItem(PERSISTED_SESSION_KEY, JSON.stringify(session));
+}
+
 /**
  * View aktif disimpan di query string supaya refresh dan tombol back tidak
  * selalu melempar pengguna kembali ke Live Map, dan tautan ke Matriks Data
@@ -118,19 +157,83 @@ export default function App() {
   // sync manual, prewarm). Backend yang beneran memvalidasi, bukan cuma
   // dicek string di JS seperti sebelumnya.
   const [adminKey, setAdminKey] = useState<string | null>(null);
-  // Sama seperti adminKey: sengaja di memori saja, bukan localStorage --
-  // reload halaman = login ulang. Ini gerbang tampilan front-end saja;
-  // endpoint baca publik (preview layer, dsb) tidak ikut terkunci olehnya.
+  // Token sesi disimpan di localStorage supaya reload/reset web tidak
+  // memaksa login ulang. Token tetap diverifikasi ke /api/auth/session saat
+  // aplikasi dibuka; revoke dari admin akan membuat verifikasi itu 401.
   // session.role menentukan siapa yang lihat tab Manajemen User di
   // Pengaturan (lihat SettingsPanel) -- bukan pembatas fitur dashboard lain.
-  const [session, setSession] = useState<AppSession | null>(null);
+  const [session, setSession] = useState<AppSession | null>(readPersistedSession);
+  const [restoringSession, setRestoringSession] = useState(() => Boolean(readPersistedSession()));
 
   // Kalau ada panggilan API balas 401 (mis. backend API_REQUIRE_AUTH menyala
   // dan token kadaluarsa), buang sesi -> kembali ke LoginPage.
   useEffect(() => {
-    setUnauthorizedHandler(() => setSession(null));
+    setUnauthorizedHandler(() => {
+      persistSession(null);
+      setSession(null);
+    });
     return () => setUnauthorizedHandler(null);
   }, []);
+
+  useEffect(() => {
+    const persisted = readPersistedSession();
+    if (!persisted) {
+      setRestoringSession(false);
+      return;
+    }
+
+    let cancelled = false;
+    fetch("/api/auth/session", {
+      headers: { Authorization: `Bearer ${persisted.token}` }
+    })
+      .then(async (response) => {
+        if (cancelled) return;
+        if (response.ok) {
+          const data = await response.json();
+          const refreshed: AppSession = {
+            token: persisted.token,
+            username: data.username ?? persisted.username,
+            role: data.role ?? persisted.role,
+            expiresAt: data.expires_at ?? persisted.expiresAt ?? null
+          };
+          persistSession(refreshed);
+          setSession(refreshed);
+        } else if (response.status === 401) {
+          persistSession(null);
+          setSession(null);
+        }
+      })
+      .catch(() => {
+        // Saat server sedang restart, pertahankan sesi lokal. Panggilan API
+        // dashboard akan menampilkan error koneksi seperti biasa; sesi tetap
+        // dibuang otomatis bila server mengembalikan 401.
+      })
+      .finally(() => {
+        if (!cancelled) setRestoringSession(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleLoginSuccess = (nextSession: AppSession) => {
+    persistSession(nextSession);
+    setSession(nextSession);
+  };
+
+  const handleLogout = () => {
+    const current = session;
+    persistSession(null);
+    setAdminKey(null);
+    setSession(null);
+    if (current?.token) {
+      void fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${current.token}` }
+      }).catch(() => undefined);
+    }
+  };
 
   const commitViewChange = (view: AppView) => {
     setActiveView(view);
@@ -153,14 +256,9 @@ export default function App() {
 
   const handleViewChange = (view: AppView) => {
     if (view === "settings") {
-      // Menu Pengaturan khusus admin -- tombolnya disembunyikan di SidebarNav
-      // untuk role user; guard ini menutup jalur lain (mis. state lama).
-      // Admin sudah membuktikan identitas lewat login JWT, jadi tidak perlu
-      // password ADMIN_API_KEY kedua kalinya (require_admin_key menerima sesi
-      // JWT role admin, lihat core/auth.py).
-      if (session?.role === "admin") {
-        commitViewChange("settings");
-      }
+      // Info akun tersedia untuk semua role. Isi pengaturan sistem dan
+      // manajemen sesi tetap diguard di SettingsPanel oleh role admin.
+      commitViewChange("settings");
       return;
     }
     commitViewChange(view);
@@ -498,8 +596,12 @@ export default function App() {
     return `${hours} jam ${mins} menit`;
   }, [latestHotspot, clockSec]);
 
+  if (restoringSession) {
+    return <ViewLoader label="Memulihkan sesi akun..." />;
+  }
+
   if (!session) {
-    return <LoginPage onSuccess={setSession} />;
+    return <LoginPage onSuccess={handleLoginSuccess} />;
   }
 
   return (
@@ -528,7 +630,7 @@ export default function App() {
         }}
         onManualSync={() => void manualSync()}
         onPrewarmHistory={() => void prewarmHistory()}
-        onLogout={() => setSession(null)}
+        onLogout={handleLogout}
         syncLabel={syncLabel}
         syncStatusLabel={syncStatusLabel}
         lastSyncLabel={isStorageLoading ? "memuat..." : lastHotspotSyncLabel}
@@ -797,6 +899,7 @@ export default function App() {
                 onRefreshLayers={() => void retryInitialLoad()}
                 adminKey={adminKey}
                 session={session}
+                onLogout={handleLogout}
               />
             </Suspense>
           </section>

@@ -62,6 +62,17 @@ describe("App", () => {
         );
       }
 
+      if (url === "/api/auth/session") {
+        return new Response(
+          JSON.stringify({ ok: true, username: "admin", role: "admin", expires_at: "2026-09-25T00:00:00+00:00" }),
+          { status: 200 }
+        );
+      }
+
+      if (url === "/api/auth/logout") {
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+
       if (url === "/api/auth/verify") {
         const headers = new Headers(init?.headers);
         const key = headers.get("X-Admin-Key");
@@ -558,13 +569,25 @@ describe("App", () => {
     ).toBe(true);
   });
 
-  it("menyembunyikan menu Pengaturan + tombol Sync/Prewarm untuk role user", async () => {
+  it("menyembunyikan kontrol admin tetapi mempertahankan Pengaturan untuk role user", async () => {
     render(<App />);
     await loginThroughUI("regular-user");
 
-    expect(screen.queryByRole("button", { name: /pengaturan/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /pengaturan/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /sync hotspot/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /prewarm/i })).not.toBeInTheDocument();
+  });
+
+  it("memulihkan sesi tersimpan setelah aplikasi di-reset", async () => {
+    const firstRender = render(<App />);
+    await loginThroughUI("admin");
+    firstRender.unmount();
+
+    render(<App />);
+
+    expect(await screen.findByRole("button", { name: /pengaturan/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Username")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input) === "/api/auth/session")).toBe(true);
   });
 
   it("menampilkan menu Pengaturan + tombol Sync/Prewarm untuk role admin", async () => {

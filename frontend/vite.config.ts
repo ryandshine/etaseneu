@@ -34,6 +34,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
+    setupFiles: ["src/test/setup.ts"],
     include: ["src/test/**/*.test.tsx"],
     // Default 5000ms mepet buat test yang render <App/>: sejak gerbang login
     // ditambahkan (LoginPage.tsx), test itu sekarang butuh satu ronde

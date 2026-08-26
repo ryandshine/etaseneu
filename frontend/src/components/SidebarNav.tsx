@@ -36,8 +36,8 @@ type SidebarNavProps = {
   latestHotspotTimeLabel: string;
   dataAgeLabel: string;
   hasLatestHotspot: boolean;
-  /** Role admin: menampilkan menu Pengaturan + tombol Sync/Prewarm. Role
-   *  user tidak melihatnya sama sekali (endpoint-nya juga admin-only). */
+  /** Role admin: menampilkan tombol Sync/Prewarm. Menu Pengaturan berisi info
+   *  akun untuk semua role, sedangkan panel sistemnya tetap admin-only. */
   isAdmin: boolean;
   mobileOpen?: boolean;
   /**
@@ -121,11 +121,9 @@ export function SidebarNav({
           <NavButton active={activeView === "kompleks"} onClick={() => onChangeView("kompleks")}>
             Kompleks Kebakaran
           </NavButton>
-          {isAdmin ? (
-            <NavButton active={activeView === "settings"} onClick={() => onChangeView("settings")}>
-              Pengaturan
-            </NavButton>
-          ) : null}
+          <NavButton active={activeView === "settings"} onClick={() => onChangeView("settings")}>
+            Pengaturan
+          </NavButton>
         </nav>
 
         <button type="button" className="side-logout-btn" onClick={onLogout}>

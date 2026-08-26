@@ -2,14 +2,16 @@ export interface HealthResponse {
   status: string;
 }
 
-// Sesi login (POST /api/auth/login) -- disimpan di memori React saja
-// (bukan localStorage), reload halaman = login ulang. Lihat App.tsx.
+// Sesi login (POST /api/auth/login). Token disimpan di localStorage agar
+// reload/reset web tidak memaksa login ulang; endpoint /api/auth/session
+// tetap memvalidasi token dan status revoke di server.
 export type UserRole = "admin" | "user";
 
 export interface AppSession {
   token: string;
   username: string;
   role: UserRole;
+  expiresAt?: string | null;
 }
 
 export interface AppUser {
@@ -17,6 +19,7 @@ export interface AppUser {
   username: string;
   role: UserRole;
   created_at: string;
+  active_sessions?: number;
 }
 
 export interface LayerBounds {
