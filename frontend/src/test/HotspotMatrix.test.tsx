@@ -199,6 +199,47 @@ describe("HotspotMatrix", () => {
     expect(onExport).toHaveBeenCalledWith(expect.objectContaining({ skema: "PKK" }));
   });
 
+  it("previews ten provinces and expands the rest on demand", async () => {
+    const manyHotspots = Array.from({ length: 12 }, (_, index) => ({
+      ...hotspot,
+      id: `hotspot-${index + 1}`,
+      provinceName: `Provinsi ${String(index + 1).padStart(2, "0")}`,
+      polygonMetadata: {
+        ...hotspot.polygonMetadata,
+        NAMA_PROV: `Provinsi ${String(index + 1).padStart(2, "0")}`
+      }
+    }));
+
+    render(
+      <HotspotMatrix
+        hotspots={manyHotspots}
+        geojsonStatus={null}
+        onExport={() => undefined}
+        isExporting={false}
+        onExportPdf={() => undefined}
+        isExportingPdf={false}
+        onDateChange={() => undefined}
+        startDate="2026-05-27"
+        endDate="2026-05-28"
+        timeRange={{
+          startAt: new Date("2026-05-27T00:00:00Z"),
+          endAt: new Date("2026-05-28T00:00:00Z"),
+          label: "Hari ini"
+        }}
+        dateRangeLabel="Hari ini"
+        timePreset="24h"
+        onTimePresetChange={() => undefined}
+      />
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(document.querySelectorAll(".skema-matrix tbody tr")).toHaveLength(10);
+
+    fireEvent.click(screen.getByRole("button", { name: "Lihat semua (12)" }));
+    expect(document.querySelectorAll(".skema-matrix tbody tr")).toHaveLength(12);
+    expect(screen.getByRole("button", { name: "Tampilkan 10 saja" })).toBeInTheDocument();
+  });
+
   it("shows the Frekuensi Kebakaran chip once KLHK data loads, matched by trimmed lembaga name", async () => {
     // Nama lembaga dari data KLHK kadang punya whitespace tersisa -- baris
     // ini harus tetap cocok ke grup "LPHD Demo" dari `hotspots`.

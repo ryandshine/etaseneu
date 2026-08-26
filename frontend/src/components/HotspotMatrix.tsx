@@ -316,6 +316,7 @@ function buildFrpDistribution(hotspots: MatrixHotspot[]): ChartItem[] {
 }
 
 const SKEMA_FALLBACK = "Tanpa Skema";
+const MATRIX_PREVIEW_ROW_LIMIT = 10;
 
 // Sebagian polygon di sumber belum mengisi SKEMA; titiknya tetap dihitung lewat
 // label SKEMA_FALLBACK supaya total tabel silang sama dengan jumlah rekaman
@@ -659,6 +660,17 @@ function SkemaProvinsiCard({
 }) {
   const dominant = matrix.skema[0];
   const dominantShare = matrix.grandTotal ? Math.round((matrix.totals[0] / matrix.grandTotal) * 100) : 0;
+  const [showAllRows, setShowAllRows] = useState(false);
+
+  useEffect(() => {
+    if (matrix.rows.length <= MATRIX_PREVIEW_ROW_LIMIT) {
+      setShowAllRows(false);
+    }
+  }, [matrix.rows.length]);
+
+  const visibleRows = showAllRows
+    ? matrix.rows
+    : matrix.rows.slice(0, MATRIX_PREVIEW_ROW_LIMIT);
 
   return (
     <section className="matrix-chart-card matrix-chart-card--wide glass-panel">
@@ -701,7 +713,7 @@ function SkemaProvinsiCard({
                 </tr>
               </thead>
               <tbody>
-                {matrix.rows.map((row) => (
+                {visibleRows.map((row) => (
                   <tr key={row.provinsi} className={activeProvince === row.provinsi ? "is-active" : ""}>
                     <th scope="row">
                       <button
@@ -748,6 +760,21 @@ function SkemaProvinsiCard({
               </tfoot>
             </table>
           </div>
+          {matrix.rows.length > MATRIX_PREVIEW_ROW_LIMIT ? (
+            <div className="skema-matrix__more">
+              <span>
+                Menampilkan {showAllRows ? matrix.rows.length : MATRIX_PREVIEW_ROW_LIMIT} dari {matrix.rows.length} provinsi
+              </span>
+              <button
+                type="button"
+                className="skema-matrix__more-btn"
+                onClick={() => setShowAllRows((current) => !current)}
+                aria-expanded={showAllRows}
+              >
+                {showAllRows ? "Tampilkan 10 saja" : `Lihat semua (${matrix.rows.length})`}
+              </button>
+            </div>
+          ) : null}
         </>
       )}
     </section>

@@ -3471,6 +3471,36 @@ body {
   border-radius: 0.125rem;
 }
 
+.skema-matrix__more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.55rem;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.72rem;
+}
+
+.skema-matrix__more-btn {
+  border: 1px solid rgba(255, 107, 53, 0.38);
+  border-radius: 999px;
+  padding: 0.32rem 0.7rem;
+  background: rgba(255, 107, 53, 0.08);
+  color: #ff9a70;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.skema-matrix__more-btn:hover,
+.skema-matrix__more-btn:focus-visible {
+  border-color: rgba(255, 107, 53, 0.7);
+  background: rgba(255, 107, 53, 0.16);
+  color: #ffc0a8;
+  outline: none;
+}
+
 .skema-matrix {
   width: 100%;
   border-collapse: collapse;
