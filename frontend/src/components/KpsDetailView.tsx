@@ -6,6 +6,7 @@ import type { LayerGroup as LLayerGroup } from "leaflet";
 
 import { SATELLITE_OPTIONS } from "../constants/satellites";
 import { TIME_PRESET_OPTIONS } from "../constants/time-windows";
+import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
 import type { DashboardHotspot } from "../hooks/useDashboardData";
 import { authFetch, createApiClient } from "../lib/api";
 import { getTodayWIB } from "../lib/date";
@@ -787,7 +788,13 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
         </aside>
 
         <div className="kps-detail-map">
-          <MapContainer center={[-2.5, 118]} zoom={5} preferCanvas style={{ height: "100%", width: "100%" }}>
+          <MapContainer
+            center={[-2.5, 118]}
+            zoom={5}
+            preferCanvas
+            {...SMOOTH_ZOOM_MAP_PROPS}
+            style={{ height: "100%", width: "100%" }}
+          >
             <KeepMapSized />
             <TileLayer
               attribution="Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors"

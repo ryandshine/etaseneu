@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { authFetch } from "../lib/api";
 import { formatHectares } from "../lib/hotspotDisplay";
+import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
 import { Flame, LocateFixed } from "lucide-react";
 import { WindLayer } from "./WindLayer";
 import { WeatherOverlay } from "./WeatherOverlay";
@@ -571,7 +572,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
         center={[-2.5, 118]}
         zoom={5}
         preferCanvas
-        scrollWheelZoom
+        {...SMOOTH_ZOOM_MAP_PROPS}
         zoomControl={false}
         style={{ height: "100%", width: "100%" }}
       >

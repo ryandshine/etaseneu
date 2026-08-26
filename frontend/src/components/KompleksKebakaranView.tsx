@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet";
 import { createApiClient } from "../lib/api";
+import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
 import type { ClusterCollectionResponse, ClusterRecord, ClusterSensitivity } from "../types/api";
 
 const api = createApiClient();
@@ -195,7 +196,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail }: KompleksKebakaranView
               center={[-2.5, 118]}
               zoom={5}
               preferCanvas
-              scrollWheelZoom
+              {...SMOOTH_ZOOM_MAP_PROPS}
               zoomControl={false}
               style={{ height: "100%", width: "100%" }}
             >
