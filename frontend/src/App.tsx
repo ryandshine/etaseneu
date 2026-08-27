@@ -355,7 +355,7 @@ export default function App() {
     updateDate,
     initialLoading,
     retryInitialLoad
-  } = useDashboardData(activeView, adminKey, session?.token ?? null, Boolean(session));
+  } = useDashboardData(activeView, adminKey, session?.token ?? null, Boolean(session) && !restoringSession);
 
   const provinceOptions = useMemo(() => {
     const provinces = hotspots

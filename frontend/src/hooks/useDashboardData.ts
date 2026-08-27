@@ -352,7 +352,12 @@ export function useDashboardData(
   }, []);
 
   useEffect(() => {
-    if (!ready || hasStartedInitialLoadRef.current) {
+    if (!ready) {
+      hasStartedInitialLoadRef.current = false;
+      return;
+    }
+
+    if (hasStartedInitialLoadRef.current) {
       return;
     }
 
