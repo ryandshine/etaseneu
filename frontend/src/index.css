@@ -7490,6 +7490,72 @@ a + a {
   font-size: 0.82rem;
 }
 
+.kompleks-map .leaflet-control-zoom {
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 0.5rem !important;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+}
+
+.kompleks-map .leaflet-control-zoom a {
+  width: 32px;
+  height: 32px;
+  line-height: 32px;
+  background: rgba(19, 21, 26, 0.92) !important;
+  color: #f5efe6 !important;
+  border: none !important;
+  backdrop-filter: blur(8px);
+}
+
+.kompleks-map .leaflet-control-zoom a:not(.leaflet-disabled):hover {
+  background: rgba(255, 78, 0, 0.18) !important;
+  color: #ffffff !important;
+}
+
+.kompleks-map .leaflet-control-zoom-in {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.kompleks-map-legend {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 1000;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 0.8rem;
+  max-width: min(30rem, calc(100% - 2rem));
+  padding: 0.45rem 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.45rem;
+  background: rgba(19, 21, 26, 0.82);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.62rem;
+  line-height: 1.2;
+  backdrop-filter: blur(8px);
+}
+
+.kompleks-map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.kompleks-map-legend__dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+.kompleks-map-legend__line {
+  width: 0.75rem;
+  height: 0;
+  border-top: 2px dashed #ff8c42;
+}
+
 .kompleks-list {
   display: flex;
   flex-direction: column;
@@ -7576,6 +7642,20 @@ a + a {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 11rem;
+}
+
+.kompleks-row-agency-label,
+.kompleks-popup-agency-label {
+  color: #9ca3af;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.kompleks-popup-agency-label {
+  color: #6b7280;
+  font-size: 0.65rem;
 }
 
 .kompleks-row-meta {

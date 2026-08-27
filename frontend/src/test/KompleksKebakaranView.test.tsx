@@ -14,8 +14,11 @@ vi.mock("react-leaflet", () => ({
     </div>
   ),
   MapContainer: ({ children }: { children?: ReactNode }) => <div data-testid="leaflet-map">{children}</div>,
+  GeoJSON: () => <div data-testid="geojson-layer" />,
+  Pane: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Popup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   TileLayer: () => <div data-testid="tile-layer" />,
+  ZoomControl: () => <div data-testid="zoom-control" />,
   useMap: () => ({ flyTo: flyToMock, getZoom: () => 5 })
 }));
 
@@ -112,6 +115,69 @@ describe("KompleksKebakaranView", () => {
     const firstRow = getListPanel().querySelector(".kompleks-row") as HTMLElement;
     expect(list.getByText("Besar")).toBeInTheDocument();
     expect(within(firstRow).getByText("Aktif")).toBeInTheDocument();
+  });
+
+  it("offers basemap and zoom controls for the member-point map", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          count: 1,
+          clusters: [
+            {
+              cluster_id: 1,
+              hotspot_count: 4,
+              centroid_lat: -1.5,
+              centroid_lon: 110.5,
+              first_detected_at: "2026-08-01T00:00:00Z",
+              last_detected_at: "2026-08-02T00:00:00Z",
+              dominant_agency: "LPHD Peta",
+              affected_agencies: [{ name: "LPHD Peta", hotspot_count: 4 }]
+            }
+          ],
+          points: [
+            {
+              id: 101,
+              latitude: -1.5,
+              longitude: 110.5,
+              detected_at: "2026-08-01T00:00:00Z",
+              agency_name: "LPHD Peta",
+              cluster_id: 1
+            }
+          ],
+          stats: { total_hotspots_in_range: 4, clustered_hotspots: 4, unclustered_hotspots: 0 },
+          sensitivity: "sedang",
+          range_start: "2026-08-01T00:00:00Z",
+          range_end: "2026-08-24T00:00:00Z"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    render(
+      <KompleksKebakaranView
+        layers={[
+          {
+            id: "ps-demo",
+            name: "Perhutanan Sosial",
+            label: "Perhutanan Sosial",
+            active: true,
+            color: "#059669",
+            bounds: { min_lat: -2, min_lon: 110, max_lat: -1, max_lon: 111 },
+            geojson: { type: "FeatureCollection", features: [] },
+            feature_count: 0,
+            geojson_mode: "preview",
+            agencies: ["LPHD Peta"]
+          }
+        ]}
+      />
+    );
+
+    await waitFor(() => expect(screen.getByTestId("zoom-control")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Satelit" })).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(screen.getByRole("button", { name: "Satelit" }));
+    expect(screen.getByRole("button", { name: "Satelit" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Titik anggota kompleks")).toBeInTheDocument();
+    expect(screen.getByText("Polygon lembaga")).toBeInTheDocument();
   });
 
   it("copies a WhatsApp-ready report using the active 24-hour and medium filters", async () => {

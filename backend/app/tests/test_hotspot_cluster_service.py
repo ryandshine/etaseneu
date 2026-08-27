@@ -80,6 +80,12 @@ def test_summarize_computes_centroid_span_and_dominant_agency() -> None:
     assert cluster["first_detected_at"] == t1
     assert cluster["last_detected_at"] == t3
     assert cluster["dominant_agency"] == "LPHD A"
+    assert cluster["affected_agencies"] == [
+        {"name": "LPHD A", "hotspot_count": 2},
+        {"name": "LPHD B", "hotspot_count": 1},
+    ]
+    assert [point["id"] for point in result["points"]] == [1, 2, 3]
+    assert all(point["cluster_id"] == 0 for point in result["points"])
 
     assert result["stats"] == {
         "total_hotspots_in_range": 4,

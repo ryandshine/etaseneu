@@ -100,6 +100,10 @@ def _summarize(points: list[dict], labels: dict[int, int]) -> dict[str, object]:
                 "first_detected_at": min(detected_ats),
                 "last_detected_at": max(detected_ats),
                 "dominant_agency": dominant_agency,
+                "affected_agencies": [
+                    {"name": name, "hotspot_count": count}
+                    for name, count in agencies.most_common()
+                ],
             }
         )
 
@@ -107,10 +111,27 @@ def _summarize(points: list[dict], labels: dict[int, int]) -> dict[str, object]:
 
     clustered_hotspots = sum(c["hotspot_count"] for c in clusters)
     total_hotspots = len(points)
+    clustered_points = [
+        {
+            "id": point["id"],
+            "latitude": point["latitude"],
+            "longitude": point["longitude"],
+            "detected_at": point["detected_at"],
+            "agency_name": point.get("agency_name"),
+            "cluster_id": labels[point["id"]],
+        }
+        for point in points
+        if labels[point["id"]] != NOISE
+    ]
 
     return {
         "count": len(clusters),
         "clusters": clusters,
+        # Titik anggota dikirim agar peta bisa memperlihatkan deteksi yang
+        # membentuk kompleks, termasuk titik yang berada di luar polygon
+        # lembaga dominan. Noise sengaja tidak dikirim karena bukan anggota
+        # kompleks mana pun.
+        "points": clustered_points,
         "stats": {
             "total_hotspots_in_range": total_hotspots,
             "clustered_hotspots": clustered_hotspots,
@@ -138,6 +159,7 @@ class HotspotClusterService:
             return {
                 "count": 0,
                 "clusters": [],
+                "points": [],
                 "stats": {
                     "total_hotspots_in_range": 0,
                     "clustered_hotspots": 0,

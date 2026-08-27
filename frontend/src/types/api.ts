@@ -122,6 +122,16 @@ export interface ClusterRecord {
   first_detected_at: string;
   last_detected_at: string;
   dominant_agency: string | null;
+  affected_agencies?: Array<{ name: string; hotspot_count: number }>;
+}
+
+export interface ClusterPoint {
+  id: number;
+  latitude: number;
+  longitude: number;
+  detected_at: string;
+  agency_name: string | null;
+  cluster_id: number;
 }
 
 export interface ClusterStats {
@@ -137,6 +147,7 @@ export interface ClusterCollectionResponse {
   sensitivity: ClusterSensitivity;
   range_start: string;
   range_end: string;
+  points?: ClusterPoint[];
 }
 
 export interface HotspotClusterQueryParams {

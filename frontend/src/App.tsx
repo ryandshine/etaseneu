@@ -875,7 +875,7 @@ export default function App() {
         ) : activeView === "kompleks" ? (
           <section aria-label="Kompleks Kebakaran workspace" className="workspace-stage workspace-stage--kompleks">
             <Suspense fallback={<ViewLoader label="Memuat kompleks kebakaran..." />}>
-              <KompleksKebakaranView onOpenKpsDetail={openKpsDetail} />
+              <KompleksKebakaranView onOpenKpsDetail={openKpsDetail} layers={layers} />
             </Suspense>
           </section>
         ) : activeView === "kps" ? (

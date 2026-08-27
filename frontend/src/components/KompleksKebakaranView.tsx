@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Copy } from "lucide-react";
-import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet";
+import { CircleMarker, GeoJSON, MapContainer, Pane, Popup, TileLayer, useMap, ZoomControl } from "react-leaflet";
 import { createApiClient } from "../lib/api";
 import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
-import type { ClusterCollectionResponse, ClusterRecord, ClusterSensitivity } from "../types/api";
+import type { ClusterCollectionResponse, ClusterPoint, ClusterRecord, ClusterSensitivity } from "../types/api";
+import type { DashboardLayer } from "../hooks/useDashboardData";
 
 const api = createApiClient();
 
@@ -167,12 +168,14 @@ function buildWhatsAppReport(
       ? [`• Kompleks tanpa lembaga dominan: ${unidentifiedClusterCount.toLocaleString("id-ID")}`]
       : []),
     "",
-    agencySummaries.length > 0 ? "*REKAP KPS/LEMBAGA*" : "*REKAP KPS/LEMBAGA*\nTidak ada kompleks terdeteksi.",
+    agencySummaries.length > 0
+      ? "*REKAP LEMBAGA DOMINAN*"
+      : "*REKAP LEMBAGA DOMINAN*\nTidak ada kompleks terdeteksi.",
   ];
 
   agencySummaries.forEach((summary, index) => {
     lines.push(
-      `${index + 1}. *${summary.name}*`,
+      `${index + 1}. *${summary.name}* _(lembaga dominan)_`,
       `   • Jumlah kompleks: ${summary.clusterCount.toLocaleString("id-ID")}`,
       `   • Jumlah titik: *${summary.hotspotCount.toLocaleString("id-ID")}*`,
       `   • Kompleks aktif <24 jam: ${summary.activeCount.toLocaleString("id-ID")}`,
@@ -220,11 +223,36 @@ function FlyToCluster({ cluster }: { cluster: ClusterRecord | null }) {
 
 type KompleksKebakaranViewProps = {
   onOpenKpsDetail?: (agency: string) => void;
+  layers?: DashboardLayer[];
 };
 
-export function KompleksKebakaranView({ onOpenKpsDetail }: KompleksKebakaranViewProps) {
+function featureLabel(feature: unknown): string {
+  if (!feature || typeof feature !== "object") return "";
+  const properties = (feature as { properties?: unknown }).properties;
+  if (!properties || typeof properties !== "object") return "";
+  const label = (properties as { label?: unknown }).label;
+  return typeof label === "string" ? label.trim() : "";
+}
+
+function pointColor(cluster: ClusterRecord | undefined): string {
+  return severityOf(cluster?.hotspot_count ?? 0).color;
+}
+
+function pointPathOptions(point: ClusterPoint, cluster: ClusterRecord | undefined, selectedId: number | null) {
+  const selected = point.cluster_id === selectedId;
+  const color = pointColor(cluster);
+  return {
+    color: selected ? "#ffffff" : color,
+    weight: selected ? 1.25 : 0.8,
+    fillColor: color,
+    fillOpacity: selected ? 0.92 : 0.58,
+  };
+}
+
+export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: KompleksKebakaranViewProps) {
   const [timeRangeDays, setTimeRangeDays] = useState(30);
   const [sensitivity, setSensitivity] = useState<ClusterSensitivity>("sedang");
+  const [mapStyle, setMapStyle] = useState<"dark" | "satellite">("dark");
   const [data, setData] = useState<ClusterCollectionResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -268,6 +296,11 @@ export function KompleksKebakaranView({ onOpenKpsDetail }: KompleksKebakaranView
   }, [timeRangeDays, sensitivity]);
 
   const clusters = data?.clusters ?? [];
+  const clusterPoints = data?.points ?? [];
+  const clusterById = useMemo(
+    () => new Map(clusters.map((cluster) => [cluster.cluster_id, cluster])),
+    [clusters]
+  );
   const selectedCluster = useMemo(
     () => clusters.find((c) => c.cluster_id === selectedId) ?? null,
     [clusters, selectedId]
@@ -276,6 +309,10 @@ export function KompleksKebakaranView({ onOpenKpsDetail }: KompleksKebakaranView
   const besarCount = clusters.filter((c) => c.hotspot_count >= BESAR_THRESHOLD).length;
   const aktifCount = clusters.filter((c) => hoursSince(c.last_detected_at) < AKTIF_THRESHOLD_HOURS).length;
   const totalTergabung = data?.stats.clustered_hotspots ?? 0;
+  const selectedAgencies = useMemo(
+    () => new Set((selectedCluster?.affected_agencies ?? []).map((agency) => agency.name)),
+    [selectedCluster]
+  );
 
   const handleCopyReport = async () => {
     if (!data || loading) return;
@@ -391,76 +428,159 @@ export function KompleksKebakaranView({ onOpenKpsDetail }: KompleksKebakaranView
           {loading ? (
             <div className="kompleks-map-loading">Memuat peta kompleks...</div>
           ) : (
-            <MapContainer
-              center={[-2.5, 118]}
-              zoom={5}
-              preferCanvas
-              {...SMOOTH_ZOOM_MAP_PROPS}
-              zoomControl={false}
-              style={{ height: "100%", width: "100%" }}
-            >
-              <TileLayer
-                attribution="Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors"
-                url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
-                maxZoom={16}
-              />
-              <TileLayer
-                url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
-                maxZoom={16}
-              />
-              <FlyToCluster cluster={selectedCluster} />
-              {clusters.map((cluster) => {
-                const severity = severityOf(cluster.hotspot_count);
-                const isSelected = cluster.cluster_id === selectedId;
-                return (
-                  <CircleMarker
-                    key={cluster.cluster_id}
-                    center={[cluster.centroid_lat, cluster.centroid_lon]}
-                    radius={6 + Math.sqrt(cluster.hotspot_count) * 1.4}
-                    pathOptions={{
-                      color: isSelected ? "#ffffff" : severity.color,
-                      weight: isSelected ? 2.5 : 1.4,
-                      fillColor: severity.color,
-                      fillOpacity: isSelected ? 0.85 : 0.55
-                    }}
-                    eventHandlers={{ click: () => setSelectedId(cluster.cluster_id) }}
-                  >
-                    <Popup>
-                      <strong>{cluster.dominant_agency ?? "Kompleks tanpa nama lembaga"}</strong>
-                      <br />
-                      {cluster.hotspot_count.toLocaleString("id-ID")} titik &middot;{" "}
-                      {formatSpanDays(cluster.first_detected_at, cluster.last_detected_at)} hari
-                      <br />
-                      {formatActivity(cluster.last_detected_at).text}
-                      {cluster.dominant_agency && onOpenKpsDetail ? (
-                        // Popup Leaflet pakai skin bawaan terang, bukan tema gelap
-                        // aplikasi -- gaya inline di sini (bukan class global)
-                        // supaya kontras tetap benar di atas latar terang itu,
-                        // pola yang sama dipakai popup lain di HotspotMap.tsx.
-                        <button
-                          type="button"
-                          onClick={() => onOpenKpsDetail(cluster.dominant_agency as string)}
-                          style={{
-                            display: "block",
-                            marginTop: "8px",
-                            padding: 0,
-                            border: "none",
-                            background: "none",
-                            color: "#ea580c",
-                            fontWeight: 700,
-                            fontSize: "12px",
-                            textDecoration: "underline",
-                            cursor: "pointer"
-                          }}
-                        >
-                          Lihat Detail KPS &rarr;
-                        </button>
-                      ) : null}
-                    </Popup>
-                  </CircleMarker>
-                );
-              })}
-            </MapContainer>
+            <>
+              <div className="basemap-switcher kompleks-basemap-switcher" role="group" aria-label="Gaya peta kompleks">
+                <button
+                  type="button"
+                  className={mapStyle === "dark" ? "basemap-switcher-btn--active" : ""}
+                  onClick={() => setMapStyle("dark")}
+                  aria-pressed={mapStyle === "dark"}
+                >
+                  Peta
+                </button>
+                <button
+                  type="button"
+                  className={mapStyle === "satellite" ? "basemap-switcher-btn--active" : ""}
+                  onClick={() => setMapStyle("satellite")}
+                  aria-pressed={mapStyle === "satellite"}
+                >
+                  Satelit
+                </button>
+              </div>
+              <div className="kompleks-map-legend" aria-label="Keterangan lapisan peta">
+                <span><i className="kompleks-map-legend__dot" /> Titik anggota kompleks</span>
+                <span><i className="kompleks-map-legend__line" /> Polygon lembaga</span>
+              </div>
+              <MapContainer
+                center={[-2.5, 118]}
+                zoom={5}
+                preferCanvas
+                {...SMOOTH_ZOOM_MAP_PROPS}
+                zoomControl={false}
+                style={{ height: "100%", width: "100%" }}
+              >
+                {mapStyle === "satellite" ? (
+                  <>
+                    <TileLayer
+                      attribution="Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+                      url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                      maxZoom={19}
+                    />
+                    <TileLayer
+                      url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+                      maxZoom={19}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <TileLayer
+                      attribution="Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors"
+                      url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+                      maxZoom={16}
+                    />
+                    <TileLayer
+                      url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
+                      maxZoom={16}
+                    />
+                  </>
+                )}
+                <ZoomControl position="bottomleft" />
+                <FlyToCluster cluster={selectedCluster} />
+                <Pane name="kompleks-boundaries" style={{ zIndex: 400 }}>
+                  {layers.filter((layer) => layer.active).map((layer) => (
+                    <GeoJSON
+                      key={layer.id}
+                      data={layer.geojson as never}
+                      style={(feature) => {
+                        const label = featureLabel(feature);
+                        const highlighted = selectedAgencies.has(label);
+                        return {
+                          color: highlighted ? "#ff8c42" : layer.color,
+                          weight: highlighted ? 2.4 : 1,
+                          opacity: highlighted ? 1 : 0.55,
+                          fillColor: highlighted ? "#ff8c42" : layer.color,
+                          fillOpacity: highlighted ? 0.12 : 0.025,
+                          dashArray: highlighted ? "6 4" : "3 5",
+                        };
+                      }}
+                    />
+                  ))}
+                </Pane>
+                <Pane name="kompleks-points" style={{ zIndex: 420 }}>
+                  {clusterPoints.map((point) => (
+                    <CircleMarker
+                      key={`point-${point.id}`}
+                      center={[point.latitude, point.longitude]}
+                      radius={point.cluster_id === selectedId ? 4 : 2.6}
+                      pathOptions={pointPathOptions(point, clusterById.get(point.cluster_id), selectedId)}
+                    />
+                  ))}
+                  {clusters.map((cluster) => {
+                    const severity = severityOf(cluster.hotspot_count);
+                    const isSelected = cluster.cluster_id === selectedId;
+                    return (
+                      <CircleMarker
+                        key={cluster.cluster_id}
+                        center={[cluster.centroid_lat, cluster.centroid_lon]}
+                        radius={6 + Math.sqrt(cluster.hotspot_count) * 1.4}
+                        pathOptions={{
+                          color: isSelected ? "#ffffff" : severity.color,
+                          weight: isSelected ? 2.5 : 1.4,
+                          fillColor: severity.color,
+                          fillOpacity: isSelected ? 0.85 : 0.55
+                        }}
+                        eventHandlers={{ click: () => setSelectedId(cluster.cluster_id) }}
+                      >
+                        <Popup>
+                          {cluster.dominant_agency ? (
+                            <>
+                              <span className="kompleks-popup-agency-label">Lembaga dominan</span>
+                              <br />
+                              <strong>{cluster.dominant_agency}</strong>
+                            </>
+                          ) : (
+                            <strong>Kompleks tanpa lembaga dominan</strong>
+                          )}
+                          <br />
+                          {cluster.hotspot_count.toLocaleString("id-ID")} titik &middot;{" "}
+                          {formatSpanDays(cluster.first_detected_at, cluster.last_detected_at)} hari
+                          <br />
+                          {formatActivity(cluster.last_detected_at).text}
+                          {cluster.affected_agencies && cluster.affected_agencies.length > 1 ? (
+                            <>
+                              <br />
+                              <span className="kompleks-popup-agency-label">Lembaga terdampak dalam cluster</span>
+                              <br />
+                              {cluster.affected_agencies.map((agency) => `${agency.name} (${agency.hotspot_count})`).join(", ")}
+                            </>
+                          ) : null}
+                          {cluster.dominant_agency && onOpenKpsDetail ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenKpsDetail(cluster.dominant_agency as string)}
+                              style={{
+                                display: "block",
+                                marginTop: "8px",
+                                padding: 0,
+                                border: "none",
+                                background: "none",
+                                color: "#ea580c",
+                                fontWeight: 700,
+                                fontSize: "12px",
+                                textDecoration: "underline",
+                                cursor: "pointer"
+                              }}
+                            >
+                              Lihat Detail KPS &rarr;
+                            </button>
+                          ) : null}
+                        </Popup>
+                      </CircleMarker>
+                    );
+                  })}
+                </Pane>
+              </MapContainer>
+            </>
           )}
         </div>
 
@@ -504,9 +624,14 @@ export function KompleksKebakaranView({ onOpenKpsDetail }: KompleksKebakaranView
                     <span className="kompleks-row-rank">{index + 1}</span>
                     <span className="kompleks-row-body">
                       <span className="kompleks-row-top">
-                        <span className="kompleks-row-name">
-                          {cluster.dominant_agency ?? "Tanpa lembaga"}
-                        </span>
+                        {cluster.dominant_agency ? (
+                          <>
+                            <span className="kompleks-row-agency-label">Lembaga dominan:</span>
+                            <span className="kompleks-row-name">{cluster.dominant_agency}</span>
+                          </>
+                        ) : (
+                          <span className="kompleks-row-name">Tanpa lembaga dominan</span>
+                        )}
                         <span className={`kompleks-chip kompleks-chip--${severity.key}`}>
                           {severity.label}
                         </span>
