@@ -341,10 +341,16 @@ def _build_simplified_payload(features: list[dict], tolerance: float) -> dict:
             or properties.get("name")
             or ""
         )
+        props_dict = {"label": str(label)}
+        for field in ("LEMBAGA", "SKEMA", "WILKER_BPS", "NAMA_PROV", "NAMA_KAB", "OBJECTID_1"):
+            val = properties.get(field) or properties.get(field.lower())
+            if val is not None:
+                props_dict[field] = str(val) if not isinstance(val, (int, float)) else val
+
         display_features.append(
             {
                 "type": "Feature",
-                "properties": {"label": str(label)},
+                "properties": props_dict,
                 "geometry": _simplify_geometry(geometry, tolerance),
             }
         )

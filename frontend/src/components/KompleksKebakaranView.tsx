@@ -396,11 +396,6 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
   );
   const selectedLocations = selectedCluster?.locations ?? [];
 
-  useEffect(() => {
-    // Jangan membawa mode audit ratusan ring ke cluster berikutnya.
-    setShowCoreRadii(false);
-  }, [selectedId]);
-
   const handleCopyReport = async () => {
     if (!data || loading) return;
     setCopyState("copying");
@@ -564,7 +559,6 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
               <MapContainer
                 center={[-2.5, 118]}
                 zoom={5}
-                preferCanvas
                 {...SMOOTH_ZOOM_MAP_PROPS}
                 zoomControl={false}
                 style={{ height: "100%", width: "100%" }}
@@ -600,6 +594,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                 <Pane name="kompleks-footprint" style={{ zIndex: 405, pointerEvents: "none" }}>
                   {selectedCluster?.footprint ? (
                     <GeoJSON
+                      key={`footprint-${selectedCluster.cluster_id}`}
                       data={{
                         type: "Feature",
                         properties: {},
@@ -621,7 +616,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                   {showCoreRadii
                     ? selectedCorePoints.map((point) => (
                         <Circle
-                          key={`radius-${point.id}`}
+                          key={`radius-${selectedId}-${point.id}`}
                           center={[point.latitude, point.longitude]}
                           radius={sensitivityParameters.epsKm * 1000}
                           interactive={false}
@@ -641,7 +636,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                 <Pane name="kompleks-boundaries" style={{ zIndex: 420 }}>
                   {layers.filter((layer) => layer.active).map((layer) => (
                     <GeoJSON
-                      key={`${layer.id}-${clusters.length}`}
+                      key={`boundaries-${layer.id}-${selectedCluster?.cluster_id ?? "none"}`}
                       data={layer.geojson as never}
                       style={(feature) => {
                         const label = featureLabel(feature);
