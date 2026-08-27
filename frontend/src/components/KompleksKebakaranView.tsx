@@ -337,12 +337,34 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
   );
 
   const besarCount = clusters.filter((c) => c.hotspot_count >= BESAR_THRESHOLD).length;
-  const aktifCount = clusters.filter((c) => hoursSince(c.last_detected_at) < AKTIF_THRESHOLD_HOURS).length;
+  const aktifCount = useMemo(() => {
+    const activeAgencies = new Set<string>();
+    let unnamedActive = 0;
+    clusters.forEach((c) => {
+      if (hoursSince(c.last_detected_at) < AKTIF_THRESHOLD_HOURS) {
+        if (c.dominant_agency) {
+          activeAgencies.add(c.dominant_agency);
+        } else {
+          unnamedActive += 1;
+        }
+      }
+    });
+    return activeAgencies.size + unnamedActive;
+  }, [clusters]);
   const totalTergabung = data?.stats.clustered_hotspots ?? 0;
   const selectedAgencies = useMemo(
     () => new Set((selectedCluster?.affected_agencies ?? []).map((agency) => agency.name)),
     [selectedCluster]
   );
+  const agencyClusterCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    clusters.forEach((c) => {
+      if (c.dominant_agency) {
+        counts.set(c.dominant_agency, (counts.get(c.dominant_agency) ?? 0) + 1);
+      }
+    });
+    return counts;
+  }, [clusters]);
   const sensitivityParameters = SENSITIVITY_OPTIONS.find((option) => option.value === sensitivity) ?? SENSITIVITY_OPTIONS[1];
   const selectedCorePoints = useMemo(
     () => clusterPoints.filter((point) => point.cluster_id === selectedId && point.is_core),
@@ -450,7 +472,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
             <strong>{loading ? "–" : besarCount}</strong> besar (&ge;{BESAR_THRESHOLD})
           </span>
           <span className="ok">
-            <strong>{loading ? "–" : aktifCount}</strong> aktif &lt;24 jam
+            <strong>{loading ? "–" : aktifCount}</strong> lembaga aktif &lt;24 jam
           </span>
           <span>
             <strong>{loading ? "–" : totalTergabung.toLocaleString("id-ID")}</strong> titik tergabung
@@ -488,15 +510,16 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                   Satelit
                 </button>
               </div>
-              <div className="kompleks-map-legend" aria-label="Keterangan lapisan peta">
-                <span><i className="kompleks-map-legend__dot" /> Titik anggota kompleks</span>
-                <span><i className="kompleks-map-legend__cluster" /> Ukuran simbol = jumlah titik</span>
-                <span><i className="kompleks-map-legend__location" /> Lokasi terindikasi</span>
-                <span><i className="kompleks-map-legend__footprint" /> Selubung kompleks = gabungan radius ε semua titik inti</span>
-                <span><i className="kompleks-map-legend__line" /> Polygon lembaga</span>
-                <span>
-                  <i className="kompleks-map-legend__radius" /> Ring ε per titik inti (mode audit)
-                </span>
+              <div className="kompleks-map-legend" aria-label="Legenda peta kompleks">
+                <span className="kompleks-map-legend__title">Legenda Peta</span>
+                <div className="kompleks-map-legend__grid">
+                  <span className="kompleks-map-legend__item"><i className="kompleks-map-legend__dot" /> Titik anggota kompleks</span>
+                  <span className="kompleks-map-legend__item"><i className="kompleks-map-legend__cluster" /> Ukuran = Banyak titik</span>
+                  <span className="kompleks-map-legend__item"><i className="kompleks-map-legend__location" /> Lokasi terindikasi</span>
+                  <span className="kompleks-map-legend__item" title="Gabungan radius ε semua titik inti"><i className="kompleks-map-legend__footprint" /> Selubung kompleks</span>
+                  <span className="kompleks-map-legend__item"><i className="kompleks-map-legend__line" /> Polygon lembaga</span>
+                  <span className="kompleks-map-legend__item" title="Mode audit radius ε per titik inti"><i className="kompleks-map-legend__radius" /> Ring radius ε</span>
+                </div>
               </div>
               <div className="kompleks-map-audit" aria-live="polite">
                 <button
@@ -634,6 +657,62 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                           fillOpacity: highlighted ? 0.12 : 0.025,
                           dashArray: highlighted ? "6 4" : "3 5",
                         };
+                      }}
+                      onEachFeature={(feature, leafletLayer) => {
+                        const label = featureLabel(feature);
+                        if (!label) return;
+
+                        leafletLayer.bindTooltip(label, { sticky: true, className: "kompleks-polygon-tooltip" });
+
+                        const matchingCluster = clusters.find((c) => c.dominant_agency === label);
+
+                        const container = document.createElement("div");
+                        container.style.fontSize = "12px";
+                        container.style.fontFamily = "sans-serif";
+                        container.style.minWidth = "180px";
+
+                        const header = document.createElement("strong");
+                        header.style.color = "#ea580c";
+                        header.textContent = "Polygon Lembaga";
+                        container.appendChild(header);
+
+                        const title = document.createElement("div");
+                        title.style.marginTop = "4px";
+                        title.style.fontWeight = "600";
+                        title.style.fontSize = "13px";
+                        title.textContent = label;
+                        container.appendChild(title);
+
+                        if (matchingCluster) {
+                          const clusterInfo = document.createElement("div");
+                          clusterInfo.style.marginTop = "6px";
+                          clusterInfo.style.fontSize = "11px";
+                          clusterInfo.style.color = "#374151";
+                          clusterInfo.innerHTML = `Terdeteksi <strong>${matchingCluster.hotspot_count.toLocaleString("id-ID")} titik</strong> pada kompleks ini`;
+                          container.appendChild(clusterInfo);
+                        }
+
+                        if (onOpenKpsDetail) {
+                          const btn = document.createElement("button");
+                          btn.type = "button";
+                          btn.textContent = "Lihat Detail KPS →";
+                          btn.style.display = "block";
+                          btn.style.marginTop = "8px";
+                          btn.style.padding = "0";
+                          btn.style.border = "none";
+                          btn.style.background = "none";
+                          btn.style.color = "#ea580c";
+                          btn.style.fontWeight = "700";
+                          btn.style.fontSize = "12px";
+                          btn.style.cursor = "pointer";
+                          btn.onclick = (e) => {
+                            e.stopPropagation();
+                            onOpenKpsDetail(label);
+                          };
+                          container.appendChild(btn);
+                        }
+
+                        leafletLayer.bindPopup(container);
                       }}
                     />
                   ))}
@@ -783,6 +862,9 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                         ) : (
                           <span className="kompleks-row-name">Tanpa lembaga dominan</span>
                         )}
+                        <span className="kompleks-chip kompleks-chip--cluster">
+                          Kompleks #{cluster.cluster_id}
+                        </span>
                         <span className={`kompleks-chip kompleks-chip--${severity.key}`}>
                           {severity.label}
                         </span>
@@ -794,6 +876,11 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                         <span><b>Balai/Wilker:</b> {cluster.dominant_wilker ?? "Belum teridentifikasi"}</span>
                         <span><b>Provinsi:</b> {cluster.dominant_province ?? "Belum teridentifikasi"}</span>
                         <span><b>Lokasi terindikasi:</b> {cluster.location_count ?? "-"} · <b>Dalam polygon:</b> {cluster.polygon_hotspot_count ?? "-"} titik</span>
+                        {cluster.dominant_agency && (agencyClusterCounts.get(cluster.dominant_agency) ?? 0) > 1 ? (
+                          <span style={{ color: "#93c5fd" }}>
+                            <b>Info:</b> 1 dari {agencyClusterCounts.get(cluster.dominant_agency)} kompleks terpisah di area lembaga ini
+                          </span>
+                        ) : null}
                       </span>
                       <span className="kompleks-row-meta">
                         <b>{cluster.hotspot_count.toLocaleString("id-ID")}</b> titik &middot;{" "}

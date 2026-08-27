@@ -588,10 +588,16 @@ export function useDashboardData(
     setTimePreset("custom");
     if (field === "startDate") {
       setStartDate(value);
+      if (endDate && value > endDate) {
+        setEndDate(value);
+      }
       return;
     }
 
     setEndDate(value);
+    if (startDate && value < startDate) {
+      setStartDate(value);
+    }
   }
 
   async function exportDashboard(filters?: { province?: string; wilker?: string; confidence?: string; skema?: string }) {

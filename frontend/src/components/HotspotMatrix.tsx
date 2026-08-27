@@ -1006,12 +1006,12 @@ export function HotspotMatrix({
   // pengguna klik titik periode (baru saat itu `selectedPeriod` terisi dan
   // baris yang membaca trendGroupBy benar-benar dieksekusi).
   const trendGroupBy = useMemo((): 'day' | 'month' => {
-    if (!startDate || !endDate) return 'day';
-    const s = new Date(startDate);
-    const e = new Date(endDate);
+    const s = timeRange?.startAt ?? (startDate ? new Date(startDate) : new Date());
+    const e = timeRange?.endAt ?? (endDate ? new Date(endDate) : new Date());
     const monthsDiff = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
-    return monthsDiff >= 1 ? 'month' : 'day';
-  }, [startDate, endDate]);
+    const daysDiff = (e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24);
+    return monthsDiff >= 1 || daysDiff > 35 ? 'month' : 'day';
+  }, [timeRange, startDate, endDate]);
 
   const filteredHotspots = useMemo(
     () =>
@@ -1043,7 +1043,7 @@ export function HotspotMatrix({
 
         return wilkerMatch && provinceMatch && frpMatch && skemaMatch && periodMatch && searchMatch;
       }),
-    [activeFrpCategory, hotspots, wilkerFilter, provinceFilter, skemaFilter, selectedPeriod, searchQuery],
+    [activeFrpCategory, hotspots, wilkerFilter, provinceFilter, skemaFilter, selectedPeriod, searchQuery, trendGroupBy],
   );
 
   const groupedRows = useMemo(() => {
@@ -1073,13 +1073,37 @@ export function HotspotMatrix({
     }).sort((a, b) => new Date(b.representativeHotspot.detectedAt).getTime() - new Date(a.representativeHotspot.detectedAt).getTime());
   }, [filteredHotspots]);
 
+  // Reset filter bertingkat jika pilihan tidak lagi ada di opsi data baru
+  useEffect(() => {
+    if (provinceFilter && !provinceOptions.includes(provinceFilter)) {
+      setProvinceFilter("");
+    }
+  }, [provinceOptions, provinceFilter]);
+
+  useEffect(() => {
+    if (wilkerFilter && !wilkerOptions.includes(wilkerFilter)) {
+      setWilkerFilter("");
+    }
+  }, [wilkerOptions, wilkerFilter]);
+
+  useEffect(() => {
+    if (skemaFilter && !skemaOptions.includes(skemaFilter)) {
+      setSkemaFilter("");
+    }
+  }, [skemaOptions, skemaFilter]);
+
+  // Reset filter periode klik grafik jika rentang waktu atau filter utama berubah
+  useEffect(() => {
+    setSelectedPeriod(null);
+  }, [timePreset, startDate, endDate, wilkerFilter, provinceFilter, skemaFilter, activeFrpCategory]);
+
   // Reset ke halaman 1 setiap kali filter berubah
   useEffect(() => {
     setCurrentPage(1);
   }, [wilkerFilter, provinceFilter, skemaFilter, activeFrpCategory, groupedRows.length]);
 
-    const confidenceDistribution = useMemo(() => buildConfidenceDistribution(filteredHotspots), [filteredHotspots]);
-const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [filteredHotspots]);
+  const confidenceDistribution = useMemo(() => buildConfidenceDistribution(filteredHotspots), [filteredHotspots]);
+  const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [filteredHotspots]);
   const topWilker = useMemo(() => buildTopWilker(filteredHotspots), [filteredHotspots]);
   const skemaProvinsiMatrix = useMemo(
     () => buildSkemaProvinsiMatrix(filteredHotspots),
@@ -1123,8 +1147,6 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
           const detail = (await response.json()) as PolygonDetail;
           features.unshift(polygonDetailToGeoJsonFeature(detail));
         }
-        // Kalau polygon gagal dimuat (mis. 404), titik-titik hotspot-nya
-        // tetap diunduh -- boundary-nya saja yang hilang, bukan seluruh file.
       }
 
       downloadGeoJson(
@@ -1138,15 +1160,12 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
     }
   };
 
-  // Tanpa kelas `panel`: section ini mengisi seluruh stage, jadi border,
-  // bayangan, dan padding sebuah panel hanya menambah satu lapis bingkai yang
-  // membuat setiap kartu di dalamnya jadi kartu-di-dalam-kartu.
   return (
     <section className="panel--matrix matrix-shell">
       <div className="matrix-header-bar glass-panel">
         <div className="matrix-header-copy">
-          <p className="panel-eyebrow">Log Riwayat Irisan Hotspot</p>
-          <h2>Matriks Intersep</h2>
+          <p className="panel-eyebrow">Log Sebaran Hotspot Areal KPS</p>
+          <h2>Matriks &amp; Rekapitulasi Data</h2>
           <p className="muted-copy">
             {dateRangeLabel} · {filteredHotspots.length} rekaman · {latestRegistrySync}
           </p>
@@ -1325,7 +1344,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                     <XAxis dataKey="label" stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} />
                     <YAxis hide />
                     <ChartTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.01)' }} />
-                    <Bar dataKey="value" fill="#FF4E00" radius={[4, 4, 0, 0]} background={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} barSize={16} style={{ cursor: 'pointer' }}>
+                    <Bar dataKey="value" fill="#FF4E00" radius={[4, 4, 0, 0]} background={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} barSize={16} isAnimationActive={false} style={{ cursor: 'pointer' }}>
                       <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
                       {topWilker.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={wilkerFilter === entry.label ? '#FF6B35' : (entry.color || '#FF4E00')} opacity={wilkerFilter === entry.label ? 1 : 0.85} />
@@ -1372,7 +1391,7 @@ const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [f
                       <XAxis dataKey="label" stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} tickFormatter={(val) => { if (typeof val !== 'string') return ''; return trendGroupBy === 'month' ? val.slice(0, 7) : val.slice(8, 10); }} />
                       <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} allowDecimals={false} />
                       <ChartTooltip content={<DailyTrendTooltip />} />
-                      <Area type="monotone" dataKey="value" stroke={selectedPeriod ? "#FF6B35" : "#f97316"} strokeWidth={selectedPeriod ? 3 : 2} fill="url(#dailyTrendGradient)" isAnimationActive={true} style={{ cursor: 'pointer' }}>
+                      <Area type="monotone" dataKey="value" stroke={selectedPeriod ? "#FF6B35" : "#f97316"} strokeWidth={selectedPeriod ? 3 : 2} fill="url(#dailyTrendGradient)" isAnimationActive={false} style={{ cursor: 'pointer' }}>
                         <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
                       </Area>
                     </AreaChart>

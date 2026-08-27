@@ -110,14 +110,58 @@ describe("KompleksKebakaranView", () => {
     await waitFor(() => {
       expect(norm(screen.getByText(/besar \(≥400\)/))).toBe("1 besar (≥400)");
     });
-    expect(norm(screen.getByText(/aktif <24 jam/i))).toBe("1 aktif <24 jam");
+    expect(norm(screen.getByText(/aktif <24 jam/i))).toBe("1 lembaga aktif <24 jam");
 
-    // "Aktif" juga muncul di teks penjelasan "Cara baca" di bawah daftar --
-    // scope ke baris pertama (LPHD Kalibandung, kompleks terbesar & aktif)
-    // supaya yang diuji betul-betul chip baris, bukan teks penjelasan.
+    // Scope ke baris pertama (LPHD Kalibandung, kompleks terbesar & aktif)
+    // supaya yang diuji betul-betul chip baris.
     const firstRow = getListPanel().querySelector(".kompleks-row") as HTMLElement;
     expect(list.getByText("Besar")).toBeInTheDocument();
     expect(within(firstRow).getByText("Aktif")).toBeInTheDocument();
+  });
+
+  it("counts unique dominant agencies for active <24h summary even with multiple clusters", async () => {
+    const now = Date.now();
+    const active = new Date(now - 2 * 60 * 60 * 1000).toISOString();
+
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          count: 2,
+          clusters: [
+            {
+              cluster_id: 1,
+              hotspot_count: 59,
+              centroid_lat: -1.5,
+              centroid_lon: 110.5,
+              first_detected_at: "2026-08-01T00:00:00Z",
+              last_detected_at: active,
+              dominant_agency: "KTH Ramban Makmur"
+            },
+            {
+              cluster_id: 2,
+              hotspot_count: 45,
+              centroid_lat: -1.6,
+              centroid_lon: 110.6,
+              first_detected_at: "2026-08-01T00:00:00Z",
+              last_detected_at: active,
+              dominant_agency: "KTH Ramban Makmur"
+            }
+          ],
+          stats: { total_hotspots_in_range: 104, clustered_hotspots: 104, unclustered_hotspots: 0 },
+          sensitivity: "sedang",
+          range_start: "2026-08-01T00:00:00Z",
+          range_end: "2026-08-24T00:00:00Z"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    render(<KompleksKebakaranView />);
+    await waitFor(() => expect(getListPanel()).toBeInTheDocument());
+
+    const norm = (el: Element | null) => el?.textContent?.replace(/\s+/g, " ").trim();
+    // Walaupun ada 2 kompleks aktif, keduanya milik 1 lembaga yang sama -> terhitung 1 lembaga aktif
+    expect(norm(screen.getByText(/aktif <24 jam/i))).toBe("1 lembaga aktif <24 jam");
   });
 
   it("offers basemap and zoom controls for the member-point map", async () => {

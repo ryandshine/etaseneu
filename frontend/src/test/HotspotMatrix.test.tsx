@@ -101,7 +101,7 @@ describe("HotspotMatrix", () => {
     );
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(screen.getByText("Matriks Intersep")).toBeInTheDocument();
+    expect(screen.getByText("Matriks & Rekapitulasi Data")).toBeInTheDocument();
     // Rentang tanggal kini dua input berlabel "Dari"/"Ke", bukan satu label
     // tunggal "Rentang Tanggal".
     expect(screen.getByText("Filter Waktu")).toBeInTheDocument();

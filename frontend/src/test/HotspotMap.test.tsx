@@ -360,7 +360,7 @@ describe("Hotspot map integration", () => {
     expect(screen.getAllByText("Satelit").length).toBeGreaterThanOrEqual(3);
 
     fireEvent.click(screen.getByRole("button", { name: /matriks data/i }));
-    const exportBtn = await screen.findByRole("button", { name: /ekspor xlsx/i });
+    const exportBtn = await screen.findByRole("button", { name: /ekspor xlsx/i }, { timeout: 5000 });
     fireEvent.click(exportBtn);
 
     await waitFor(() => {

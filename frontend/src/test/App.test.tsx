@@ -410,7 +410,7 @@ describe("App", () => {
       await vi.dynamicImportSettled();
     });
 
-    expect(screen.getByText("Matriks Intersep")).toBeInTheDocument();
+    expect(screen.getByText("Matriks & Rekapitulasi Data")).toBeInTheDocument();
   });
 
   it("does not restore the password-gated settings view from the URL", async () => {
