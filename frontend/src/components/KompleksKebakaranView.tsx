@@ -258,7 +258,17 @@ function featureLabel(feature: unknown): string {
   if (!feature || typeof feature !== "object") return "";
   const properties = (feature as { properties?: unknown }).properties;
   if (!properties || typeof properties !== "object") return "";
-  const label = (properties as { label?: unknown }).label;
+  const props = properties as Record<string, unknown>;
+  const label =
+    props.LEMBAGA ||
+    props.label ||
+    props.NAMA_KPS ||
+    props.NAMA_LEMBAGA ||
+    props.NAMALEMBAG ||
+    props.nama_lembaga ||
+    props.name ||
+    props.NAME ||
+    props.Name;
   return typeof label === "string" ? label.trim() : "";
 }
 
@@ -356,14 +366,28 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
     () => new Set((selectedCluster?.affected_agencies ?? []).map((agency) => agency.name)),
     [selectedCluster]
   );
-  const agencyClusterCounts = useMemo(() => {
+  const agencyClusterInfo = useMemo(() => {
     const counts = new Map<string, number>();
+    const indices = new Map<number, { index: number; total: number }>();
+
+    const agencyClusterList = new Map<string, number[]>();
     clusters.forEach((c) => {
       if (c.dominant_agency) {
-        counts.set(c.dominant_agency, (counts.get(c.dominant_agency) ?? 0) + 1);
+        if (!agencyClusterList.has(c.dominant_agency)) {
+          agencyClusterList.set(c.dominant_agency, []);
+        }
+        agencyClusterList.get(c.dominant_agency)!.push(c.cluster_id);
       }
     });
-    return counts;
+
+    agencyClusterList.forEach((clusterIds, agency) => {
+      counts.set(agency, clusterIds.length);
+      clusterIds.forEach((id, idx) => {
+        indices.set(id, { index: idx + 1, total: clusterIds.length });
+      });
+    });
+
+    return { counts, indices };
   }, [clusters]);
   const sensitivityParameters = SENSITIVITY_OPTIONS.find((option) => option.value === sensitivity) ?? SENSITIVITY_OPTIONS[1];
   const selectedCorePoints = useMemo(
@@ -573,7 +597,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                 <ZoomControl position="bottomleft" />
                 <ScaleControl position="bottomright" metric imperial={false} maxWidth={160} />
                 <FlyToCluster cluster={selectedCluster} />
-                <Pane name="kompleks-footprint" style={{ zIndex: 405 }}>
+                <Pane name="kompleks-footprint" style={{ zIndex: 405, pointerEvents: "none" }}>
                   {selectedCluster?.footprint ? (
                     <GeoJSON
                       data={{
@@ -581,6 +605,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                         properties: {},
                         geometry: selectedCluster.footprint
                       } as never}
+                      interactive={false}
                       style={{
                         color: "#fbbf24",
                         weight: 2.2,
@@ -592,26 +617,160 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                     />
                   ) : null}
                 </Pane>
-                <Pane name="kompleks-radius" style={{ zIndex: 415 }}>
+                <Pane name="kompleks-radius" style={{ zIndex: 415, pointerEvents: "none" }}>
                   {showCoreRadii
                     ? selectedCorePoints.map((point) => (
                         <Circle
                           key={`radius-${point.id}`}
                           center={[point.latitude, point.longitude]}
                           radius={sensitivityParameters.epsKm * 1000}
+                          interactive={false}
                           pathOptions={{
                             color: "#fde68a",
                             weight: 1,
                             opacity: 0.65,
                             dashArray: "5 5",
                             fillColor: "#fbbf24",
-                            fillOpacity: 0.025
+                            fillOpacity: 0.025,
+                            interactive: false
                           }}
                         />
                       ))
                     : null}
                 </Pane>
-                <Pane name="kompleks-locations" style={{ zIndex: 425 }}>
+                <Pane name="kompleks-boundaries" style={{ zIndex: 420 }}>
+                  {layers.filter((layer) => layer.active).map((layer) => (
+                    <GeoJSON
+                      key={`${layer.id}-${clusters.length}`}
+                      data={layer.geojson as never}
+                      style={(feature) => {
+                        const label = featureLabel(feature);
+                        const highlighted = selectedAgencies.has(label);
+                        return {
+                          color: highlighted ? "#ff8c42" : layer.color,
+                          weight: highlighted ? 2.4 : 1,
+                          opacity: highlighted ? 1 : 0.55,
+                          fillColor: highlighted ? "#ff8c42" : layer.color,
+                          fillOpacity: highlighted ? 0.12 : 0.025,
+                          dashArray: highlighted ? "6 4" : "3 5",
+                        };
+                      }}
+                      onEachFeature={(feature, leafletLayer) => {
+                        const props = ((feature as { properties?: unknown }).properties || {}) as Record<string, unknown>;
+                        const label = featureLabel(feature) || (typeof props.OBJECTID_1 === "number" ? `Polygon #${props.OBJECTID_1}` : "Polygon KPS");
+                        if (!label) return;
+
+                        const skema = String(props.SKEMA || props.skema || "").trim();
+                        const prov = String(props.NAMA_PROV || props.provinsi || "").trim();
+                        const kab = String(props.NAMA_KAB || props.kabupaten || "").trim();
+                        const wilker = String(props.WILKER_BPS || "").trim();
+
+                        leafletLayer.bindTooltip(label, { sticky: true, className: "kompleks-polygon-tooltip" });
+
+                        const matchingCluster = clusters.find((c) => c.dominant_agency === label);
+
+                        const container = document.createElement("div");
+                        container.style.fontSize = "12px";
+                        container.style.fontFamily = "sans-serif";
+                        container.style.minWidth = "200px";
+                        container.style.lineHeight = "1.4";
+
+                        const header = document.createElement("div");
+                        header.style.color = "#ea580c";
+                        header.style.fontWeight = "700";
+                        header.style.fontSize = "11px";
+                        header.style.textTransform = "uppercase";
+                        header.style.letterSpacing = "0.05em";
+                        header.textContent = "Polygon Lembaga";
+                        container.appendChild(header);
+
+                        const title = document.createElement("div");
+                        title.style.marginTop = "3px";
+                        title.style.fontWeight = "700";
+                        title.style.fontSize = "13px";
+                        title.style.color = "#111827";
+                        title.textContent = label;
+                        container.appendChild(title);
+
+                        const parts = [skema, wilker, kab, prov].filter(Boolean);
+                        if (parts.length > 0) {
+                          const meta = document.createElement("div");
+                          meta.style.marginTop = "3px";
+                          meta.style.fontSize = "11px";
+                          meta.style.color = "#6b7280";
+                          meta.textContent = parts.join(" · ");
+                          container.appendChild(meta);
+                        }
+
+                        const statusBox = document.createElement("div");
+                        statusBox.style.marginTop = "8px";
+                        statusBox.style.padding = "6px 8px";
+                        statusBox.style.borderRadius = "4px";
+                        statusBox.style.fontSize = "11px";
+
+                        if (matchingCluster) {
+                          statusBox.style.background = "rgba(239, 68, 68, 0.1)";
+                          statusBox.style.border = "1px solid rgba(239, 68, 68, 0.25)";
+                          statusBox.style.color = "#b91c1c";
+                          statusBox.innerHTML = `🔥 Terdeteksi <strong>${matchingCluster.hotspot_count.toLocaleString("id-ID")} titik api</strong> aktif pada area ini.`;
+                        } else {
+                          statusBox.style.background = "rgba(16, 185, 129, 0.1)";
+                          statusBox.style.border = "1px solid rgba(16, 185, 129, 0.25)";
+                          statusBox.style.color = "#047857";
+                          statusBox.textContent = "✅ Tidak ada titik api aktif dalam rentang waktu ini.";
+                        }
+                        container.appendChild(statusBox);
+
+                        const btnGroup = document.createElement("div");
+                        btnGroup.style.display = "flex";
+                        btnGroup.style.gap = "8px";
+                        btnGroup.style.marginTop = "8px";
+                        btnGroup.style.alignItems = "center";
+
+                        if (matchingCluster) {
+                          const selectBtn = document.createElement("button");
+                          selectBtn.type = "button";
+                          selectBtn.textContent = "Fokus Kompleks";
+                          selectBtn.style.padding = "4px 8px";
+                          selectBtn.style.border = "1px solid #ea580c";
+                          selectBtn.style.borderRadius = "4px";
+                          selectBtn.style.background = "#ea580c";
+                          selectBtn.style.color = "#ffffff";
+                          selectBtn.style.fontWeight = "600";
+                          selectBtn.style.fontSize = "11px";
+                          selectBtn.style.cursor = "pointer";
+                          selectBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            setSelectedId(matchingCluster.cluster_id);
+                          };
+                          btnGroup.appendChild(selectBtn);
+                        }
+
+                        if (onOpenKpsDetail) {
+                          const detailBtn = document.createElement("button");
+                          detailBtn.type = "button";
+                          detailBtn.textContent = "Lihat Detail KPS →";
+                          detailBtn.style.padding = "4px 0";
+                          detailBtn.style.border = "none";
+                          detailBtn.style.background = "none";
+                          detailBtn.style.color = "#ea580c";
+                          detailBtn.style.fontWeight = "700";
+                          detailBtn.style.fontSize = "11px";
+                          detailBtn.style.cursor = "pointer";
+                          detailBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            onOpenKpsDetail(label);
+                          };
+                          btnGroup.appendChild(detailBtn);
+                        }
+
+                        container.appendChild(btnGroup);
+                        leafletLayer.bindPopup(container);
+                      }}
+                    />
+                  ))}
+                </Pane>
+                <Pane name="kompleks-locations" style={{ zIndex: 430 }}>
                   {selectedLocations.map((location) => (
                     <CircleMarker
                       key={`location-${location.location_id}`}
@@ -641,83 +800,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                     </CircleMarker>
                   ))}
                 </Pane>
-                <Pane name="kompleks-boundaries" style={{ zIndex: 400 }}>
-                  {layers.filter((layer) => layer.active).map((layer) => (
-                    <GeoJSON
-                      key={layer.id}
-                      data={layer.geojson as never}
-                      style={(feature) => {
-                        const label = featureLabel(feature);
-                        const highlighted = selectedAgencies.has(label);
-                        return {
-                          color: highlighted ? "#ff8c42" : layer.color,
-                          weight: highlighted ? 2.4 : 1,
-                          opacity: highlighted ? 1 : 0.55,
-                          fillColor: highlighted ? "#ff8c42" : layer.color,
-                          fillOpacity: highlighted ? 0.12 : 0.025,
-                          dashArray: highlighted ? "6 4" : "3 5",
-                        };
-                      }}
-                      onEachFeature={(feature, leafletLayer) => {
-                        const label = featureLabel(feature);
-                        if (!label) return;
-
-                        leafletLayer.bindTooltip(label, { sticky: true, className: "kompleks-polygon-tooltip" });
-
-                        const matchingCluster = clusters.find((c) => c.dominant_agency === label);
-
-                        const container = document.createElement("div");
-                        container.style.fontSize = "12px";
-                        container.style.fontFamily = "sans-serif";
-                        container.style.minWidth = "180px";
-
-                        const header = document.createElement("strong");
-                        header.style.color = "#ea580c";
-                        header.textContent = "Polygon Lembaga";
-                        container.appendChild(header);
-
-                        const title = document.createElement("div");
-                        title.style.marginTop = "4px";
-                        title.style.fontWeight = "600";
-                        title.style.fontSize = "13px";
-                        title.textContent = label;
-                        container.appendChild(title);
-
-                        if (matchingCluster) {
-                          const clusterInfo = document.createElement("div");
-                          clusterInfo.style.marginTop = "6px";
-                          clusterInfo.style.fontSize = "11px";
-                          clusterInfo.style.color = "#374151";
-                          clusterInfo.innerHTML = `Terdeteksi <strong>${matchingCluster.hotspot_count.toLocaleString("id-ID")} titik</strong> pada kompleks ini`;
-                          container.appendChild(clusterInfo);
-                        }
-
-                        if (onOpenKpsDetail) {
-                          const btn = document.createElement("button");
-                          btn.type = "button";
-                          btn.textContent = "Lihat Detail KPS →";
-                          btn.style.display = "block";
-                          btn.style.marginTop = "8px";
-                          btn.style.padding = "0";
-                          btn.style.border = "none";
-                          btn.style.background = "none";
-                          btn.style.color = "#ea580c";
-                          btn.style.fontWeight = "700";
-                          btn.style.fontSize = "12px";
-                          btn.style.cursor = "pointer";
-                          btn.onclick = (e) => {
-                            e.stopPropagation();
-                            onOpenKpsDetail(label);
-                          };
-                          container.appendChild(btn);
-                        }
-
-                        leafletLayer.bindPopup(container);
-                      }}
-                    />
-                  ))}
-                </Pane>
-                <Pane name="kompleks-points" style={{ zIndex: 420 }}>
+                <Pane name="kompleks-points" style={{ zIndex: 440 }}>
                   {clusterPoints.map((point) => (
                     <CircleMarker
                       key={`point-${point.id}`}
@@ -833,6 +916,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                 const severity = severityOf(cluster.hotspot_count);
                 const activity = formatActivity(cluster.last_detected_at);
                 const isSelected = cluster.cluster_id === selectedId;
+                const multiInfo = cluster.dominant_agency ? agencyClusterInfo.indices.get(cluster.cluster_id) : undefined;
                 return (
                   // div, bukan <button>, karena butuh tombol "Lihat Detail KPS"
                   // sungguhan di dalamnya -- <button> di dalam <button> tidak
@@ -862,9 +946,11 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                         ) : (
                           <span className="kompleks-row-name">Tanpa lembaga dominan</span>
                         )}
-                        <span className="kompleks-chip kompleks-chip--cluster">
-                          Kompleks #{cluster.cluster_id}
-                        </span>
+                        {multiInfo && multiInfo.total > 1 ? (
+                          <span className="kompleks-chip kompleks-chip--cluster">
+                            Kluster {multiInfo.index}/{multiInfo.total}
+                          </span>
+                        ) : null}
                         <span className={`kompleks-chip kompleks-chip--${severity.key}`}>
                           {severity.label}
                         </span>
@@ -876,9 +962,9 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                         <span><b>Balai/Wilker:</b> {cluster.dominant_wilker ?? "Belum teridentifikasi"}</span>
                         <span><b>Provinsi:</b> {cluster.dominant_province ?? "Belum teridentifikasi"}</span>
                         <span><b>Lokasi terindikasi:</b> {cluster.location_count ?? "-"} · <b>Dalam polygon:</b> {cluster.polygon_hotspot_count ?? "-"} titik</span>
-                        {cluster.dominant_agency && (agencyClusterCounts.get(cluster.dominant_agency) ?? 0) > 1 ? (
+                        {multiInfo && multiInfo.total > 1 ? (
                           <span style={{ color: "#93c5fd" }}>
-                            <b>Info:</b> 1 dari {agencyClusterCounts.get(cluster.dominant_agency)} kompleks terpisah di area lembaga ini
+                            <b>Info:</b> Kluster {multiInfo.index} dari {multiInfo.total} area terpisah di lembaga ini
                           </span>
                         ) : null}
                       </span>
