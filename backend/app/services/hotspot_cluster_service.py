@@ -78,7 +78,25 @@ def _graph_cluster(
     return labels
 
 
-def _summarize(points: list[dict], labels: dict[int, int]) -> dict[str, object]:
+def _core_point_ids(
+    point_ids: list[int],
+    edges: list[tuple[int, int]],
+    min_samples: int,
+) -> set[int]:
+    adjacency = _build_adjacency(point_ids, edges)
+    return {
+        point_id
+        for point_id, neighbors in adjacency.items()
+        if len(neighbors) + 1 >= min_samples
+    }
+
+
+def _summarize(
+    points: list[dict],
+    labels: dict[int, int],
+    core_point_ids: set[int] | None = None,
+) -> dict[str, object]:
+    core_point_ids = core_point_ids or set()
     members_by_cluster: dict[int, list[dict]] = defaultdict(list)
     for point in points:
         cluster_id = labels[point["id"]]
@@ -100,6 +118,7 @@ def _summarize(points: list[dict], labels: dict[int, int]) -> dict[str, object]:
                 "first_detected_at": min(detected_ats),
                 "last_detected_at": max(detected_ats),
                 "dominant_agency": dominant_agency,
+                "core_point_count": sum(1 for member in members if member["id"] in core_point_ids),
                 "affected_agencies": [
                     {"name": name, "hotspot_count": count}
                     for name, count in agencies.most_common()
@@ -119,6 +138,7 @@ def _summarize(points: list[dict], labels: dict[int, int]) -> dict[str, object]:
             "detected_at": point["detected_at"],
             "agency_name": point.get("agency_name"),
             "cluster_id": labels[point["id"]],
+            "is_core": point["id"] in core_point_ids,
         }
         for point in points
         if labels[point["id"]] != NOISE
@@ -172,4 +192,5 @@ class HotspotClusterService:
         )
         point_ids = [p["id"] for p in points]
         labels = _graph_cluster(point_ids, edges, min_samples)
-        return _summarize(points, labels)
+        core_point_ids = _core_point_ids(point_ids, edges, min_samples)
+        return _summarize(points, labels, core_point_ids)

@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Copy } from "lucide-react";
-import { CircleMarker, GeoJSON, MapContainer, Pane, Popup, TileLayer, useMap, ZoomControl } from "react-leaflet";
+import {
+  Circle,
+  CircleMarker,
+  GeoJSON,
+  MapContainer,
+  Pane,
+  Popup,
+  ScaleControl,
+  TileLayer,
+  useMap,
+  ZoomControl
+} from "react-leaflet";
 import { createApiClient } from "../lib/api";
 import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
 import type { ClusterCollectionResponse, ClusterPoint, ClusterRecord, ClusterSensitivity } from "../types/api";
@@ -20,10 +31,13 @@ const SENSITIVITY_OPTIONS: {
   value: ClusterSensitivity;
   label: string;
   hint: string;
+  epsKm: number;
+  epsHours: number;
+  minSamples: number;
 }[] = [
-  { value: "ketat", label: "Ketat", hint: "radius 1 km, jeda antar-deteksi 12 jam" },
-  { value: "sedang", label: "Sedang (disarankan)", hint: "radius 2 km, jeda antar-deteksi 48 jam" },
-  { value: "longgar", label: "Longgar", hint: "radius 5 km, jeda antar-deteksi 72 jam" }
+  { value: "ketat", label: "Ketat", hint: "radius 1 km, jeda antar-deteksi 12 jam", epsKm: 1, epsHours: 12, minSamples: 4 },
+  { value: "sedang", label: "Sedang (disarankan)", hint: "radius 2 km, jeda antar-deteksi 48 jam", epsKm: 2, epsHours: 48, minSamples: 4 },
+  { value: "longgar", label: "Longgar", hint: "radius 5 km, jeda antar-deteksi 72 jam", epsKm: 5, epsHours: 72, minSamples: 3 }
 ];
 
 const BESAR_THRESHOLD = 400;
@@ -242,8 +256,8 @@ function pointPathOptions(point: ClusterPoint, cluster: ClusterRecord | undefine
   const selected = point.cluster_id === selectedId;
   const color = pointColor(cluster);
   return {
-    color: selected ? "#ffffff" : color,
-    weight: selected ? 1.25 : 0.8,
+    color: point.is_core || selected ? "#ffffff" : color,
+    weight: point.is_core ? 1.5 : selected ? 1.25 : 0.8,
     fillColor: color,
     fillOpacity: selected ? 0.92 : 0.58,
   };
@@ -312,6 +326,11 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
   const selectedAgencies = useMemo(
     () => new Set((selectedCluster?.affected_agencies ?? []).map((agency) => agency.name)),
     [selectedCluster]
+  );
+  const sensitivityParameters = SENSITIVITY_OPTIONS.find((option) => option.value === sensitivity) ?? SENSITIVITY_OPTIONS[1];
+  const selectedCorePoints = useMemo(
+    () => clusterPoints.filter((point) => point.cluster_id === selectedId && point.is_core),
+    [clusterPoints, selectedId]
   );
 
   const handleCopyReport = async () => {
@@ -449,7 +468,14 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
               </div>
               <div className="kompleks-map-legend" aria-label="Keterangan lapisan peta">
                 <span><i className="kompleks-map-legend__dot" /> Titik anggota kompleks</span>
+                <span><i className="kompleks-map-legend__cluster" /> Ukuran simbol = jumlah titik</span>
                 <span><i className="kompleks-map-legend__line" /> Polygon lembaga</span>
+                <span>
+                  <i className="kompleks-map-legend__radius" />{" "}
+                  {selectedCluster
+                    ? `Radius ε = ${sensitivityParameters.epsKm} km di setiap titik inti`
+                    : "Pilih cluster untuk melihat radius ε"}
+                </span>
               </div>
               <MapContainer
                 center={[-2.5, 118]}
@@ -485,7 +511,25 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                   </>
                 )}
                 <ZoomControl position="bottomleft" />
+                <ScaleControl position="bottomright" metric imperial={false} maxWidth={160} />
                 <FlyToCluster cluster={selectedCluster} />
+                <Pane name="kompleks-radius" style={{ zIndex: 415 }}>
+                  {selectedCorePoints.map((point) => (
+                    <Circle
+                      key={`radius-${point.id}`}
+                      center={[point.latitude, point.longitude]}
+                      radius={sensitivityParameters.epsKm * 1000}
+                      pathOptions={{
+                        color: "#fbbf24",
+                        weight: 1.5,
+                        opacity: 0.72,
+                        dashArray: "7 6",
+                        fillColor: "#fbbf24",
+                        fillOpacity: 0.018
+                      }}
+                    />
+                  ))}
+                </Pane>
                 <Pane name="kompleks-boundaries" style={{ zIndex: 400 }}>
                   {layers.filter((layer) => layer.active).map((layer) => (
                     <GeoJSON
@@ -522,7 +566,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                       <CircleMarker
                         key={cluster.cluster_id}
                         center={[cluster.centroid_lat, cluster.centroid_lon]}
-                        radius={6 + Math.sqrt(cluster.hotspot_count) * 1.4}
+                        radius={Math.min(22, 6 + Math.sqrt(cluster.hotspot_count) * 0.9)}
                         pathOptions={{
                           color: isSelected ? "#ffffff" : severity.color,
                           weight: isSelected ? 2.5 : 1.4,
@@ -546,6 +590,13 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                           {formatSpanDays(cluster.first_detected_at, cluster.last_detected_at)} hari
                           <br />
                           {formatActivity(cluster.last_detected_at).text}
+                          <br />
+                          <span className="kompleks-popup-agency-label">Parameter analisis</span>
+                          <br />
+                          Radius ε di setiap titik inti: <strong>{sensitivityParameters.epsKm} km</strong> ·{" "}
+                          titik inti: <strong>{cluster.core_point_count ?? "-"}</strong> · jeda τ:{" "}
+                          <strong>{sensitivityParameters.epsHours} jam</strong> · minimum{" "}
+                          <strong>{sensitivityParameters.minSamples} titik</strong>
                           {cluster.affected_agencies && cluster.affected_agencies.length > 1 ? (
                             <>
                               <br />

@@ -122,6 +122,7 @@ export interface ClusterRecord {
   first_detected_at: string;
   last_detected_at: string;
   dominant_agency: string | null;
+  core_point_count?: number;
   affected_agencies?: Array<{ name: string; hotspot_count: number }>;
 }
 
@@ -132,6 +133,7 @@ export interface ClusterPoint {
   detected_at: string;
   agency_name: string | null;
   cluster_id: number;
+  is_core?: boolean;
 }
 
 export interface ClusterStats {

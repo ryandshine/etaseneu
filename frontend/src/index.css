@@ -7550,10 +7550,25 @@ a + a {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55);
 }
 
+.kompleks-map-legend__cluster {
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);
+}
+
 .kompleks-map-legend__line {
   width: 0.75rem;
   height: 0;
   border-top: 2px dashed #ff8c42;
+}
+
+.kompleks-map-legend__radius {
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 2px dashed #fbbf24;
+  border-radius: 50%;
 }
 
 .kompleks-list {

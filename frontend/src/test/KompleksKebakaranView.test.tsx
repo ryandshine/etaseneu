@@ -13,10 +13,12 @@ vi.mock("react-leaflet", () => ({
       {children}
     </div>
   ),
+  Circle: () => <div data-testid="audit-radius" />,
   MapContainer: ({ children }: { children?: ReactNode }) => <div data-testid="leaflet-map">{children}</div>,
   GeoJSON: () => <div data-testid="geojson-layer" />,
   Pane: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Popup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  ScaleControl: () => <div data-testid="scale-control" />,
   TileLayer: () => <div data-testid="tile-layer" />,
   ZoomControl: () => <div data-testid="zoom-control" />,
   useMap: () => ({ flyTo: flyToMock, getZoom: () => 5 })
@@ -141,7 +143,8 @@ describe("KompleksKebakaranView", () => {
               longitude: 110.5,
               detected_at: "2026-08-01T00:00:00Z",
               agency_name: "LPHD Peta",
-              cluster_id: 1
+              cluster_id: 1,
+              is_core: true
             }
           ],
           stats: { total_hotspots_in_range: 4, clustered_hotspots: 4, unclustered_hotspots: 0 },
