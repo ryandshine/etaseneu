@@ -818,32 +818,6 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
               })
             )}
           </div>
-          <p className="kompleks-explain">
-            <b>Cara baca</b>
-            <br />
-            <b>Rentang Waktu</b> = jendela data, bukan durasi satu kebakaran. <b>24 Jam</b> =
-            pantauan harian; <b>7 Hari</b> = rekap mingguan; <b>30 Hari</b> = rekap bulanan.
-            Makin lebar jendelanya, kompleks dapat menggabungkan deteksi berulang di lokasi yang sama.
-            <br />
-            <b>Kompleks</b> = kumpulan titik yang memenuhi jarak <b>ε</b>, jeda waktu <b>τ</b>,
-            dan minimum titik inti sesuai Kepekaan. <b>Titik noise</b> yang tidak menjadi anggota
-            kompleks tidak ditampilkan agar peta tetap terbaca.
-            <br />
-            <b>Selubung kompleks</b> = gabungan seluruh radius ε pada titik inti, sehingga bentuknya
-            adalah footprint analisis kompleks—bukan polygon lembaga dan bukan batas satu api.
-            Tombol <b>Tampilkan semua ring ε</b> membuka setiap radius individual untuk audit.
-            <br />
-            <b>Lokasi terindikasi</b> = kantong spasial yang lebih rapat di dalam kompleks. Marker
-            bernomor menunjukkan hasil sub-clustering lokasi; jumlahnya dihitung dari distribusi titik,
-            bukan dipaksa menjadi dua atau tiga lokasi. Angka <b>Dalam polygon</b> dan <b>Di luar</b>
-            memisahkan anggota kompleks berdasarkan hasil pencocokan polygon.
-            <br />
-            <b>Lembaga dominan</b> adalah lembaga dengan titik terbanyak. Balai/Wilker dan Provinsi
-            adalah metadata administratif; jika satu kompleks menyentuh beberapa wilayah, rincian
-            lengkapnya dapat dilihat pada popup. Chip <b style={{ color: "#6ee7b7" }}>Aktif</b> berarti
-            deteksi terakhir &lt;24 jam, sedangkan <b>Besar/Sedang/Kecil</b> membandingkan jumlah titik
-            pada rentang yang sama.
-          </p>
         </div>
       </div>
     </section>
