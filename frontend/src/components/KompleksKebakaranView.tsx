@@ -9,6 +9,7 @@ import {
   Popup,
   ScaleControl,
   TileLayer,
+  Tooltip,
   useMap,
   ZoomControl
 } from "react-leaflet";
@@ -34,10 +35,11 @@ const SENSITIVITY_OPTIONS: {
   epsKm: number;
   epsHours: number;
   minSamples: number;
+  locationEpsKm: number;
 }[] = [
-  { value: "ketat", label: "Ketat", hint: "radius 1 km, jeda antar-deteksi 12 jam", epsKm: 1, epsHours: 12, minSamples: 4 },
-  { value: "sedang", label: "Sedang (disarankan)", hint: "radius 2 km, jeda antar-deteksi 48 jam", epsKm: 2, epsHours: 48, minSamples: 4 },
-  { value: "longgar", label: "Longgar", hint: "radius 5 km, jeda antar-deteksi 72 jam", epsKm: 5, epsHours: 72, minSamples: 3 }
+  { value: "ketat", label: "Ketat", hint: "kompleks 1 km/12 jam, lokasi 0,5 km", epsKm: 1, epsHours: 12, minSamples: 4, locationEpsKm: 0.5 },
+  { value: "sedang", label: "Sedang (disarankan)", hint: "kompleks 2 km/48 jam, lokasi 1 km", epsKm: 2, epsHours: 48, minSamples: 4, locationEpsKm: 1 },
+  { value: "longgar", label: "Longgar", hint: "kompleks 5 km/72 jam, lokasi 2,5 km", epsKm: 5, epsHours: 72, minSamples: 3, locationEpsKm: 2.5 }
 ];
 
 const BESAR_THRESHOLD = 400;
@@ -93,6 +95,18 @@ type AgencySummary = {
   centroidLat: number;
   centroidLon: number;
 };
+
+type RankedClusterLabel = { name: string; hotspot_count: number };
+
+function formatClusterLabels(
+  labels: RankedClusterLabel[] | undefined,
+  fallback: string
+): string {
+  const names = (labels ?? []).map((label) => label.name).filter(Boolean);
+  if (names.length === 0) return fallback;
+  const visibleNames = names.slice(0, 2).join(", ");
+  return names.length > 2 ? `${visibleNames} +${names.length - 2} lainnya` : visibleNames;
+}
 
 function summarizeByAgency(clusters: ClusterRecord[]): AgencySummary[] {
   const summaries = new Map<string, AgencySummary>();
@@ -271,6 +285,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [showCoreRadii, setShowCoreRadii] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copying" | "copied" | "error">("idle");
 
   useEffect(() => {
@@ -278,6 +293,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
     setLoading(true);
     setError(null);
     setSelectedId(null);
+    setShowCoreRadii(false);
 
     const endAt = new Date();
     const startAt = new Date(endAt.getTime() - timeRangeDays * 24 * 60 * 60 * 1000);
@@ -332,6 +348,12 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
     () => clusterPoints.filter((point) => point.cluster_id === selectedId && point.is_core),
     [clusterPoints, selectedId]
   );
+  const selectedLocations = selectedCluster?.locations ?? [];
+
+  useEffect(() => {
+    // Jangan membawa mode audit ratusan ring ke cluster berikutnya.
+    setShowCoreRadii(false);
+  }, [selectedId]);
 
   const handleCopyReport = async () => {
     if (!data || loading) return;
@@ -469,12 +491,27 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
               <div className="kompleks-map-legend" aria-label="Keterangan lapisan peta">
                 <span><i className="kompleks-map-legend__dot" /> Titik anggota kompleks</span>
                 <span><i className="kompleks-map-legend__cluster" /> Ukuran simbol = jumlah titik</span>
+                <span><i className="kompleks-map-legend__location" /> Lokasi terindikasi</span>
+                <span><i className="kompleks-map-legend__footprint" /> Selubung kompleks = gabungan radius ε semua titik inti</span>
                 <span><i className="kompleks-map-legend__line" /> Polygon lembaga</span>
                 <span>
-                  <i className="kompleks-map-legend__radius" />{" "}
+                  <i className="kompleks-map-legend__radius" /> Ring ε per titik inti (mode audit)
+                </span>
+              </div>
+              <div className="kompleks-map-audit" aria-live="polite">
+                <button
+                  type="button"
+                  className="kompleks-map-audit__button"
+                  disabled={!selectedCluster || selectedCorePoints.length === 0}
+                  aria-pressed={showCoreRadii}
+                  onClick={() => setShowCoreRadii((visible) => !visible)}
+                >
+                  {showCoreRadii ? "Sembunyikan ring ε" : "Tampilkan semua ring ε"}
+                </button>
+                <span>
                   {selectedCluster
-                    ? `Radius ε = ${sensitivityParameters.epsKm} km di setiap titik inti`
-                    : "Pilih cluster untuk melihat radius ε"}
+                    ? `${selectedCorePoints.length.toLocaleString("id-ID")} titik inti · ε ${sensitivityParameters.epsKm} km`
+                    : "Pilih kompleks untuk melihat selubung ε"}
                 </span>
               </div>
               <MapContainer
@@ -513,21 +550,72 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                 <ZoomControl position="bottomleft" />
                 <ScaleControl position="bottomright" metric imperial={false} maxWidth={160} />
                 <FlyToCluster cluster={selectedCluster} />
-                <Pane name="kompleks-radius" style={{ zIndex: 415 }}>
-                  {selectedCorePoints.map((point) => (
-                    <Circle
-                      key={`radius-${point.id}`}
-                      center={[point.latitude, point.longitude]}
-                      radius={sensitivityParameters.epsKm * 1000}
-                      pathOptions={{
+                <Pane name="kompleks-footprint" style={{ zIndex: 405 }}>
+                  {selectedCluster?.footprint ? (
+                    <GeoJSON
+                      data={{
+                        type: "Feature",
+                        properties: {},
+                        geometry: selectedCluster.footprint
+                      } as never}
+                      style={{
                         color: "#fbbf24",
-                        weight: 1.5,
-                        opacity: 0.72,
-                        dashArray: "7 6",
+                        weight: 2.2,
+                        opacity: 0.95,
                         fillColor: "#fbbf24",
-                        fillOpacity: 0.018
+                        fillOpacity: 0.14,
+                        dashArray: "8 5"
                       }}
                     />
+                  ) : null}
+                </Pane>
+                <Pane name="kompleks-radius" style={{ zIndex: 415 }}>
+                  {showCoreRadii
+                    ? selectedCorePoints.map((point) => (
+                        <Circle
+                          key={`radius-${point.id}`}
+                          center={[point.latitude, point.longitude]}
+                          radius={sensitivityParameters.epsKm * 1000}
+                          pathOptions={{
+                            color: "#fde68a",
+                            weight: 1,
+                            opacity: 0.65,
+                            dashArray: "5 5",
+                            fillColor: "#fbbf24",
+                            fillOpacity: 0.025
+                          }}
+                        />
+                      ))
+                    : null}
+                </Pane>
+                <Pane name="kompleks-locations" style={{ zIndex: 425 }}>
+                  {selectedLocations.map((location) => (
+                    <CircleMarker
+                      key={`location-${location.location_id}`}
+                      center={[location.centroid_lat, location.centroid_lon]}
+                      radius={9}
+                      pathOptions={{
+                        color: "#fff7cc",
+                        weight: 2,
+                        fillColor: "#f97316",
+                        fillOpacity: 0.92
+                      }}
+                    >
+                      <Tooltip permanent direction="center" className="kompleks-location-label">
+                        {location.location_id}
+                      </Tooltip>
+                      <Popup>
+                        <strong>Lokasi terindikasi {location.location_id}</strong>
+                        <br />
+                        {location.hotspot_count.toLocaleString("id-ID")} deteksi
+                        <br />
+                        Dalam polygon: {location.polygon_hotspot_count.toLocaleString("id-ID")}
+                        <br />
+                        Di luar polygon: {location.outside_polygon_hotspot_count.toLocaleString("id-ID")}
+                        <br />
+                        {formatActivity(location.last_detected_at).text}
+                      </Popup>
+                    </CircleMarker>
                   ))}
                 </Pane>
                 <Pane name="kompleks-boundaries" style={{ zIndex: 400 }}>
@@ -591,10 +679,22 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                           <br />
                           {formatActivity(cluster.last_detected_at).text}
                           <br />
+                          Lokasi terindikasi: <strong>{cluster.location_count ?? "-"}</strong> · yang menyentuh polygon:{" "}
+                          <strong>{cluster.locations_in_polygon ?? "-"}</strong>
+                          <br />
+                          Deteksi dalam polygon: <strong>{cluster.polygon_hotspot_count ?? "-"}</strong> · di luar:{" "}
+                          <strong>{cluster.outside_polygon_hotspot_count ?? "-"}</strong>
+                          <br />
+                          <span className="kompleks-popup-agency-label">Cakupan administratif</span>
+                          <br />
+                          Balai/Wilker: {formatClusterLabels(cluster.affected_wilkers, "Belum teridentifikasi")}
+                          <br />
+                          Provinsi: {formatClusterLabels(cluster.affected_provinces, "Belum teridentifikasi")}
+                          <br />
                           <span className="kompleks-popup-agency-label">Parameter analisis</span>
                           <br />
-                          Radius ε di setiap titik inti: <strong>{sensitivityParameters.epsKm} km</strong> ·{" "}
-                          titik inti: <strong>{cluster.core_point_count ?? "-"}</strong> · jeda τ:{" "}
+                          Selubung = union radius ε dari <strong>{cluster.core_point_count ?? "-"}</strong> titik inti · ε:{" "}
+                          <strong>{sensitivityParameters.epsKm} km</strong> · jeda τ:{" "}
                           <strong>{sensitivityParameters.epsHours} jam</strong> · minimum{" "}
                           <strong>{sensitivityParameters.minSamples} titik</strong>
                           {cluster.affected_agencies && cluster.affected_agencies.length > 1 ? (
@@ -690,6 +790,11 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                           <span className="kompleks-chip kompleks-chip--live">Aktif</span>
                         ) : null}
                       </span>
+                      <span className="kompleks-row-context">
+                        <span><b>Balai/Wilker:</b> {cluster.dominant_wilker ?? "Belum teridentifikasi"}</span>
+                        <span><b>Provinsi:</b> {cluster.dominant_province ?? "Belum teridentifikasi"}</span>
+                        <span><b>Lokasi terindikasi:</b> {cluster.location_count ?? "-"} · <b>Dalam polygon:</b> {cluster.polygon_hotspot_count ?? "-"} titik</span>
+                      </span>
                       <span className="kompleks-row-meta">
                         <b>{cluster.hotspot_count.toLocaleString("id-ID")}</b> titik &middot;{" "}
                         <b>{formatSpanDays(cluster.first_detected_at, cluster.last_detected_at)}</b>{" "}
@@ -716,19 +821,28 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
           <p className="kompleks-explain">
             <b>Cara baca</b>
             <br />
-            <b>Rentang Waktu</b> = jendela data. <b>24 Jam</b> = titik panas hari ini (pantauan
-            harian); <b>7 Hari</b> = minggu ini; <b>30 Hari</b> = rekap bulanan. Makin lebar
-            jendelanya, kompleks makin sedikit tapi makin besar dan rentang harinya memanjang &mdash;
-            itu area yang sama berulang menyala, bukan satu api menyala terus.
+            <b>Rentang Waktu</b> = jendela data, bukan durasi satu kebakaran. <b>24 Jam</b> =
+            pantauan harian; <b>7 Hari</b> = rekap mingguan; <b>30 Hari</b> = rekap bulanan.
+            Makin lebar jendelanya, kompleks dapat menggabungkan deteksi berulang di lokasi yang sama.
             <br />
-            <b>Kompleks</b> = kumpulan titik hotspot yang berdekatan lokasi &amp; waktu (sesuai
-            Kepekaan Pengelompokan). Contoh baris <i>&ldquo;344 titik &middot; 18.5 hari &middot;
-            Aktif &middot; 7.7 jam lalu&rdquo;</i> = 344 deteksi; jarak deteksi pertama ke terakhir
-            18.5 hari; terakhir terdeteksi 7.7 jam lalu.
+            <b>Kompleks</b> = kumpulan titik yang memenuhi jarak <b>ε</b>, jeda waktu <b>τ</b>,
+            dan minimum titik inti sesuai Kepekaan. <b>Titik noise</b> yang tidak menjadi anggota
+            kompleks tidak ditampilkan agar peta tetap terbaca.
             <br />
-            Chip <b style={{ color: "#6ee7b7" }}>Aktif</b> = deteksi terakhirnya &lt;24 jam lalu
-            (tidak ikut berubah oleh Rentang Waktu). Chip <b>Besar/Sedang/Kecil</b> hanya sebanding
-            dalam jendela yang sama.
+            <b>Selubung kompleks</b> = gabungan seluruh radius ε pada titik inti, sehingga bentuknya
+            adalah footprint analisis kompleks—bukan polygon lembaga dan bukan batas satu api.
+            Tombol <b>Tampilkan semua ring ε</b> membuka setiap radius individual untuk audit.
+            <br />
+            <b>Lokasi terindikasi</b> = kantong spasial yang lebih rapat di dalam kompleks. Marker
+            bernomor menunjukkan hasil sub-clustering lokasi; jumlahnya dihitung dari distribusi titik,
+            bukan dipaksa menjadi dua atau tiga lokasi. Angka <b>Dalam polygon</b> dan <b>Di luar</b>
+            memisahkan anggota kompleks berdasarkan hasil pencocokan polygon.
+            <br />
+            <b>Lembaga dominan</b> adalah lembaga dengan titik terbanyak. Balai/Wilker dan Provinsi
+            adalah metadata administratif; jika satu kompleks menyentuh beberapa wilayah, rincian
+            lengkapnya dapat dilihat pada popup. Chip <b style={{ color: "#6ee7b7" }}>Aktif</b> berarti
+            deteksi terakhir &lt;24 jam, sedangkan <b>Besar/Sedang/Kecil</b> membandingkan jumlah titik
+            pada rentang yang sama.
           </p>
         </div>
       </div>

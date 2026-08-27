@@ -254,10 +254,32 @@ class _HotspotObservationMixin:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, latitude, longitude, detected_at, agency_name
-                    FROM hotspot_observations
-                    WHERE detected_at >= %s::timestamptz AND detected_at <= %s::timestamptz
-                    ORDER BY id ASC
+                    SELECT
+                        obs.id,
+                        obs.latitude,
+                        obs.longitude,
+                        obs.detected_at,
+                        obs.agency_name,
+                        poly.polygon_metadata_id,
+                        poly.polygon_agency_name,
+                        poly.wilker_bps,
+                        poly.nama_prov AS province_name
+                    FROM hotspot_observations obs
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            p.id AS polygon_metadata_id,
+                            p.lembaga AS polygon_agency_name,
+                            p.wilker_bps,
+                            p.nama_prov
+                        FROM polygon_metadata p
+                        WHERE p.is_active
+                          AND p.layer_key = obs.layer_key
+                          AND ST_Covers(p.geometry, obs.geom)
+                        ORDER BY p.id ASC
+                        LIMIT 1
+                    ) poly ON TRUE
+                    WHERE obs.detected_at >= %s::timestamptz AND obs.detected_at <= %s::timestamptz
+                    ORDER BY obs.id ASC
                     """,
                     (start_at, end_at),
                 )

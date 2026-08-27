@@ -20,6 +20,7 @@ vi.mock("react-leaflet", () => ({
   Popup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   ScaleControl: () => <div data-testid="scale-control" />,
   TileLayer: () => <div data-testid="tile-layer" />,
+  Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   ZoomControl: () => <div data-testid="zoom-control" />,
   useMap: () => ({ flyTo: flyToMock, getZoom: () => 5 })
 }));
@@ -133,6 +134,15 @@ describe("KompleksKebakaranView", () => {
               first_detected_at: "2026-08-01T00:00:00Z",
               last_detected_at: "2026-08-02T00:00:00Z",
               dominant_agency: "LPHD Peta",
+              dominant_wilker: "Balai PS Peta",
+              dominant_province: "Kalimantan Barat",
+              affected_wilkers: [{ name: "Balai PS Peta", hotspot_count: 4 }],
+              affected_provinces: [{ name: "Kalimantan Barat", hotspot_count: 4 }],
+              core_point_count: 1,
+              footprint: {
+                type: "Polygon",
+                coordinates: [[[110.49, -1.51], [110.51, -1.51], [110.51, -1.49], [110.49, -1.51]]]
+              },
               affected_agencies: [{ name: "LPHD Peta", hotspot_count: 4 }]
             }
           ],
@@ -181,6 +191,15 @@ describe("KompleksKebakaranView", () => {
     expect(screen.getByRole("button", { name: "Satelit" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Titik anggota kompleks")).toBeInTheDocument();
     expect(screen.getByText("Polygon lembaga")).toBeInTheDocument();
+    expect(within(getListPanel()).getByText("Balai PS Peta")).toBeInTheDocument();
+    expect(within(getListPanel()).getByText("Kalimantan Barat")).toBeInTheDocument();
+    expect(screen.queryAllByTestId("audit-radius")).toHaveLength(0);
+    const auditButton = screen.getByRole("button", { name: "Tampilkan semua ring ε" });
+    expect(auditButton).toBeDisabled();
+    fireEvent.click(within(getListPanel()).getByText("LPHD Peta"));
+    await waitFor(() => expect(auditButton).not.toBeDisabled());
+    fireEvent.click(auditButton);
+    expect(screen.getAllByTestId("audit-radius")).toHaveLength(1);
   });
 
   it("copies a WhatsApp-ready report using the active 24-hour and medium filters", async () => {

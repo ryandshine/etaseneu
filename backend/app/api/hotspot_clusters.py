@@ -14,9 +14,9 @@ router = APIRouter()
 # parameter yang sudah divalidasi terhadap data hotspot produksi sungguhan
 # (lihat riwayat sesi perencanaan fitur ini).
 SENSITIVITY_PRESETS: dict[str, dict[str, float]] = {
-    "ketat": {"eps_km": 1.0, "eps_hours": 12.0, "min_samples": 4},
-    "sedang": {"eps_km": 2.0, "eps_hours": 48.0, "min_samples": 4},
-    "longgar": {"eps_km": 5.0, "eps_hours": 72.0, "min_samples": 3},
+    "ketat": {"eps_km": 1.0, "eps_hours": 12.0, "min_samples": 4, "location_eps_km": 0.5},
+    "sedang": {"eps_km": 2.0, "eps_hours": 48.0, "min_samples": 4, "location_eps_km": 1.0},
+    "longgar": {"eps_km": 5.0, "eps_hours": 72.0, "min_samples": 3, "location_eps_km": 2.5},
 }
 
 
@@ -40,6 +40,7 @@ async def get_hotspot_clusters(
         eps_km=preset["eps_km"],
         eps_hours=preset["eps_hours"],
         min_samples=int(preset["min_samples"]),
+        location_eps_km=preset["location_eps_km"],
     )
 
     return {

@@ -114,6 +114,26 @@ export type StatsResponse = StatsSummary;
 // sengaja tidak diekspos ke frontend.
 export type ClusterSensitivity = "ketat" | "sedang" | "longgar";
 
+export interface ClusterLocation {
+  location_id: number;
+  hotspot_count: number;
+  centroid_lat: number;
+  centroid_lon: number;
+  first_detected_at: string;
+  last_detected_at: string;
+  polygon_hotspot_count: number;
+  outside_polygon_hotspot_count: number;
+}
+
+export interface ClusterPolygonSummary {
+  polygon_metadata_id: number;
+  name: string | null;
+  wilker_bps: string | null;
+  province_name: string | null;
+  hotspot_count: number;
+  location_count: number;
+}
+
 export interface ClusterRecord {
   cluster_id: number;
   hotspot_count: number;
@@ -123,7 +143,20 @@ export interface ClusterRecord {
   last_detected_at: string;
   dominant_agency: string | null;
   core_point_count?: number;
+  dominant_wilker?: string | null;
+  dominant_province?: string | null;
+  /** Union buffer ε dari seluruh core point; footprint audit cluster. */
+  footprint?: Record<string, unknown> | null;
+  affected_wilkers?: Array<{ name: string; hotspot_count: number }>;
+  affected_provinces?: Array<{ name: string; hotspot_count: number }>;
   affected_agencies?: Array<{ name: string; hotspot_count: number }>;
+  location_count?: number;
+  locations_in_polygon?: number;
+  polygon_hotspot_count?: number;
+  outside_polygon_hotspot_count?: number;
+  dominant_polygon?: ClusterPolygonSummary | null;
+  polygons?: ClusterPolygonSummary[];
+  locations?: ClusterLocation[];
 }
 
 export interface ClusterPoint {
@@ -132,6 +165,10 @@ export interface ClusterPoint {
   longitude: number;
   detected_at: string;
   agency_name: string | null;
+  polygon_metadata_id?: number | null;
+  polygon_agency_name?: string | null;
+  wilker_bps?: string | null;
+  province_name?: string | null;
   cluster_id: number;
   is_core?: boolean;
 }

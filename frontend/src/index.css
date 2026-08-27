@@ -7518,7 +7518,7 @@ a + a {
 
 .kompleks-map-legend {
   position: absolute;
-  right: 1rem;
+  right: 11rem;
   bottom: 1rem;
   z-index: 1000;
   display: flex;
@@ -7558,6 +7558,34 @@ a + a {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);
 }
 
+.kompleks-map-legend__location {
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 2px solid #fff7cc;
+  border-radius: 50%;
+  background: #f97316;
+}
+
+.kompleks-location-label {
+  min-width: 1.15rem;
+  margin-left: -0.575rem;
+  margin-top: -0.575rem;
+  border: 0 !important;
+  border-radius: 50%;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #fff7cc !important;
+  font-size: 0.62rem;
+  font-weight: 900;
+  line-height: 1.15rem;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+.kompleks-location-label::before {
+  display: none !important;
+}
+
 .kompleks-map-legend__line {
   width: 0.75rem;
   height: 0;
@@ -7569,6 +7597,53 @@ a + a {
   height: 0.75rem;
   border: 2px dashed #fbbf24;
   border-radius: 50%;
+}
+
+.kompleks-map-legend__footprint {
+  width: 0.8rem;
+  height: 0.55rem;
+  border: 1px solid #fbbf24;
+  background: rgba(251, 191, 36, 0.18);
+  transform: skew(-18deg);
+}
+
+.kompleks-map-audit {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  max-width: min(28rem, calc(100% - 2rem));
+  padding: 0.4rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(19, 21, 26, 0.84);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.62rem;
+  line-height: 1.2;
+  backdrop-filter: blur(8px);
+}
+
+.kompleks-map-audit__button {
+  border: 1px solid rgba(251, 191, 36, 0.55);
+  background: rgba(251, 191, 36, 0.1);
+  color: #fde68a;
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.kompleks-map-audit__button:hover:not(:disabled),
+.kompleks-map-audit__button[aria-pressed="true"] {
+  background: rgba(251, 191, 36, 0.22);
+  color: #fff7cc;
+}
+
+.kompleks-map-audit__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .kompleks-list {
@@ -7684,6 +7759,20 @@ a + a {
   font-weight: 700;
 }
 
+.kompleks-row-context {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  color: #a8b4c2;
+  font-size: 0.64rem;
+  line-height: 1.35;
+}
+
+.kompleks-row-context b {
+  color: #6f8498;
+  font-weight: 700;
+}
+
 .kompleks-row-detail-btn {
   align-self: flex-start;
   margin-top: 0.1rem;
@@ -7785,5 +7874,16 @@ a + a {
     flex: none;
     min-height: auto;
     overflow: visible;
+  }
+
+  .kompleks-map-legend {
+    right: 0.75rem;
+    bottom: 3.5rem;
+  }
+
+  .kompleks-map-audit {
+    left: 0.75rem;
+    right: 0.75rem;
+    max-width: none;
   }
 }

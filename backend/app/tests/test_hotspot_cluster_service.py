@@ -47,13 +47,15 @@ def test_graph_cluster_respects_min_samples_threshold() -> None:
     assert labels == {1: NOISE, 2: NOISE}
 
 
-def _point(id_, lat, lon, detected_at, agency):
+def _point(id_, lat, lon, detected_at, agency, wilker_bps=None, province_name=None):
     return {
         "id": id_,
         "latitude": lat,
         "longitude": lon,
         "detected_at": detected_at,
         "agency_name": agency,
+        "wilker_bps": wilker_bps,
+        "province_name": province_name,
     }
 
 
@@ -63,9 +65,9 @@ def test_summarize_computes_centroid_span_and_dominant_agency() -> None:
     t3 = datetime(2026, 8, 3, tzinfo=timezone.utc)
 
     points = [
-        _point(1, -1.0, 110.0, t1, "LPHD A"),
-        _point(2, -1.2, 110.2, t2, "LPHD A"),
-        _point(3, -1.1, 110.1, t3, "LPHD B"),
+        _point(1, -1.0, 110.0, t1, "LPHD A", "Balai PS Banjarbaru", "Kalimantan Barat"),
+        _point(2, -1.2, 110.2, t2, "LPHD A", "Balai PS Banjarbaru", "Kalimantan Barat"),
+        _point(3, -1.1, 110.1, t3, "LPHD B", "Balai PS Ketapang", "Kalimantan Barat"),
         _point(4, -5.0, 120.0, t1, None),
     ]
     labels = {1: 0, 2: 0, 3: 0, 4: NOISE}
@@ -81,6 +83,13 @@ def test_summarize_computes_centroid_span_and_dominant_agency() -> None:
     assert cluster["last_detected_at"] == t3
     assert cluster["dominant_agency"] == "LPHD A"
     assert cluster["core_point_count"] == 2
+    assert cluster["dominant_wilker"] == "Balai PS Banjarbaru"
+    assert cluster["dominant_province"] == "Kalimantan Barat"
+    assert cluster["affected_wilkers"] == [
+        {"name": "Balai PS Banjarbaru", "hotspot_count": 2},
+        {"name": "Balai PS Ketapang", "hotspot_count": 1},
+    ]
+    assert cluster["affected_provinces"] == [{"name": "Kalimantan Barat", "hotspot_count": 3}]
     assert cluster["affected_agencies"] == [
         {"name": "LPHD A", "hotspot_count": 2},
         {"name": "LPHD B", "hotspot_count": 1},
@@ -111,6 +120,23 @@ def test_summarize_ranks_clusters_by_size_descending() -> None:
 
     assert [c["hotspot_count"] for c in result["clusters"]] == [3, 2]
     assert [c["dominant_agency"] for c in result["clusters"]] == ["B", "A"]
+
+
+def test_summarize_builds_union_epsilon_footprint_from_core_points() -> None:
+    t = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    points = [
+        _point(1, -1.0, 110.0, t, "A"),
+        _point(2, -1.0, 110.01, t, "A"),
+        _point(3, -1.0, 110.02, t, "A"),
+    ]
+    labels = {1: 0, 2: 0, 3: 0}
+
+    result = _summarize(points, labels, core_point_ids={1, 2, 3}, eps_km=1)
+
+    footprint = result["clusters"][0]["footprint"]
+    assert footprint is not None
+    assert footprint["type"] in {"Polygon", "MultiPolygon"}
+    assert len(footprint["coordinates"]) > 0
 
 
 def test_summarize_returns_empty_result_when_no_clusters() -> None:
