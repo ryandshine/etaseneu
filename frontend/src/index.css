@@ -101,6 +101,8 @@ body {
 .app-frame {
   display: grid;
   grid-template-columns: 18rem minmax(0, 1fr);
+  height: 100vh;
+  height: 100dvh;
   min-height: 100vh;
   min-height: 100dvh;
   overflow: hidden;
@@ -459,8 +461,9 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  min-height: 100vh;
-  min-height: 100dvh;
+  min-height: 0;
+  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: transparent;
 }
@@ -495,6 +498,7 @@ body {
 .workspace-stage {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   position: relative;
   overflow: hidden;
   animation: stage-fade-in 220ms ease-out;
@@ -522,6 +526,8 @@ body {
 }
 
 .workspace-stage--matrix {
+  min-height: 0;
+  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 1rem;
@@ -532,9 +538,15 @@ body {
 }
 
 .workspace-stage--kps {
-  overflow: auto;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 1rem;
   background: transparent;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 /* Peta di dalamnya butuh tinggi tetap (Leaflet), jadi TIDAK dibiarkan ikut
