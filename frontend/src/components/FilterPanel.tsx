@@ -16,6 +16,7 @@ type FilterPanelProps = {
   selectedWilker: string;
   onWilkerChange: (wilker: string) => void;
   wilkerOptions: string[];
+  isWilkerLocked?: boolean;
   showWind: boolean;
   onToggleWind: () => void;
   weatherOverlay?: "temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null;
@@ -75,9 +76,11 @@ export function FilterPanel(props: FilterPanelProps) {
         <select
           value={props.selectedWilker}
           onChange={(e) => props.onWilkerChange(e.target.value)}
+          disabled={props.isWilkerLocked}
           className="filter-select-input"
+          style={props.isWilkerLocked ? { opacity: 0.75, cursor: "not-allowed" } : undefined}
         >
-          <option value="">Semua Wilker</option>
+          {!props.isWilkerLocked && <option value="">Semua Wilker</option>}
           {props.wilkerOptions.map((wilker) => (
             <option key={wilker} value={wilker}>
               {wilker}

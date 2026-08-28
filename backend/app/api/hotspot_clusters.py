@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
+from app.core.auth import TokenClaims, get_current_user_claims
 from app.services.hotspot_cluster_service import HotspotClusterService
 
 
@@ -25,6 +26,7 @@ async def get_hotspot_clusters(
     start_at: datetime | None = None,
     end_at: datetime | None = None,
     sensitivity: str = Query(default="sedang"),
+    claims: TokenClaims | None = Depends(get_current_user_claims),
 ) -> dict[str, object]:
     preset = SENSITIVITY_PRESETS.get(sensitivity, SENSITIVITY_PRESETS["sedang"])
 
@@ -42,6 +44,18 @@ async def get_hotspot_clusters(
         min_samples=int(preset["min_samples"]),
         location_eps_km=preset["location_eps_km"],
     )
+
+    if claims and claims.role == "bps" and claims.wilker_bps:
+        filtered_clusters = [
+            c for c in result.get("clusters", [])
+            if c.get("dominant_wilker") == claims.wilker_bps
+            or any(w.get("name") == claims.wilker_bps for w in c.get("affected_wilkers", []))
+        ]
+        result = {
+            **result,
+            "count": len(filtered_clusters),
+            "clusters": filtered_clusters,
+        }
 
     return {
         **result,

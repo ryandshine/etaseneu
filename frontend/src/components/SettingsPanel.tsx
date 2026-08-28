@@ -243,7 +243,7 @@ export function SettingsPanel({ onRefreshLayers, adminKey, session, onLogout }: 
             <h2 id="account-settings-title">Informasi akun</h2>
           </div>
           <span className={`account-role-badge account-role-badge--${session?.role ?? "user"}`}>
-            {session?.role === "admin" ? "ADMIN" : "USER"}
+            {session?.role === "admin" ? "ADMIN" : session?.role === "bps" ? "BPS" : "USER"}
           </span>
         </div>
         <div className="account-settings-grid">
@@ -251,6 +251,12 @@ export function SettingsPanel({ onRefreshLayers, adminKey, session, onLogout }: 
             <span>Username</span>
             <strong>{session?.username ?? "—"}</strong>
           </div>
+          {session?.role === "bps" && session?.wilker_bps && (
+            <div>
+              <span>Wilayah Kerja</span>
+              <strong>{session.wilker_bps}</strong>
+            </div>
+          )}
           <div>
             <span>Status sesi</span>
             <strong className="account-session-status"><i aria-hidden="true" /> Aktif & tersimpan</strong>

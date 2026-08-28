@@ -60,8 +60,25 @@ const dangerButtonStyle: React.CSSProperties = {
 
 const roleDotColor: Record<UserRole, string> = {
   admin: "#f97316",
-  user: "#6b7280"
+  user: "#6b7280",
+  bps: "#10b981"
 };
+
+export const AVAILABLE_WILKERS = [
+  "Balai PS Ambon",
+  "Balai PS Banjarbaru",
+  "Balai PS Bogor",
+  "Balai PS Denpasar",
+  "Balai PS Gowa",
+  "Balai PS Kampar",
+  "Balai PS Kupang",
+  "Balai PS Kutai Kartanegara",
+  "Balai PS Manado",
+  "Balai PS Manokwari",
+  "Balai PS Medan",
+  "Balai PS Palembang",
+  "Balai PS Yogyakarta"
+];
 
 export function UserManagementPanel({ token, currentUsername }: UserManagementPanelProps) {
   const [users, setUsers] = useState<AppUser[]>([]);
@@ -71,6 +88,7 @@ export function UserManagementPanel({ token, currentUsername }: UserManagementPa
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newRole, setNewRole] = useState<UserRole>("user");
+  const [newWilker, setNewWilker] = useState(AVAILABLE_WILKERS[0]);
   const [creating, setCreating] = useState(false);
 
   const [passwordEditId, setPasswordEditId] = useState<number | null>(null);
@@ -113,7 +131,12 @@ export function UserManagementPanel({ token, currentUsername }: UserManagementPa
       const response = await fetch("/api/auth/users", {
         method: "POST",
         headers: authHeaders,
-        body: JSON.stringify({ username: newUsername, password: newPassword, role: newRole })
+        body: JSON.stringify({
+          username: newUsername,
+          password: newPassword,
+          role: newRole,
+          wilker_bps: newRole === "bps" ? newWilker : null
+        })
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
@@ -134,10 +157,11 @@ export function UserManagementPanel({ token, currentUsername }: UserManagementPa
     setBusyId(user.id);
     setError(null);
     try {
+      const wilker = role === "bps" ? (user.wilker_bps || AVAILABLE_WILKERS[0]) : null;
       const response = await fetch(`/api/auth/users/${user.id}`, {
         method: "PATCH",
         headers: authHeaders,
-        body: JSON.stringify({ role })
+        body: JSON.stringify({ role, wilker_bps: wilker })
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
@@ -146,6 +170,27 @@ export function UserManagementPanel({ token, currentUsername }: UserManagementPa
       await fetchUsers();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal mengubah role.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleWilkerChange = async (user: AppUser, wilker_bps: string) => {
+    setBusyId(user.id);
+    setError(null);
+    try {
+      const response = await fetch(`/api/auth/users/${user.id}`, {
+        method: "PATCH",
+        headers: authHeaders,
+        body: JSON.stringify({ wilker_bps })
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.detail || "Gagal mengubah wilayah kerja.");
+      }
+      await fetchUsers();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal mengubah wilayah kerja.");
     } finally {
       setBusyId(null);
     }
@@ -227,7 +272,7 @@ export function UserManagementPanel({ token, currentUsername }: UserManagementPa
             Manajemen User
           </h2>
           <p style={{ color: "#9ca3af", fontSize: "0.8rem", margin: 0 }}>
-            Tambah akun, ubah role, ganti password, dan cabut sesi perangkat. Khusus role admin.
+            Tambah akun, ubah role (Admin, User Nasional, BPS Wilayah Kerja), ganti password, dan cabut sesi perangkat.
           </p>
         </div>
         <span style={{ color: "#6b7280", fontSize: "0.72rem", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "999px", padding: "0.3rem 0.7rem", whiteSpace: "nowrap" }}>
@@ -272,10 +317,27 @@ export function UserManagementPanel({ token, currentUsername }: UserManagementPa
               onChange={(event) => setNewRole(event.currentTarget.value as UserRole)}
               className="filter-select-input"
             >
-              <option value="user">User</option>
+              <option value="user">User (Nasional)</option>
+              <option value="bps">BPS (Wilker)</option>
               <option value="admin">Admin</option>
             </select>
           </label>
+          {newRole === "bps" && (
+            <label className="field">
+              <span>Wilayah Kerja</span>
+              <select
+                value={newWilker}
+                onChange={(event) => setNewWilker(event.currentTarget.value)}
+                className="filter-select-input"
+              >
+                {AVAILABLE_WILKERS.map((wilker) => (
+                  <option key={wilker} value={wilker}>
+                    {wilker}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <button
             type="submit"
             disabled={creating}
@@ -303,11 +365,11 @@ export function UserManagementPanel({ token, currentUsername }: UserManagementPa
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
             <thead>
               <tr>
-                {["Username", "Role", "Sesi aktif", "Dibuat", "Aksi"].map((heading, i) => (
+                {["Username", "Role", "Wilayah Kerja", "Sesi aktif", "Dibuat", "Aksi"].map((heading, i) => (
                   <th
                     key={heading}
                     style={{
-                      textAlign: i === 4 ? "right" : "left",
+                      textAlign: i === 5 ? "right" : "left",
                       color: "#6b7280",
                       fontSize: "0.7rem",
                       fontWeight: 600,
@@ -349,9 +411,30 @@ export function UserManagementPanel({ token, currentUsername }: UserManagementPa
                           style={{ width: "auto" }}
                         >
                           <option value="user">User</option>
+                          <option value="bps">BPS</option>
                           <option value="admin">Admin</option>
                         </select>
                       </div>
+                    </td>
+                    <td style={{ padding: "0.85rem 0.5rem", verticalAlign: "middle" }}>
+                      {user.role === "bps" ? (
+                        <select
+                          aria-label={`Wilayah Kerja untuk ${user.username}`}
+                          value={user.wilker_bps || ""}
+                          disabled={isBusy}
+                          onChange={(event) => handleWilkerChange(user, event.currentTarget.value)}
+                          className="filter-select-input"
+                          style={{ width: "auto", fontSize: "0.75rem" }}
+                        >
+                          {AVAILABLE_WILKERS.map((wilker) => (
+                            <option key={wilker} value={wilker}>
+                              {wilker}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span style={{ color: "#6b7280", fontSize: "0.75rem" }}>Semua (Nasional)</span>
+                      )}
                     </td>
                     <td style={{ padding: "0.85rem 0.5rem", verticalAlign: "middle", color: (user.active_sessions ?? 0) > 0 ? "#86efac" : "#6b7280", fontSize: "0.78rem", whiteSpace: "nowrap" }}>
                       {user.active_sessions ?? 0}

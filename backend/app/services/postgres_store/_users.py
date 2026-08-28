@@ -20,9 +20,11 @@ class _UserAccountMixin:
                     username TEXT UNIQUE NOT NULL,
                     password_hash TEXT NOT NULL,
                     role TEXT NOT NULL DEFAULT 'user',
+                    wilker_bps TEXT,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )
+                );
+                ALTER TABLE app_users ADD COLUMN IF NOT EXISTS wilker_bps TEXT;
                 """
             )
 
@@ -78,7 +80,7 @@ class _UserAccountMixin:
             self._ensure_app_users_table(conn)
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT id, username, password_hash, role, created_at "
+                    "SELECT id, username, password_hash, role, wilker_bps, created_at "
                     "FROM app_users WHERE username = %s",
                     (username,),
                 )
@@ -90,22 +92,24 @@ class _UserAccountMixin:
             self._ensure_app_users_table(conn)
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT id, username, role, created_at FROM app_users "
+                    "SELECT id, username, role, wilker_bps, created_at FROM app_users "
                     "ORDER BY created_at ASC"
                 )
                 return [dict(row) for row in cur.fetchall()]
 
-    def create_user(self, *, username: str, password_hash: str, role: str) -> dict:
+    def create_user(
+        self, *, username: str, password_hash: str, role: str, wilker_bps: str | None = None
+    ) -> dict:
         with self.connection() as conn:
             self._ensure_app_users_table(conn)
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO app_users (username, password_hash, role)
-                    VALUES (%s, %s, %s)
-                    RETURNING id, username, role, created_at
+                    INSERT INTO app_users (username, password_hash, role, wilker_bps)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id, username, role, wilker_bps, created_at
                     """,
-                    (username, password_hash, role),
+                    (username, password_hash, role, wilker_bps),
                 )
                 return dict(cur.fetchone())
 
@@ -122,23 +126,25 @@ class _UserAccountMixin:
             self._ensure_app_users_table(conn)
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT id, username, role, created_at FROM app_users WHERE id = %s",
+                    "SELECT id, username, role, wilker_bps, created_at FROM app_users WHERE id = %s",
                     (user_id,),
                 )
                 row = cur.fetchone()
                 return dict(row) if row else None
 
-    def update_user_role(self, user_id: int, role: str) -> dict | None:
+    def update_user_role(
+        self, user_id: int, role: str, wilker_bps: str | None = None
+    ) -> dict | None:
         with self.connection() as conn:
             self._ensure_app_users_table(conn)
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    UPDATE app_users SET role = %s, updated_at = %s
+                    UPDATE app_users SET role = %s, wilker_bps = %s, updated_at = %s
                     WHERE id = %s
-                    RETURNING id, username, role, created_at
+                    RETURNING id, username, role, wilker_bps, created_at
                     """,
-                    (role, datetime.now(timezone.utc), user_id),
+                    (role, wilker_bps, datetime.now(timezone.utc), user_id),
                 )
                 row = cur.fetchone()
                 return dict(row) if row else None
@@ -200,7 +206,7 @@ class _UserAccountMixin:
                     WHERE sessions.token_hash = %s AND sessions.user_id = %s
                       AND sessions.user_id = users.id
                       AND sessions.revoked_at IS NULL AND sessions.expires_at > NOW()
-                    RETURNING users.username, users.role
+                    RETURNING users.username, users.role, users.wilker_bps
                     """,
                     (token_hash, user_id),
                 )

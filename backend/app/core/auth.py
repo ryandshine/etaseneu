@@ -97,17 +97,26 @@ class TokenClaims:
     user_id: int
     username: str
     role: str
+    wilker_bps: str | None = None
     expires_at: datetime | None = None
     session_id: str | None = None
 
 
-def issue_token(*, user_id: int, username: str, role: str, persist_session: bool = False) -> str:
+def issue_token(
+    *,
+    user_id: int,
+    username: str,
+    role: str,
+    wilker_bps: str | None = None,
+    persist_session: bool = False,
+) -> str:
     now = datetime.now(timezone.utc)
     session_id = secrets.token_urlsafe(24)
     payload = {
         "sub": str(user_id),
         "username": username,
         "role": role,
+        "wilker_bps": wilker_bps,
         "jti": session_id,
         "iat": now,
         "exp": now + TOKEN_TTL,
@@ -130,6 +139,7 @@ def decode_token(token: str) -> TokenClaims:
             user_id=int(payload["sub"]),
             username=str(payload["username"]),
             role=str(payload["role"]),
+            wilker_bps=str(payload["wilker_bps"]) if payload.get("wilker_bps") else None,
             expires_at=datetime.fromtimestamp(float(payload["exp"]), tz=timezone.utc),
             session_id=str(payload["sid"]) if payload.get("sid") else None,
         )
@@ -171,6 +181,7 @@ def _authenticate_bearer_token(authorization: str | None, store) -> TokenClaims:
         if isinstance(session_user, dict):
             claims.username = str(session_user.get("username", claims.username))
             claims.role = str(session_user.get("role", claims.role))
+            claims.wilker_bps = session_user.get("wilker_bps") or claims.wilker_bps
     return claims
 
 
@@ -201,6 +212,34 @@ async def require_session_if_enabled(
     if not get_settings().api_require_auth:
         return None
     return _authenticate_bearer_token(authorization, store)
+
+
+async def get_current_user_claims(
+    authorization: str | None = Header(default=None),
+    store = Depends(get_auth_store),
+) -> TokenClaims | None:
+    """Ekstrak sesi user secara non-blocking jika ada token valid.
+    
+    Digunakan untuk scoping data per wilayah kerja (role bps) tanpa memblokir
+    endpoint publik jika api_require_auth belum aktif.
+    """
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        return None
+    try:
+        claims = decode_token(token)
+        validator = getattr(store, "validate_session", None)
+        if claims.session_id and store.enabled and validator is not None:
+            session_user = validator(hash_session_token(token), claims.user_id)
+            if session_user and isinstance(session_user, dict):
+                claims.username = str(session_user.get("username", claims.username))
+                claims.role = str(session_user.get("role", claims.role))
+                claims.wilker_bps = session_user.get("wilker_bps") or claims.wilker_bps
+        return claims
+    except Exception:
+        return None
 
 
 async def require_admin_role(

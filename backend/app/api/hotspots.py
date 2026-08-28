@@ -1,9 +1,11 @@
 from datetime import date, datetime, time, timedelta, timezone
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
+from app.core.auth import TokenClaims, get_current_user_claims
 from app.models.query import HotspotQuery
 from app.services.hotspot_service import HotspotService
+from app.services.stats_service import build_stats
 
 
 router = APIRouter()
@@ -18,6 +20,7 @@ async def get_hotspots(
     satellites: list[str] = Query(default=[]),
     active_layers: list[str] = Query(default=[]),
     view: str | None = Query(default=None),
+    claims: TokenClaims | None = Depends(get_current_user_claims),
 ) -> dict[str, object]:
     query = HotspotQuery(
         start_at=_resolve_start_at(start_at, start_date),
@@ -28,10 +31,23 @@ async def get_hotspots(
     service = HotspotService()
     result = await service.fetch_filtered_hotspots(query)
 
+    hotspots = result.get("hotspots", [])
+    if claims and claims.role == "bps" and claims.wilker_bps:
+        hotspots = [
+            h for h in hotspots
+            if (h.get("polygon_metadata") or {}).get("WILKER_BPS") == claims.wilker_bps
+        ]
+        result = {
+            **result,
+            "count": len(hotspots),
+            "hotspots": hotspots,
+            "stats": build_stats(hotspots),
+        }
+
     if view == "map":
         return {
             **result,
-            "hotspots": [_to_map_hotspot(hotspot) for hotspot in result.get("hotspots", [])],
+            "hotspots": [_to_map_hotspot(hotspot) for hotspot in hotspots],
         }
 
     return result

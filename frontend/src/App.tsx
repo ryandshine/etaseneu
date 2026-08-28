@@ -59,7 +59,7 @@ function readPersistedSession(): AppSession | null {
     if (
       typeof value.token !== "string" ||
       typeof value.username !== "string" ||
-      (value.role !== "admin" && value.role !== "user")
+      (value.role !== "admin" && value.role !== "user" && value.role !== "bps")
     ) {
       window.localStorage.removeItem(PERSISTED_SESSION_KEY);
       return null;
@@ -68,6 +68,7 @@ function readPersistedSession(): AppSession | null {
       token: value.token,
       username: value.username,
       role: value.role,
+      wilker_bps: typeof value.wilker_bps === "string" ? value.wilker_bps : null,
       expiresAt: typeof value.expiresAt === "string" ? value.expiresAt : null
     };
   } catch {
@@ -194,6 +195,7 @@ export default function App() {
             token: persisted.token,
             username: data.username ?? persisted.username,
             role: data.role ?? persisted.role,
+            wilker_bps: data.wilker_bps ?? persisted.wilker_bps ?? null,
             expiresAt: data.expires_at ?? persisted.expiresAt ?? null
           };
           persistSession(refreshed);
@@ -381,11 +383,16 @@ export default function App() {
 
   // Pilihan yang tidak lagi ada di data (mis. setelah rentang waktu diubah)
   // direset supaya peta tidak diam-diam menyaring habis semua titik.
+  // Untuk role BPS, wilker selalu terkunci ke wilayah kerjanya.
   useEffect(() => {
+    if (session?.role === "bps" && session.wilker_bps) {
+      setSelectedWilker(session.wilker_bps);
+      return;
+    }
     if (selectedWilker && !wilkerOptions.includes(selectedWilker)) {
       setSelectedWilker("");
     }
-  }, [wilkerOptions, selectedWilker]);
+  }, [wilkerOptions, selectedWilker, session?.role, session?.wilker_bps]);
 
   const visibleHotspots = useMemo(
     () =>
@@ -665,6 +672,7 @@ export default function App() {
             selectedWilker={selectedWilker}
             onWilkerChange={setSelectedWilker}
             wilkerOptions={wilkerOptions}
+            isWilkerLocked={session?.role === "bps"}
             showWind={showWind}
             onToggleWind={() => setShowWind(w => !w)}
             weatherOverlay={weatherOverlay}

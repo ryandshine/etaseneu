@@ -2452,6 +2452,12 @@ body {
   color: #ffc0a8;
 }
 
+.account-role-badge--bps {
+  border-color: rgba(16, 185, 129, 0.42);
+  background: rgba(16, 185, 129, 0.12);
+  color: #6ee7b7;
+}
+
 .account-settings-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

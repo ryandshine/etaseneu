@@ -5,12 +5,13 @@ export interface HealthResponse {
 // Sesi login (POST /api/auth/login). Token disimpan di localStorage agar
 // reload/reset web tidak memaksa login ulang; endpoint /api/auth/session
 // tetap memvalidasi token dan status revoke di server.
-export type UserRole = "admin" | "user";
+export type UserRole = "admin" | "user" | "bps";
 
 export interface AppSession {
   token: string;
   username: string;
   role: UserRole;
+  wilker_bps?: string | null;
   expiresAt?: string | null;
 }
 
@@ -18,6 +19,7 @@ export interface AppUser {
   id: number;
   username: string;
   role: UserRole;
+  wilker_bps?: string | null;
   created_at: string;
   active_sessions?: number;
 }

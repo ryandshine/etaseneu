@@ -1,8 +1,9 @@
 from datetime import date, datetime, time, timedelta, timezone
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 
+from app.core.auth import TokenClaims, get_current_user_claims
 from app.models.query import HotspotQuery
 from app.services.burned_area_report import load_burned_area_report
 from app.services.export_service import build_excel_file
@@ -27,7 +28,11 @@ async def export_hotspots(
     confidence: str | None = None,
     skema: str | None = None,
     agency: str | None = None,
+    claims: TokenClaims | None = Depends(get_current_user_claims),
 ) -> Response:
+    if claims and claims.role == "bps" and claims.wilker_bps:
+        wilker = claims.wilker_bps
+
     service = HotspotService()
     result = await service.fetch_filtered_hotspots(
         HotspotQuery(
@@ -80,7 +85,11 @@ async def export_hotspots_pdf(
     confidence: str | None = None,
     skema: str | None = None,
     agency: str | None = None,
+    claims: TokenClaims | None = Depends(get_current_user_claims),
 ) -> Response:
+    if claims and claims.role == "bps" and claims.wilker_bps:
+        wilker = claims.wilker_bps
+
     service = HotspotService()
     query = HotspotQuery(
         start_at=_resolve_start_at(start_at, start_date),

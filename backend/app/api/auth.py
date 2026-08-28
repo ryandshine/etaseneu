@@ -22,7 +22,7 @@ from app.services.turnstile_service import verify_turnstile
 
 router = APIRouter()
 
-VALID_ROLES = ("admin", "user")
+VALID_ROLES = ("admin", "user", "bps")
 
 
 # Alias dependency bersama: require_authenticated_user memakai objek dependency
@@ -90,6 +90,7 @@ async def login(
         user_id=user["id"],
         username=user["username"],
         role=user["role"],
+        wilker_bps=user.get("wilker_bps"),
         persist_session=True,
     )
     create_session = getattr(store, "create_session", None)
@@ -108,6 +109,7 @@ async def login(
         "token": token,
         "username": user["username"],
         "role": user["role"],
+        "wilker_bps": user.get("wilker_bps"),
         "expires_at": (datetime.now(timezone.utc) + TOKEN_TTL).isoformat(),
     }
 
@@ -120,6 +122,7 @@ async def get_current_session(
         "ok": True,
         "username": claims.username,
         "role": claims.role,
+        "wilker_bps": claims.wilker_bps,
         "expires_at": claims.expires_at.isoformat() if claims.expires_at else None,
     }
 
@@ -142,6 +145,7 @@ class UserOut(BaseModel):
     id: int
     username: str
     role: str
+    wilker_bps: str | None = None
     created_at: str
     active_sessions: int = 0
 
@@ -151,6 +155,7 @@ def _serialize_user(row: dict) -> UserOut:
         id=row["id"],
         username=row["username"],
         role=row["role"],
+        wilker_bps=row.get("wilker_bps"),
         created_at=str(row["created_at"]),
         active_sessions=int(row.get("active_sessions", 0)),
     )
@@ -193,6 +198,7 @@ class CreateUserRequest(BaseModel):
     username: str
     password: str
     role: str = "user"
+    wilker_bps: str | None = None
 
 
 @router.post("/auth/users")
@@ -207,19 +213,29 @@ async def create_user(
     if len(payload.password) < 6:
         raise HTTPException(status_code=400, detail="Password minimal 6 karakter.")
     if payload.role not in VALID_ROLES:
-        raise HTTPException(status_code=400, detail="Role harus admin atau user.")
+        raise HTTPException(status_code=400, detail="Role harus admin, user, atau bps.")
+
+    wilker = payload.wilker_bps.strip() if payload.wilker_bps else None
+    if payload.role == "bps" and not wilker:
+        raise HTTPException(status_code=400, detail="Wilayah kerja Balai PS wajib diisi untuk role bps.")
+    if payload.role != "bps":
+        wilker = None
 
     if store.get_user_by_username(username):
         raise HTTPException(status_code=409, detail="Username sudah dipakai.")
 
     row = store.create_user(
-        username=username, password_hash=hash_password(payload.password), role=payload.role
+        username=username,
+        password_hash=hash_password(payload.password),
+        role=payload.role,
+        wilker_bps=wilker,
     )
     return _serialize_user(row)
 
 
 class UpdateUserRequest(BaseModel):
     role: str | None = None
+    wilker_bps: str | None = None
     password: str | None = None
 
 
@@ -234,17 +250,24 @@ async def update_user(
     if not target:
         raise HTTPException(status_code=404, detail="User tidak ditemukan.")
 
-    if payload.role is not None:
-        if payload.role not in VALID_ROLES:
-            raise HTTPException(status_code=400, detail="Role harus admin atau user.")
-        # Jangan sampai admin terakhir diturunkan jadi user biasa -- situs
-        # kehilangan admin sama sekali, tidak ada yang bisa mengangkat admin
-        # baru lagi lewat UI.
-        if target["role"] == "admin" and payload.role != "admin" and store.count_admins() <= 1:
+    if payload.role is not None or payload.wilker_bps is not None:
+        new_role = payload.role if payload.role is not None else target["role"]
+        if new_role not in VALID_ROLES:
+            raise HTTPException(status_code=400, detail="Role harus admin, user, atau bps.")
+        if target["role"] == "admin" and new_role != "admin" and store.count_admins() <= 1:
             raise HTTPException(
                 status_code=400, detail="Tidak bisa menurunkan role admin terakhir."
             )
-        store.update_user_role(user_id, payload.role)
+        new_wilker = (
+            payload.wilker_bps.strip()
+            if payload.wilker_bps is not None
+            else target.get("wilker_bps")
+        )
+        if new_role != "bps":
+            new_wilker = None
+        elif not new_wilker:
+            raise HTTPException(status_code=400, detail="Wilayah kerja Balai PS wajib diisi untuk role bps.")
+        store.update_user_role(user_id, new_role, new_wilker)
 
     if payload.password is not None:
         if len(payload.password) < 6:
