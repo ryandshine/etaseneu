@@ -21,6 +21,7 @@ from ._hotspots import _HotspotObservationMixin
 from ._layers import _LayerRegistryMixin
 from ._polygons import _PolygonMetadataMixin
 from ._relations import _PolygonRelationMixin
+from ._s2_burned_area import _S2BurnedAreaMixin
 from ._scheduler import _SchedulerMetricsMixin
 from ._spatial import _SpatialMatchMixin
 from ._users import _UserAccountMixin
@@ -39,6 +40,7 @@ class PostgresStore(
     _PolygonRelationMixin,
     _SpatialMatchMixin,
     _BurnedAreaMixin,
+    _S2BurnedAreaMixin,
     _UserAccountMixin,
 ):
     """Fasad tunggal ke semua tabel aplikasi -- lihat docstring modul ini."""

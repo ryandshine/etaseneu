@@ -30,6 +30,8 @@ import type { LayerGroup as LLayerGroup } from "leaflet";
 
 import { useBurnedAreaOverlay } from "../hooks/useBurnedAreaOverlay";
 import type { BurnedAreaOverlayFeature } from "../hooks/useBurnedAreaOverlay";
+import { useS2BurnedAreaOverlay } from "../hooks/useS2BurnedAreaOverlay";
+import type { S2BurnedAreaFeature } from "../hooks/useS2BurnedAreaOverlay";
 import type { LayerBounds } from "../types/api";
 
 const MONTH_LABELS = [
@@ -395,6 +397,13 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
   const [showBurnedArea, setShowBurnedArea] = useState(true);
   const burnedArea = useBurnedAreaOverlay(showBurnedArea, undefined, selectedWilker);
 
+  // Lapisan estimasi MANDIRI (Sentinel-2 dNBR) -- terpisah dari rekap resmi
+  // di atas. Mati secara default: cuma relevan setelah admin menjalankan
+  // analisisnya, dan pengguna biasa tidak perlu melihat angka "belum
+  // terverifikasi" tanpa sadar itu estimasi.
+  const [showS2Burned, setShowS2Burned] = useState(false);
+  const s2Burned = useS2BurnedAreaOverlay(showS2Burned);
+
   // Polygon bekas terbakar & titik hotspot BERBAGI satu Pane/renderer (lihat
   // JSX di bawah) supaya polygonnya bisa diklik sungguhan. Canvas renderer
   // Leaflet memasang listener klik langsung di elemen <canvas>-nya sendiri
@@ -547,6 +556,40 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
             <p className="burned-summary-chip__source">Sumber Kementerian Kehutanan · akurasi H/M</p>
           </div>
         ) : null}
+
+        <button
+          type="button"
+          className={`burned-toggle burned-toggle--s2${showS2Burned ? " burned-toggle--active" : ""}${
+            s2Burned.loading ? " burned-toggle--loading" : ""
+          }`}
+          onClick={() => setShowS2Burned((current) => !current)}
+          title={
+            showS2Burned
+              ? "Sembunyikan estimasi mandiri Sentinel-2"
+              : "Tampilkan estimasi bekas terbakar hasil analisis mandiri (Sentinel-2 dNBR, belum terverifikasi)"
+          }
+          aria-pressed={showS2Burned}
+        >
+          <Flame size={15} />
+          <span>Estimasi Sentinel-2</span>
+        </button>
+
+        {showS2Burned && s2Burned.data ? (
+          <div className="burned-summary-chip">
+            <p className="burned-summary-chip__figure">
+              <span className="burned-summary-chip__value">
+                {formatHectares(s2Burned.data.meta.total_ha)}
+              </span>
+              <span className="burned-summary-chip__unit">Ha</span>
+            </p>
+            <p className="burned-summary-chip__scope">
+              {formatHectares(s2Burned.data.meta.polygons)} KPS · {s2Burned.data.meta.no_hotspot_but_burned} tanpa hotspot
+            </p>
+            <p className="burned-summary-chip__source">
+              Analisis mandiri Sentinel-2 · estimasi, belum terverifikasi
+            </p>
+          </div>
+        ) : null}
       </div>
       {userLocation.error ? <p className="locate-error-toast">{userLocation.error}</p> : null}
 
@@ -696,6 +739,39 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
             lewat z-index Pane terpisah (390 sempat dicoba, ketutup isian
             hijau KPS, makanya sekarang di atas batas KPS juga). */}
         <Pane name="kps-interaktif" style={{ zIndex: 420 }}>
+          {showS2Burned && s2Burned.data ? (
+            <GeoJSON
+              key={`s2-burned-${s2Burned.data.meta.year}-${s2Burned.data.meta.month}-${s2Burned.data.meta.polygons}`}
+              data={s2Burned.data as never}
+              style={{
+                color: "#f59e0b",
+                weight: 1.5,
+                dashArray: "5 3",
+                fillColor: "#f59e0b",
+                fillOpacity: 0.35
+              }}
+              onEachFeature={(feature, layer) => {
+                const props = feature.properties as S2BurnedAreaFeature["properties"];
+                const hotspotNote = props.has_hotspot
+                  ? `<div>Hotspot bulan ini: <strong>${props.hotspot_count_month}</strong></div>`
+                  : `<div style="color:#fca5a5">Tidak ada hotspot terdeteksi — terbakar tetap terekam citra.</div>`;
+                layer.bindPopup(
+                  `<div style="font-size:12px;font-family:sans-serif;min-width:200px">
+                     <strong style="color:#b45309">Estimasi Bekas Terbakar</strong>
+                     <div style="margin-top:6px;font-weight:600">${props.lembaga ?? "-"}</div>
+                     <div style="color:#9ca3af;font-size:11px">${props.nama_kab ?? "-"} · ${props.nama_prov ?? "-"}</div>
+                     <div style="margin-top:6px">Luas estimasi: <strong>${formatNumber(
+                       Math.round(props.area_ha * 10) / 10
+                     )} Ha</strong></div>
+                     ${hotspotNote}
+                     <div style="margin-top:6px;color:#fbbf24;font-size:11px">
+                       Analisis mandiri Sentinel-2 dNBR — estimasi, belum terverifikasi Kementerian Kehutanan.
+                     </div>
+                   </div>`
+                );
+              }}
+            />
+          ) : null}
           {showBurnedArea && burnedArea.data ? (
             <GeoJSON
               key={`burned-overlay-${burnedArea.data.kps_count}`}

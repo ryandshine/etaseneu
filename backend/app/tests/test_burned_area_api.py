@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import pytest
 
 
@@ -352,3 +354,63 @@ def test_burned_area_refresh_klhk_returns_404_when_file_missing(monkeypatch) -> 
     response = client.post("/api/burned-area/refresh-klhk?file_name=tidak-ada.geojson")
 
     assert response.status_code == 404
+
+
+def test_analyze_s2_status_starts_idle(monkeypatch) -> None:
+    client = _client(monkeypatch)
+    response = client.get("/api/burned-area/analyze-s2/status")
+    assert response.status_code == 200
+    assert response.json().get("state") in {"idle", "running", "done", "error"}
+
+
+def test_analyze_s2_requires_admin_key(monkeypatch) -> None:
+    client = _client(monkeypatch)
+    response = client.post("/api/burned-area/analyze-s2?year=2026&month=8")
+    assert response.status_code in (401, 503)
+
+
+def test_analyze_s2_returns_503_when_gee_not_configured(monkeypatch) -> None:
+    from app.core.auth import require_admin_key
+    from app.main import create_app
+    from fastapi.testclient import TestClient
+    from app.services.burned_area_s2_service import BurnedAreaS2Service
+
+    monkeypatch.setattr(BurnedAreaS2Service, "enabled", property(lambda self: False))
+
+    app = create_app()
+    app.dependency_overrides[require_admin_key] = lambda: None
+    client = TestClient(app)
+
+    response = client.post("/api/burned-area/analyze-s2?year=2026&month=8")
+    assert response.status_code == 503
+
+
+def test_analyze_s2_starts_background_job(monkeypatch) -> None:
+    from app.core.auth import require_admin_key
+    from app.main import create_app
+    from fastapi.testclient import TestClient
+    from app.services.burned_area_s2_service import BurnedAreaS2Service
+    import app.api.burned_area as burned_area_api
+
+    monkeypatch.setattr(BurnedAreaS2Service, "enabled", property(lambda self: True))
+    monkeypatch.setattr(
+        BurnedAreaS2Service,
+        "analyze_month",
+        lambda self, year, month, provinces=None: {"year": year, "month": month, "computed": 0},
+    )
+    burned_area_api._s2_job.clear()
+    burned_area_api._s2_job.update(state="idle")
+
+    app = create_app()
+    app.dependency_overrides[require_admin_key] = lambda: None
+    client = TestClient(app)
+
+    response = client.post("/api/burned-area/analyze-s2?year=2026&month=8")
+    assert response.status_code == 200
+    assert response.json()["state"] == "running"
+
+    for _ in range(50):
+        if burned_area_api._s2_job.get("state") == "done":
+            break
+        time.sleep(0.05)
+    assert burned_area_api._s2_job["state"] == "done"
