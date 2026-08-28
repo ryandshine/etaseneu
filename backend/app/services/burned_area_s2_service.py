@@ -179,26 +179,39 @@ class BurnedAreaS2Service:
         scar_c = scar.And(cpc.gte(MIN_CLUSTER_PX))
         return scar_c, dnbr
 
-    def _vectorize(self, ee, scar_c, polygon_geojson) -> dict | None:
-        """Piksel scar di dalam satu poligon -> GeoJSON MultiPolygon, diclip ke KPS."""
+    def _vectorize_burned_union(self, ee, scar_c, burned_polys: list[dict]):
+        """SATU `reduceToVectors` untuk semua poligon terbakar di provinsi ini.
+
+        Memvektorkan piksel scar HANYA di dalam gabungan geometri poligon
+        terbakar (bukan seluruh bbox provinsi), lalu mengembalikan satu
+        shapely (Multi)Polygon gabungan. Pemanggil meng-`intersection` per
+        poligon. Satu round-trip GEE per provinsi, bukan satu per poligon --
+        yang terakhir itu membuat run nasional makan berjam-jam.
+
+        Return shapely geometry, atau None kalau gagal (non-fatal: angka luas
+        tetap tersimpan tanpa bentuk peta).
+        """
         try:
+            region = ee.FeatureCollection(
+                [ee.Feature(ee.Geometry(p["geometry"])) for p in burned_polys]
+            ).geometry()
             vectors = (
                 scar_c.selfMask()
                 .reduceToVectors(
-                    geometry=ee.Geometry(polygon_geojson),
+                    geometry=region,
                     scale=20,
                     geometryType="polygon",
                     eightConnected=True,
-                    maxPixels=1e9,
+                    maxPixels=1e10,
+                    bestEffort=True,
                 )
                 .getInfo()
             )
-        except Exception as exc:  # noqa: BLE001 -- non-fatal, angka luas tetap tersimpan
+        except Exception as exc:  # noqa: BLE001 -- non-fatal
             logger.warning("S2_BURNED: reduceToVectors gagal — %s", exc)
             return None
 
         try:
-            boundary = shapely_shape(polygon_geojson).buffer(0)
             parts = [
                 shapely_shape(f["geometry"]).buffer(0)
                 for f in vectors.get("features", [])
@@ -206,11 +219,20 @@ class BurnedAreaS2Service:
             ]
             if not parts:
                 return None
-            clipped = unary_union(parts).intersection(boundary)
+            return unary_union(parts)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("S2_BURNED: clip geometry gagal — %s", exc)
+            logger.warning("S2_BURNED: union geometry gagal — %s", exc)
             return None
 
+    @staticmethod
+    def _clip_to_polygon(burned_union, polygon_geojson) -> dict | None:
+        """Potong gabungan piksel terbakar ke batas satu poligon -> GeoJSON."""
+        if burned_union is None:
+            return None
+        try:
+            clipped = burned_union.intersection(shapely_shape(polygon_geojson).buffer(0))
+        except Exception:  # noqa: BLE001
+            return None
         if clipped.is_empty:
             return None
         if isinstance(clipped, ShapelyPolygon):
@@ -263,6 +285,7 @@ class BurnedAreaS2Service:
                 logger.warning("S2_BURNED: gagal bangun mask untuk %s — %s", prov, exc)
                 continue
 
+            burned_hits: list[tuple[int, dict, float]] = []
             for start in range(0, len(prov_polys), _BATCH_SIZE):
                 batch = prov_polys[start : start + _BATCH_SIZE]
                 fc = ee.FeatureCollection(
@@ -294,22 +317,30 @@ class BurnedAreaS2Service:
                     area_ha = float(props.get("sum") or 0.0) / 10000.0
                     if area_ha < MIN_REPORT_HA:
                         continue
-                    poly = geom_by_pid[pid]
-                    geom = self._vectorize(ee, scar_c, poly["geometry"])
-                    hs = int(hotspot_counts.get(pid, 0))
-                    rows.append(
-                        {
-                            "polygon_metadata_id": pid,
-                            "layer_key": poly["layer_key"],
-                            "year": year,
-                            "month": month,
-                            "area_ha": round(area_ha, 2),
-                            "dnbr_mean": None,
-                            "hotspot_count_month": hs,
-                            "has_hotspot": hs > 0,
-                            "geometry_geojson": geom,
-                        }
-                    )
+                    burned_hits.append((pid, geom_by_pid[pid], round(area_ha, 2)))
+
+            if not burned_hits:
+                continue
+
+            # Satu vektorisasi untuk seluruh provinsi (lihat _vectorize_burned_union).
+            burned_union = self._vectorize_burned_union(
+                ee, scar_c, [poly for _pid, poly, _ha in burned_hits]
+            )
+            for pid, poly, area_ha in burned_hits:
+                hs = int(hotspot_counts.get(pid, 0))
+                rows.append(
+                    {
+                        "polygon_metadata_id": pid,
+                        "layer_key": poly["layer_key"],
+                        "year": year,
+                        "month": month,
+                        "area_ha": area_ha,
+                        "dnbr_mean": None,
+                        "hotspot_count_month": hs,
+                        "has_hotspot": hs > 0,
+                        "geometry_geojson": self._clip_to_polygon(burned_union, poly["geometry"]),
+                    }
+                )
 
         cleared = self.postgres_store.clear_s2_burned_area(year, month, provinces=provinces)
         saved = self.postgres_store.upsert_s2_burned_area(rows)
