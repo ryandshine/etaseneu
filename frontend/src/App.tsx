@@ -6,7 +6,7 @@ import { LoginPage } from "./components/LoginPage";
 import { PasswordGateModal } from "./components/PasswordGateModal";
 import { SidebarNav } from "./components/SidebarNav";
 import { useDashboardData } from "./hooks/useDashboardData";
-import { setUnauthorizedHandler } from "./lib/api";
+import { setAuthToken, setUnauthorizedHandler } from "./lib/api";
 import { getTodayWIB, formatDateTimeWIB } from "./lib/date";
 import type { AppSession } from "./types/api";
 
@@ -178,6 +178,7 @@ export default function App() {
   // dan token kadaluarsa), buang sesi -> kembali ke LoginPage.
   useEffect(() => {
     setUnauthorizedHandler(() => {
+      setAuthToken(null);
       persistSession(null);
       setSession(null);
     });
@@ -190,6 +191,8 @@ export default function App() {
       setRestoringSession(false);
       return;
     }
+
+    setAuthToken(persisted.token);
 
     let cancelled = false;
     fetch("/api/auth/session", {
@@ -208,7 +211,9 @@ export default function App() {
           };
           persistSession(refreshed);
           setSession(refreshed);
+          setAuthToken(refreshed.token);
         } else if (response.status === 401) {
+          setAuthToken(null);
           persistSession(null);
           setSession(null);
         }
@@ -228,12 +233,14 @@ export default function App() {
   }, []);
 
   const handleLoginSuccess = (nextSession: AppSession) => {
+    setAuthToken(nextSession.token);
     persistSession(nextSession);
     setSession(nextSession);
   };
 
   const handleLogout = () => {
     const current = session;
+    setAuthToken(null);
     persistSession(null);
     setAdminKey(null);
     setSession(null);

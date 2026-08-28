@@ -82,6 +82,21 @@ function toHistoryQueryRecord(
 let authToken: string | null = null;
 let unauthorizedHandler: (() => void) | null = null;
 
+export function getEffectiveToken(): string | null {
+  if (authToken) return authToken;
+  try {
+    const raw = localStorage.getItem("etaseneu.session.v1") || localStorage.getItem("etaseneu_app_session");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.token && typeof parsed.token === "string") {
+        authToken = parsed.token;
+        return parsed.token;
+      }
+    }
+  } catch {}
+  return null;
+}
+
 export function setAuthToken(token: string | null): void {
   authToken = token;
 }
@@ -99,8 +114,9 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
  */
 export async function authFetch(input: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
-  if (authToken && !headers.has("Authorization")) {
-    headers.set("Authorization", `Bearer ${authToken}`);
+  const token = getEffectiveToken();
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
   }
   const response = await fetch(input, { ...init, headers });
   if (response.status === 401) {
@@ -139,8 +155,9 @@ async function fetchJson<T>(
     Accept: "application/json",
     ...extraHeaders
   };
-  if (authToken) {
-    headers.Authorization = `Bearer ${authToken}`;
+  const token = getEffectiveToken();
+  if (token && !headers.Authorization) {
+    headers.Authorization = `Bearer ${token}`;
   }
 
   const response = await fetch(path, { method, headers });
