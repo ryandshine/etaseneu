@@ -19,15 +19,16 @@ function formatHa(value: number): string {
 }
 
 type BurnedAreaCardProps = {
-  /** Disaring ke provinsi/skema yang sedang aktif di toolbar matriks, supaya
+  /** Disaring ke provinsi/skema/wilker yang sedang aktif di toolbar matriks, supaya
    *  kartu ini ikut konteks yang sedang dilihat -- bukan selalu angka nasional
    *  yang tidak nyambung dengan tabel di bawahnya. */
   provinceFilter: string;
   skemaFilter: string;
+  wilkerFilter?: string;
   onSelectSkema: (label: string) => void;
 };
 
-export function BurnedAreaCard({ provinceFilter, skemaFilter, onSelectSkema }: BurnedAreaCardProps) {
+export function BurnedAreaCard({ provinceFilter, skemaFilter, wilkerFilter, onSelectSkema }: BurnedAreaCardProps) {
   const [features, setFeatures] = useState<BurnedAreaOverlayFeature[] | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -67,9 +68,12 @@ export function BurnedAreaCard({ provinceFilter, skemaFilter, onSelectSkema }: B
         ? (feature.properties.nama_prov ?? "") === provinceFilter
         : true;
       const skemaMatch = skemaFilter ? (feature.properties.skema ?? "") === skemaFilter : true;
-      return provinceMatch && skemaMatch;
+      const wilkerMatch = wilkerFilter
+        ? (feature.properties.wilker_bps ?? "") === wilkerFilter
+        : true;
+      return provinceMatch && skemaMatch && wilkerMatch;
     });
-  }, [features, provinceFilter, skemaFilter]);
+  }, [features, provinceFilter, skemaFilter, wilkerFilter]);
 
   const bySkema = useMemo(() => {
     const totals = new Map<string, { ha: number; kps: number }>();

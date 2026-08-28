@@ -885,6 +885,8 @@ export default function App() {
                 dateRangeLabel={timeRange.label}
                 timePreset={timePreset}
                 onTimePresetChange={setTimePreset}
+                initialWilker={selectedWilker}
+                lockedWilker={session?.role === "bps" ? (session.wilker_bps || selectedWilker) : undefined}
                 onOpenKpsDetail={openKpsDetail}
               />
             </Suspense>

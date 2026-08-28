@@ -153,6 +153,8 @@ type HotspotMatrixProps = {
    * supaya tidak ada scroll bertingkat. Opsional supaya HotspotMatrix tetap
    * bisa dites/dipakai tanpa fitur navigasi App.
    */
+  initialWilker?: string;
+  lockedWilker?: string;
   onOpenKpsDetail?: (agency: string) => void;
 };
 
@@ -848,6 +850,8 @@ export function HotspotMatrix({
   dateRangeLabel,
   timePreset,
   onTimePresetChange,
+  initialWilker,
+  lockedWilker,
   onOpenKpsDetail
 }: HotspotMatrixProps) {
   const CustomTooltip = ({ active, payload }: any) => {
@@ -889,7 +893,13 @@ export function HotspotMatrix({
     return null;
   };
 
-  const [wilkerFilter, setWilkerFilter] = useState("");
+  const [wilkerFilter, setWilkerFilter] = useState(lockedWilker || initialWilker || "");
+
+  useEffect(() => {
+    if (lockedWilker) {
+      setWilkerFilter(lockedWilker);
+    }
+  }, [lockedWilker]);
   const [provinceFilter, setProvinceFilter] = useState("");
   const [skemaFilter, setSkemaFilter] = useState("");
   const [activeFrpCategory, setActiveFrpCategory] = useState<string | null>(null);
@@ -1258,14 +1268,21 @@ export function HotspotMatrix({
           <span>Wilker Filter</span>
           <select
             value={wilkerFilter}
+            disabled={Boolean(lockedWilker)}
             onChange={(event) => setWilkerFilter(event.currentTarget.value)}
           >
-            <option value="">Semua wilker</option>
-            {wilkerOptions.map((wilker) => (
-              <option key={wilker} value={wilker}>
-                {wilker}
-              </option>
-            ))}
+            {lockedWilker ? (
+              <option value={lockedWilker}>{lockedWilker}</option>
+            ) : (
+              <>
+                <option value="">Semua wilker</option>
+                {wilkerOptions.map((wilker) => (
+                  <option key={wilker} value={wilker}>
+                    {wilker}
+                  </option>
+                ))}
+              </>
+            )}
           </select>
         </label>
 
@@ -1317,6 +1334,7 @@ export function HotspotMatrix({
           <BurnedAreaCard
             provinceFilter={provinceFilter}
             skemaFilter={skemaFilter}
+            wilkerFilter={wilkerFilter}
             onSelectSkema={(label) => setSkemaFilter((current) => (current === label ? "" : label))}
           />
 
