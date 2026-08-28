@@ -1,6 +1,41 @@
 # Desain: Analisis Bekas Terbakar mandiri (Sentinel-2 dNBR)
 
 Tanggal: 2026-08-28
+Status: TERIMPLEMENTASI 2026-08-29 (branch `feat/burned-area-s2`) — dengan
+penyesuaian di bawah setelah prototyping.
+
+## Penyesuaian vs draft (hasil prototyping di 120 poligon Kalbar)
+
+Draft di bawah masih rujukan niatnya, tapi yang **benar-benar dibangun** beda
+di dua hal karena draft terbukti salah saat dicoba:
+
+1. **Formula lebih ketat & pakai MEDIAN, bukan ekstrem.** `dNBR = median(NBR
+   pre) − median(NBR post)` (bukan `max(pre) − min(post)` — versi ekstrem +
+   ambang longgar 0.12/0.27 menghasilkan ~20× luas rekap KLHK karena
+   penurunan NBR musim kemarau ikut terhitung). Mask tunggal:
+   `dNBR ≥ 0.40 AND dNDVI ≥ 0.15 AND NDVI_pre ≥ 0.30 AND MNDWI < −0.05 AND
+   nobs ≥ 2`, lalu `connectedPixelCount ≥ 25` (~1 ha @ 20 m). **Tanpa tiga
+   tingkat keyakinan** — satu ambang defensible. `has_hotspot` +
+   `hotspot_count_month` jadi penanda keyakinan (bukan filter).
+2. **Tabel TERPISAH `s2_burned_area`, bukan menambah kolom ke
+   `burned_area_summary`.** Alasan: user minta "polygonnya nampak" sebagai
+   lapisan sendiri berlabel "estimasi belum terverifikasi", jadi lebih bersih
+   tidak mencampur baris ke tabel rekap resmi sama sekali. Skema:
+   `polygon_metadata_id, layer_key, year, month, area_ha, dnbr_mean,
+   hotspot_count_month, has_hotspot, geometry(MultiPolygon), source,
+   computed_at`, UNIQUE `(polygon_metadata_id, year, month)`. Tiap run
+   `clear` dulu lalu `upsert` (idempotent).
+3. **Pemrosesan per-provinsi:** satu komposit raster per bbox provinsi, lalu
+   `reduceRegions` batched (150 poligon) atas poligon provinsi itu. ~76 dtk /
+   120 poligon; job jalan di thread latar, frontend poll
+   `/api/burned-area/analyze-s2/status`.
+
+API final: `POST /api/burned-area/analyze-s2` (admin),
+`GET /api/burned-area/analyze-s2/status`, `GET /api/burned-area/s2-overlay`.
+
+---
+
+Tanggal: 2026-08-28
 Status: draft — menunggu review sebelum implementation plan.
 
 ## Tujuan
