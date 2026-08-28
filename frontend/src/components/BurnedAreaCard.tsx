@@ -28,6 +28,18 @@ type BurnedAreaCardProps = {
   onSelectSkema: (label: string) => void;
 };
 
+function normalizeWilker(val?: string | null): string {
+  if (!val) return "";
+  const clean = val.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (clean.includes("kutai") || clean.includes("kurtanegara")) return "kutaikartanegara";
+  return clean;
+}
+
+function matchWilker(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false;
+  return normalizeWilker(a) === normalizeWilker(b);
+}
+
 export function BurnedAreaCard({ provinceFilter, skemaFilter, wilkerFilter, onSelectSkema }: BurnedAreaCardProps) {
   const [features, setFeatures] = useState<BurnedAreaOverlayFeature[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -65,11 +77,11 @@ export function BurnedAreaCard({ provinceFilter, skemaFilter, wilkerFilter, onSe
     }
     return features.filter((feature) => {
       const provinceMatch = provinceFilter
-        ? (feature.properties.nama_prov ?? "") === provinceFilter
+        ? (feature.properties.nama_prov ?? "").trim().toLowerCase() === provinceFilter.trim().toLowerCase()
         : true;
-      const skemaMatch = skemaFilter ? (feature.properties.skema ?? "") === skemaFilter : true;
+      const skemaMatch = skemaFilter ? (feature.properties.skema ?? "").trim().toLowerCase() === skemaFilter.trim().toLowerCase() : true;
       const wilkerMatch = wilkerFilter
-        ? (feature.properties.wilker_bps ?? "") === wilkerFilter
+        ? matchWilker(feature.properties.wilker_bps, wilkerFilter)
         : true;
       return provinceMatch && skemaMatch && wilkerMatch;
     });

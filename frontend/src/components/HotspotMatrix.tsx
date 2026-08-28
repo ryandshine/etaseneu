@@ -947,6 +947,18 @@ export function HotspotMatrix({
     return map;
   }, [burnFrequency]);
 
+function normalizeWilker(val?: string | null): string {
+  if (!val) return "";
+  const clean = val.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (clean.includes("kutai") || clean.includes("kurtanegara")) return "kutaikartanegara";
+  return clean;
+}
+
+function matchWilker(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false;
+  return normalizeWilker(a) === normalizeWilker(b);
+}
+
   // Cascading filter: Province options only show provinces that have hotspots
   // matching the current wilkerFilter (and confidence). So picking a Wilker
   // narrows down which Provinces appear, and vice-versa.
@@ -956,7 +968,7 @@ export function HotspotMatrix({
         new Set(
           hotspots
             .filter((h) => {
-              const wilkerMatch = wilkerFilter ? h.polygonMetadata.WILKER_BPS === wilkerFilter : true;
+              const wilkerMatch = wilkerFilter ? matchWilker(h.polygonMetadata.WILKER_BPS, wilkerFilter) : true;
               const frpMatch = activeFrpCategory ? getFrpCategory(h) === activeFrpCategory : true;
               const skemaMatch = skemaFilter ? getSkema(h) === skemaFilter : true;
               return wilkerMatch && frpMatch && skemaMatch;
@@ -996,12 +1008,13 @@ export function HotspotMatrix({
         new Set(
           hotspots
             .filter((h) => {
-              const wilkerMatch = wilkerFilter ? h.polygonMetadata.WILKER_BPS === wilkerFilter : true;
+              const wilkerMatch = wilkerFilter ? matchWilker(h.polygonMetadata.WILKER_BPS, wilkerFilter) : true;
               const provinceMatch = provinceFilter ? h.provinceName === provinceFilter : true;
               const frpMatch = activeFrpCategory ? getFrpCategory(h) === activeFrpCategory : true;
               return wilkerMatch && provinceMatch && frpMatch;
             })
-            .map(getSkema),
+            .map((h) => getSkema(h))
+            .filter((value): value is string => Boolean(value && value.trim())),
         ),
       ).sort(),
     [hotspots, wilkerFilter, provinceFilter, activeFrpCategory],
@@ -1027,7 +1040,7 @@ export function HotspotMatrix({
     () =>
       hotspots.filter((hotspot) => {
         const wilkerMatch = wilkerFilter
-          ? hotspot.polygonMetadata.WILKER_BPS === wilkerFilter
+          ? matchWilker(hotspot.polygonMetadata.WILKER_BPS, wilkerFilter)
           : true;
         const provinceMatch = provinceFilter ? hotspot.provinceName === provinceFilter : true;
         const frpMatch = activeFrpCategory ? getFrpCategory(hotspot) === activeFrpCategory : true;

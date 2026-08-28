@@ -396,25 +396,54 @@ export default function App() {
     }
   }, [provinceOptions, selectedProvince]);
 
+  const userWilker = useMemo(() => {
+    if (session?.role === "bps") {
+      if (session.wilker_bps) return session.wilker_bps;
+      const u = session.username?.toLowerCase() || "";
+      if (u.includes("banjarbaru")) return "Balai PS Banjarbaru";
+      if (u.includes("kampar")) return "Balai PS Kampar";
+      if (u.includes("palembang")) return "Balai PS Palembang";
+      if (u.includes("medan")) return "Balai PS Medan";
+      if (u.includes("gowa")) return "Balai PS Gowa";
+      if (u.includes("denpasar")) return "Balai PS Denpasar";
+      if (u.includes("ambon")) return "Balai PS Ambon";
+      if (u.includes("bogor")) return "Balai PS Bogor";
+      if (u.includes("kupang")) return "Balai PS Kupang";
+      if (u.includes("kutai") || u.includes("karta")) return "Balai PS Kutai Kartanegara";
+      if (u.includes("manado")) return "Balai PS Manado";
+      if (u.includes("manokwari")) return "Balai PS Manokwari";
+      if (u.includes("yogyakarta") || u.includes("jogja")) return "Balai PS Yogyakarta";
+    }
+    return "";
+  }, [session]);
+
+  const effectiveWilker = session?.role === "bps" ? (userWilker || session.wilker_bps || selectedWilker) : selectedWilker;
+
   // Pilihan yang tidak lagi ada di data (mis. setelah rentang waktu diubah)
   // direset supaya peta tidak diam-diam menyaring habis semua titik.
   // Untuk role BPS, wilker selalu terkunci ke wilayah kerjanya.
   useEffect(() => {
-    if (session?.role === "bps" && session.wilker_bps) {
-      setSelectedWilker(session.wilker_bps);
+    if (session?.role === "bps" && effectiveWilker) {
+      setSelectedWilker(effectiveWilker);
       return;
     }
     if (selectedWilker && !wilkerOptions.includes(selectedWilker)) {
       setSelectedWilker("");
     }
-  }, [wilkerOptions, selectedWilker, session?.role, session?.wilker_bps]);
+  }, [wilkerOptions, selectedWilker, session?.role, effectiveWilker]);
 
   const visibleHotspots = useMemo(
     () =>
-      selectedWilker
-        ? hotspots.filter((h) => h.polygonMetadata?.WILKER_BPS === selectedWilker)
+      effectiveWilker
+        ? hotspots.filter((h) => {
+            const w = h.polygonMetadata?.WILKER_BPS;
+            if (!w) return false;
+            const normW = w.toLowerCase().replace(/[^a-z0-9]/g, "");
+            const normEff = effectiveWilker.toLowerCase().replace(/[^a-z0-9]/g, "");
+            return normW.includes(normEff) || normEff.includes(normW);
+          })
         : hotspots,
-    [hotspots, selectedWilker],
+    [hotspots, effectiveWilker],
   );
 
   const historyYear = timeRange.endAt.getUTCFullYear() || parseInt(getTodayWIB().slice(0, 4), 10);
@@ -857,7 +886,7 @@ export default function App() {
           <section aria-label="Matrix workspace" className="workspace-stage workspace-stage--matrix">
             <Suspense fallback={<ViewLoader label="Memuat matriks data..." />}>
               <HotspotMatrix
-                hotspots={hotspots.map((hotspot) => ({
+                hotspots={(session?.role === "bps" ? visibleHotspots : hotspots).map((hotspot) => ({
                   id: hotspot.id,
                   detectedAt: hotspot.detectedAt,
                   latitude: hotspot.latitude,
@@ -885,8 +914,8 @@ export default function App() {
                 dateRangeLabel={timeRange.label}
                 timePreset={timePreset}
                 onTimePresetChange={setTimePreset}
-                initialWilker={selectedWilker}
-                lockedWilker={session?.role === "bps" ? (session.wilker_bps || selectedWilker) : undefined}
+                initialWilker={effectiveWilker || selectedWilker}
+                lockedWilker={session?.role === "bps" ? effectiveWilker : undefined}
                 onOpenKpsDetail={openKpsDetail}
               />
             </Suspense>
