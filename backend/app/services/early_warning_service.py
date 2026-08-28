@@ -167,7 +167,7 @@ class EarlyWarningService:
         search: str | None = None,
         limit: int = 1500,
     ) -> list[dict[str, Any]]:
-        """Ambil daftar KPS dengan jarak perambatan (dalam KM) dari bekas luka bakar."""
+        """Ambil daftar KPS dengan klasifikasi zona perambatan ilmiah."""
         with self.store.connection() as conn:
             with conn.cursor() as cur:
                 is_burned_filter = category in [
@@ -341,6 +341,31 @@ class EarlyWarningService:
             max_dist = round(float(r["max_distance_km_today"]), 2) if r["max_distance_km_today"] is not None else None
             avg_dist = round(float(r["avg_distance_km_today"]), 2) if r["avg_distance_km_today"] is not None else None
 
+            # Klasifikasi Zona Ilmiah
+            if r["total_burned_ha"] > 0:
+                if h_today > 0:
+                    if h_strict > 0 and h_expand == 0:
+                        propagation_zone = "Strict Re-burn (Bara Bekas)"
+                        zone_code = "strict"
+                    elif h_strict > 0 and h_expand > 0:
+                        propagation_zone = "Kombinasi Bara & Merambat"
+                        zone_code = "combo"
+                    elif min_dist is not None and min_dist <= 1.0:
+                        propagation_zone = "Zona 1: Merambat Langsung (≤1.0 km)"
+                        zone_code = "zone1"
+                    elif min_dist is not None and min_dist <= 3.0:
+                        propagation_zone = "Zona 2: Loncatan Bara / Spotting (1-3 km)"
+                        zone_code = "zone2"
+                    else:
+                        propagation_zone = "Zona 3: Titik Bakar Mandiri (>3.0 km)"
+                        zone_code = "zone3"
+                else:
+                    propagation_zone = "-"
+                    zone_code = "none"
+            else:
+                propagation_zone = "Titik Baru 2026 (Belum Ada Rekap)"
+                zone_code = "new_2026"
+
             ftri = compute_ftri_score(
                 h_today=h_today,
                 h_yesterday=r["h_yesterday"],
@@ -361,8 +386,12 @@ class EarlyWarningService:
                         status_badge = f"🔴 Bara Bekas ({h_strict}) & Blok Baru ({h_expand}{dist_text})"
                     elif h_strict > 0:
                         status_badge = f"🔴 Strict Re-burn ({h_strict} di Bekas Terbakar)"
+                    elif zone_code == "zone1":
+                        status_badge = f"🔴 Zona 1: Merambat Langsung ({h_expand} Baru{dist_text})"
+                    elif zone_code == "zone2":
+                        status_badge = f"🟠 Zona 2: Loncatan Bara ({h_expand} Baru{dist_text})"
                     else:
-                        status_badge = f"🔴 Perembetan ({h_expand} di Blok Baru{dist_text})"
+                        status_badge = f"🟡 Zona 3: Titik Bakar Mandiri ({h_expand} Baru{dist_text})"
                 elif r["h_yesterday"] > 0:
                     status_badge = "⚠️ Reda Kemarin"
                 elif h_7d > 0:
@@ -400,6 +429,8 @@ class EarlyWarningService:
                 "min_distance_km": min_dist,
                 "max_distance_km": max_dist,
                 "avg_distance_km": avg_dist,
+                "propagation_zone": propagation_zone,
+                "zone_code": zone_code,
                 "hotspots_yesterday": r["h_yesterday"],
                 "hotspots_7d": h_7d,
                 "hotspots_7d_strict_reburn": h_7d_strict,
@@ -423,6 +454,7 @@ class EarlyWarningService:
         fill_header = PatternFill(start_color="1B365D", end_color="1B365D", fill_type="solid")
         fill_red_light = PatternFill(start_color="FFEBEE", end_color="FFEBEE", fill_type="solid")
         fill_orange_light = PatternFill(start_color="FFF3E0", end_color="FFF3E0", fill_type="solid")
+        fill_yellow_light = PatternFill(start_color="FFFDE7", end_color="FFFDE7", fill_type="solid")
 
         border_thin = Border(
             left=Side(style="thin", color="D3D3D3"), right=Side(style="thin", color="D3D3D3"),
@@ -447,8 +479,9 @@ class EarlyWarningService:
             "Luas SK (ha)", "Luas Terbakar KLHK (ha)", "Frekuensi Terbakar",
             "Hotspot Hari Ini (Total)", "Tepat di Bekas Terbakar (Strict Re-burn)", "Perembetan Blok Baru",
             "Jarak Perambatan Min (KM)", "Jarak Perambatan Max (KM)", "Jarak Perambatan Rerata (KM)",
+            "Klasifikasi Zona Ilmiah",
             "Hotspot Kemarin", "Hotspot 7 Hari", "Hotspot Bulan Ini", "Total Hotspot 2026",
-            "Deteksi Terakhir", "Skor FTRI", "Status & Rincian Perambatan"
+            "Deteksi Terakhir", "Skor FTRI", "Status & Rincian Mekanisme"
         ]
 
         for col_idx, h in enumerate(headers, 1):
@@ -465,6 +498,7 @@ class EarlyWarningService:
                 r["nama_kab"] or "-", r["nama_prov"] or "-", r["luas_sk"], r["total_burned_ha"], r["burn_frequency"],
                 r["hotspots_today"], r["hotspots_today_strict_reburn"], r["hotspots_today_expanding"],
                 r["min_distance_km"], r["max_distance_km"], r["avg_distance_km"],
+                r["propagation_zone"],
                 r["hotspots_yesterday"], r["hotspots_7d"], r["hotspots_month"], r["hotspots_year"],
                 dt_str, r["ftri_score"], r["status_label"]
             ]
@@ -473,17 +507,22 @@ class EarlyWarningService:
                 cell.font = font_regular
                 cell.border = border_thin
                 if r["hotspots_today"] > 0:
-                    if col_idx in [1, 12, 13, 14, 23, 24]:
-                        cell.fill = fill_red_light
+                    if col_idx in [1, 12, 13, 14, 18, 24, 25]:
+                        if r["zone_code"] == "zone1" or r["zone_code"] == "strict" or r["zone_code"] == "combo":
+                            cell.fill = fill_red_light
+                        elif r["zone_code"] == "zone2":
+                            cell.fill = fill_orange_light
+                        else:
+                            cell.fill = fill_yellow_light
                 elif r["hotspots_yesterday"] > 0:
-                    if col_idx in [1, 18, 23, 24]:
+                    if col_idx in [1, 19, 24, 25]:
                         cell.fill = fill_orange_light
 
-                if col_idx in [1, 2, 4, 11, 22, 24]:
+                if col_idx in [1, 2, 4, 11, 18, 23, 25]:
                     cell.alignment = align_center
-                elif col_idx in [9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23]:
+                elif col_idx in [9, 10, 12, 13, 14, 15, 16, 17, 19, 20, 21, 22, 24]:
                     cell.alignment = align_right
-                    if col_idx in [9, 10, 15, 16, 17, 23]:
+                    if col_idx in [9, 10, 15, 16, 17, 24]:
                         cell.number_format = "#,##0.00"
                     else:
                         cell.number_format = "#,##0"

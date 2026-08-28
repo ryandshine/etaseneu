@@ -9,7 +9,7 @@ import {
   ChevronRight,
   TrendingUp,
   FileSpreadsheet,
-  Ruler
+  Info
 } from "lucide-react";
 import { authFetch, downloadWithAuth } from "../lib/api";
 
@@ -64,6 +64,8 @@ interface KpsItem {
   min_distance_km: number | null;
   max_distance_km: number | null;
   avg_distance_km: number | null;
+  propagation_zone: string;
+  zone_code: string;
   hotspots_yesterday: number;
   hotspots_7d: number;
   hotspots_7d_strict_reburn: number;
@@ -91,7 +93,8 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
   const [search, setSearch] = useState("");
   const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedSkema, setSelectedSkema] = useState("");
-  const [sortBy, setSortBy] = useState<"ftri" | "hs_today" | "hs_strict" | "distance" | "burned_ha" | "hs_7d">("ftri");
+  const [selectedZone, setSelectedZone] = useState("");
+  const [sortBy, setSortBy] = useState<"ftri" | "hs_today" | "distance" | "hs_strict" | "burned_ha" | "hs_7d">("ftri");
 
   // Fetch summary
   const loadSummary = async () => {
@@ -170,18 +173,22 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
       );
     }
 
+    if (selectedZone) {
+      result = result.filter((i) => i.zone_code === selectedZone);
+    }
+
     result.sort((a, b) => {
       if (sortBy === "ftri") return b.ftri_score - a.ftri_score;
       if (sortBy === "hs_today") return b.hotspots_today - a.hotspots_today;
-      if (sortBy === "hs_strict") return b.hotspots_today_strict_reburn - a.hotspots_today_strict_reburn;
       if (sortBy === "distance") return (b.max_distance_km || 0) - (a.max_distance_km || 0);
+      if (sortBy === "hs_strict") return b.hotspots_today_strict_reburn - a.hotspots_today_strict_reburn;
       if (sortBy === "hs_7d") return b.hotspots_7d - a.hotspots_7d;
       if (sortBy === "burned_ha") return b.total_burned_ha - a.total_burned_ha;
       return 0;
     });
 
     return result;
-  }, [items, search, sortBy]);
+  }, [items, search, selectedZone, sortBy]);
 
   const handleDownloadExcel = async () => {
     try {
@@ -205,7 +212,7 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
             Peringatan Dini & Rekapitulasi Kebakaran KPS
           </h1>
           <p style={{ fontSize: "0.85rem", color: "#9ca3af", marginTop: "0.3rem", margin: 0 }}>
-            Deteksi Spasial Presisi: Titik Tepat di Bekas Terbakar (Strict Re-burn) & Jangkauan Jarak Perambatan (KM)
+            Deteksi Spasial Presisi: Titik Tepat di Bekas Terbakar (Strict Re-burn) & Klasifikasi Zona Perambatan Ilmiah
           </p>
         </div>
 
@@ -256,6 +263,14 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
             Segarkan
           </button>
         </div>
+      </div>
+
+      {/* Scientific Guide Banner */}
+      <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", backgroundColor: "rgba(30, 41, 59, 0.6)", border: "1px solid rgba(255,255,255,0.08)", padding: "0.6rem 0.85rem", borderRadius: "6px", marginBottom: "1.2rem", fontSize: "0.75rem", color: "#cbd5e1" }}>
+        <Info size={16} color="#38bdf8" style={{ flexShrink: 0 }} />
+        <span>
+          <strong>Pedoman Zona Perambatan:</strong> <span style={{ color: "#ef4444", fontWeight: "600" }}>🔴 Zona 1 (&le;1.0 km)</span> = Merambat Langsung | <span style={{ color: "#f97316", fontWeight: "600" }}>🟠 Zona 2 (1.0 - 3.0 km)</span> = Loncatan Bara / Spotting | <span style={{ color: "#eab308", fontWeight: "600" }}>🟡 Zona 3 (&gt;3.0 km)</span> = Titik Bakar Mandiri (Pembukaan Blok Baru).
+        </span>
       </div>
 
       {/* KPI Cards */}
@@ -406,7 +421,7 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
       {/* Search & Filter Bar */}
       <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap", alignItems: "center" }}>
         {/* Search */}
-        <div style={{ position: "relative", flex: "1 1 240px" }}>
+        <div style={{ position: "relative", flex: "1 1 220px" }}>
           <Search size={15} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "#6b7280" }} />
           <input
             type="text"
@@ -436,7 +451,7 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
             borderRadius: "6px",
             color: "#ffffff",
             fontSize: "0.82rem",
-            minWidth: "160px"
+            minWidth: "150px"
           }}
         >
           <option value="">Semua Provinsi</option>
@@ -458,7 +473,7 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
             borderRadius: "6px",
             color: "#ffffff",
             fontSize: "0.82rem",
-            minWidth: "140px"
+            minWidth: "130px"
           }}
         >
           <option value="">Semua Skema</option>
@@ -468,6 +483,30 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
             </option>
           ))}
         </select>
+
+        {/* Zona Perambatan Filter */}
+        {category === "burned_active_today" && (
+          <select
+            value={selectedZone}
+            onChange={(e) => setSelectedZone(e.target.value)}
+            style={{
+              padding: "0.5rem 0.75rem",
+              backgroundColor: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: "6px",
+              color: "#ffffff",
+              fontSize: "0.82rem",
+              minWidth: "160px"
+            }}
+          >
+            <option value="">Semua Zona Perambatan</option>
+            <option value="zone1" style={{ backgroundColor: "#1e293b" }}>🔴 Zona 1: Merambat Langsung (≤1 km)</option>
+            <option value="zone2" style={{ backgroundColor: "#1e293b" }}>🟠 Zona 2: Loncatan Bara (1-3 km)</option>
+            <option value="zone3" style={{ backgroundColor: "#1e293b" }}>🟡 Zona 3: Titik Bakar Mandiri (&gt;3 km)</option>
+            <option value="combo" style={{ backgroundColor: "#1e293b" }}>🔴 Kombinasi Bara & Merambat</option>
+            <option value="strict" style={{ backgroundColor: "#1e293b" }}>🔥 Strict Re-burn (Bara Bekas)</option>
+          </select>
+        )}
 
         {/* Sort */}
         <select
@@ -513,7 +552,7 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS 7 Hari</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS Agt</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "right" }}>Skor FTRI</th>
-              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>Status & Jangkauan Perambatan</th>
+              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>Status & Zona Perambatan</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>Aksi</th>
             </tr>
           </thead>
@@ -594,7 +633,13 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
                             {item.hotspots_today_expanding > 0 ? (
                               <span
                                 title={`${item.hotspots_today_expanding} titik berada di blok baru dengan jarak ${distLabel || ''} dari luka bakar lama`}
-                                style={{ backgroundColor: "rgba(249,115,22,0.2)", color: "#fdba74", padding: "0.1rem 0.35rem", borderRadius: "3px", fontWeight: "600" }}
+                                style={{
+                                  backgroundColor: item.zone_code === "zone1" ? "rgba(239,68,68,0.25)" : item.zone_code === "zone2" ? "rgba(249,115,22,0.2)" : "rgba(234,179,8,0.2)",
+                                  color: item.zone_code === "zone1" ? "#fca5a5" : item.zone_code === "zone2" ? "#fdba74" : "#fef08a",
+                                  padding: "0.1rem 0.35rem",
+                                  borderRadius: "3px",
+                                  fontWeight: "600"
+                                }}
                               >
                                 ⚡ {item.hotspots_today_expanding} Baru {distLabel ? `(${distLabel})` : ""}
                               </span>
@@ -624,19 +669,19 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
                           borderRadius: "4px",
                           fontSize: "0.7rem",
                           fontWeight: "600",
-                          backgroundColor: item.status_label.includes("🔴")
+                          backgroundColor: item.zone_code === "zone1" || item.zone_code === "strict" || item.zone_code === "combo"
                             ? "rgba(239,68,68,0.15)"
-                            : item.status_label.includes("⚠️") || item.status_label.includes("🟠")
+                            : item.zone_code === "zone2" || item.status_label.includes("⚠️") || item.status_label.includes("🟠")
                             ? "rgba(249,115,22,0.15)"
-                            : item.status_label.includes("🟡")
-                            ? "rgba(245,158,11,0.15)"
+                            : item.zone_code === "zone3" || item.status_label.includes("🟡")
+                            ? "rgba(234,179,8,0.15)"
                             : "rgba(34,197,94,0.15)",
-                          color: item.status_label.includes("🔴")
+                          color: item.zone_code === "zone1" || item.zone_code === "strict" || item.zone_code === "combo"
                             ? "#ef4444"
-                            : item.status_label.includes("⚠️") || item.status_label.includes("🟠")
+                            : item.zone_code === "zone2" || item.status_label.includes("⚠️") || item.status_label.includes("🟠")
                             ? "#f97316"
-                            : item.status_label.includes("🟡")
-                            ? "#f59e0b"
+                            : item.zone_code === "zone3" || item.status_label.includes("🟡")
+                            ? "#eab308"
                             : "#22c55e"
                         }}
                       >
