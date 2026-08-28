@@ -272,11 +272,20 @@ class BurnedAreaS2Service:
             [p["id"] for p in polygons], month_start, nxt.isoformat()
         )
 
-        rows: list[dict[str, object]] = []
+        # Clear sekali di awal untuk cakupan yang diminta -- lalu upsert
+        # PER-PROVINSI di bawah, bukan sekaligus di akhir: run nasional bisa
+        # berjam-jam, hasil tiap provinsi harus langsung tampil di peta dan
+        # tidak hilang kalau proses mati di tengah.
+        cleared = self.postgres_store.clear_s2_burned_area(year, month, provinces=provinces)
+
+        total_saved = 0
+        total_ha = 0.0
+        total_no_hotspot = 0
         polygons_checked = 0
 
         for prov, prov_polys in by_prov.items():
             polygons_checked += len(prov_polys)
+            rows: list[dict[str, object]] = []
             region = self._province_bbox(ee, prov_polys)
             try:
                 scar_c, _dnbr = self._scar_mask(ee, region)
@@ -342,12 +351,24 @@ class BurnedAreaS2Service:
                     }
                 )
 
-        cleared = self.postgres_store.clear_s2_burned_area(year, month, provinces=provinces)
-        saved = self.postgres_store.upsert_s2_burned_area(rows)
-        total_ha = round(sum(float(r["area_ha"]) for r in rows), 1)
+            if rows:
+                total_saved += self.postgres_store.upsert_s2_burned_area(rows)
+                prov_ha = sum(float(r["area_ha"]) for r in rows)
+                total_ha += prov_ha
+                total_no_hotspot += sum(1 for r in rows if not r["has_hotspot"])
+                logger.info(
+                    "S2_BURNED: %s — %d poligon terbakar, %.1f ha (kumulatif %d / %.1f ha)",
+                    prov,
+                    len(rows),
+                    prov_ha,
+                    total_saved,
+                    total_ha,
+                )
+
+        total_ha = round(total_ha, 1)
         logger.info(
-            "S2_BURNED: %d/%d poligon terbakar (%.1f ha), %d dihapus, bulan %d-%02d",
-            saved,
+            "S2_BURNED: SELESAI %d/%d poligon terbakar (%.1f ha), %d baris lama dihapus, bulan %d-%02d",
+            total_saved,
             polygons_checked,
             total_ha,
             cleared,
@@ -358,9 +379,9 @@ class BurnedAreaS2Service:
             "year": year,
             "month": month,
             "polygons_checked": polygons_checked,
-            "computed": saved,
+            "computed": total_saved,
             "total_ha": total_ha,
-            "no_hotspot_but_burned": sum(1 for r in rows if not r["has_hotspot"]),
+            "no_hotspot_but_burned": total_no_hotspot,
         }
 
     def _province_bbox(self, ee, prov_polys: list[dict]):
