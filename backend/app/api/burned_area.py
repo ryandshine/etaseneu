@@ -1,4 +1,3 @@
-import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -6,38 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.auth import require_admin_key
 from app.services.burned_area_klhk_service import BurnedAreaKlhkError, refresh_burned_area_from_klhk_file
-from app.services.burned_area_s2_service import BurnedAreaS2Error, BurnedAreaS2Service
 from app.services.burned_area_service import BurnedAreaService, BurnedAreaServiceError
 from app.services.postgres_store import PostgresStore
 from app.core.config import get_settings
 
 
 router = APIRouter()
-
-# Status job analisis Sentinel-2 mandiri. Satu job global -- analisisnya berat
-# (per-provinsi, bisa berjenjang menit) jadi dijalankan di thread latar dan
-# frontend mem-poll `/burned-area/analyze-s2/status`. Tidak dipersistensi:
-# kalau proses restart di tengah job, status kembali "idle" dan admin tinggal
-# menekan tombol lagi (hasil parsial per-provinsi yang sudah ke-upsert tetap ada).
-_s2_job_lock = threading.Lock()
-_s2_job: dict[str, object] = {"state": "idle"}
-
-
-def _run_s2_analysis(year: int, month: int, provinces: list[str] | None) -> None:
-    try:
-        result = BurnedAreaS2Service().analyze_month(year, month, provinces=provinces)
-        with _s2_job_lock:
-            _s2_job.update(state="done", result=result, error=None, finished_at=_now_iso())
-    except BurnedAreaS2Error as exc:
-        with _s2_job_lock:
-            _s2_job.update(state="error", error=str(exc), finished_at=_now_iso())
-    except Exception as exc:  # noqa: BLE001 -- jangan biarkan thread mati diam-diam
-        with _s2_job_lock:
-            _s2_job.update(state="error", error=repr(exc), finished_at=_now_iso())
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 @router.get("/burned-area/summary")
@@ -216,51 +189,11 @@ async def burned_area_s2_overlay(
     return store.read_s2_burned_area_overlay(year, month)
 
 
-@router.get("/burned-area/analyze-s2/status")
-async def burned_area_analyze_s2_status() -> dict[str, object]:
-    with _s2_job_lock:
-        return dict(_s2_job)
-
-
-@router.post("/burned-area/analyze-s2")
-async def burned_area_analyze_s2(
-    year: int | None = None,
-    month: int | None = None,
-    provinces: list[str] = Query(default=[]),
-    _: None = Depends(require_admin_key),
-) -> dict[str, object]:
-    """Jalankan analisis mandiri Sentinel-2 dNBR untuk bekas terbakar satu
-    bulan (default: bulan berjalan). Berjalan di latar; pantau lewat
-    `/burned-area/analyze-s2/status`. Menolak kalau job lain masih jalan."""
-    service = BurnedAreaS2Service()
-    if not service.enabled:
-        raise HTTPException(
-            status_code=503,
-            detail="Google Earth Engine belum dikonfigurasi di server.",
-        )
-    if year is None or month is None:
-        now = datetime.now(timezone.utc)
-        year, month = now.year, now.month
-
-    with _s2_job_lock:
-        if _s2_job.get("state") == "running":
-            raise HTTPException(status_code=409, detail="Analisis Sentinel-2 masih berjalan.")
-        _s2_job.clear()
-        _s2_job.update(
-            state="running",
-            year=year,
-            month=month,
-            provinces=provinces or None,
-            started_at=_now_iso(),
-        )
-
-    thread = threading.Thread(
-        target=_run_s2_analysis,
-        args=(year, month, provinces or None),
-        daemon=True,
-    )
-    thread.start()
-    return {"state": "running", "year": year, "month": month, "provinces": provinces or None}
+# Catatan: analisis Sentinel-2 dijalankan manual dari skrip
+# (`app.services.burned_area_s2_service.BurnedAreaS2Service.analyze_month`),
+# bukan lewat endpoint admin -- hasilnya di-upsert ke `s2_burned_area` dan
+# ditampilkan lewat `/burned-area/s2-overlay` di atas. Tidak ada tombol UI
+# maupun scheduler; frekuensinya mengikuti terbitnya rekap KLHK.
 
 
 @router.post("/burned-area/refresh-klhk")

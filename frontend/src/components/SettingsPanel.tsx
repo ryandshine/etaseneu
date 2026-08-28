@@ -37,61 +37,6 @@ export function SettingsPanel({ onRefreshLayers, adminKey, session, onLogout }: 
   const [pendingAction, setPendingAction] = useState<{ fileName: string; action: LayerAction } | null>(null);
   const [processingFile, setProcessingFile] = useState<string | null>(null);
 
-  // --- Analisis mandiri bekas terbakar (Sentinel-2 dNBR) ---
-  type S2Job = {
-    state: "idle" | "running" | "done" | "error";
-    result?: { computed?: number; polygons_checked?: number; total_ha?: number; no_hotspot_but_burned?: number };
-    error?: string;
-    year?: number;
-    month?: number;
-  };
-  const [s2Job, setS2Job] = useState<S2Job>({ state: "idle" });
-  const [s2Starting, setS2Starting] = useState(false);
-
-  useEffect(() => {
-    if (session?.role !== "admin") return;
-    let active = true;
-    const poll = async () => {
-      try {
-        const res = await fetch("/api/burned-area/analyze-s2/status", { headers: adminActionHeaders });
-        if (res.ok && active) setS2Job(await res.json());
-      } catch {
-        /* status opsional */
-      }
-    };
-    poll();
-    const id = setInterval(poll, 5000);
-    return () => {
-      active = false;
-      clearInterval(id);
-    };
-  }, [session?.role]);
-
-  const startS2Analysis = async () => {
-    setS2Starting(true);
-    setFeedback(null);
-    try {
-      const res = await fetch("/api/burned-area/analyze-s2", {
-        method: "POST",
-        headers: adminActionHeaders,
-      });
-      if (res.status === 409) {
-        setFeedback({ tone: "warn", title: "Analisis sedang berjalan", body: "Tunggu proses yang sekarang selesai dulu." });
-      } else if (res.status === 503) {
-        setFeedback({ tone: "danger", title: "Earth Engine belum dikonfigurasi", body: "Server belum punya kredensial Google Earth Engine." });
-      } else if (!res.ok) {
-        setFeedback({ tone: "danger", title: "Gagal memulai analisis", body: `HTTP ${res.status}` });
-      } else {
-        setS2Job({ state: "running" });
-        setFeedback({ tone: "success", title: "Analisis dimulai", body: "Berjalan di latar. Progres muncul di kartu ini; hasilnya jadi lapisan “Estimasi Sentinel-2” di peta." });
-      }
-    } catch (e) {
-      setFeedback({ tone: "danger", title: "Gagal memulai analisis", body: String(e) });
-    } finally {
-      setS2Starting(false);
-    }
-  };
-
   const fetchStatus = async () => {
     setLoadingStatus(true);
     try {
@@ -617,53 +562,6 @@ export function SettingsPanel({ onRefreshLayers, adminKey, session, onLogout }: 
               Tidak ada file GeoJSON yang aktif terdaftar dalam sistem.
             </div>
           )}
-        </div>
-
-        {/* Analisis mandiri bekas terbakar Sentinel-2 */}
-        <div style={{ background: "rgba(17, 24, 39, 0.5)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "12px", padding: "2rem" }}>
-          <h2 style={{ fontSize: "1.25rem", color: "#fff", marginBottom: "0.5rem", fontWeight: 600 }}>
-            Analisis Bekas Terbakar Mandiri (Sentinel-2)
-          </h2>
-          <p style={{ color: "#9ca3af", fontSize: "0.88rem", marginBottom: "1rem" }}>
-            Menghitung sendiri estimasi luas bekas terbakar bulan berjalan dari citra Sentinel-2 (indeks dNBR),
-            tanpa menunggu rekap resmi Kementerian Kehutanan. Menjangkau semua KPS &amp; Hutan Adat aktif —
-            termasuk yang tidak punya titik hotspot. Hasilnya <strong>estimasi, belum terverifikasi</strong>,
-            disimpan terpisah dari data resmi dan tampil sebagai lapisan “Estimasi Sentinel-2” di peta.
-          </p>
-          <p style={{ color: "#fbbf24", fontSize: "0.78rem", marginBottom: "1rem" }}>
-            Proses berat (per-provinsi, bisa beberapa menit). Jalankan seperlunya, bukan berkala.
-          </p>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={startS2Analysis}
-              disabled={s2Starting || s2Job.state === "running"}
-              style={{
-                background: s2Job.state === "running" ? "rgba(245,158,11,0.15)" : "#f59e0b",
-                border: "1px solid #f59e0b",
-                color: s2Job.state === "running" ? "#fbbf24" : "#1f2937",
-                padding: "0.6rem 1.1rem",
-                borderRadius: "8px",
-                fontSize: "0.85rem",
-                fontWeight: 700,
-                cursor: s2Starting || s2Job.state === "running" ? "not-allowed" : "pointer",
-              }}
-            >
-              {s2Job.state === "running" ? "Analisis berjalan…" : s2Starting ? "Memulai…" : "Jalankan analisis bulan ini"}
-            </button>
-
-            {s2Job.state === "done" && s2Job.result ? (
-              <span style={{ color: "#9ca3af", fontSize: "0.82rem" }}>
-                Selesai · {s2Job.result.computed ?? 0} KPS terbakar dari {s2Job.result.polygons_checked ?? 0} diperiksa ·{" "}
-                {(s2Job.result.total_ha ?? 0).toLocaleString("id-ID", { maximumFractionDigits: 1 })} Ha ·{" "}
-                {s2Job.result.no_hotspot_but_burned ?? 0} tanpa hotspot
-              </span>
-            ) : null}
-            {s2Job.state === "error" ? (
-              <span style={{ color: "#fca5a5", fontSize: "0.82rem" }}>Gagal: {s2Job.error}</span>
-            ) : null}
-          </div>
         </div>
 
         {session?.role === "admin" ? (

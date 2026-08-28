@@ -98,8 +98,10 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   re-raise ke client) karena URL FIRMS menyertakan `MAP_KEY` rahasia di path-nya.
 - `burned_area_service.py` — jalur GEE/MODIS/VIIRS **lama, sudah tidak dipakai** (lihat bahaya #2).
 - `burned_area_s2_service.py` — **analisis MANDIRI** bekas terbakar dari Sentinel-2 L2A dNBR via GEE,
-  supaya tidak perlu menunggu rekap KLHK. On-demand admin (`POST /api/burned-area/analyze-s2`, job
-  thread latar, poll `/analyze-s2/status`), tidak ada scheduler. Menyasar SEMUA poligon aktif
+  supaya tidak perlu menunggu rekap KLHK. Dijalankan **manual lewat skrip**
+  (`BurnedAreaS2Service().analyze_month(year, month)`), TIDAK ada endpoint admin/tombol UI/scheduler —
+  frekuensinya ikut terbitnya rekap KLHK. Endpoint yang ada cuma `GET /api/burned-area/s2-overlay`
+  (baca hasil untuk lapisan peta). Menyasar SEMUA poligon aktif
   (`psagustus2026` + `HUTAN_ADAT_APR26`), hotspot = penanda keyakinan bukan filter. Formula
   divalidasi: `dNBR = median(NBR pre) − median(NBR post)` (BUKAN max/min — ekstrem + ambang longgar
   menghasilkan ~20× KLHK), mask `dNBR≥0.40 AND dNDVI≥0.15 AND NDVI_pre≥0.30 AND MNDWI<−0.05 AND

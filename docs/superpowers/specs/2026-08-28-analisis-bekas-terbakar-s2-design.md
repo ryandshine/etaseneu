@@ -26,12 +26,18 @@ di dua hal karena draft terbukti salah saat dicoba:
    computed_at`, UNIQUE `(polygon_metadata_id, year, month)`. Tiap run
    `clear` dulu lalu `upsert` (idempotent).
 3. **Pemrosesan per-provinsi:** satu komposit raster per bbox provinsi, lalu
-   `reduceRegions` batched (150 poligon) atas poligon provinsi itu. ~76 dtk /
-   120 poligon; job jalan di thread latar, frontend poll
-   `/api/burned-area/analyze-s2/status`.
+   `reduceRegions` batched (150 poligon) atas poligon provinsi itu. Upsert
+   PER-PROVINSI (clear sekali di awal) supaya hasil tampil progresif & tidak
+   hilang kalau run panjang mati di tengah. ~11 mnt / 290 poligon (Kalbar).
+4. **Tanpa endpoint admin / tombol UI / scheduler.** Keputusan #2 draft
+   (tombol admin on-demand) DIBATALKAN atas permintaan user 2026-08-29 —
+   dijalankan manual lewat skrip
+   (`BurnedAreaS2Service().analyze_month(year, month)`), frekuensi ikut
+   terbitnya rekap KLHK. Job-thread + `analyze-s2` + `analyze-s2/status` yang
+   sempat dibuat sudah dihapus.
 
-API final: `POST /api/burned-area/analyze-s2` (admin),
-`GET /api/burned-area/analyze-s2/status`, `GET /api/burned-area/s2-overlay`.
+API final: **hanya** `GET /api/burned-area/s2-overlay` (baca hasil untuk
+lapisan peta "Estimasi Sentinel-2").
 
 ---
 
