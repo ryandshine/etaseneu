@@ -152,24 +152,63 @@ def _bilinear(value_grid: list[list[float]], lat: float, lon: float, lats: list[
     )
 
 
-def calculate_cbi_val(temp_c: float, rh_pct: float) -> float:
-    rh = max(0.0, min(100.0, rh_pct))
-    cbi = ((110.0 - 1.37 * rh) - 9.01) * (10 ** (0.0444 * temp_c)) / 124.0
-    return max(0.0, cbi)
+def calculate_cbi_val(
+    temp_c: float,
+    rh_pct: float,
+    wind_speed_ms: float = 2.5,
+    rain_mm: float = 0.0,
+    soil_moisture: float = 0.20,
+) -> float:
+    """Indeks Kerentanan Bahaya Kebakaran Tropis (Tropical Fire Danger Rating).
+    
+    Disesuaikan khusus untuk iklim tropis khatulistiwa & lahan gambut Indonesia (BMKG/ASMC FDRS).
+    Memperhitungkan defisit kelembaban udara (RH), suhu, kecepatan angin, kelembaban tanah/gambut
+    (soil moisture 0-10cm), dan peredam curah hujan.
+    """
+    rh = max(5.0, min(100.0, rh_pct))
+    t = max(10.0, min(45.0, temp_c))
+
+    # 1. Defisit Kelembaban Termal (Potensi Pengeringan Serasah/Bahan Bakar Hutan Tropis)
+    # Pada RH < 65% dan Suhu > 28°C di Indonesia, serasah hutan dan kubah gambut mengering sangat cepat
+    vpd_proxy = (100.0 - rh) * (1.0 + max(0.0, t - 26.0) * 0.065)
+
+    # 2. Faktor Pengaruh Angin (Kecepatan di atas 2.0 m/s mempercepat penjalaran & suplai oksigen)
+    wind_factor = 1.0 + max(0.0, (wind_speed_ms - 2.0) * 0.12)
+
+    # 3. Faktor Kekeringan Tanah/Gambut (Soil moisture < 0.18 m3/m3 menandakan serasah sangat kering)
+    soil_factor = 1.0
+    if soil_moisture < 0.15:
+        soil_factor = 1.35  # Kering ekstrem
+    elif soil_moisture < 0.25:
+        soil_factor = 1.15  # Mulai kering
+    elif soil_moisture > 0.35:
+        soil_factor = 0.70  # Basah / lembab
+
+    # 4. Reduksi Curah Hujan
+    rain_suppression = 0.0 if rain_mm > 2.0 else (0.4 if rain_mm > 0.2 else 1.0)
+
+    raw_score = vpd_proxy * wind_factor * soil_factor * rain_suppression * 0.95
+    return max(0.0, min(100.0, round(raw_score, 1)))
 
 
-def calculate_cbi(temp_c: float, rh_pct: float) -> dict[str, Any]:
-    cbi = calculate_cbi_val(temp_c, rh_pct)
-    if cbi < 50:
+def calculate_cbi(
+    temp_c: float,
+    rh_pct: float,
+    wind_speed_ms: float = 2.5,
+    rain_mm: float = 0.0,
+    soil_moisture: float = 0.20,
+) -> dict[str, Any]:
+    cbi = calculate_cbi_val(temp_c, rh_pct, wind_speed_ms, rain_mm, soil_moisture)
+    if cbi < 30.0:
         level = "Rendah"
         color = "#22c55e"
-    elif cbi < 75:
+    elif cbi < 55.0:
         level = "Sedang"
         color = "#eab308"
-    elif cbi < 90:
+    elif cbi < 75.0:
         level = "Tinggi"
         color = "#f97316"
-    elif cbi < 97.5:
+    elif cbi < 90.0:
         level = "Sangat Tinggi"
         color = "#ef4444"
     else:
@@ -177,9 +216,9 @@ def calculate_cbi(temp_c: float, rh_pct: float) -> dict[str, Any]:
         color = "#7f1d1d"
 
     return {
-        "value": round(cbi, 2),
+        "value": cbi,
         "level": level,
-        "color": color
+        "color": color,
     }
 
 
@@ -214,10 +253,12 @@ async def _fetch_grid_data(parameter: str) -> dict[str, Any]:
 
     # Map our UI parameter names to Open-Meteo variables
     om_vars = "temperature_2m,relative_humidity_2m"
-    if parameter == "soil_moisture":
+    if parameter in ["soil_moisture", "fwi"]:
         om_vars += ",soil_moisture_0_to_10cm"
-    elif parameter == "precipitation":
+    if parameter in ["precipitation", "fwi"]:
         om_vars += ",precipitation"
+    if parameter == "fwi":
+        om_vars += ",wind_speed_10m"
 
     async with httpx.AsyncClient(timeout=settings.request_timeout_seconds) as client:
         response = await client.get(
@@ -255,7 +296,10 @@ async def _fetch_grid_data(parameter: str) -> dict[str, Any]:
             elif parameter == "fwi":
                 t = float(current.get("temperature_2m", 0.0) or 0.0)
                 rh = float(current.get("relative_humidity_2m", 0.0) or 0.0)
-                sample_values[pt] = calculate_cbi_val(t, rh)
+                wind = float(current.get("wind_speed_10m", 0.0) or 0.0)
+                precip = float(current.get("precipitation", 0.0) or 0.0)
+                sm = float(current.get("soil_moisture_0_to_10cm", 0.0) or 0.20)
+                sample_values[pt] = calculate_cbi_val(t, rh, wind, precip, sm)
             else:
                 sample_values[pt] = 0.0
 
@@ -318,10 +362,12 @@ async def get_spot_weather(
 
     temp = float(current_weather.get("temperature_2m", 0.0) or 0.0)
     rh = float(current_weather.get("relative_humidity_2m", 0.0) or 0.0)
-    cbi = calculate_cbi(temp, rh)
+    wind = float(current_weather.get("wind_speed_10m", 0.0) or 0.0)
+    precip = float(current_weather.get("precipitation", 0.0) or 0.0)
+    sm = float(current_weather.get("soil_moisture_0_to_10cm", 0.0) or 0.0)
+    cbi = calculate_cbi(temp, rh, wind, precip, sm)
 
     # Soil moisture status
-    sm = float(current_weather.get("soil_moisture_0_to_10cm", 0.0) or 0.0)
     if sm < 0.15:
         sm_status = "Kering (Ekstrem)"
         sm_color = "#ef4444"
