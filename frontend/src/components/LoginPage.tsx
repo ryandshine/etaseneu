@@ -85,6 +85,7 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
           token: data.token,
           username: data.username,
           role: data.role,
+          wilker_bps: data.wilker_bps ?? null,
           expiresAt: data.expires_at ?? null
         });
         return;
