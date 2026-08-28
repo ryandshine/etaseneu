@@ -15,6 +15,7 @@ from app.api.scheduler import router as scheduler_router
 from app.api.stats import router as stats_router
 from app.api.wind import router as wind_router
 from app.api.weather import router as weather_router
+from app.api.early_warning import router as early_warning_router
 
 
 # Gate baca opsional (flag API_REQUIRE_AUTH). Dipasang di router BACA saja.
@@ -39,6 +40,7 @@ router.include_router(metrics_router)
 router.include_router(wind_router, dependencies=_read_gate)
 router.include_router(weather_router, dependencies=_read_gate)
 router.include_router(burned_area_router, dependencies=_read_gate)
+router.include_router(early_warning_router, dependencies=_read_gate)
 api_router = router
 
 

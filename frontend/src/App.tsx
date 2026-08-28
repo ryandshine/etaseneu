@@ -35,6 +35,11 @@ const KompleksKebakaranView = lazy(async () => {
   return { default: module.KompleksKebakaranView };
 });
 
+const EarlyWarningView = lazy(async () => {
+  const module = await import("./components/EarlyWarningView");
+  return { default: module.EarlyWarningView };
+});
+
 const SettingsPanel = lazy(async () => {
   const module = await import("./components/SettingsPanel");
   return { default: module.SettingsPanel };
@@ -44,7 +49,7 @@ function isSchedulerFailureStatus(status?: string | null): boolean {
   return status === "failure" || status === "failed";
 }
 
-type AppView = "map" | "matrix" | "pointmatch" | "kompleks" | "settings" | "kps";
+type AppView = "map" | "matrix" | "pointmatch" | "kompleks" | "earlywarning" | "settings" | "kps";
 
 const PERSISTED_SESSION_KEY = "etaseneu.session.v1";
 
@@ -117,6 +122,9 @@ function readViewFromUrl(): AppView {
   }
   if (view === "kompleks") {
     return "kompleks";
+  }
+  if (view === "earlywarning") {
+    return "earlywarning";
   }
   if (view === "kps" && params.get("kps")) {
     return "kps";
@@ -884,6 +892,12 @@ export default function App() {
           <section aria-label="Kompleks Kebakaran workspace" className="workspace-stage workspace-stage--kompleks">
             <Suspense fallback={<ViewLoader label="Memuat kompleks kebakaran..." />}>
               <KompleksKebakaranView onOpenKpsDetail={openKpsDetail} layers={layers} />
+            </Suspense>
+          </section>
+        ) : activeView === "earlywarning" ? (
+          <section aria-label="Peringatan Dini workspace" className="workspace-stage workspace-stage--earlywarning">
+            <Suspense fallback={<ViewLoader label="Memuat peringatan dini..." />}>
+              <EarlyWarningView onOpenKpsDetail={openKpsDetail} />
             </Suspense>
           </section>
         ) : activeView === "kps" ? (
