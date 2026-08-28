@@ -27,6 +27,18 @@ export type BurnedAreaOverlay = {
   kps_count: number;
 };
 
+function normalizeWilker(val?: string | null): string {
+  if (!val) return "";
+  const clean = val.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (clean.includes("kutai") || clean.includes("kurtanegara")) return "kutaikartanegara";
+  return clean;
+}
+
+function matchWilker(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false;
+  return normalizeWilker(a) === normalizeWilker(b);
+}
+
 /**
  * Lapisan "kawasan terdampak kebakaran" untuk peta utama.
  *
@@ -36,17 +48,12 @@ export type BurnedAreaOverlay = {
  * bikin lapisan ini nyaris selalu kosong saat pengguna melihat rentang
  * beberapa hari terakhir. Default: sepanjang tahun berjalan.
  */
-export function useBurnedAreaOverlay(enabled: boolean, year?: number) {
+export function useBurnedAreaOverlay(enabled: boolean, year?: number, wilkerFilter?: string) {
   const [data, setData] = useState<BurnedAreaOverlay | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!enabled) {
-      return;
-    }
-    // Sekali diambil, disimpan -- mematikan lalu menyalakan lagi togglenya
-    // tidak perlu memanggil ulang server.
-    if (data) {
       return;
     }
 
@@ -57,7 +64,16 @@ export function useBurnedAreaOverlay(enabled: boolean, year?: number) {
       .then((response) => (response.ok ? response.json() : null))
       .then((payload: BurnedAreaOverlay | null) => {
         if (active && payload?.features) {
-          setData(payload);
+          const features = wilkerFilter
+            ? payload.features.filter((f) => matchWilker(f.properties.wilker_bps, wilkerFilter))
+            : payload.features;
+          const total_ha = features.reduce((sum, f) => sum + (f.properties.burned_area_ha || 0), 0);
+          setData({
+            type: "FeatureCollection",
+            features,
+            total_ha,
+            kps_count: features.length,
+          });
         }
       })
       .catch(() => {
@@ -72,7 +88,7 @@ export function useBurnedAreaOverlay(enabled: boolean, year?: number) {
     return () => {
       active = false;
     };
-  }, [enabled, year, data]);
+  }, [enabled, year, wilkerFilter]);
 
   return { data, loading };
 }

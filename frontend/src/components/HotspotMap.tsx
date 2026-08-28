@@ -69,6 +69,7 @@ type HotspotMapProps = {
   hotspots: HotspotRecord[];
   layers: LayerRecord[];
   selectedProvince?: string;
+  selectedWilker?: string;
   showWind?: boolean;
   weatherOverlay?: "temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null;
 };
@@ -381,7 +382,7 @@ const rainIcon = divIcon({
   iconAnchor: [16, 16]
 });
 
-export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weatherOverlay }: HotspotMapProps) {
+export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker, showWind, weatherOverlay }: HotspotMapProps) {
   const [rainyCoords, setRainyCoords] = useState<{ lat: number; lon: number; precipitation: number; label: string }[]>([]);
   const [showUserLocation, setShowUserLocation] = useState(false);
   const userLocation = useUserLocationWatch(showUserLocation);
@@ -392,7 +393,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, showWind, weath
   // togglenya (ikon api di sudut kiri atas kurang gampang ditemukan sendiri).
   // Tombolnya tetap ada untuk yang mau menyembunyikannya.
   const [showBurnedArea, setShowBurnedArea] = useState(true);
-  const burnedArea = useBurnedAreaOverlay(showBurnedArea);
+  const burnedArea = useBurnedAreaOverlay(showBurnedArea, undefined, selectedWilker);
 
   // Polygon bekas terbakar & titik hotspot BERBAGI satu Pane/renderer (lihat
   // JSX di bawah) supaya polygonnya bisa diklik sungguhan. Canvas renderer

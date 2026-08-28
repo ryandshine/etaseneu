@@ -26,6 +26,7 @@ async def get_hotspot_clusters(
     start_at: datetime | None = None,
     end_at: datetime | None = None,
     sensitivity: str = Query(default="sedang"),
+    wilker_bps: str | None = None,
     claims: TokenClaims | None = Depends(get_current_user_claims),
 ) -> dict[str, object]:
     preset = SENSITIVITY_PRESETS.get(sensitivity, SENSITIVITY_PRESETS["sedang"])
@@ -45,16 +46,26 @@ async def get_hotspot_clusters(
         location_eps_km=preset["location_eps_km"],
     )
 
-    if claims and claims.role == "bps" and claims.wilker_bps:
+    target_wilker = (claims.wilker_bps if claims and claims.role == "bps" else None) or wilker_bps
+    if target_wilker:
+        target_norm = "".join(ch.lower() for ch in target_wilker if ch.isalnum())
         filtered_clusters = [
             c for c in result.get("clusters", [])
-            if c.get("dominant_wilker") == claims.wilker_bps
-            or any(w.get("name") == claims.wilker_bps for w in c.get("affected_wilkers", []))
+            if (
+                target_norm in "".join(ch.lower() for ch in str(c.get("dominant_wilker") or "") if ch.isalnum())
+                or any(
+                    target_norm in "".join(ch.lower() for ch in str(w.get("name") or "") if ch.isalnum())
+                    for w in c.get("affected_wilkers", [])
+                )
+            )
         ]
+        cluster_ids = {c["cluster_id"] for c in filtered_clusters}
+        filtered_points = [p for p in result.get("points", []) if p.get("cluster_id") in cluster_ids]
         result = {
             **result,
             "count": len(filtered_clusters),
             "clusters": filtered_clusters,
+            "points": filtered_points,
         }
 
     return {

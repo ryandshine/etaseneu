@@ -734,6 +734,7 @@ export default function App() {
                 hotspots={visibleHotspots}
                 layers={layers}
                 selectedProvince={selectedProvince}
+                selectedWilker={effectiveWilker || selectedWilker}
                 showWind={showWind}
                 weatherOverlay={weatherOverlay}
               />
