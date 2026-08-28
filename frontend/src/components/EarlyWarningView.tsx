@@ -9,8 +9,7 @@ import {
   ChevronRight,
   TrendingUp,
   FileSpreadsheet,
-  Layers,
-  Sparkles
+  Ruler
 } from "lucide-react";
 import { authFetch, downloadWithAuth } from "../lib/api";
 
@@ -62,6 +61,9 @@ interface KpsItem {
   hotspots_today: number;
   hotspots_today_strict_reburn: number;
   hotspots_today_expanding: number;
+  min_distance_km: number | null;
+  max_distance_km: number | null;
+  avg_distance_km: number | null;
   hotspots_yesterday: number;
   hotspots_7d: number;
   hotspots_7d_strict_reburn: number;
@@ -89,7 +91,7 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
   const [search, setSearch] = useState("");
   const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedSkema, setSelectedSkema] = useState("");
-  const [sortBy, setSortBy] = useState<"ftri" | "hs_today" | "hs_strict" | "burned_ha" | "hs_7d">("ftri");
+  const [sortBy, setSortBy] = useState<"ftri" | "hs_today" | "hs_strict" | "distance" | "burned_ha" | "hs_7d">("ftri");
 
   // Fetch summary
   const loadSummary = async () => {
@@ -172,6 +174,7 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
       if (sortBy === "ftri") return b.ftri_score - a.ftri_score;
       if (sortBy === "hs_today") return b.hotspots_today - a.hotspots_today;
       if (sortBy === "hs_strict") return b.hotspots_today_strict_reburn - a.hotspots_today_strict_reburn;
+      if (sortBy === "distance") return (b.max_distance_km || 0) - (a.max_distance_km || 0);
       if (sortBy === "hs_7d") return b.hotspots_7d - a.hotspots_7d;
       if (sortBy === "burned_ha") return b.total_burned_ha - a.total_burned_ha;
       return 0;
@@ -202,7 +205,7 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
             Peringatan Dini & Rekapitulasi Kebakaran KPS
           </h1>
           <p style={{ fontSize: "0.85rem", color: "#9ca3af", marginTop: "0.3rem", margin: 0 }}>
-            Deteksi Spasial Presisi: Titik Tepat di Bekas Terbakar (Strict Re-burn) vs Perembetan Blok Baru
+            Deteksi Spasial Presisi: Titik Tepat di Bekas Terbakar (Strict Re-burn) & Jangkauan Jarak Perambatan (KM)
           </p>
         </div>
 
@@ -481,6 +484,7 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
         >
           <option value="ftri" style={{ backgroundColor: "#1e293b" }}>Urut: Skor FTRI Tertinggi</option>
           <option value="hs_today" style={{ backgroundColor: "#1e293b" }}>Urut: Hotspot Hari Ini (Total)</option>
+          <option value="distance" style={{ backgroundColor: "#1e293b" }}>Urut: Jarak Perambatan Terjauh (KM)</option>
           <option value="hs_strict" style={{ backgroundColor: "#1e293b" }}>Urut: Strict Re-burn (Bekas Terbakar)</option>
           <option value="hs_7d" style={{ backgroundColor: "#1e293b" }}>Urut: Hotspot 7 Hari</option>
           <option value="burned_ha" style={{ backgroundColor: "#1e293b" }}>Urut: Luas Terbakar (ha)</option>
@@ -501,15 +505,15 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
               <th style={{ padding: "0.75rem 0.8rem", width: "70px", textAlign: "center" }}>Skema</th>
               <th style={{ padding: "0.75rem 0.8rem" }}>Wilayah (Kab, Prov)</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "right" }}>Luas Terbakar (KLHK)</th>
-              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center", minWidth: "160px" }}>
-                Hotspot Hari Ini
-                <div style={{ fontSize: "0.68rem", fontWeight: "normal", color: "#6b7280" }}>[Total / Bekas / Baru]</div>
+              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center", minWidth: "170px" }}>
+                Hotspot Hari Ini & Jarak
+                <div style={{ fontSize: "0.68rem", fontWeight: "normal", color: "#6b7280" }}>[Total / Bekas / Jarak Baru (km)]</div>
               </th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS Kemarin</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS 7 Hari</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS Agt</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "right" }}>Skor FTRI</th>
-              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>Status & Tipe Kebakaran</th>
+              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>Status & Jangkauan Perambatan</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>Aksi</th>
             </tr>
           </thead>
@@ -528,133 +532,142 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
                 </td>
               </tr>
             ) : (
-              displayItems.map((item, idx) => (
-                <tr
-                  key={item.id}
-                  style={{
-                    borderBottom: "1px solid rgba(255,255,255,0.04)",
-                    backgroundColor: item.hotspots_today > 0 ? "rgba(239, 68, 68, 0.05)" : "transparent"
-                  }}
-                >
-                  <td style={{ padding: "0.65rem 0.8rem", textAlign: "center", color: "#6b7280" }}>{idx + 1}</td>
-                  <td style={{ padding: "0.65rem 0.8rem" }}>
-                    <div style={{ fontWeight: "600", color: "#ffffff" }}>{item.lembaga}</div>
-                    <div style={{ fontSize: "0.7rem", color: "#6b7280" }}>
-                      Desa: {item.nama_desa || "-"} | Kec: {item.nama_kec || "-"}
-                    </div>
-                  </td>
-                  <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
-                    <span style={{ padding: "0.15rem 0.45rem", borderRadius: "4px", backgroundColor: "rgba(255,255,255,0.08)", fontSize: "0.72rem", color: "#d1d5db" }}>
-                      {item.skema || "-"}
-                    </span>
-                  </td>
-                  <td style={{ padding: "0.65rem 0.8rem" }}>
-                    <div style={{ color: "#e5e7eb" }}>{item.nama_kab}</div>
-                    <div style={{ fontSize: "0.7rem", color: "#9ca3af" }}>{item.nama_prov}</div>
-                  </td>
-                  <td style={{ padding: "0.65rem 0.8rem", textAlign: "right", fontWeight: "600", color: item.total_burned_ha > 0 ? "#fca5a5" : "#9ca3af" }}>
-                    {item.total_burned_ha > 0 ? `${item.total_burned_ha.toLocaleString("id-ID", { minimumFractionDigits: 2 })} ha` : "-"}
-                  </td>
-                  <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
-                    {item.hotspots_today > 0 ? (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.25rem" }}>
-                        <span
-                          style={{
-                            padding: "0.15rem 0.55rem",
-                            borderRadius: "999px",
-                            fontWeight: "800",
-                            fontSize: "0.78rem",
-                            backgroundColor: "#ef4444",
-                            color: "#ffffff"
-                          }}
-                        >
-                          {item.hotspots_today} Hotspot
-                        </span>
-                        <div style={{ display: "flex", gap: "0.25rem", fontSize: "0.68rem" }}>
-                          {item.hotspots_today_strict_reburn > 0 ? (
-                            <span
-                              title={`${item.hotspots_today_strict_reburn} titik jatuh tepat di atas koordinat bekas luka bakar KLHK lama`}
-                              style={{ backgroundColor: "rgba(239,68,68,0.25)", color: "#fca5a5", padding: "0.1rem 0.35rem", borderRadius: "3px", fontWeight: "600" }}
-                            >
-                              🔥 {item.hotspots_today_strict_reburn} Bekas
-                            </span>
-                          ) : null}
-                          {item.hotspots_today_expanding > 0 ? (
-                            <span
-                              title={`${item.hotspots_today_expanding} titik berada di blok/koordinat baru di dalam izin KPS`}
-                              style={{ backgroundColor: "rgba(249,115,22,0.2)", color: "#fdba74", padding: "0.1rem 0.35rem", borderRadius: "3px", fontWeight: "600" }}
-                            >
-                              ⚡ {item.hotspots_today_expanding} Baru
-                            </span>
-                          ) : null}
-                        </div>
+              displayItems.map((item, idx) => {
+                const hasDist = item.min_distance_km !== null;
+                const distLabel = hasDist
+                  ? item.min_distance_km === item.max_distance_km
+                    ? `${item.min_distance_km} km`
+                    : `${item.min_distance_km} - ${item.max_distance_km} km`
+                  : null;
+
+                return (
+                  <tr
+                    key={item.id}
+                    style={{
+                      borderBottom: "1px solid rgba(255,255,255,0.04)",
+                      backgroundColor: item.hotspots_today > 0 ? "rgba(239, 68, 68, 0.05)" : "transparent"
+                    }}
+                  >
+                    <td style={{ padding: "0.65rem 0.8rem", textAlign: "center", color: "#6b7280" }}>{idx + 1}</td>
+                    <td style={{ padding: "0.65rem 0.8rem" }}>
+                      <div style={{ fontWeight: "600", color: "#ffffff" }}>{item.lembaga}</div>
+                      <div style={{ fontSize: "0.7rem", color: "#6b7280" }}>
+                        Desa: {item.nama_desa || "-"} | Kec: {item.nama_kec || "-"}
                       </div>
-                    ) : (
-                      <span style={{ color: "#6b7280", fontSize: "0.75rem" }}>0</span>
-                    )}
-                  </td>
-                  <td style={{ padding: "0.65rem 0.8rem", textAlign: "center", color: item.hotspots_yesterday > 0 ? "#f97316" : "#6b7280" }}>
-                    {item.hotspots_yesterday}
-                  </td>
-                  <td style={{ padding: "0.65rem 0.8rem", textAlign: "center", color: item.hotspots_7d > 0 ? "#fbbf24" : "#6b7280" }}>
-                    {item.hotspots_7d}
-                  </td>
-                  <td style={{ padding: "0.65rem 0.8rem", textAlign: "center", color: item.hotspots_month > 0 ? "#e5e7eb" : "#6b7280" }}>
-                    {item.hotspots_month}
-                  </td>
-                  <td style={{ padding: "0.65rem 0.8rem", textAlign: "right", fontWeight: "700", color: item.ftri_score >= 60 ? "#ef4444" : item.ftri_score >= 40 ? "#f97316" : "#22c55e" }}>
-                    {item.ftri_score.toFixed(1)}
-                  </td>
-                  <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
-                    <span
-                      style={{
-                        padding: "0.2rem 0.55rem",
-                        borderRadius: "4px",
-                        fontSize: "0.7rem",
-                        fontWeight: "600",
-                        backgroundColor: item.status_label.includes("🔴")
-                          ? "rgba(239,68,68,0.15)"
-                          : item.status_label.includes("⚠️") || item.status_label.includes("🟠")
-                          ? "rgba(249,115,22,0.15)"
-                          : item.status_label.includes("🟡")
-                          ? "rgba(245,158,11,0.15)"
-                          : "rgba(34,197,94,0.15)",
-                        color: item.status_label.includes("🔴")
-                          ? "#ef4444"
-                          : item.status_label.includes("⚠️") || item.status_label.includes("🟠")
-                          ? "#f97316"
-                          : item.status_label.includes("🟡")
-                          ? "#f59e0b"
-                          : "#22c55e"
-                      }}
-                    >
-                      {item.status_label}
-                    </span>
-                  </td>
-                  <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
-                    {onOpenKpsDetail ? (
-                      <button
-                        type="button"
-                        onClick={() => onOpenKpsDetail(item.lembaga)}
+                    </td>
+                    <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
+                      <span style={{ padding: "0.15rem 0.45rem", borderRadius: "4px", backgroundColor: "rgba(255,255,255,0.08)", fontSize: "0.72rem", color: "#d1d5db" }}>
+                        {item.skema || "-"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "0.65rem 0.8rem" }}>
+                      <div style={{ color: "#e5e7eb" }}>{item.nama_kab}</div>
+                      <div style={{ fontSize: "0.7rem", color: "#9ca3af" }}>{item.nama_prov}</div>
+                    </td>
+                    <td style={{ padding: "0.65rem 0.8rem", textAlign: "right", fontWeight: "600", color: item.total_burned_ha > 0 ? "#fca5a5" : "#9ca3af" }}>
+                      {item.total_burned_ha > 0 ? `${item.total_burned_ha.toLocaleString("id-ID", { minimumFractionDigits: 2 })} ha` : "-"}
+                    </td>
+                    <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
+                      {item.hotspots_today > 0 ? (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.25rem" }}>
+                          <span
+                            style={{
+                              padding: "0.15rem 0.55rem",
+                              borderRadius: "999px",
+                              fontWeight: "800",
+                              fontSize: "0.78rem",
+                              backgroundColor: "#ef4444",
+                              color: "#ffffff"
+                            }}
+                          >
+                            {item.hotspots_today} Hotspot
+                          </span>
+                          <div style={{ display: "flex", gap: "0.25rem", fontSize: "0.68rem", flexWrap: "wrap", justifyContent: "center" }}>
+                            {item.hotspots_today_strict_reburn > 0 ? (
+                              <span
+                                title={`${item.hotspots_today_strict_reburn} titik jatuh tepat di atas koordinat bekas luka bakar KLHK lama`}
+                                style={{ backgroundColor: "rgba(239,68,68,0.25)", color: "#fca5a5", padding: "0.1rem 0.35rem", borderRadius: "3px", fontWeight: "600" }}
+                              >
+                                🔥 {item.hotspots_today_strict_reburn} Bekas
+                              </span>
+                            ) : null}
+                            {item.hotspots_today_expanding > 0 ? (
+                              <span
+                                title={`${item.hotspots_today_expanding} titik berada di blok baru dengan jarak ${distLabel || ''} dari luka bakar lama`}
+                                style={{ backgroundColor: "rgba(249,115,22,0.2)", color: "#fdba74", padding: "0.1rem 0.35rem", borderRadius: "3px", fontWeight: "600" }}
+                              >
+                                ⚡ {item.hotspots_today_expanding} Baru {distLabel ? `(${distLabel})` : ""}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : (
+                        <span style={{ color: "#6b7280", fontSize: "0.75rem" }}>0</span>
+                      )}
+                    </td>
+                    <td style={{ padding: "0.65rem 0.8rem", textAlign: "center", color: item.hotspots_yesterday > 0 ? "#f97316" : "#6b7280" }}>
+                      {item.hotspots_yesterday}
+                    </td>
+                    <td style={{ padding: "0.65rem 0.8rem", textAlign: "center", color: item.hotspots_7d > 0 ? "#fbbf24" : "#6b7280" }}>
+                      {item.hotspots_7d}
+                    </td>
+                    <td style={{ padding: "0.65rem 0.8rem", textAlign: "center", color: item.hotspots_month > 0 ? "#e5e7eb" : "#6b7280" }}>
+                      {item.hotspots_month}
+                    </td>
+                    <td style={{ padding: "0.65rem 0.8rem", textAlign: "right", fontWeight: "700", color: item.ftri_score >= 60 ? "#ef4444" : item.ftri_score >= 40 ? "#f97316" : "#22c55e" }}>
+                      {item.ftri_score.toFixed(1)}
+                    </td>
+                    <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
+                      <span
                         style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.2rem",
-                          backgroundColor: "rgba(255,255,255,0.08)",
-                          color: "#60a5fa",
-                          border: "none",
+                          padding: "0.2rem 0.55rem",
                           borderRadius: "4px",
-                          padding: "0.3rem 0.55rem",
-                          fontSize: "0.72rem",
-                          cursor: "pointer"
+                          fontSize: "0.7rem",
+                          fontWeight: "600",
+                          backgroundColor: item.status_label.includes("🔴")
+                            ? "rgba(239,68,68,0.15)"
+                            : item.status_label.includes("⚠️") || item.status_label.includes("🟠")
+                            ? "rgba(249,115,22,0.15)"
+                            : item.status_label.includes("🟡")
+                            ? "rgba(245,158,11,0.15)"
+                            : "rgba(34,197,94,0.15)",
+                          color: item.status_label.includes("🔴")
+                            ? "#ef4444"
+                            : item.status_label.includes("⚠️") || item.status_label.includes("🟠")
+                            ? "#f97316"
+                            : item.status_label.includes("🟡")
+                            ? "#f59e0b"
+                            : "#22c55e"
                         }}
                       >
-                        Detail <ChevronRight size={12} />
-                      </button>
-                    ) : null}
-                  </td>
-                </tr>
-              ))
+                        {item.status_label}
+                      </span>
+                    </td>
+                    <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
+                      {onOpenKpsDetail ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenKpsDetail(item.lembaga)}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.2rem",
+                            backgroundColor: "rgba(255,255,255,0.08)",
+                            color: "#60a5fa",
+                            border: "none",
+                            borderRadius: "4px",
+                            padding: "0.3rem 0.55rem",
+                            fontSize: "0.72rem",
+                            cursor: "pointer"
+                          }}
+                        >
+                          Detail <ChevronRight size={12} />
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

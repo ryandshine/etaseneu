@@ -24,7 +24,6 @@ def compute_ftri_score(
     h_today_strict_reburn: int = 0,
 ) -> float:
     """Hitung Skor FTRI (Fire Threat & Recurrence Index) 0 - 100."""
-    # Strict reburn diberi pembobotan urgensi lebih tinggi karena menunjukkan bara aktif
     h_now = (h_today * 10) + (h_today_strict_reburn * 5) + (h_yesterday * 3) + (h_7d * 0.5)
     urgency_score = min(50.0, 10.0 * math.log1p(h_now))
     
@@ -50,7 +49,6 @@ class EarlyWarningService:
         """Ambil metrik agregat makro status kebakaran KPS."""
         with self.store.connection() as conn:
             with conn.cursor() as cur:
-                # 1. Metrik KPS ber-luas terbakar dengan pemecahan strict re-burn vs expansion
                 cur.execute(
                     """
                     WITH polygon_burned AS (
@@ -99,7 +97,6 @@ class EarlyWarningService:
                 )
                 burned_stats = cur.fetchone() or {}
 
-                # 2. Metrik Early Warning (Hotspot 2026 tanpa luas terbakar)
                 cur.execute(
                     """
                     WITH ew_polygons AS (
@@ -170,7 +167,7 @@ class EarlyWarningService:
         search: str | None = None,
         limit: int = 1500,
     ) -> list[dict[str, Any]]:
-        """Ambil daftar KPS berdasarkan kategori analisis & pemecahan strict re-burn vs expansion."""
+        """Ambil daftar KPS dengan jarak perambatan (dalam KM) dari bekas luka bakar."""
         with self.store.connection() as conn:
             with conn.cursor() as cur:
                 is_burned_filter = category in [
@@ -203,6 +200,33 @@ class EarlyWarningService:
                                   AND b.burned_geom IS NOT NULL
                                   AND ST_Contains(b.burned_geom, h.geom)
                             ) as h_today_strict_reburn,
+                            MIN(
+                                CASE 
+                                    WHEN h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')
+                                         AND b.burned_geom IS NOT NULL
+                                         AND NOT ST_Contains(b.burned_geom, h.geom)
+                                    THEN ST_Distance(h.geom::geography, b.burned_geom::geography) / 1000.0
+                                    ELSE NULL
+                                END
+                            ) as min_distance_km_today,
+                            MAX(
+                                CASE 
+                                    WHEN h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')
+                                         AND b.burned_geom IS NOT NULL
+                                         AND NOT ST_Contains(b.burned_geom, h.geom)
+                                    THEN ST_Distance(h.geom::geography, b.burned_geom::geography) / 1000.0
+                                    ELSE NULL
+                                END
+                            ) as max_distance_km_today,
+                            AVG(
+                                CASE 
+                                    WHEN h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')
+                                         AND b.burned_geom IS NOT NULL
+                                         AND NOT ST_Contains(b.burned_geom, h.geom)
+                                    THEN ST_Distance(h.geom::geography, b.burned_geom::geography) / 1000.0
+                                    ELSE NULL
+                                END
+                            ) as avg_distance_km_today,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta' - INTERVAL '1 day') AND h.detected_at < DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')) as h_yesterday,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta' - INTERVAL '7 days')) as h_7d,
                             COUNT(h.id) FILTER (
@@ -234,6 +258,9 @@ class EarlyWarningService:
                         b.latest_burned_month,
                         COALESCE(h.h_today, 0) as h_today,
                         COALESCE(h.h_today_strict_reburn, 0) as h_today_strict_reburn,
+                        h.min_distance_km_today,
+                        h.max_distance_km_today,
+                        h.avg_distance_km_today,
                         COALESCE(h.h_yesterday, 0) as h_yesterday,
                         COALESCE(h.h_7d, 0) as h_7d,
                         COALESCE(h.h_7d_strict_reburn, 0) as h_7d_strict_reburn,
@@ -310,6 +337,10 @@ class EarlyWarningService:
             h_7d_strict = r["h_7d_strict_reburn"]
             h_7d_expand = max(0, h_7d - h_7d_strict)
 
+            min_dist = round(float(r["min_distance_km_today"]), 2) if r["min_distance_km_today"] is not None else None
+            max_dist = round(float(r["max_distance_km_today"]), 2) if r["max_distance_km_today"] is not None else None
+            avg_dist = round(float(r["avg_distance_km_today"]), 2) if r["avg_distance_km_today"] is not None else None
+
             ftri = compute_ftri_score(
                 h_today=h_today,
                 h_yesterday=r["h_yesterday"],
@@ -322,15 +353,16 @@ class EarlyWarningService:
                 h_today_strict_reburn=h_strict,
             )
 
-            # Label status & detail re-burn
+            # Label status & detail perambatan
             if r["total_burned_ha"] > 0:
                 if h_today > 0:
+                    dist_text = f" ({min_dist}-{max_dist} km)" if min_dist is not None and max_dist is not None and max_dist > min_dist else f" ({min_dist} km)" if min_dist is not None else ""
                     if h_strict > 0 and h_expand > 0:
-                        status_badge = f"🔴 Bara Bekas ({h_strict}) & Blok Baru ({h_expand})"
+                        status_badge = f"🔴 Bara Bekas ({h_strict}) & Blok Baru ({h_expand}{dist_text})"
                     elif h_strict > 0:
                         status_badge = f"🔴 Strict Re-burn ({h_strict} di Bekas Terbakar)"
                     else:
-                        status_badge = f"🔴 Perembetan ({h_expand} di Blok Baru)"
+                        status_badge = f"🔴 Perembetan ({h_expand} di Blok Baru{dist_text})"
                 elif r["h_yesterday"] > 0:
                     status_badge = "⚠️ Reda Kemarin"
                 elif h_7d > 0:
@@ -365,6 +397,9 @@ class EarlyWarningService:
                 "hotspots_today": h_today,
                 "hotspots_today_strict_reburn": h_strict,
                 "hotspots_today_expanding": h_expand,
+                "min_distance_km": min_dist,
+                "max_distance_km": max_dist,
+                "avg_distance_km": avg_dist,
                 "hotspots_yesterday": r["h_yesterday"],
                 "hotspots_7d": h_7d,
                 "hotspots_7d_strict_reburn": h_7d_strict,
@@ -411,8 +446,9 @@ class EarlyWarningService:
             "No", "ID", "Nama KPS / Lembaga", "Skema", "Desa", "Kecamatan", "Kabupaten", "Provinsi",
             "Luas SK (ha)", "Luas Terbakar KLHK (ha)", "Frekuensi Terbakar",
             "Hotspot Hari Ini (Total)", "Tepat di Bekas Terbakar (Strict Re-burn)", "Perembetan Blok Baru",
+            "Jarak Perambatan Min (KM)", "Jarak Perambatan Max (KM)", "Jarak Perambatan Rerata (KM)",
             "Hotspot Kemarin", "Hotspot 7 Hari", "Hotspot Bulan Ini", "Total Hotspot 2026",
-            "Deteksi Terakhir", "Skor FTRI", "Status Kondisi"
+            "Deteksi Terakhir", "Skor FTRI", "Status & Rincian Perambatan"
         ]
 
         for col_idx, h in enumerate(headers, 1):
@@ -428,6 +464,7 @@ class EarlyWarningService:
                 row_idx - 4, r["id"], r["lembaga"], r["skema"], r["nama_desa"] or "-", r["nama_kec"] or "-",
                 r["nama_kab"] or "-", r["nama_prov"] or "-", r["luas_sk"], r["total_burned_ha"], r["burn_frequency"],
                 r["hotspots_today"], r["hotspots_today_strict_reburn"], r["hotspots_today_expanding"],
+                r["min_distance_km"], r["max_distance_km"], r["avg_distance_km"],
                 r["hotspots_yesterday"], r["hotspots_7d"], r["hotspots_month"], r["hotspots_year"],
                 dt_str, r["ftri_score"], r["status_label"]
             ]
@@ -436,17 +473,17 @@ class EarlyWarningService:
                 cell.font = font_regular
                 cell.border = border_thin
                 if r["hotspots_today"] > 0:
-                    if col_idx in [1, 12, 13, 14, 20, 21]:
+                    if col_idx in [1, 12, 13, 14, 23, 24]:
                         cell.fill = fill_red_light
                 elif r["hotspots_yesterday"] > 0:
-                    if col_idx in [1, 15, 20, 21]:
+                    if col_idx in [1, 18, 23, 24]:
                         cell.fill = fill_orange_light
 
-                if col_idx in [1, 2, 4, 11, 19, 21]:
+                if col_idx in [1, 2, 4, 11, 22, 24]:
                     cell.alignment = align_center
-                elif col_idx in [9, 10, 12, 13, 14, 15, 16, 17, 18, 20]:
+                elif col_idx in [9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23]:
                     cell.alignment = align_right
-                    if col_idx in [9, 10, 20]:
+                    if col_idx in [9, 10, 15, 16, 17, 23]:
                         cell.number_format = "#,##0.00"
                     else:
                         cell.number_format = "#,##0"
