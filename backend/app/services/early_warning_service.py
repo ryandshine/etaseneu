@@ -167,7 +167,7 @@ class EarlyWarningService:
         search: str | None = None,
         limit: int = 1500,
     ) -> list[dict[str, Any]]:
-        """Ambil daftar KPS dengan klasifikasi zona perambatan ilmiah."""
+        """Ambil daftar KPS dengan jarak dan arah kompas perambatan ilmiah."""
         with self.store.connection() as conn:
             with conn.cursor() as cur:
                 is_burned_filter = category in [
@@ -227,6 +227,15 @@ class EarlyWarningService:
                                     ELSE NULL
                                 END
                             ) as avg_distance_km_today,
+                            AVG(
+                                CASE 
+                                    WHEN h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')
+                                         AND b.burned_geom IS NOT NULL
+                                         AND NOT ST_Contains(b.burned_geom, h.geom)
+                                    THEN degrees(ST_Azimuth(ST_Centroid(b.burned_geom), h.geom))
+                                    ELSE NULL
+                                END
+                            ) as avg_fire_azimuth_today,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta' - INTERVAL '1 day') AND h.detected_at < DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')) as h_yesterday,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta' - INTERVAL '7 days')) as h_7d,
                             COUNT(h.id) FILTER (
@@ -261,6 +270,7 @@ class EarlyWarningService:
                         h.min_distance_km_today,
                         h.max_distance_km_today,
                         h.avg_distance_km_today,
+                        h.avg_fire_azimuth_today,
                         COALESCE(h.h_yesterday, 0) as h_yesterday,
                         COALESCE(h.h_7d, 0) as h_7d,
                         COALESCE(h.h_7d_strict_reburn, 0) as h_7d_strict_reburn,
@@ -327,6 +337,17 @@ class EarlyWarningService:
                 cur.execute(base_query + where_sql + order_sql, params)
                 rows = cur.fetchall()
 
+        dirs_map = [
+            "Utara (U)",
+            "Timur Laut (TL)",
+            "Timur (T)",
+            "Tenggara (TG)",
+            "Selatan (S)",
+            "Barat Daya (BD)",
+            "Barat (B)",
+            "Barat Laut (BL)",
+        ]
+
         results = []
         for r in rows:
             h_today = r["h_today"]
@@ -340,6 +361,11 @@ class EarlyWarningService:
             min_dist = round(float(r["min_distance_km_today"]), 2) if r["min_distance_km_today"] is not None else None
             max_dist = round(float(r["max_distance_km_today"]), 2) if r["max_distance_km_today"] is not None else None
             avg_dist = round(float(r["avg_distance_km_today"]), 2) if r["avg_distance_km_today"] is not None else None
+
+            # Arah kompas perambatan
+            az = float(r["avg_fire_azimuth_today"]) if r["avg_fire_azimuth_today"] is not None else None
+            fire_direction = dirs_map[int((az + 22.5) / 45) % 8] if az is not None else None
+            az_deg = round(az, 1) if az is not None else None
 
             # Klasifikasi Zona Ilmiah
             if r["total_burned_ha"] > 0:
@@ -382,16 +408,17 @@ class EarlyWarningService:
             if r["total_burned_ha"] > 0:
                 if h_today > 0:
                     dist_text = f" ({min_dist}-{max_dist} km)" if min_dist is not None and max_dist is not None and max_dist > min_dist else f" ({min_dist} km)" if min_dist is not None else ""
+                    dir_text = f" ke {fire_direction}" if fire_direction else ""
                     if h_strict > 0 and h_expand > 0:
-                        status_badge = f"🔴 Bara Bekas ({h_strict}) & Blok Baru ({h_expand}{dist_text})"
+                        status_badge = f"🔴 Bara Bekas ({h_strict}) & Blok Baru ({h_expand}{dist_text}{dir_text})"
                     elif h_strict > 0:
                         status_badge = f"🔴 Strict Re-burn ({h_strict} di Bekas Terbakar)"
                     elif zone_code == "zone1":
-                        status_badge = f"🔴 Zona 1: Merambat Langsung ({h_expand} Baru{dist_text})"
+                        status_badge = f"🔴 Zona 1: Merambat Langsung ({h_expand} Baru{dist_text}{dir_text})"
                     elif zone_code == "zone2":
-                        status_badge = f"🟠 Zona 2: Loncatan Bara ({h_expand} Baru{dist_text})"
+                        status_badge = f"🟠 Zona 2: Loncatan Bara ({h_expand} Baru{dist_text}{dir_text})"
                     else:
-                        status_badge = f"🟡 Zona 3: Titik Bakar Mandiri ({h_expand} Baru{dist_text})"
+                        status_badge = f"🟡 Zona 3: Titik Bakar Mandiri ({h_expand} Baru{dist_text}{dir_text})"
                 elif r["h_yesterday"] > 0:
                     status_badge = "⚠️ Reda Kemarin"
                 elif h_7d > 0:
@@ -429,6 +456,8 @@ class EarlyWarningService:
                 "min_distance_km": min_dist,
                 "max_distance_km": max_dist,
                 "avg_distance_km": avg_dist,
+                "fire_direction": fire_direction,
+                "fire_azimuth_deg": az_deg,
                 "propagation_zone": propagation_zone,
                 "zone_code": zone_code,
                 "hotspots_yesterday": r["h_yesterday"],
@@ -479,6 +508,7 @@ class EarlyWarningService:
             "Luas SK (ha)", "Luas Terbakar KLHK (ha)", "Frekuensi Terbakar",
             "Hotspot Hari Ini (Total)", "Tepat di Bekas Terbakar (Strict Re-burn)", "Perembetan Blok Baru",
             "Jarak Perambatan Min (KM)", "Jarak Perambatan Max (KM)", "Jarak Perambatan Rerata (KM)",
+            "Arah Perambatan Kompas", "Sudut Azimuth (°)",
             "Klasifikasi Zona Ilmiah",
             "Hotspot Kemarin", "Hotspot 7 Hari", "Hotspot Bulan Ini", "Total Hotspot 2026",
             "Deteksi Terakhir", "Skor FTRI", "Status & Rincian Mekanisme"
@@ -498,6 +528,7 @@ class EarlyWarningService:
                 r["nama_kab"] or "-", r["nama_prov"] or "-", r["luas_sk"], r["total_burned_ha"], r["burn_frequency"],
                 r["hotspots_today"], r["hotspots_today_strict_reburn"], r["hotspots_today_expanding"],
                 r["min_distance_km"], r["max_distance_km"], r["avg_distance_km"],
+                r["fire_direction"] or "-", r["fire_azimuth_deg"] or "-",
                 r["propagation_zone"],
                 r["hotspots_yesterday"], r["hotspots_7d"], r["hotspots_month"], r["hotspots_year"],
                 dt_str, r["ftri_score"], r["status_label"]
@@ -507,7 +538,7 @@ class EarlyWarningService:
                 cell.font = font_regular
                 cell.border = border_thin
                 if r["hotspots_today"] > 0:
-                    if col_idx in [1, 12, 13, 14, 18, 24, 25]:
+                    if col_idx in [1, 12, 13, 14, 20, 26, 27]:
                         if r["zone_code"] == "zone1" or r["zone_code"] == "strict" or r["zone_code"] == "combo":
                             cell.fill = fill_red_light
                         elif r["zone_code"] == "zone2":
@@ -515,14 +546,14 @@ class EarlyWarningService:
                         else:
                             cell.fill = fill_yellow_light
                 elif r["hotspots_yesterday"] > 0:
-                    if col_idx in [1, 19, 24, 25]:
+                    if col_idx in [1, 21, 26, 27]:
                         cell.fill = fill_orange_light
 
-                if col_idx in [1, 2, 4, 11, 18, 23, 25]:
+                if col_idx in [1, 2, 4, 11, 18, 20, 25, 27]:
                     cell.alignment = align_center
-                elif col_idx in [9, 10, 12, 13, 14, 15, 16, 17, 19, 20, 21, 22, 24]:
+                elif col_idx in [9, 10, 12, 13, 14, 15, 16, 17, 19, 21, 22, 23, 24, 26]:
                     cell.alignment = align_right
-                    if col_idx in [9, 10, 15, 16, 17, 24]:
+                    if col_idx in [9, 10, 15, 16, 17, 19, 26]:
                         cell.number_format = "#,##0.00"
                     else:
                         cell.number_format = "#,##0"

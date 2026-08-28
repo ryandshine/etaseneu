@@ -9,7 +9,9 @@ import {
   ChevronRight,
   TrendingUp,
   FileSpreadsheet,
-  Info
+  Info,
+  Compass,
+  Wind
 } from "lucide-react";
 import { authFetch, downloadWithAuth } from "../lib/api";
 
@@ -64,6 +66,8 @@ interface KpsItem {
   min_distance_km: number | null;
   max_distance_km: number | null;
   avg_distance_km: number | null;
+  fire_direction: string | null;
+  fire_azimuth_deg: number | null;
   propagation_zone: string;
   zone_code: string;
   hotspots_yesterday: number;
@@ -212,7 +216,7 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
             Peringatan Dini & Rekapitulasi Kebakaran KPS
           </h1>
           <p style={{ fontSize: "0.85rem", color: "#9ca3af", marginTop: "0.3rem", margin: 0 }}>
-            Deteksi Spasial Presisi: Titik Tepat di Bekas Terbakar (Strict Re-burn) & Klasifikasi Zona Perambatan Ilmiah
+            Deteksi Spasial: Titik Tepat di Bekas Terbakar (Strict Re-burn), Jarak (KM), dan Arah Kompas Perambatan
           </p>
         </div>
 
@@ -266,10 +270,13 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
       </div>
 
       {/* Scientific Guide Banner */}
-      <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", backgroundColor: "rgba(30, 41, 59, 0.6)", border: "1px solid rgba(255,255,255,0.08)", padding: "0.6rem 0.85rem", borderRadius: "6px", marginBottom: "1.2rem", fontSize: "0.75rem", color: "#cbd5e1" }}>
-        <Info size={16} color="#38bdf8" style={{ flexShrink: 0 }} />
+      <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", backgroundColor: "rgba(30, 41, 59, 0.6)", border: "1px solid rgba(255,255,255,0.08)", padding: "0.6rem 0.85rem", borderRadius: "6px", marginBottom: "1.2rem", fontSize: "0.75rem", color: "#cbd5e1", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+          <Wind size={15} color="#38bdf8" />
+          <strong>Pedoman Zona & Arah Perambatan:</strong>
+        </div>
         <span>
-          <strong>Pedoman Zona Perambatan:</strong> <span style={{ color: "#ef4444", fontWeight: "600" }}>🔴 Zona 1 (&le;1.0 km)</span> = Merambat Langsung | <span style={{ color: "#f97316", fontWeight: "600" }}>🟠 Zona 2 (1.0 - 3.0 km)</span> = Loncatan Bara / Spotting | <span style={{ color: "#eab308", fontWeight: "600" }}>🟡 Zona 3 (&gt;3.0 km)</span> = Titik Bakar Mandiri (Pembukaan Blok Baru).
+          <span style={{ color: "#ef4444", fontWeight: "600" }}>🔴 Zona 1 (&le;1.0 km)</span> = Merambat Langsung | <span style={{ color: "#f97316", fontWeight: "600" }}>🟠 Zona 2 (1.0 - 3.0 km)</span> = Loncatan Bara | <span style={{ color: "#eab308", fontWeight: "600" }}>🟡 Zona 3 (&gt;3.0 km)</span> = Titik Bakar Mandiri.
         </span>
       </div>
 
@@ -544,9 +551,9 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
               <th style={{ padding: "0.75rem 0.8rem", width: "70px", textAlign: "center" }}>Skema</th>
               <th style={{ padding: "0.75rem 0.8rem" }}>Wilayah (Kab, Prov)</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "right" }}>Luas Terbakar (KLHK)</th>
-              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center", minWidth: "170px" }}>
-                Hotspot Hari Ini & Jarak
-                <div style={{ fontSize: "0.68rem", fontWeight: "normal", color: "#6b7280" }}>[Total / Bekas / Jarak Baru (km)]</div>
+              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center", minWidth: "180px" }}>
+                Hotspot Hari Ini, Jarak & Arah
+                <div style={{ fontSize: "0.68rem", fontWeight: "normal", color: "#6b7280" }}>[Total / Bekas / Jarak (km) & Arah]</div>
               </th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS Kemarin</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS 7 Hari</th>
@@ -578,6 +585,8 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
                     ? `${item.min_distance_km} km`
                     : `${item.min_distance_km} - ${item.max_distance_km} km`
                   : null;
+
+                const dirShort = item.fire_direction ? item.fire_direction.split(" ")[0] : null;
 
                 return (
                   <tr
@@ -632,16 +641,19 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
                             ) : null}
                             {item.hotspots_today_expanding > 0 ? (
                               <span
-                                title={`${item.hotspots_today_expanding} titik berada di blok baru dengan jarak ${distLabel || ''} dari luka bakar lama`}
+                                title={`${item.hotspots_today_expanding} titik berada di blok baru dengan jarak ${distLabel || ''} arah ${item.fire_direction || '-'}`}
                                 style={{
                                   backgroundColor: item.zone_code === "zone1" ? "rgba(239,68,68,0.25)" : item.zone_code === "zone2" ? "rgba(249,115,22,0.2)" : "rgba(234,179,8,0.2)",
                                   color: item.zone_code === "zone1" ? "#fca5a5" : item.zone_code === "zone2" ? "#fdba74" : "#fef08a",
                                   padding: "0.1rem 0.35rem",
                                   borderRadius: "3px",
-                                  fontWeight: "600"
+                                  fontWeight: "600",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.2rem"
                                 }}
                               >
-                                ⚡ {item.hotspots_today_expanding} Baru {distLabel ? `(${distLabel})` : ""}
+                                ⚡ {item.hotspots_today_expanding} Baru {distLabel ? `(${distLabel}${dirShort ? ` ke ${dirShort}` : ''})` : ""}
                               </span>
                             ) : null}
                           </div>
