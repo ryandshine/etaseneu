@@ -549,6 +549,29 @@ body {
   overscroll-behavior-y: contain;
 }
 
+.workspace-stage--pointmatch {
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1rem;
+  background: transparent;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+.workspace-stage--settings {
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: transparent;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
 /* Peta di dalamnya butuh tinggi tetap (Leaflet), jadi TIDAK dibiarkan ikut
    scroll satu halaman seperti --matrix/--kps -- panel daftar di kanan yang
    punya scroll internal sendiri (lihat .kompleks-list-scroll), sama seperti

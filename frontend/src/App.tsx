@@ -867,7 +867,7 @@ export default function App() {
             </Suspense>
           </section>
         ) : activeView === "pointmatch" ? (
-          <section aria-label="Cek titik ke KPS workspace" className="workspace-stage">
+          <section aria-label="Cek titik ke KPS workspace" className="workspace-stage workspace-stage--pointmatch">
             <Suspense fallback={<ViewLoader label="Memuat alat cek titik..." />}>
               <PointMatchView />
             </Suspense>
@@ -893,7 +893,7 @@ export default function App() {
             </Suspense>
           </section>
         ) : (
-          <section aria-label="Settings workspace" className="workspace-stage">
+          <section aria-label="Settings workspace" className="workspace-stage workspace-stage--settings">
             <Suspense fallback={<ViewLoader label="Memuat pengaturan..." />}>
               <SettingsPanel
                 onRefreshLayers={() => void retryInitialLoad()}
