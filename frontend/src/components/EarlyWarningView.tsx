@@ -6,11 +6,11 @@ import {
   Download,
   Search,
   RefreshCw,
-  ExternalLink,
   ChevronRight,
-  MapPin,
   TrendingUp,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Layers,
+  Sparkles
 } from "lucide-react";
 import { authFetch, downloadWithAuth } from "../lib/api";
 
@@ -26,6 +26,9 @@ interface SummaryMetrics {
     total_polygons: number;
     total_burned_ha: number;
     active_today: number;
+    strict_reburn_kps_today: number;
+    strict_reburn_hotspots_today: number;
+    expanding_hotspots_today: number;
     clear_today: number;
     active_yesterday: number;
     active_7d: number;
@@ -57,8 +60,12 @@ interface KpsItem {
   burn_frequency: number;
   latest_burned_month: string | null;
   hotspots_today: number;
+  hotspots_today_strict_reburn: number;
+  hotspots_today_expanding: number;
   hotspots_yesterday: number;
   hotspots_7d: number;
+  hotspots_7d_strict_reburn: number;
+  hotspots_7d_expanding: number;
   hotspots_month: number;
   hotspots_year: number;
   latest_hotspot_at: string | null;
@@ -76,26 +83,24 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
   const [items, setItems] = useState<KpsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingItems, setLoadingItems] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
   // Filters
   const [search, setSearch] = useState("");
   const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedSkema, setSelectedSkema] = useState("");
-  const [sortBy, setSortBy] = useState<"ftri" | "hs_today" | "burned_ha" | "hs_7d">("ftri");
+  const [sortBy, setSortBy] = useState<"ftri" | "hs_today" | "hs_strict" | "burned_ha" | "hs_7d">("ftri");
 
   // Fetch summary
   const loadSummary = async () => {
     try {
       setLoading(true);
-      setError(null);
       const res = await authFetch("/api/early-warning/summary");
       if (!res.ok) throw new Error("Gagal memuat ringkasan data");
       const data: SummaryMetrics = await res.json();
       setSummary(data);
     } catch (err: any) {
-      setError(err.message || "Terjadi kesalahan saat memuat data");
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -166,6 +171,7 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
     result.sort((a, b) => {
       if (sortBy === "ftri") return b.ftri_score - a.ftri_score;
       if (sortBy === "hs_today") return b.hotspots_today - a.hotspots_today;
+      if (sortBy === "hs_strict") return b.hotspots_today_strict_reburn - a.hotspots_today_strict_reburn;
       if (sortBy === "hs_7d") return b.hotspots_7d - a.hotspots_7d;
       if (sortBy === "burned_ha") return b.total_burned_ha - a.total_burned_ha;
       return 0;
@@ -196,7 +202,7 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
             Peringatan Dini & Rekapitulasi Kebakaran KPS
           </h1>
           <p style={{ fontSize: "0.85rem", color: "#9ca3af", marginTop: "0.3rem", margin: 0 }}>
-            Integrasi Spasial Rekap Luas Bekas Terbakar KLHK & Pemantauan Titik Panas NASA FIRMS Real-Time
+            Deteksi Spasial Presisi: Titik Tepat di Bekas Terbakar (Strict Re-burn) vs Perembetan Blok Baru
           </p>
         </div>
 
@@ -252,7 +258,7 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
       {/* KPI Cards */}
       {summary && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.85rem", marginBottom: "1.5rem" }}>
-          {/* Card 1: Re-burn active today */}
+          {/* Card 1: Re-burn active today with strict breakdown */}
           <div
             onClick={() => setCategory("burned_active_today")}
             style={{
@@ -273,8 +279,13 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
             <div style={{ fontSize: "1.85rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
               {summary.burned_area_stats.active_today} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
             </div>
-            <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "0.5rem" }}>
-              KPS ber-luas terbakar yang masih terdeteksi titik api aktif
+            <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.6rem", flexWrap: "wrap", fontSize: "0.7rem" }}>
+              <span style={{ backgroundColor: "rgba(239,68,68,0.25)", color: "#fca5a5", padding: "0.15rem 0.4rem", borderRadius: "4px" }}>
+                🔥 {summary.burned_area_stats.strict_reburn_hotspots_today} di Bekas Terbakar
+              </span>
+              <span style={{ backgroundColor: "rgba(249,115,22,0.2)", color: "#fdba74", padding: "0.15rem 0.4rem", borderRadius: "4px" }}>
+                ⚡ {summary.burned_area_stats.expanding_hotspots_today} di Blok Baru
+              </span>
             </div>
           </div>
 
@@ -469,7 +480,8 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
           }}
         >
           <option value="ftri" style={{ backgroundColor: "#1e293b" }}>Urut: Skor FTRI Tertinggi</option>
-          <option value="hs_today" style={{ backgroundColor: "#1e293b" }}>Urut: Hotspot Hari Ini</option>
+          <option value="hs_today" style={{ backgroundColor: "#1e293b" }}>Urut: Hotspot Hari Ini (Total)</option>
+          <option value="hs_strict" style={{ backgroundColor: "#1e293b" }}>Urut: Strict Re-burn (Bekas Terbakar)</option>
           <option value="hs_7d" style={{ backgroundColor: "#1e293b" }}>Urut: Hotspot 7 Hari</option>
           <option value="burned_ha" style={{ backgroundColor: "#1e293b" }}>Urut: Luas Terbakar (ha)</option>
         </select>
@@ -486,15 +498,18 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
             <tr style={{ backgroundColor: "rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.12)", color: "#9ca3af" }}>
               <th style={{ padding: "0.75rem 0.8rem", width: "45px", textAlign: "center" }}>No</th>
               <th style={{ padding: "0.75rem 0.8rem" }}>Nama KPS / Lembaga</th>
-              <th style={{ padding: "0.75rem 0.8rem", width: "80px", textAlign: "center" }}>Skema</th>
+              <th style={{ padding: "0.75rem 0.8rem", width: "70px", textAlign: "center" }}>Skema</th>
               <th style={{ padding: "0.75rem 0.8rem" }}>Wilayah (Kab, Prov)</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "right" }}>Luas Terbakar (KLHK)</th>
-              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS Hari Ini</th>
+              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center", minWidth: "160px" }}>
+                Hotspot Hari Ini
+                <div style={{ fontSize: "0.68rem", fontWeight: "normal", color: "#6b7280" }}>[Total / Bekas / Baru]</div>
+              </th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS Kemarin</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS 7 Hari</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS Agt</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "right" }}>Skor FTRI</th>
-              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>Status</th>
+              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>Status & Tipe Kebakaran</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>Aksi</th>
             </tr>
           </thead>
@@ -541,18 +556,42 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
                     {item.total_burned_ha > 0 ? `${item.total_burned_ha.toLocaleString("id-ID", { minimumFractionDigits: 2 })} ha` : "-"}
                   </td>
                   <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
-                    <span
-                      style={{
-                        padding: "0.15rem 0.5rem",
-                        borderRadius: "999px",
-                        fontWeight: "700",
-                        fontSize: "0.75rem",
-                        backgroundColor: item.hotspots_today > 0 ? "#ef4444" : "rgba(255,255,255,0.05)",
-                        color: item.hotspots_today > 0 ? "#ffffff" : "#6b7280"
-                      }}
-                    >
-                      {item.hotspots_today}
-                    </span>
+                    {item.hotspots_today > 0 ? (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.25rem" }}>
+                        <span
+                          style={{
+                            padding: "0.15rem 0.55rem",
+                            borderRadius: "999px",
+                            fontWeight: "800",
+                            fontSize: "0.78rem",
+                            backgroundColor: "#ef4444",
+                            color: "#ffffff"
+                          }}
+                        >
+                          {item.hotspots_today} Hotspot
+                        </span>
+                        <div style={{ display: "flex", gap: "0.25rem", fontSize: "0.68rem" }}>
+                          {item.hotspots_today_strict_reburn > 0 ? (
+                            <span
+                              title={`${item.hotspots_today_strict_reburn} titik jatuh tepat di atas koordinat bekas luka bakar KLHK lama`}
+                              style={{ backgroundColor: "rgba(239,68,68,0.25)", color: "#fca5a5", padding: "0.1rem 0.35rem", borderRadius: "3px", fontWeight: "600" }}
+                            >
+                              🔥 {item.hotspots_today_strict_reburn} Bekas
+                            </span>
+                          ) : null}
+                          {item.hotspots_today_expanding > 0 ? (
+                            <span
+                              title={`${item.hotspots_today_expanding} titik berada di blok/koordinat baru di dalam izin KPS`}
+                              style={{ backgroundColor: "rgba(249,115,22,0.2)", color: "#fdba74", padding: "0.1rem 0.35rem", borderRadius: "3px", fontWeight: "600" }}
+                            >
+                              ⚡ {item.hotspots_today_expanding} Baru
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : (
+                      <span style={{ color: "#6b7280", fontSize: "0.75rem" }}>0</span>
+                    )}
                   </td>
                   <td style={{ padding: "0.65rem 0.8rem", textAlign: "center", color: item.hotspots_yesterday > 0 ? "#f97316" : "#6b7280" }}>
                     {item.hotspots_yesterday}

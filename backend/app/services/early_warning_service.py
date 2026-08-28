@@ -21,9 +21,11 @@ def compute_ftri_score(
     total_burned_ha: float,
     burn_frequency: int,
     luas_sk: float | None,
+    h_today_strict_reburn: int = 0,
 ) -> float:
     """Hitung Skor FTRI (Fire Threat & Recurrence Index) 0 - 100."""
-    h_now = (h_today * 10) + (h_yesterday * 3) + (h_7d * 0.5)
+    # Strict reburn diberi pembobotan urgensi lebih tinggi karena menunjukkan bara aktif
+    h_now = (h_today * 10) + (h_today_strict_reburn * 5) + (h_yesterday * 3) + (h_7d * 0.5)
     urgency_score = min(50.0, 10.0 * math.log1p(h_now))
     
     severity_score = min(30.0, (5.0 * math.log1p(total_burned_ha)) + (burn_frequency * 2.0))
@@ -48,13 +50,14 @@ class EarlyWarningService:
         """Ambil metrik agregat makro status kebakaran KPS."""
         with self.store.connection() as conn:
             with conn.cursor() as cur:
-                # 1. Metrik KPS ber-luas terbakar
+                # 1. Metrik KPS ber-luas terbakar dengan pemecahan strict re-burn vs expansion
                 cur.execute(
                     """
                     WITH polygon_burned AS (
                         SELECT 
                             polygon_metadata_id,
-                            SUM(burned_area_ha) as total_burned_ha
+                            SUM(burned_area_ha) as total_burned_ha,
+                            ST_Union(geometry) FILTER (WHERE geometry IS NOT NULL) as burned_geom
                         FROM burned_area_summary
                         WHERE burned_area_ha > 0
                         GROUP BY polygon_metadata_id
@@ -63,10 +66,16 @@ class EarlyWarningService:
                         SELECT 
                             p.id as polygon_id,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')) as h_today,
+                            COUNT(h.id) FILTER (
+                                WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')
+                                  AND b.burned_geom IS NOT NULL
+                                  AND ST_Contains(b.burned_geom, h.geom)
+                            ) as h_today_strict_reburn,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta' - INTERVAL '1 day') AND h.detected_at < DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')) as h_yesterday,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta' - INTERVAL '7 days')) as h_7d,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Jakarta')) as h_month
                         FROM polygon_metadata p
+                        JOIN polygon_burned b ON p.id = b.polygon_metadata_id
                         JOIN hotspot_observations h ON ST_Contains(p.geometry, h.geom)
                         WHERE p.is_active = TRUE
                         GROUP BY p.id
@@ -75,6 +84,9 @@ class EarlyWarningService:
                         COUNT(b.polygon_metadata_id) as total_burned_polygons,
                         COALESCE(SUM(b.total_burned_ha), 0) as total_burned_ha,
                         COUNT(*) FILTER (WHERE COALESCE(h.h_today, 0) > 0) as burned_active_today,
+                        COUNT(*) FILTER (WHERE COALESCE(h.h_today_strict_reburn, 0) > 0) as burned_strict_reburn_kps_today,
+                        COALESCE(SUM(h.h_today_strict_reburn), 0) as total_strict_reburn_hotspots_today,
+                        COALESCE(SUM(h.h_today - h.h_today_strict_reburn), 0) as total_expanding_hotspots_today,
                         COUNT(*) FILTER (WHERE COALESCE(h.h_today, 0) = 0) as burned_clear_today,
                         COUNT(*) FILTER (WHERE COALESCE(h.h_today, 0) = 0 AND COALESCE(h.h_yesterday, 0) > 0) as burned_active_yesterday,
                         COUNT(*) FILTER (WHERE COALESCE(h.h_today, 0) = 0 AND COALESCE(h.h_yesterday, 0) = 0 AND COALESCE(h.h_7d, 0) > 0) as burned_active_7d,
@@ -129,6 +141,9 @@ class EarlyWarningService:
                 "total_polygons": int(burned_stats.get("total_burned_polygons") or 0),
                 "total_burned_ha": float(burned_stats.get("total_burned_ha") or 0.0),
                 "active_today": int(burned_stats.get("burned_active_today") or 0),
+                "strict_reburn_kps_today": int(burned_stats.get("burned_strict_reburn_kps_today") or 0),
+                "strict_reburn_hotspots_today": int(burned_stats.get("total_strict_reburn_hotspots_today") or 0),
+                "expanding_hotspots_today": int(burned_stats.get("total_expanding_hotspots_today") or 0),
                 "clear_today": int(burned_stats.get("burned_clear_today") or 0),
                 "active_yesterday": int(burned_stats.get("burned_active_yesterday") or 0),
                 "active_7d": int(burned_stats.get("burned_active_7d") or 0),
@@ -155,7 +170,7 @@ class EarlyWarningService:
         search: str | None = None,
         limit: int = 1500,
     ) -> list[dict[str, Any]]:
-        """Ambil daftar KPS berdasarkan kategori analisis & filter."""
+        """Ambil daftar KPS berdasarkan kategori analisis & pemecahan strict re-burn vs expansion."""
         with self.store.connection() as conn:
             with conn.cursor() as cur:
                 is_burned_filter = category in [
@@ -173,7 +188,8 @@ class EarlyWarningService:
                             polygon_metadata_id,
                             SUM(burned_area_ha) as total_burned_ha,
                             COUNT(DISTINCT (year, month)) as burn_frequency,
-                            MAX(make_date(year, month, 1)) as latest_burned_month
+                            MAX(make_date(year, month, 1)) as latest_burned_month,
+                            ST_Union(geometry) FILTER (WHERE geometry IS NOT NULL) as burned_geom
                         FROM burned_area_summary
                         WHERE burned_area_ha > 0
                         GROUP BY polygon_metadata_id
@@ -182,12 +198,23 @@ class EarlyWarningService:
                         SELECT 
                             p.id as polygon_id,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')) as h_today,
+                            COUNT(h.id) FILTER (
+                                WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')
+                                  AND b.burned_geom IS NOT NULL
+                                  AND ST_Contains(b.burned_geom, h.geom)
+                            ) as h_today_strict_reburn,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta' - INTERVAL '1 day') AND h.detected_at < DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')) as h_yesterday,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta' - INTERVAL '7 days')) as h_7d,
+                            COUNT(h.id) FILTER (
+                                WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta' - INTERVAL '7 days')
+                                  AND b.burned_geom IS NOT NULL
+                                  AND ST_Contains(b.burned_geom, h.geom)
+                            ) as h_7d_strict_reburn,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Jakarta')) as h_month,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('year', NOW() AT TIME ZONE 'Asia/Jakarta')) as h_year,
                             MAX(h.detected_at) as latest_hotspot_at
                         FROM polygon_metadata p
+                        LEFT JOIN polygon_burned b ON p.id = b.polygon_metadata_id
                         JOIN hotspot_observations h ON ST_Contains(p.geometry, h.geom)
                         WHERE p.is_active = TRUE
                         GROUP BY p.id
@@ -206,8 +233,10 @@ class EarlyWarningService:
                         COALESCE(b.burn_frequency, 0) as burn_frequency,
                         b.latest_burned_month,
                         COALESCE(h.h_today, 0) as h_today,
+                        COALESCE(h.h_today_strict_reburn, 0) as h_today_strict_reburn,
                         COALESCE(h.h_yesterday, 0) as h_yesterday,
                         COALESCE(h.h_7d, 0) as h_7d,
+                        COALESCE(h.h_7d_strict_reburn, 0) as h_7d_strict_reburn,
                         COALESCE(h.h_month, 0) as h_month,
                         COALESCE(h.h_year, 0) as h_year,
                         h.latest_hotspot_at
@@ -273,35 +302,49 @@ class EarlyWarningService:
 
         results = []
         for r in rows:
+            h_today = r["h_today"]
+            h_strict = r["h_today_strict_reburn"]
+            h_expand = max(0, h_today - h_strict)
+            
+            h_7d = r["h_7d"]
+            h_7d_strict = r["h_7d_strict_reburn"]
+            h_7d_expand = max(0, h_7d - h_7d_strict)
+
             ftri = compute_ftri_score(
-                h_today=r["h_today"],
+                h_today=h_today,
                 h_yesterday=r["h_yesterday"],
-                h_7d=r["h_7d"],
+                h_7d=h_7d,
                 h_aug=r["h_month"],
                 h_total_2026=r["h_year"],
                 total_burned_ha=float(r["total_burned_ha"] or 0),
                 burn_frequency=r["burn_frequency"],
                 luas_sk=float(r["luas_sk"]) if r["luas_sk"] else None,
+                h_today_strict_reburn=h_strict,
             )
 
-            # Label status
+            # Label status & detail re-burn
             if r["total_burned_ha"] > 0:
-                if r["h_today"] > 0:
-                    status_badge = "🔴 Aktif Hari Ini (Re-burn)"
+                if h_today > 0:
+                    if h_strict > 0 and h_expand > 0:
+                        status_badge = f"🔴 Bara Bekas ({h_strict}) & Blok Baru ({h_expand})"
+                    elif h_strict > 0:
+                        status_badge = f"🔴 Strict Re-burn ({h_strict} di Bekas Terbakar)"
+                    else:
+                        status_badge = f"🔴 Perembetan ({h_expand} di Blok Baru)"
                 elif r["h_yesterday"] > 0:
                     status_badge = "⚠️ Reda Kemarin"
-                elif r["h_7d"] > 0:
+                elif h_7d > 0:
                     status_badge = "🟡 Reda 7 Hari"
                 elif r["h_month"] > 0:
                     status_badge = "⚪ Reda di Awal Bulan"
                 else:
                     status_badge = "🟢 Padam / 0 Hotspot"
             else:
-                if r["h_today"] > 0:
+                if h_today > 0:
                     status_badge = "🔴 P1: Titik Baru Hari Ini"
                 elif r["h_yesterday"] > 0:
                     status_badge = "🟠 P2: Titik Baru Kemarin"
-                elif r["h_7d"] > 0:
+                elif h_7d > 0:
                     status_badge = "🟡 P3: Titik Baru 7 Hari"
                 else:
                     status_badge = "🟢 Terpantau Jan-Juli"
@@ -319,9 +362,13 @@ class EarlyWarningService:
                 "total_burned_ha": float(r["total_burned_ha"] or 0),
                 "burn_frequency": r["burn_frequency"],
                 "latest_burned_month": r["latest_burned_month"].strftime("%B %Y") if r["latest_burned_month"] else None,
-                "hotspots_today": r["h_today"],
+                "hotspots_today": h_today,
+                "hotspots_today_strict_reburn": h_strict,
+                "hotspots_today_expanding": h_expand,
                 "hotspots_yesterday": r["h_yesterday"],
-                "hotspots_7d": r["h_7d"],
+                "hotspots_7d": h_7d,
+                "hotspots_7d_strict_reburn": h_7d_strict,
+                "hotspots_7d_expanding": h_7d_expand,
                 "hotspots_month": r["h_month"],
                 "hotspots_year": r["h_year"],
                 "latest_hotspot_at": r["latest_hotspot_at"].isoformat() if r["latest_hotspot_at"] else None,
@@ -363,8 +410,9 @@ class EarlyWarningService:
         headers = [
             "No", "ID", "Nama KPS / Lembaga", "Skema", "Desa", "Kecamatan", "Kabupaten", "Provinsi",
             "Luas SK (ha)", "Luas Terbakar KLHK (ha)", "Frekuensi Terbakar",
-            "Hotspot Hari Ini", "Hotspot Kemarin", "Hotspot 7 Hari", "Hotspot Bulan Ini", "Total Hotspot 2026",
-            "Deteksi Terakhir", "Skor FTRI", "Status"
+            "Hotspot Hari Ini (Total)", "Tepat di Bekas Terbakar (Strict Re-burn)", "Perembetan Blok Baru",
+            "Hotspot Kemarin", "Hotspot 7 Hari", "Hotspot Bulan Ini", "Total Hotspot 2026",
+            "Deteksi Terakhir", "Skor FTRI", "Status Kondisi"
         ]
 
         for col_idx, h in enumerate(headers, 1):
@@ -379,7 +427,8 @@ class EarlyWarningService:
             row_values = [
                 row_idx - 4, r["id"], r["lembaga"], r["skema"], r["nama_desa"] or "-", r["nama_kec"] or "-",
                 r["nama_kab"] or "-", r["nama_prov"] or "-", r["luas_sk"], r["total_burned_ha"], r["burn_frequency"],
-                r["hotspots_today"], r["hotspots_yesterday"], r["hotspots_7d"], r["hotspots_month"], r["hotspots_year"],
+                r["hotspots_today"], r["hotspots_today_strict_reburn"], r["hotspots_today_expanding"],
+                r["hotspots_yesterday"], r["hotspots_7d"], r["hotspots_month"], r["hotspots_year"],
                 dt_str, r["ftri_score"], r["status_label"]
             ]
             for col_idx, val in enumerate(row_values, 1):
@@ -387,17 +436,17 @@ class EarlyWarningService:
                 cell.font = font_regular
                 cell.border = border_thin
                 if r["hotspots_today"] > 0:
-                    if col_idx in [1, 12, 18, 19]:
+                    if col_idx in [1, 12, 13, 14, 20, 21]:
                         cell.fill = fill_red_light
                 elif r["hotspots_yesterday"] > 0:
-                    if col_idx in [1, 13, 18, 19]:
+                    if col_idx in [1, 15, 20, 21]:
                         cell.fill = fill_orange_light
 
-                if col_idx in [1, 2, 4, 11, 17, 19]:
+                if col_idx in [1, 2, 4, 11, 19, 21]:
                     cell.alignment = align_center
-                elif col_idx in [9, 10, 12, 13, 14, 15, 16, 18]:
+                elif col_idx in [9, 10, 12, 13, 14, 15, 16, 17, 18, 20]:
                     cell.alignment = align_right
-                    if col_idx in [9, 10, 18]:
+                    if col_idx in [9, 10, 20]:
                         cell.number_format = "#,##0.00"
                     else:
                         cell.number_format = "#,##0"
