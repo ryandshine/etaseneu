@@ -97,6 +97,18 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
 - `nasa_client.py` — wrapper httpx async ke NASA FIRMS CSV API. Sengaja LOG error mentah (bukan
   re-raise ke client) karena URL FIRMS menyertakan `MAP_KEY` rahasia di path-nya.
 - `burned_area_service.py` — jalur GEE/MODIS/VIIRS **lama, sudah tidak dipakai** (lihat bahaya #2).
+- `burned_area_s2_service.py` — **analisis MANDIRI** bekas terbakar dari Sentinel-2 L2A dNBR via GEE,
+  supaya tidak perlu menunggu rekap KLHK. On-demand admin (`POST /api/burned-area/analyze-s2`, job
+  thread latar, poll `/analyze-s2/status`), tidak ada scheduler. Menyasar SEMUA poligon aktif
+  (`psagustus2026` + `HUTAN_ADAT_APR26`), hotspot = penanda keyakinan bukan filter. Formula
+  divalidasi: `dNBR = median(NBR pre) − median(NBR post)` (BUKAN max/min — ekstrem + ambang longgar
+  menghasilkan ~20× KLHK), mask `dNBR≥0.40 AND dNDVI≥0.15 AND NDVI_pre≥0.30 AND MNDWI<−0.05 AND
+  nobs≥2`, lalu `connectedPixelCount≥25` (~1 ha @ 20 m). Diproses per-provinsi (1 komposit raster per
+  bbox provinsi + `reduceRegions` batched). Hasil disimpan di tabel **TERPISAH `s2_burned_area`**
+  (mixin `postgres_store/_s2_burned_area.py`), TIDAK dicampur ke `burned_area_summary` — angkanya
+  estimasi belum terverifikasi. Lapisan peta "Estimasi Sentinel-2" (oranye putus-putus) di
+  `HotspotMap.tsx` + kartu admin di `SettingsPanel.tsx`. Butuh env `GEE_SERVICE_ACCOUNT_EMAIL` /
+  `GEE_SERVICE_ACCOUNT_KEY_PATH` / `GEE_PROJECT_ID` (kalau kosong → endpoint balas 503).
 - `hotspot_cluster_service.py` — menu "Kompleks Kebakaran": mengelompokkan titik hotspot yang
   berdekatan ruang (~2km) DAN waktu (~48 jam) sekaligus jadi satu "kompleks" (ST-DBSCAN), dipanggil
   dari `GET /api/hotspots/clusters` (preset `sensitivity` ketat/sedang/longgar, bukan eps/min_samples
