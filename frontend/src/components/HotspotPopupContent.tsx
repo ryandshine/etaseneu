@@ -208,7 +208,7 @@ export function HotspotWeatherPopup({ lat, lon }: { lat: number; lon: number }) 
           </strong>
         </div>
         <div style={{ gridColumn: "span 2" }}>
-          <span style={{ color: "#94a3b8" }}>Bahaya Api (CBI): </span>
+          <span style={{ color: "#94a3b8" }}>Bahaya Api (FDRS): </span>
           <strong style={{ color: data.current.fire_danger.color }}>
             {data.current.fire_danger.level} ({data.current.fire_danger.value})
           </strong>

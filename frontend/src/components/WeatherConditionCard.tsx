@@ -93,7 +93,7 @@ export function WeatherConditionCard({ lat, lon }: { lat: number; lon: number })
     <section className="matrix-detail-card">
       <div className="matrix-detail-card__head">
         <span>Kondisi Cuaca & Kualitas Udara</span>
-        <strong style={{ color: data.current.fire_danger.color }}>CBI: {data.current.fire_danger.level}</strong>
+        <strong style={{ color: data.current.fire_danger.color }}>Bahaya Api (FDRS): {data.current.fire_danger.level}</strong>
       </div>
       <div className="matrix-detail-grid matrix-detail-grid--two">
         <div className="matrix-detail-item">

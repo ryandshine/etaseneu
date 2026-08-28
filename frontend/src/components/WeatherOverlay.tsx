@@ -52,10 +52,10 @@ function getSoilMoistureColor(val: number): string {
 }
 
 function getFWIColor(val: number): string {
-  if (val < 50) return "#22c55e"; // Rendah
-  if (val < 75) return "#eab308"; // Sedang
-  if (val < 90) return "#f97316"; // Tinggi
-  if (val < 97.5) return "#ef4444"; // Sangat Tinggi
+  if (val < 30) return "#22c55e"; // Rendah (Aman)
+  if (val < 55) return "#eab308"; // Sedang
+  if (val < 75) return "#f97316"; // Tinggi
+  if (val < 90) return "#ef4444"; // Sangat Tinggi
   return "#7f1d1d"; // Ekstrem
 }
 
@@ -87,7 +87,7 @@ function getLabel(parameter: string, val: number): string {
     case "soil_moisture":
       return `${(val * 100).toFixed(1)}% m³/m³`;
     case "fwi":
-      return `${val.toFixed(1)} (CBI)`;
+      return `${val.toFixed(1)} (FDRS)`;
     default:
       return `${val}`;
   }
