@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMap } from 'react-leaflet';
 import L, { type Layer } from 'leaflet';
+import { authFetch } from '../lib/api';
 
 type WindLayerProps = {
   visible: boolean;
@@ -24,10 +25,12 @@ export function WindLayer({ visible }: WindLayerProps) {
 
   const fetchWindData = async () => {
     try {
-      const response = await fetch('/api/wind');
-      const data = (await response.json()) as unknown[];
-      if (Array.isArray(data)) {
-        setWindData(data);
+      const response = await authFetch('/api/wind');
+      if (response.ok) {
+        const data = (await response.json()) as unknown[];
+        if (Array.isArray(data)) {
+          setWindData(data);
+        }
       }
     } catch {
       // ignore, layer will simply keep existing data or clear on cleanup
