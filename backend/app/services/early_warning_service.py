@@ -45,12 +45,16 @@ class EarlyWarningService:
     def __init__(self, store: PostgresStore | None = None):
         self.store = store or PostgresStore(get_settings().database_url)
 
-    def get_summary_metrics(self) -> dict[str, Any]:
-        """Ambil metrik agregat makro status kebakaran KPS."""
+    def get_summary_metrics(self, wilker_bps: str | None = None) -> dict[str, Any]:
+        """Ambil metrik agregat makro status kebakaran KPS (bisa difilter per wilker_bps)."""
         with self.store.connection() as conn:
             with conn.cursor() as cur:
+                wilker_clause = " AND p.wilker_bps = %s" if wilker_bps else ""
+                wilker_params = [wilker_bps] if wilker_bps else []
+
+                # 1. Metrik KPS ber-luas terbakar
                 cur.execute(
-                    """
+                    f"""
                     WITH polygon_burned AS (
                         SELECT 
                             polygon_metadata_id,
@@ -75,7 +79,7 @@ class EarlyWarningService:
                         FROM polygon_metadata p
                         JOIN polygon_burned b ON p.id = b.polygon_metadata_id
                         JOIN hotspot_observations h ON ST_Contains(p.geometry, h.geom)
-                        WHERE p.is_active = TRUE
+                        WHERE p.is_active = TRUE {wilker_clause}
                         GROUP BY p.id
                     )
                     SELECT 
@@ -92,13 +96,15 @@ class EarlyWarningService:
                     FROM polygon_metadata p
                     JOIN polygon_burned b ON p.id = b.polygon_metadata_id
                     LEFT JOIN polygon_hotspots h ON p.id = h.polygon_id
-                    WHERE p.is_active = TRUE
-                    """
+                    WHERE p.is_active = TRUE {wilker_clause}
+                    """,
+                    wilker_params + wilker_params if wilker_bps else []
                 )
                 burned_stats = cur.fetchone() or {}
 
+                # 2. Metrik Early Warning
                 cur.execute(
-                    """
+                    f"""
                     WITH ew_polygons AS (
                         SELECT 
                             p.id,
@@ -115,7 +121,7 @@ class EarlyWarningService:
                             WHERE year = EXTRACT(YEAR FROM NOW()) AND burned_area_ha > 0
                             GROUP BY polygon_metadata_id
                         ) b ON p.id = b.polygon_metadata_id
-                        WHERE p.is_active = TRUE
+                        WHERE p.is_active = TRUE {wilker_clause}
                           AND b.polygon_metadata_id IS NULL
                           AND h.detected_at >= DATE_TRUNC('year', NOW() AT TIME ZONE 'Asia/Jakarta')
                         GROUP BY p.id
@@ -129,7 +135,8 @@ class EarlyWarningService:
                         COALESCE(SUM(h_month), 0) as ew_month_hotspots,
                         COALESCE(SUM(h_total), 0) as ew_year_hotspots
                     FROM ew_polygons
-                    """
+                    """,
+                    wilker_params if wilker_bps else []
                 )
                 ew_stats = cur.fetchone() or {}
 
@@ -155,6 +162,7 @@ class EarlyWarningService:
                 "month_hotspots": int(ew_stats.get("ew_month_hotspots") or 0),
                 "year_hotspots": int(ew_stats.get("ew_year_hotspots") or 0),
             },
+            "wilker_bps": wilker_bps,
             "updated_at": datetime.now().isoformat(),
         }
 
@@ -164,10 +172,11 @@ class EarlyWarningService:
         category: str = "burned_active_today",
         province: str | None = None,
         skema: str | None = None,
+        wilker_bps: str | None = None,
         search: str | None = None,
         limit: int = 1500,
     ) -> list[dict[str, Any]]:
-        """Ambil daftar KPS dengan jarak dan arah kompas perambatan ilmiah."""
+        """Ambil daftar KPS dengan filter provinsi, skema, dan wilker_bps."""
         with self.store.connection() as conn:
             with conn.cursor() as cur:
                 is_burned_filter = category in [
@@ -259,6 +268,7 @@ class EarlyWarningService:
                         p.nama_kec,
                         p.nama_kab,
                         p.nama_prov,
+                        p.wilker_bps,
                         p.skema,
                         p.luas_sk,
                         p.no_sk,
@@ -308,6 +318,9 @@ class EarlyWarningService:
                     elif category == "early_warning_7d":
                         clauses.append("COALESCE(h.h_today, 0) = 0 AND COALESCE(h.h_yesterday, 0) = 0 AND COALESCE(h.h_7d, 0) > 0")
 
+                if wilker_bps:
+                    clauses.append("p.wilker_bps = %s")
+                    params.append(wilker_bps)
                 if province:
                     clauses.append("p.nama_prov = %s")
                     params.append(province)
@@ -444,6 +457,7 @@ class EarlyWarningService:
                 "nama_kec": r["nama_kec"],
                 "nama_kab": r["nama_kab"],
                 "nama_prov": r["nama_prov"],
+                "wilker_bps": r["wilker_bps"],
                 "skema": r["skema"],
                 "luas_sk": float(r["luas_sk"]) if r["luas_sk"] else None,
                 "no_sk": r["no_sk"],
@@ -472,7 +486,7 @@ class EarlyWarningService:
             })
         return results
 
-    def build_excel_export(self, category: str = "all") -> bytes:
+    def build_excel_export(self, category: str = "all", wilker_bps: str | None = None) -> bytes:
         """Bangun file Excel ekspor terstruktur langsung dari memori."""
         wb = openpyxl.Workbook()
         font_title = Font(name="Calibri", size=15, bold=True, color="1B365D")
@@ -500,11 +514,12 @@ class EarlyWarningService:
 
         ws["A1"] = "REKAPITULASI ANALISIS KEBAKARAN & PERINGATAN DINI KPS"
         ws["A1"].font = font_title
-        ws["A2"] = f"Dihasilkan pada: {datetime.now().strftime('%d %B %Y %H:%M WIB')} | Kategori: {category.upper()}"
+        wilker_str = f" | Balai PS: {wilker_bps}" if wilker_bps else ""
+        ws["A2"] = f"Dihasilkan pada: {datetime.now().strftime('%d %B %Y %H:%M WIB')} | Kategori: {category.upper()}{wilker_str}"
         ws["A2"].font = font_subtitle
 
         headers = [
-            "No", "ID", "Nama KPS / Lembaga", "Skema", "Desa", "Kecamatan", "Kabupaten", "Provinsi",
+            "No", "ID", "Nama KPS / Lembaga", "Balai PS", "Skema", "Desa", "Kecamatan", "Kabupaten", "Provinsi",
             "Luas SK (ha)", "Luas Terbakar KLHK (ha)", "Frekuensi Terbakar",
             "Hotspot Hari Ini (Total)", "Tepat di Bekas Terbakar (Strict Re-burn)", "Perembetan Blok Baru",
             "Jarak Perambatan Min (KM)", "Jarak Perambatan Max (KM)", "Jarak Perambatan Rerata (KM)",
@@ -520,11 +535,11 @@ class EarlyWarningService:
             cell.fill = fill_header
             cell.alignment = align_center
 
-        items = self.get_kps_analysis_list(category=category, limit=2000)
+        items = self.get_kps_analysis_list(category=category, wilker_bps=wilker_bps, limit=2000)
         for row_idx, r in enumerate(items, 5):
             dt_str = r["latest_hotspot_at"][:16].replace("T", " ") if r["latest_hotspot_at"] else "-"
             row_values = [
-                row_idx - 4, r["id"], r["lembaga"], r["skema"], r["nama_desa"] or "-", r["nama_kec"] or "-",
+                row_idx - 4, r["id"], r["lembaga"], r["wilker_bps"] or "-", r["skema"], r["nama_desa"] or "-", r["nama_kec"] or "-",
                 r["nama_kab"] or "-", r["nama_prov"] or "-", r["luas_sk"], r["total_burned_ha"], r["burn_frequency"],
                 r["hotspots_today"], r["hotspots_today_strict_reburn"], r["hotspots_today_expanding"],
                 r["min_distance_km"], r["max_distance_km"], r["avg_distance_km"],
@@ -538,7 +553,7 @@ class EarlyWarningService:
                 cell.font = font_regular
                 cell.border = border_thin
                 if r["hotspots_today"] > 0:
-                    if col_idx in [1, 12, 13, 14, 20, 26, 27]:
+                    if col_idx in [1, 13, 14, 15, 21, 27, 28]:
                         if r["zone_code"] == "zone1" or r["zone_code"] == "strict" or r["zone_code"] == "combo":
                             cell.fill = fill_red_light
                         elif r["zone_code"] == "zone2":
@@ -546,14 +561,14 @@ class EarlyWarningService:
                         else:
                             cell.fill = fill_yellow_light
                 elif r["hotspots_yesterday"] > 0:
-                    if col_idx in [1, 21, 26, 27]:
+                    if col_idx in [1, 22, 27, 28]:
                         cell.fill = fill_orange_light
 
-                if col_idx in [1, 2, 4, 11, 18, 20, 25, 27]:
+                if col_idx in [1, 2, 4, 5, 12, 19, 21, 26, 28]:
                     cell.alignment = align_center
-                elif col_idx in [9, 10, 12, 13, 14, 15, 16, 17, 19, 21, 22, 23, 24, 26]:
+                elif col_idx in [10, 11, 13, 14, 15, 16, 17, 18, 20, 22, 23, 24, 25, 27]:
                     cell.alignment = align_right
-                    if col_idx in [9, 10, 15, 16, 17, 19, 26]:
+                    if col_idx in [10, 11, 16, 17, 18, 20, 27]:
                         cell.number_format = "#,##0.00"
                     else:
                         cell.number_format = "#,##0"

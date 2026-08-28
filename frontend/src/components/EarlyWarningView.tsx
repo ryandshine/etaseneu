@@ -10,10 +10,12 @@ import {
   TrendingUp,
   FileSpreadsheet,
   Info,
-  Compass,
-  Wind
+  Wind,
+  ShieldAlert,
+  Lock
 } from "lucide-react";
 import { authFetch, downloadWithAuth } from "../lib/api";
+import type { AppSession } from "../types/api";
 
 type CategoryType =
   | "burned_active_today"
@@ -44,6 +46,7 @@ interface SummaryMetrics {
     month_hotspots: number;
     year_hotspots: number;
   };
+  wilker_bps?: string | null;
   updated_at: string;
 }
 
@@ -54,6 +57,7 @@ interface KpsItem {
   nama_kec: string | null;
   nama_kab: string | null;
   nama_prov: string | null;
+  wilker_bps: string | null;
   skema: string | null;
   luas_sk: number | null;
   no_sk: string | null;
@@ -83,15 +87,25 @@ interface KpsItem {
 
 interface EarlyWarningViewProps {
   onOpenKpsDetail?: (agencyName: string) => void;
+  session?: AppSession | null;
+  selectedWilker?: string;
 }
 
-export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
+export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: EarlyWarningViewProps) {
   const [category, setCategory] = useState<CategoryType>("burned_active_today");
   const [summary, setSummary] = useState<SummaryMetrics | null>(null);
   const [items, setItems] = useState<KpsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingItems, setLoadingItems] = useState(false);
   const [downloading, setDownloading] = useState(false);
+
+  // Active wilker for BPS role
+  const activeWilkerBps = useMemo(() => {
+    if (session?.role === "bps" && session.wilker_bps) {
+      return session.wilker_bps;
+    }
+    return selectedWilker || "";
+  }, [session, selectedWilker]);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -104,7 +118,10 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
   const loadSummary = async () => {
     try {
       setLoading(true);
-      const res = await authFetch("/api/early-warning/summary");
+      const query = new URLSearchParams();
+      if (activeWilkerBps) query.append("wilker_bps", activeWilkerBps);
+
+      const res = await authFetch(`/api/early-warning/summary?${query.toString()}`);
       if (!res.ok) throw new Error("Gagal memuat ringkasan data");
       const data: SummaryMetrics = await res.json();
       setSummary(data);
@@ -123,6 +140,7 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
         category,
         limit: "1500"
       });
+      if (activeWilkerBps) query.append("wilker_bps", activeWilkerBps);
       if (selectedProvince) query.append("province", selectedProvince);
       if (selectedSkema) query.append("skema", selectedSkema);
       if (search) query.append("search", search);
@@ -140,11 +158,11 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
 
   useEffect(() => {
     loadSummary();
-  }, []);
+  }, [activeWilkerBps]);
 
   useEffect(() => {
     loadItems();
-  }, [category, selectedProvince, selectedSkema]);
+  }, [category, activeWilkerBps, selectedProvince, selectedSkema]);
 
   // Unique options for filters
   const provinces = useMemo(() => {
@@ -197,8 +215,10 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
   const handleDownloadExcel = async () => {
     try {
       setDownloading(true);
-      const filename = `rekap-analisis-kps-${category}-${new Date().toISOString().slice(0, 10)}.xlsx`;
-      await downloadWithAuth(`/api/early-warning/export.xlsx?category=${category}`, filename);
+      const wilkerQuery = activeWilkerBps ? `&wilker_bps=${encodeURIComponent(activeWilkerBps)}` : "";
+      const wilkerFile = activeWilkerBps ? `-${activeWilkerBps.replace(/\s+/g, "_")}` : "";
+      const filename = `rekap-analisis-kps-${category}${wilkerFile}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      await downloadWithAuth(`/api/early-warning/export.xlsx?category=${category}${wilkerQuery}`, filename);
     } catch (err: any) {
       alert("Gagal mengunduh Excel: " + err.message);
     } finally {
@@ -211,12 +231,21 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem", flexWrap: "wrap", gap: "1rem" }}>
         <div>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: "700", display: "flex", alignItems: "center", gap: "0.6rem", margin: 0, color: "#ffffff" }}>
-            <Flame style={{ color: "#ef4444" }} size={28} />
-            Peringatan Dini & Rekapitulasi Kebakaran KPS
-          </h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+            <h1 style={{ fontSize: "1.5rem", fontWeight: "700", display: "flex", alignItems: "center", gap: "0.6rem", margin: 0, color: "#ffffff" }}>
+              <Flame style={{ color: "#ef4444" }} size={28} />
+              Peringatan Dini & Rekapitulasi Kebakaran KPS
+            </h1>
+            {session?.role === "bps" && activeWilkerBps ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", backgroundColor: "rgba(37, 99, 235, 0.2)", border: "1px solid #3b82f6", color: "#93c5fd", padding: "0.2rem 0.6rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: "600" }}>
+                <Lock size={12} /> {activeWilkerBps}
+              </span>
+            ) : null}
+          </div>
           <p style={{ fontSize: "0.85rem", color: "#9ca3af", marginTop: "0.3rem", margin: 0 }}>
-            Deteksi Spasial: Titik Tepat di Bekas Terbakar (Strict Re-burn), Jarak (KM), dan Arah Kompas Perambatan
+            {session?.role === "bps"
+              ? `Menampilkan data spasial & titik api khusus wilayah kerja ${activeWilkerBps}`
+              : "Deteksi Spasial: Titik Tepat di Bekas Terbakar (Strict Re-burn), Jarak (KM), dan Arah Kompas Perambatan"}
           </p>
         </div>
 
@@ -397,11 +426,11 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
       {/* Tabs Navigation */}
       <div style={{ display: "flex", gap: "0.4rem", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "0.6rem", marginBottom: "1rem", overflowX: "auto" }}>
         {[
-          { id: "burned_active_today", label: "🔴 Terbakar Hari Ini (17)", desc: "KPS Luas Terbakar + HS Hari Ini" },
-          { id: "burned_clear_today", label: "🟢 Padam Hari Ini (249)", desc: "KPS Luas Terbakar + 0 HS Hari Ini" },
-          { id: "early_warning_today", label: "⚡ Early Warning Hari Ini (40)", desc: "Titik Api Baru Hari Ini" },
-          { id: "early_warning_all", label: "📋 Semua Early Warning (1.411)", desc: "Hotspot Baru 2026" },
-          { id: "all_burned", label: "📊 Seluruh KPS Terbakar (266)", desc: "Database Luas Terbakar KLHK" }
+          { id: "burned_active_today", label: `🔴 Terbakar Hari Ini (${summary?.burned_area_stats.active_today ?? 0})` },
+          { id: "burned_clear_today", label: `🟢 Padam Hari Ini (${summary?.burned_area_stats.clear_today ?? 0})` },
+          { id: "early_warning_today", label: `⚡ Early Warning Hari Ini (${summary?.early_warning_stats.active_today ?? 0})` },
+          { id: "early_warning_all", label: `📋 Semua Early Warning (${summary?.early_warning_stats.total_kps ?? 0})` },
+          { id: "all_burned", label: `📊 Seluruh KPS Terbakar (${summary?.burned_area_stats.total_polygons ?? 0})` }
         ].map((t) => (
           <button
             key={t.id}
@@ -574,7 +603,7 @@ export function EarlyWarningView({ onOpenKpsDetail }: EarlyWarningViewProps) {
             ) : displayItems.length === 0 ? (
               <tr>
                 <td colSpan={12} style={{ padding: "2.5rem", textAlign: "center", color: "#6b7280" }}>
-                  Tidak ada data KPS yang sesuai dengan filter.
+                  Tidak ada data KPS yang sesuai dengan filter{activeWilkerBps ? ` untuk ${activeWilkerBps}` : ""}.
                 </td>
               </tr>
             ) : (

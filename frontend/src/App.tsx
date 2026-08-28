@@ -897,7 +897,11 @@ export default function App() {
         ) : activeView === "earlywarning" ? (
           <section aria-label="Peringatan Dini workspace" className="workspace-stage workspace-stage--earlywarning">
             <Suspense fallback={<ViewLoader label="Memuat peringatan dini..." />}>
-              <EarlyWarningView onOpenKpsDetail={openKpsDetail} />
+              <EarlyWarningView
+                onOpenKpsDetail={openKpsDetail}
+                session={session}
+                selectedWilker={session?.role === "bps" ? (session.wilker_bps || selectedWilker) : selectedWilker}
+              />
             </Suspense>
           </section>
         ) : activeView === "kps" ? (
