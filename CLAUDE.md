@@ -108,9 +108,12 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   nobs≥2`, lalu `connectedPixelCount≥25` (~1 ha @ 20 m). Diproses per-provinsi (1 komposit raster per
   bbox provinsi + `reduceRegions` batched). Hasil disimpan di tabel **TERPISAH `s2_burned_area`**
   (mixin `postgres_store/_s2_burned_area.py`), TIDAK dicampur ke `burned_area_summary` — angkanya
-  estimasi belum terverifikasi. Lapisan peta "Estimasi Sentinel-2" (oranye putus-putus) di
-  `HotspotMap.tsx` + kartu admin di `SettingsPanel.tsx`. Butuh env `GEE_SERVICE_ACCOUNT_EMAIL` /
-  `GEE_SERVICE_ACCOUNT_KEY_PATH` / `GEE_PROJECT_ID` (kalau kosong → endpoint balas 503).
+  estimasi belum terverifikasi. Dua tempat tampil di frontend: lapisan peta utama "Estimasi
+  Sentinel-2" (oranye putus-putus) di `HotspotMap.tsx` (`useS2BurnedAreaOverlay` →
+  `GET /api/burned-area/s2-overlay`), DAN bagian "Estimasi bekas terbakar (Sentinel-2)" di kartu
+  Detail KPS (`KpsDetailView.tsx` → `GET /api/burned-area/s2-summary?polygon_ids=...`), terpisah dari
+  angka KLHK di kartu yang sama. Analisis dijalankan `analyze_month()` (butuh env GEE); menampilkan
+  hasilnya TIDAK butuh env — cuma baca tabel.
 - `hotspot_cluster_service.py` — menu "Kompleks Kebakaran": mengelompokkan titik hotspot yang
   berdekatan ruang (~2km) DAN waktu (~48 jam) sekaligus jadi satu "kompleks" (ST-DBSCAN), dipanggil
   dari `GET /api/hotspots/clusters` (preset `sensitivity` ketat/sedang/longgar, bukan eps/min_samples

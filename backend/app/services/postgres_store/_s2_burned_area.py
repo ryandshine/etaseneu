@@ -178,6 +178,44 @@ class _S2BurnedAreaMixin:
                     )
                 return cur.rowcount
 
+    def read_s2_burned_area_for_polygons(
+        self, polygon_ids: Sequence[int]
+    ) -> list[dict[str, object]]:
+        """Baris estimasi Sentinel-2 untuk KPS tertentu (semua bulan), berikut
+        geometri poligonnya -- dipakai kartu Detail KPS."""
+        if not polygon_ids:
+            return []
+        ids = sorted({int(p) for p in polygon_ids})
+        with self.connection() as conn:
+            self._ensure_s2_burned_area_table(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT polygon_metadata_id, layer_key, year, month,
+                           area_ha, hotspot_count_month, has_hotspot, computed_at,
+                           ST_AsGeoJSON(geometry)::json AS geometry_json
+                    FROM s2_burned_area
+                    WHERE polygon_metadata_id = ANY(%s)
+                    ORDER BY year DESC, month DESC
+                    """,
+                    (ids,),
+                )
+                rows = cur.fetchall()
+        return [
+            {
+                "polygon_metadata_id": int(r["polygon_metadata_id"]),
+                "layer_key": r["layer_key"],
+                "year": int(r["year"]),
+                "month": int(r["month"]),
+                "area_ha": round(float(r["area_ha"]), 2),
+                "hotspot_count_month": int(r["hotspot_count_month"]),
+                "has_hotspot": bool(r["has_hotspot"]),
+                "computed_at": r["computed_at"].isoformat() if r.get("computed_at") else None,
+                "geometry_json": r.get("geometry_json"),
+            }
+            for r in rows
+        ]
+
     def read_s2_burned_area_overlay(self, year: int, month: int) -> dict[str, object]:
         with self.connection() as conn:
             self._ensure_s2_burned_area_table(conn)

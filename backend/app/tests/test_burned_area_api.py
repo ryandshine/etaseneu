@@ -353,3 +353,40 @@ def test_burned_area_refresh_klhk_returns_404_when_file_missing(monkeypatch) -> 
 
     assert response.status_code == 404
 
+
+
+def test_s2_summary_returns_rows_and_geometry(monkeypatch) -> None:
+    from app.services.postgres_store import PostgresStore
+
+    fake_rows = [
+        {
+            "polygon_metadata_id": 42,
+            "layer_key": "psagustus2026",
+            "year": 2026,
+            "month": 8,
+            "area_ha": 12.3,
+            "hotspot_count_month": 5,
+            "has_hotspot": True,
+            "computed_at": "2026-08-29T00:00:00Z",
+            "geometry_json": {"type": "MultiPolygon", "coordinates": []},
+        }
+    ]
+    monkeypatch.setattr(
+        PostgresStore, "read_s2_burned_area_for_polygons", lambda self, ids: fake_rows
+    )
+
+    client = _client(monkeypatch)
+    response = client.get("/api/burned-area/s2-summary?polygon_ids=42")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["rows"][0]["area_ha"] == 12.3
+    assert "geometry_json" not in body["rows"][0]
+    assert body["geometry"]["features"][0]["properties"]["has_hotspot"] is True
+
+
+def test_s2_summary_empty_without_polygon_ids(monkeypatch) -> None:
+    client = _client(monkeypatch)
+    response = client.get("/api/burned-area/s2-summary")
+    assert response.status_code == 200
+    assert response.json() == {"rows": [], "geometry": {"type": "FeatureCollection", "features": []}}

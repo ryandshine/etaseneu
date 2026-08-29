@@ -51,6 +51,27 @@ type BurnedAreaFeatureCollection = {
   }>;
 };
 
+// Estimasi MANDIRI Sentinel-2 dNBR -- terpisah total dari rekap resmi KLHK
+// (BurnedAreaRow di atas). Angkanya estimasi, belum terverifikasi.
+type S2BurnedRow = {
+  polygon_metadata_id: number;
+  year: number;
+  month: number;
+  area_ha: number;
+  hotspot_count_month: number;
+  has_hotspot: boolean;
+  computed_at: string | null;
+};
+
+type S2BurnedFeatureCollection = {
+  type: "FeatureCollection";
+  features: Array<{
+    type: "Feature";
+    geometry: Record<string, unknown>;
+    properties: { year: number; month: number; area_ha: number; hotspot_count_month: number; has_hotspot: boolean };
+  }>;
+};
+
 type KpsDetailViewProps = {
   agency: string;
   hotspots: DashboardHotspot[];
@@ -387,12 +408,17 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
   // akumulasi kejadian, bukan luas area).
   const [uniqueHa, setUniqueHa] = useState<number | null>(null);
   const [burnedGeometry, setBurnedGeometry] = useState<BurnedAreaFeatureCollection | null>(null);
+  // Estimasi mandiri Sentinel-2 untuk KPS ini (lihat S2BurnedRow).
+  const [s2BurnedRows, setS2BurnedRows] = useState<S2BurnedRow[]>([]);
+  const [s2BurnedGeometry, setS2BurnedGeometry] = useState<S2BurnedFeatureCollection | null>(null);
 
   useEffect(() => {
     if (polygonId === null) {
       setBurnedAreas([]);
       setUniqueHa(null);
       setBurnedGeometry(null);
+      setS2BurnedRows([]);
+      setS2BurnedGeometry(null);
       return;
     }
 
@@ -423,10 +449,64 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
         /* diamkan -- lihat komentar di atas */
       });
 
+    // Estimasi mandiri Sentinel-2 -- juga dibiarkan gagal diam-diam: KPS yang
+    // belum dihitung / benar-benar tidak terbakar adalah kondisi normal.
+    authFetch(`/api/burned-area/s2-summary?polygon_ids=${polygonId}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { rows?: S2BurnedRow[]; geometry?: S2BurnedFeatureCollection } | null) => {
+        if (!active || !payload) {
+          return;
+        }
+        setS2BurnedRows(payload.rows ?? []);
+        setS2BurnedGeometry(payload.geometry?.features?.length ? payload.geometry : null);
+      })
+      .catch(() => {
+        /* diamkan */
+      });
+
     return () => {
       active = false;
     };
   }, [polygonId]);
+
+  const effectiveS2Burned = useMemo(() => {
+    if (!isCustomRangeActive) {
+      return s2BurnedRows;
+    }
+    return s2BurnedRows.filter((row) => isPeriodInRange(row.year, row.month, customStartDate, customEndDate));
+  }, [s2BurnedRows, isCustomRangeActive, customStartDate, customEndDate]);
+
+  const effectiveS2Geometry = useMemo(() => {
+    if (!s2BurnedGeometry || !isCustomRangeActive) {
+      return s2BurnedGeometry;
+    }
+    return {
+      ...s2BurnedGeometry,
+      features: s2BurnedGeometry.features.filter((feature) =>
+        isPeriodInRange(feature.properties.year, feature.properties.month, customStartDate, customEndDate)
+      )
+    };
+  }, [s2BurnedGeometry, isCustomRangeActive, customStartDate, customEndDate]);
+
+  const s2BurnedStats = useMemo(() => {
+    if (effectiveS2Burned.length === 0) {
+      return null;
+    }
+    const sorted = [...effectiveS2Burned].sort((a, b) => b.year - a.year || b.month - a.month);
+    // Angka bulanan dijumlah (lahan yang terbakar >1 bulan terhitung ganda) --
+    // sama batasannya dengan akumulasi KLHK. Untuk Agustus 2026 cuma ada satu
+    // bulan jadi tidak jadi soal; label tetap "akumulasi" biar jujur.
+    const accumulatedHa = effectiveS2Burned.reduce((sum, row) => sum + (row.area_ha ?? 0), 0);
+    const totalHotspot = effectiveS2Burned.reduce((sum, row) => sum + (row.hotspot_count_month ?? 0), 0);
+    return {
+      accumulatedHa,
+      latest: sorted[0],
+      months: sorted,
+      anyHotspot: effectiveS2Burned.some((row) => row.has_hotspot),
+      totalHotspot,
+      multiMonth: new Set(effectiveS2Burned.map((row) => `${row.year}-${row.month}`)).size > 1
+    };
+  }, [effectiveS2Burned]);
 
   // Riwayat KLHK disaring ke rentang kustom (kalau aktif) di titik pemakaian
   // ini -- fetch-nya sendiri (di atas) tetap ambil SELURUH riwayat sekali
@@ -560,7 +640,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
         layer.bringToFront();
       }
     });
-  }, [kpsHotspots, effectiveBurnedGeometry]);
+  }, [kpsHotspots, effectiveBurnedGeometry, effectiveS2Geometry]);
 
   return (
     <div className="kps-detail">
@@ -784,6 +864,57 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                 </p>
               </div>
             )}
+
+            {s2BurnedStats && (
+              <div style={{ marginTop: "1rem", paddingTop: "0.85rem", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                <div className="control-metric">
+                  <span>Estimasi bekas terbakar (Sentinel-2):</span>
+                  <strong style={{ color: "#f59e0b" }}>
+                    {formatNumber(Math.round(s2BurnedStats.accumulatedHa * 10) / 10)} Ha
+                  </strong>
+                </div>
+                <p className="help-copy" style={{ marginTop: "0.4rem" }}>
+                  {s2BurnedStats.multiMonth ? "Terakhir dihitung" : "Periode"}:{" "}
+                  {MONTH_LABELS[s2BurnedStats.latest.month - 1]} {s2BurnedStats.latest.year}
+                  {" · "}
+                  {s2BurnedStats.anyHotspot
+                    ? `${s2BurnedStats.totalHotspot} titik hotspot`
+                    : "tanpa titik hotspot"}
+                </p>
+                {s2BurnedStats.months.length > 1 && (
+                  <div style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+                    {s2BurnedStats.months.slice(0, 6).map((row) => (
+                      <div
+                        key={`s2-${row.year}-${row.month}`}
+                        style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", color: "#9ca3af" }}
+                      >
+                        <span>{MONTH_LABELS[row.month - 1]} {row.year}</span>
+                        <span>{formatNumber(Math.round(row.area_ha * 10) / 10)} Ha</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {effectiveS2Geometry && effectiveS2Geometry.features.length > 0 && (
+                  <p className="help-copy" style={{ marginTop: "0.5rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        width: "12px",
+                        height: "12px",
+                        background: "rgba(245,158,11,0.35)",
+                        border: "1px dashed #f59e0b",
+                        flexShrink: 0
+                      }}
+                    />
+                    Area oranye putus-putus di peta = estimasi Sentinel-2.
+                  </p>
+                )}
+                <p className="help-copy" style={{ marginTop: "0.5rem", fontSize: "0.72rem", color: "#f59e0b" }}>
+                  Analisis mandiri sistem dari citra Sentinel-2 (indeks dNBR). Estimasi, <strong>belum
+                  terverifikasi</strong> Kementerian Kehutanan — angka &amp; bentuknya bisa berbeda dari rekap resmi.
+                </p>
+              </div>
+            )}
           </div>
         </aside>
 
@@ -835,6 +966,44 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                 bringToFront tiap render) yang menjaga titik hotspot tetap
                 terlihat di atas arsiran merah, bukan lagi z-index Pane. */}
             <Pane name="kps-interaktif" style={{ zIndex: 420 }}>
+              {effectiveS2Geometry && effectiveS2Geometry.features.length > 0 && (
+                <GeoJSON
+                  key={`s2burned-${polygonId}-${customStartDate}-${customEndDate}`}
+                  data={effectiveS2Geometry as never}
+                  style={{
+                    color: "#f59e0b",
+                    weight: 1.2,
+                    dashArray: "5 3",
+                    fillColor: "#f59e0b",
+                    fillOpacity: 0.32,
+                    interactive: true
+                  }}
+                  onEachFeature={(feature, layer) => {
+                    const props = feature.properties as {
+                      year: number;
+                      month: number;
+                      area_ha: number;
+                      hotspot_count_month: number;
+                      has_hotspot: boolean;
+                    };
+                    const hsLine = props.has_hotspot
+                      ? `Hotspot bulan ini: ${props.hotspot_count_month}`
+                      : "Tidak ada hotspot terdeteksi";
+                    layer.bindPopup(
+                      `<div style="font-size:12px;font-family:sans-serif;min-width:190px">
+                         <strong style="color:#b45309">Estimasi Bekas Terbakar</strong>
+                         <div style="margin-top:6px">${MONTH_LABELS[props.month - 1]} ${props.year}</div>
+                         <div style="margin-top:4px">Luas estimasi: <strong>${formatNumber(
+                           Math.round(props.area_ha * 10) / 10
+                         )} Ha</strong></div>
+                         <div style="color:#9ca3af">${hsLine}</div>
+                         <div style="margin-top:6px;color:#b45309;font-size:11px">Sentinel-2 dNBR — belum terverifikasi.</div>
+                       </div>`,
+                      { className: "burned-popup" }
+                    );
+                  }}
+                />
+              )}
               {effectiveBurnedGeometry && effectiveBurnedGeometry.features.length > 0 && (
                 <GeoJSON
                   // Disertakan rentang kustom di key -- GeoJSON react-leaflet

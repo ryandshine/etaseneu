@@ -189,6 +189,39 @@ async def burned_area_s2_overlay(
     return store.read_s2_burned_area_overlay(year, month)
 
 
+@router.get("/burned-area/s2-summary")
+async def burned_area_s2_summary(
+    polygon_ids: list[int] = Query(default=[]),
+) -> dict[str, object]:
+    """Estimasi bekas terbakar Sentinel-2 untuk satu/beberapa KPS (semua
+    bulan) + geometri poligonnya, untuk kartu Detail KPS. Terpisah dari
+    `/burned-area/summary` (rekap resmi KLHK)."""
+    if not polygon_ids:
+        return {"rows": [], "geometry": {"type": "FeatureCollection", "features": []}}
+    store = PostgresStore(get_settings().database_url)
+    rows = store.read_s2_burned_area_for_polygons(polygon_ids)
+    features = [
+        {
+            "type": "Feature",
+            "geometry": row["geometry_json"],
+            "properties": {
+                "polygon_metadata_id": row["polygon_metadata_id"],
+                "year": row["year"],
+                "month": row["month"],
+                "area_ha": row["area_ha"],
+                "hotspot_count_month": row["hotspot_count_month"],
+                "has_hotspot": row["has_hotspot"],
+            },
+        }
+        for row in rows
+        if row["geometry_json"]
+    ]
+    return {
+        "rows": [{k: v for k, v in row.items() if k != "geometry_json"} for row in rows],
+        "geometry": {"type": "FeatureCollection", "features": features},
+    }
+
+
 # Catatan: analisis Sentinel-2 dijalankan manual dari skrip
 # (`app.services.burned_area_s2_service.BurnedAreaS2Service.analyze_month`),
 # bukan lewat endpoint admin -- hasilnya di-upsert ke `s2_burned_area` dan
