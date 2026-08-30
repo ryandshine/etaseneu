@@ -62,6 +62,12 @@ beforeEach(() => {
     if (url.startsWith("/api/burned-area/geometry")) {
       return jsonResponse({ type: "FeatureCollection", features: [] });
     }
+    if (url.startsWith("/api/burned-area/s2-summary")) {
+      return jsonResponse({ rows: [] });
+    }
+    if (url.startsWith("/api/land-cover/status")) {
+      return jsonResponse({ state: "idle", step: null, error: null, computed_at: null });
+    }
     if (url.startsWith("/api/hotspots")) {
       return jsonResponse({
         count: 1,

@@ -13,6 +13,7 @@ import { getTodayWIB } from "../lib/date";
 import type { PolygonDetail } from "../types/api";
 import { HotspotPopupContent } from "./HotspotPopupContent";
 import { WeatherConditionCard } from "./WeatherConditionCard";
+import { LandCoverPanel } from "./LandCoverPanel";
 import {
   buildComparison,
   formatMetadataValue,
@@ -915,6 +916,8 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                 </p>
               </div>
             )}
+
+            {polygonId !== null && <LandCoverPanel polygonId={polygonId} />}
           </div>
         </aside>
 
