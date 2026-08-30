@@ -41,6 +41,12 @@ SIMPLIFY_TOL = 0.0003
 MIN_MMU_PX = 5          # buang patch < 5 px (~0.2 ha @ 20 m)
 _MAX_CLOUD = 70
 
+# Titik latih diambil dari bbox poligon + buffer ini (meter), bukan dari
+# dalam poligon saja: poligon KPS yang hampir seluruhnya satu kelas (mis.
+# hutan rapat) tidak menyediakan >1 kelas untuk melatih Random Forest.
+# Klasifikasi & pengukuran luas tetap dibatasi ke poligon asli.
+TRAIN_BUFFER_M = 3000
+
 # {0..8} Dynamic World label -> kunci kelas 5-kategori (6=built, 8=snow dibuang)
 _DW_MAP = {0: "air", 1: "hutan", 2: "semak", 3: "semak", 4: "pertanian", 5: "semak", 7: "terbuka"}
 
@@ -156,16 +162,17 @@ class LandCoverService:
             end = today
         return start.isoformat(), end.isoformat()
 
-    def _year_feature_image(self, ee, roi, year: int):
+    def _year_feature_image(self, ee, roi, year: int, region=None):
         start, end = self._year_window(year)
+        clip_to = region if region is not None else roi
         s2 = (
             ee.ImageCollection(S2_COLLECTION)
-            .filterBounds(roi)
+            .filterBounds(clip_to)
             .filterDate(start, end)
             .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", _MAX_CLOUD))
             .map(self._scl_scale(ee))
             .median()
-            .clip(roi)
+            .clip(clip_to)
         )
         ndvi = s2.normalizedDifference(["B8", "B4"]).rename("ndvi")
         nbr = s2.normalizedDifference(["B8", "B12"]).rename("nbr")
@@ -180,7 +187,12 @@ class LandCoverService:
         ).rename(FEATURE_NAMES)
         return feat
 
-    def _year_training_points(self, ee, roi, feat_img, year: int):
+    def _dw_class_image(self, ee, roi, year: int, *, confidence_masked: bool):
+        """Citra `class_idx` (0..4) dari Dynamic World untuk satu tahun.
+
+        `confidence_masked=True` untuk sampel latih (buang piksel ragu);
+        `False` untuk klasifikasi fallback (biar luas mengisi poligon penuh).
+        """
         start, end = self._year_window(year)
         dw = (
             ee.ImageCollection(DW_COLLECTION)
@@ -188,26 +200,40 @@ class LandCoverService:
             .filterDate(start, end)
         )
         label = dw.select("label").mode()
-        prob = dw.select(
-            ["water", "trees", "grass", "flooded_vegetation", "crops",
-             "shrub_and_scrub", "built", "bare", "snow_and_ice"]
-        ).mean().reduce(ee.Reducer.max())
         from_list = [k for k in _DW_MAP]
         to_list = [_CLASS_IDX[_DW_MAP[k]] for k in from_list]
-        class_idx = (
-            label.remap(from_list, to_list)
-            .rename("class_idx")
-            .updateMask(prob.gte(DW_CONF_MIN))
-        )
+        class_idx = label.remap(from_list, to_list).rename("class_idx")
+        if confidence_masked:
+            prob = dw.select(
+                ["water", "trees", "grass", "flooded_vegetation", "crops",
+                 "shrub_and_scrub", "built", "bare", "snow_and_ice"]
+            ).mean().reduce(ee.Reducer.max())
+            class_idx = class_idx.updateMask(prob.gte(DW_CONF_MIN))
+        return class_idx
+
+    def _year_training_points(self, ee, roi, feat_img, year: int, region=None):
+        sample_region = region if region is not None else roi
+        class_idx = self._dw_class_image(ee, sample_region, year, confidence_masked=True)
         stack = feat_img.addBands(class_idx)
         return stack.stratifiedSample(
             numPoints=SAMPLES_PER_CLASS_PER_YEAR,
             classBand="class_idx",
-            region=roi,
+            region=sample_region,
             scale=10,
             seed=42 + year,
             geometries=False,
         )
+
+    def _distinct_class_count(self, samples) -> int:
+        """Berapa nilai `class_idx` berbeda ada di sampel latih gabungan.
+        < 2 -> Random Forest tak bisa dilatih, orkestrasi jatuh ke Dynamic World.
+        """
+        try:
+            hist = samples.aggregate_histogram("class_idx").getInfo() or {}
+            return len([k for k, v in hist.items() if v])
+        except Exception:  # noqa: BLE001 -- gagal hitung -> anggap degenerate
+            logger.warning("LAND_COVER: gagal menghitung kelas sampel latih", exc_info=True)
+            return 0
 
     # -- ekstraksi hasil per tahun ----------------------------------------------
 
@@ -281,6 +307,7 @@ class LandCoverService:
         started = time.monotonic()
         roi = ee.Geometry(target["geometry_json"])
         raw_geom = target["geometry_json"]
+        train_region = roi.buffer(TRAIN_BUFFER_M).bounds()
 
         try:
             self.postgres_store.mark_land_cover_running(pid, target["layer_key"])
@@ -293,21 +320,35 @@ class LandCoverService:
                     "step": f"{year} ({i + 1}/{len(YEARS)}) — sampel",
                     "started_at": date.today().isoformat(),
                 }
-                feat = self._year_feature_image(ee, roi, year)
+                feat = self._year_feature_image(ee, roi, year, region=train_region)
                 feat_by_year[year] = feat
-                pts = self._year_training_points(ee, roi, feat, year)
+                pts = self._year_training_points(ee, roi, feat, year, region=train_region)
                 samples = pts if samples is None else samples.merge(pts)
 
-            rf = ee.Classifier.smileRandomForest(RF_TREES, seed=42).train(
-                features=samples, classProperty="class_idx", inputProperties=FEATURE_NAMES
-            )
-            try:
-                oob_err = rf.explain().getInfo().get("outOfBagErrorEstimate")
-                oob_accuracy = round(1.0 - float(oob_err), 4) if oob_err is not None else None
-            except Exception:  # noqa: BLE001
+            use_rf = self._distinct_class_count(samples) >= 2
+            if use_rf:
+                rf = ee.Classifier.smileRandomForest(RF_TREES, seed=42).train(
+                    features=samples, classProperty="class_idx", inputProperties=FEATURE_NAMES
+                )
+                try:
+                    oob_err = rf.explain().getInfo().get("outOfBagErrorEstimate")
+                    oob_accuracy = round(1.0 - float(oob_err), 4) if oob_err is not None else None
+                except Exception:  # noqa: BLE001
+                    oob_accuracy = None
+                model_trees = RF_TREES
+                n_training = SAMPLES_PER_CLASS_PER_YEAR * len(CLASS_KEYS) * len(YEARS)
+            else:
+                # Poligon homogen: sampel latih < 2 kelas. Random Forest tak
+                # bisa dilatih ("Only one class") -> pakai Dynamic World langsung.
+                logger.warning(
+                    "LAND_COVER: poligon %s homogen (sampel latih < 2 kelas) — "
+                    "fallback ke klasifikasi Dynamic World langsung",
+                    pid,
+                )
+                rf = None
                 oob_accuracy = None
-
-            n_training = SAMPLES_PER_CLASS_PER_YEAR * len(CLASS_KEYS) * len(YEARS)
+                model_trees = 0
+                n_training = 0
 
             table: dict[int, dict[str, dict]] = {}
             year_class_rows: list[dict] = []
@@ -318,7 +359,12 @@ class LandCoverService:
                     "step": f"{year} ({i + 1}/{len(YEARS)}) — klasifikasi",
                     "started_at": date.today().isoformat(),
                 }
-                classified = feat_by_year[year].classify(rf).rename("class_idx")
+                if use_rf:
+                    classified = feat_by_year[year].classify(rf).rename("class_idx")
+                else:
+                    classified = self._dw_class_image(
+                        ee, train_region, year, confidence_masked=False
+                    ).rename("class_idx")
                 areas = self._year_area_by_class(ee, roi, classified)
                 total = sum(areas.values()) or 1.0
                 table[year] = {}
@@ -336,7 +382,7 @@ class LandCoverService:
             self.postgres_store.save_land_cover_result(
                 pid,
                 target["layer_key"],
-                model_trees=RF_TREES,
+                model_trees=model_trees,
                 n_training=n_training,
                 oob_accuracy=oob_accuracy,
                 duration_s=duration_s,
@@ -347,6 +393,7 @@ class LandCoverService:
                 "polygon_id": pid,
                 "years": list(YEARS),
                 "classes": list(CLASS_KEYS),
+                "method": "random_forest" if use_rf else "dynamic_world",
                 "oob_accuracy": oob_accuracy,
                 "n_training": n_training,
                 "duration_s": duration_s,

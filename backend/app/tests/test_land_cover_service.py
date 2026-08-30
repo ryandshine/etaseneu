@@ -6,6 +6,7 @@ import pytest
 
 from app.services.land_cover_service import (
     CLASS_KEYS,
+    TRAIN_BUFFER_M,
     YEARS,
     _LAND_COVER_RUN_STATE,
     LandCoverError,
@@ -111,6 +112,10 @@ class _FakeImg:
     def reduceRegion(self, *a, **k):
         # satu grup per kelas idx 0..4, luas 100 ha (1e6 m2) tiap kelas
         return _FakeGetInfo({"groups": [{"class": i, "sum": 1_000_000.0} for i in range(5)]})
+
+    def aggregate_histogram(self, *a, **k):
+        # sample latih default: 5 kelas hadir -> jalur Random Forest
+        return _FakeGetInfo({str(i): 40 for i in range(5)})
 
     def reduceToVectors(self, *a, **k):
         return _FakeGetInfo(
@@ -318,3 +323,77 @@ def test_analyze_polygon_error_inside_try_marks_error_and_rewraps(monkeypatch) -
     assert "boom" in store.errored
     assert store.running == (287785, "psagustus2026")  # running di-set sebelum gagal
     assert 287785 not in _LAND_COVER_RUN_STATE  # finally tetap membersihkan
+
+
+def test_train_buffer_constant_is_sane() -> None:
+    # sample latih diambil dari bbox poligon + buffer supaya RF melihat >1 kelas
+    assert TRAIN_BUFFER_M >= 1000
+
+
+def test_analyze_polygon_samples_training_from_buffered_region(monkeypatch) -> None:
+    """Titik latih & citra fitur harus dibangun untuk region ber-buffer
+    (bukan poligon mentah), tapi ekstraksi luas/geometri tetap di poligon."""
+    svc = _svc()
+    store = _FakeStore(_TARGET)
+    svc.postgres_store = store
+    monkeypatch.setattr(svc, "_ensure_ee", lambda: _FakeEE())
+
+    seen: dict[str, list] = {"feat": [], "pts": []}
+    real_feat = svc._year_feature_image
+    real_pts = svc._year_training_points
+
+    def spy_feat(ee, roi, year, region=None):
+        seen["feat"].append(region)
+        return real_feat(ee, roi, year, region=region)
+
+    def spy_pts(ee, roi, feat_img, year, region=None):
+        seen["pts"].append(region)
+        return real_pts(ee, roi, feat_img, year, region=region)
+
+    monkeypatch.setattr(svc, "_year_feature_image", spy_feat)
+    monkeypatch.setattr(svc, "_year_training_points", spy_pts)
+
+    svc.analyze_polygon(287785)
+
+    assert len(seen["feat"]) == len(YEARS)
+    assert len(seen["pts"]) == len(YEARS)
+    assert all(r is not None for r in seen["feat"])
+    assert all(r is not None for r in seen["pts"])
+
+
+def test_analyze_polygon_falls_back_to_dynamic_world_when_single_training_class(
+    monkeypatch,
+) -> None:
+    """Poligon homogen: sample latih < 2 kelas -> RF di-skip, klasifikasi
+    pakai Dynamic World langsung. Hasil tetap 6 tahun x 5 kelas tersimpan,
+    tanpa metrik RF."""
+    svc = _svc()
+    store = _FakeStore(_TARGET)
+    svc.postgres_store = store
+    monkeypatch.setattr(svc, "_ensure_ee", lambda: _FakeEE())
+    monkeypatch.setattr(svc, "_distinct_class_count", lambda *a, **k: 1)
+
+    rf_calls: list = []
+    monkeypatch.setattr(
+        _FakeEE,
+        "Classifier",
+        type(
+            "C",
+            (),
+            {
+                "smileRandomForest": staticmethod(
+                    lambda *a, **k: (rf_calls.append(1), _FakeClassifier())[1]
+                )
+            },
+        ),
+    )
+
+    result = svc.analyze_polygon(287785)
+
+    assert rf_calls == []  # RF tidak pernah dilatih
+    assert result["oob_accuracy"] is None
+    assert store.saved["model_trees"] == 0
+    assert store.saved["n_training"] == 0
+    assert len(store.saved["year_class_rows"]) == 30
+    assert len(store.saved["year_geom_rows"]) == 30
+    assert 287785 not in _LAND_COVER_RUN_STATE
