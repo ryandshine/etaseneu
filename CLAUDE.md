@@ -34,8 +34,8 @@ Sebelum menjalankan skrip satu-kali (migrasi data, backfill, dsb.) terhadap DB i
 
 ```
 api/            # satu file per domain: hotspots, hotspot_clusters, layers, polygons,
-                # burned_area, export, point_match, scheduler, stats, weather, wind,
-                # cache, metrics, auth. router.py merakit semuanya ke api_router (prefix /api).
+                # burned_area, land_cover, export, point_match, scheduler, stats, weather,
+                # wind, cache, metrics, auth. router.py merakit semuanya ke api_router (prefix /api).
 core/           # config.py (Settings via pydantic-settings), auth.py (admin API key + JWT multi-user)
 models/         # Pydantic models: hotspots, layers, polygons, query (HotspotQuery)
 services/       # logika bisnis (lihat di bawah)
@@ -66,6 +66,7 @@ tidak berubah (`from app.services.postgres_store import PostgresStore`).
 | `_relations.py` | Relasi hotspot↔poligon + ringkasan agregat per tahun |
 | `_spatial.py` | Pencocokan titik→poligon massal (fitur "Cek Titik ke KPS") |
 | `_burned_area.py` | Luas bekas terbakar per poligon per bulan (`burned_area_summary`) |
+| `_land_cover.py` | Tutupan lahan per poligon per tahun (`land_cover_analysis`, `land_cover_year_class`, `land_cover_year_geom`) |
 
 Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESERVE ROWS`.
 
@@ -114,6 +115,23 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   Detail KPS (`KpsDetailView.tsx` → `GET /api/burned-area/s2-summary?polygon_ids=...`), terpisah dari
   angka KLHK di kartu yang sama. Analisis dijalankan `analyze_month()` (butuh env GEE); menampilkan
   hasilnya TIDAK butuh env — cuma baca tabel.
+- `land_cover_service.py` — **analisis tutupan lahan per poligon** KPS/Hutan Adat, 2020–2025, dari
+  Sentinel-2 L2A via GEE + Random Forest (`ee.Classifier.smileRandomForest`, guru label Google
+  Dynamic World, filter keyakinan ≥0,6, komposit median tahunan). 5 kelas: `hutan|semak|pertanian|
+  terbuka|air` (pemukiman di-skip). On-demand: `POST /api/land-cover/analyze` `{polygon_id}` (query
+  `?force=true` untuk analisis ulang) → job `BackgroundTasks` (`LandCoverService.analyze_polygon`,
+  ~1–3 mnt), progres langkah live di dict modul-global `_LAND_COVER_RUN_STATE` (boleh hilang saat
+  restart), **sumber kebenaran status = kolom `land_cover_analysis.status`**. Hasil di tabel
+  TERPISAH `land_cover_analysis` / `land_cover_year_class` / `land_cover_year_geom` (mixin
+  `postgres_store/_land_cover.py`, `_ensure_land_cover_tables` bikin tabel sendiri — tanpa migrasi
+  manual) — di-cache permanen, tiap poligon dianalisis sekali. Baca hasil:
+  `GET /api/land-cover/{status,result,overlay}` (TIDAK butuh env GEE). Guard: `not service.enabled`
+  → 503; status `running` → 409; status `done` tanpa `force` → 409. "Hutan" = tutupan berpohon
+  (kebun berpohon seperti sawit/karet belum tentu terpisah). Tampil di `KpsDetailView.tsx` →
+  `LandCoverPanel.tsx` (peta rona per tahun + grafik batang bertumpuk + tabel Δ + ringkasan).
+  Konstanta warna kelas dipakai bersama di `frontend/src/constants/landCover.ts`. Tidak ada
+  scheduler, tidak ada analisis massal. nginx: `POST /api/land-cover/analyze` di grup rate-limit
+  `eta_heavy` (10r/m).
 - `hotspot_cluster_service.py` — menu "Kompleks Kebakaran": mengelompokkan titik hotspot yang
   berdekatan ruang (~2km) DAN waktu (~48 jam) sekaligus jadi satu "kompleks" (ST-DBSCAN), dipanggil
   dari `GET /api/hotspots/clusters` (preset `sensitivity` ketat/sedang/longgar, bukan eps/min_samples
