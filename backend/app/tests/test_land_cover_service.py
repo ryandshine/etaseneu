@@ -286,3 +286,35 @@ def test_analyze_polygon_happy_path_saves_all_years_classes(monkeypatch) -> None
     assert isinstance(result["summary_text"], str) and result["summary_text"]
     # progres live dibersihkan di finally
     assert 287785 not in _LAND_COVER_RUN_STATE
+    # Loop _year_class_geom benar-benar jalan: fake reduceToVectors mengembalikan
+    # satu poligon di dalam ROI untuk tiap kelas -> 6 tahun x 5 kelas = 30 baris
+    # geometri, masing-masing sudah dinormalkan ke MultiPolygon. Tanpa assert ini,
+    # regresi yang membuang pengisian year_geom_rows tidak akan ketahuan (Task 4
+    # membaca year_geom_rows untuk lapisan peta).
+    assert len(store.saved["year_geom_rows"]) == 30
+    first_geom = store.saved["year_geom_rows"][0]
+    assert set(first_geom) == {"year", "class_key", "geometry_geojson"}
+    assert first_geom["geometry_geojson"]["type"] == "MultiPolygon"
+
+
+def test_analyze_polygon_error_inside_try_marks_error_and_rewraps(monkeypatch) -> None:
+    """Kegagalan DI DALAM try (mis. save gagal) harus: tandai error via
+    mark_land_cover_error, tetap sudah set running lebih dulu, bersihkan progres
+    live, dan dibungkus ulang jadi LandCoverError (bukan exception mentah)."""
+
+    class _RaisingStore(_FakeStore):
+        def save_land_cover_result(self, polygon_id, layer_key, **kw):
+            raise RuntimeError("boom")
+
+    svc = _svc()
+    store = _RaisingStore(_TARGET)
+    svc.postgres_store = store
+    monkeypatch.setattr(svc, "_ensure_ee", lambda: _FakeEE())
+
+    with pytest.raises(LandCoverError):
+        svc.analyze_polygon(287785)
+
+    assert store.errored is not None
+    assert "boom" in store.errored
+    assert store.running == (287785, "psagustus2026")  # running di-set sebelum gagal
+    assert 287785 not in _LAND_COVER_RUN_STATE  # finally tetap membersihkan
