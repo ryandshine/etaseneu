@@ -134,3 +134,231 @@ class LandCoverService:
         ee.Initialize(credentials, project=self.settings.gee_project_id)
         self._ee_initialized = True
         return ee
+
+    # -- komposit & fitur per tahun ------------------------------------------
+
+    def _scl_scale(self, ee):
+        def _fn(img):
+            scl = img.select("SCL")
+            keep = (
+                scl.neq(0).And(scl.neq(1)).And(scl.neq(3))
+                .And(scl.neq(8)).And(scl.neq(9)).And(scl.neq(10)).And(scl.neq(11))
+            )
+            return img.updateMask(keep).divide(10000)
+
+        return _fn
+
+    def _year_window(self, year: int) -> tuple[str, str]:
+        start = date(year, 1, 1)
+        end = date(year, 12, 31)
+        today = date.today()
+        if end >= today:
+            end = today
+        return start.isoformat(), end.isoformat()
+
+    def _year_feature_image(self, ee, roi, year: int):
+        start, end = self._year_window(year)
+        s2 = (
+            ee.ImageCollection(S2_COLLECTION)
+            .filterBounds(roi)
+            .filterDate(start, end)
+            .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", _MAX_CLOUD))
+            .map(self._scl_scale(ee))
+            .median()
+            .clip(roi)
+        )
+        ndvi = s2.normalizedDifference(["B8", "B4"]).rename("ndvi")
+        nbr = s2.normalizedDifference(["B8", "B12"]).rename("nbr")
+        mndwi = s2.normalizedDifference(["B3", "B11"]).rename("mndwi")
+        ndbi = s2.normalizedDifference(["B11", "B8"]).rename("ndbi")
+        dem = ee.Image("NASA/NASADEM_HGT/001").select("elevation")
+        slope = ee.Terrain.products(dem).select("slope") if hasattr(ee, "Terrain") else dem.rename("slope")
+        feat = ee.Image.cat(
+            s2.select(["B2", "B3", "B4", "B8", "B11", "B12"]),
+            ndvi, nbr, mndwi, ndbi,
+            dem.rename("elevation"), slope.rename("slope"),
+        ).rename(FEATURE_NAMES)
+        return feat
+
+    def _year_training_points(self, ee, roi, feat_img, year: int):
+        start, end = self._year_window(year)
+        dw = (
+            ee.ImageCollection(DW_COLLECTION)
+            .filterBounds(roi)
+            .filterDate(start, end)
+        )
+        label = dw.select("label").mode()
+        prob = dw.select(
+            ["water", "trees", "grass", "flooded_vegetation", "crops",
+             "shrub_and_scrub", "built", "bare", "snow_and_ice"]
+        ).mean().reduce(ee.Reducer.max())
+        from_list = [k for k in _DW_MAP]
+        to_list = [_CLASS_IDX[_DW_MAP[k]] for k in from_list]
+        class_idx = (
+            label.remap(from_list, to_list)
+            .rename("class_idx")
+            .updateMask(prob.gte(DW_CONF_MIN))
+        )
+        stack = feat_img.addBands(class_idx)
+        return stack.stratifiedSample(
+            numPoints=SAMPLES_PER_CLASS_PER_YEAR,
+            classBand="class_idx",
+            region=roi,
+            scale=10,
+            seed=42 + year,
+            geometries=False,
+        )
+
+    # -- ekstraksi hasil per tahun ----------------------------------------------
+
+    def _year_area_by_class(self, ee, roi, classified) -> dict[str, float]:
+        grouped = (
+            ee.Image.pixelArea()
+            .addBands(classified)
+            .reduceRegion(
+                reducer=ee.Reducer.sum().group(groupField=1, groupName="class"),
+                geometry=roi,
+                scale=10,
+                maxPixels=1e9,
+                bestEffort=True,
+            )
+            .getInfo()
+        )
+        out = {k: 0.0 for k in CLASS_KEYS}
+        for grp in grouped.get("groups", []):
+            idx = int(grp.get("class", -1))
+            if 0 <= idx < len(CLASS_KEYS):
+                out[CLASS_KEYS[idx]] = float(grp.get("sum") or 0.0) / 10000.0
+        return out
+
+    def _year_class_geom(self, ee, roi, classified, raw_geom) -> dict[str, dict]:
+        boundary = shapely_shape(raw_geom).buffer(0)
+        out: dict[str, dict] = {}
+        for idx, key in enumerate(CLASS_KEYS):
+            try:
+                cpc = classified.eq(idx).selfMask().connectedPixelCount(MIN_MMU_PX + 1, True)
+                mask = classified.eq(idx).And(cpc.gte(MIN_MMU_PX)).selfMask()
+                vectors = mask.reduceToVectors(
+                    geometry=roi, scale=10, geometryType="polygon",
+                    eightConnected=True, maxPixels=1e9, bestEffort=True,
+                ).getInfo()
+            except Exception as exc:  # noqa: BLE001 -- non-fatal, peta rona di-skip kelas ini
+                logger.warning("LAND_COVER: reduceToVectors gagal (%s) — %s", key, exc)
+                continue
+            parts = [
+                shapely_shape(f["geometry"]).buffer(0)
+                for f in vectors.get("features", [])
+                if f.get("geometry")
+            ]
+            if not parts:
+                continue
+            try:
+                clipped = unary_union(parts).intersection(boundary).simplify(SIMPLIFY_TOL)
+            except Exception:  # noqa: BLE001
+                continue
+            if clipped.is_empty:
+                continue
+            if isinstance(clipped, ShapelyPolygon):
+                clipped = ShapelyMultiPolygon([clipped])
+            elif not isinstance(clipped, ShapelyMultiPolygon):
+                polys = [g for g in getattr(clipped, "geoms", []) if isinstance(g, ShapelyPolygon)]
+                if not polys:
+                    continue
+                clipped = ShapelyMultiPolygon(polys)
+            out[key] = mapping(clipped)
+        return out
+
+    # -- orkestrasi -----------------------------------------------------------
+
+    def analyze_polygon(self, polygon_id: int) -> dict[str, object]:
+        pid = int(polygon_id)
+        target = self.postgres_store.read_land_cover_target_polygon(pid)
+        if not target:
+            raise LandCoverError(
+                f"Poligon {pid} tidak ditemukan / tidak aktif / bukan KPS maupun Hutan Adat."
+            )
+        ee = self._ensure_ee()
+        started = time.monotonic()
+        roi = ee.Geometry(target["geometry_json"])
+        raw_geom = target["geometry_json"]
+
+        try:
+            self.postgres_store.mark_land_cover_running(pid, target["layer_key"])
+
+            feat_by_year = {}
+            samples = None
+            for i, year in enumerate(YEARS):
+                _LAND_COVER_RUN_STATE[pid] = {
+                    "state": "running",
+                    "step": f"{year} ({i + 1}/{len(YEARS)}) — sampel",
+                    "started_at": date.today().isoformat(),
+                }
+                feat = self._year_feature_image(ee, roi, year)
+                feat_by_year[year] = feat
+                pts = self._year_training_points(ee, roi, feat, year)
+                samples = pts if samples is None else samples.merge(pts)
+
+            rf = ee.Classifier.smileRandomForest(RF_TREES, seed=42).train(
+                features=samples, classProperty="class_idx", inputProperties=FEATURE_NAMES
+            )
+            try:
+                oob_err = rf.explain().getInfo().get("outOfBagErrorEstimate")
+                oob_accuracy = round(1.0 - float(oob_err), 4) if oob_err is not None else None
+            except Exception:  # noqa: BLE001
+                oob_accuracy = None
+
+            n_training = SAMPLES_PER_CLASS_PER_YEAR * len(CLASS_KEYS) * len(YEARS)
+
+            table: dict[int, dict[str, dict]] = {}
+            year_class_rows: list[dict] = []
+            year_geom_rows: list[dict] = []
+            for i, year in enumerate(YEARS):
+                _LAND_COVER_RUN_STATE[pid] = {
+                    "state": "running",
+                    "step": f"{year} ({i + 1}/{len(YEARS)}) — klasifikasi",
+                    "started_at": date.today().isoformat(),
+                }
+                classified = feat_by_year[year].classify(rf).rename("class_idx")
+                areas = self._year_area_by_class(ee, roi, classified)
+                total = sum(areas.values()) or 1.0
+                table[year] = {}
+                for key in CLASS_KEYS:
+                    pct = round(areas[key] / total * 100.0, 2)
+                    table[year][key] = {"area_ha": round(areas[key], 2), "pct": pct}
+                    year_class_rows.append(
+                        {"year": year, "class_key": key, "area_ha": round(areas[key], 2), "pct": pct}
+                    )
+                geoms = self._year_class_geom(ee, roi, classified, raw_geom)
+                for key, geom in geoms.items():
+                    year_geom_rows.append({"year": year, "class_key": key, "geometry_geojson": geom})
+
+            duration_s = round(time.monotonic() - started, 1)
+            self.postgres_store.save_land_cover_result(
+                pid,
+                target["layer_key"],
+                model_trees=RF_TREES,
+                n_training=n_training,
+                oob_accuracy=oob_accuracy,
+                duration_s=duration_s,
+                year_class_rows=year_class_rows,
+                year_geom_rows=year_geom_rows,
+            )
+            return {
+                "polygon_id": pid,
+                "years": list(YEARS),
+                "classes": list(CLASS_KEYS),
+                "oob_accuracy": oob_accuracy,
+                "n_training": n_training,
+                "duration_s": duration_s,
+                "table": table,
+                "net_change": _net_change(table),
+                "summary_text": _build_summary_text(table),
+            }
+        except LandCoverError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("LAND_COVER: analisis poligon %s gagal", pid)
+            self.postgres_store.mark_land_cover_error(pid, str(exc))
+            raise LandCoverError(f"Analisis gagal: {exc}") from exc
+        finally:
+            _LAND_COVER_RUN_STATE.pop(pid, None)

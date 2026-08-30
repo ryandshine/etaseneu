@@ -5,7 +5,9 @@ from __future__ import annotations
 import pytest
 
 from app.services.land_cover_service import (
+    CLASS_KEYS,
     YEARS,
+    _LAND_COVER_RUN_STATE,
     LandCoverError,
     LandCoverService,
     _build_summary_text,
@@ -79,3 +81,208 @@ def test_net_change_and_summary() -> None:
 
 def test_summary_incomplete_data() -> None:
     assert "tidak lengkap" in _build_summary_text({2020: {}}).lower()
+
+
+# ---------------------------------------------------------------------------
+# Integrasi analyze_polygon — fake ee + fake store (TIDAK ada GEE/DB nyata).
+#
+# Catatan: test double di brief bersifat ILUSTRATIF. `_FakeEE.Image` di brief
+# dibangun via `type(...)` sehingga `ee.Image("id")` (dipakai sebagai konstruktor
+# untuk NASADEM) melempar TypeError, dan `_FakeReducer.sum()` mengembalikan str
+# sehingga `.group(...)` gagal. Keduanya dikoreksi di bawah supaya
+# `analyze_polygon` jalan end-to-end tanpa menyentuh Earth Engine sungguhan.
+# ---------------------------------------------------------------------------
+
+
+class _FakeGetInfo:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def getInfo(self):
+        return self._payload
+
+
+class _FakeImg:
+    """Rantai method EE yang dipakai analyze_polygon — kebanyakan no-op."""
+
+    def __getattr__(self, _name):
+        return lambda *a, **k: self
+
+    def reduceRegion(self, *a, **k):
+        # satu grup per kelas idx 0..4, luas 100 ha (1e6 m2) tiap kelas
+        return _FakeGetInfo({"groups": [{"class": i, "sum": 1_000_000.0} for i in range(5)]})
+
+    def reduceToVectors(self, *a, **k):
+        return _FakeGetInfo(
+            {
+                "features": [
+                    {
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [[104.0, -2.0], [104.05, -2.0], [104.05, -1.95],
+                                 [104.0, -1.95], [104.0, -2.0]]
+                            ],
+                        }
+                    }
+                ]
+            }
+        )
+
+
+class _FakeImageClass(_FakeImg):
+    """Dipakai baik sebagai konstruktor (`ee.Image(id)`) maupun namespace
+    static (`ee.Image.pixelArea()`, `ee.Image.cat(...)`)."""
+
+    def __init__(self, *a, **k):
+        pass
+
+    @staticmethod
+    def pixelArea():
+        return _FakeImg()
+
+    @staticmethod
+    def cat(*a, **k):
+        return _FakeImg()
+
+
+class _FakeColl:
+    def __getattr__(self, _name):
+        return lambda *a, **k: self
+
+    def median(self):
+        return _FakeImg()
+
+    def mode(self):
+        return _FakeImg()
+
+    def mean(self):
+        return _FakeImg()
+
+
+class _FakeClassifier:
+    def train(self, *a, **k):
+        return self
+
+    def explain(self):
+        return _FakeGetInfo({"outOfBagErrorEstimate": 0.19})
+
+
+class _FakeReducer:
+    def __getattr__(self, _n):
+        # sum()/group()/max() semuanya mengembalikan token reducer chainable
+        return lambda *a, **k: self
+
+
+class _FakeGeom:
+    def __init__(self, *a, **k):
+        pass
+
+    def __getattr__(self, _n):
+        return lambda *a, **k: self
+
+
+class _FakeFC:
+    def __init__(self, *a, **k):
+        pass
+
+    def __getattr__(self, _n):
+        return lambda *a, **k: self
+
+
+class _FakeEE:
+    ImageCollection = staticmethod(lambda _id: _FakeColl())
+    Image = _FakeImageClass
+    Geometry = _FakeGeom
+    Feature = staticmethod(lambda *a, **k: object())
+    FeatureCollection = _FakeFC
+    Filter = type("F", (), {"lt": staticmethod(lambda *a, **k: "flt")})
+    Reducer = _FakeReducer()
+    Classifier = type(
+        "C", (), {"smileRandomForest": staticmethod(lambda *a, **k: _FakeClassifier())}
+    )
+    Terrain = type("T", (), {"products": staticmethod(lambda *a, **k: _FakeImg())})
+
+
+_TARGET_LAYERS = ("psagustus2026", "HUTAN_ADAT_APR26")
+
+
+class _FakeStore:
+    def __init__(self, target):
+        self._target = target
+        self.saved: dict | None = None
+        self.errored: str | None = None
+        self.running: tuple | None = None
+
+    def read_land_cover_target_polygon(self, polygon_id):
+        # meniru filter SQL: hanya poligon aktif di salah satu layer target
+        if not self._target or self._target.get("layer_key") not in _TARGET_LAYERS:
+            return None
+        return self._target
+
+    def mark_land_cover_running(self, polygon_id, layer_key):
+        self.running = (polygon_id, layer_key)
+
+    def mark_land_cover_error(self, polygon_id, message):
+        self.errored = message
+
+    def save_land_cover_result(self, polygon_id, layer_key, **kw):
+        self.saved = {"polygon_id": polygon_id, "layer_key": layer_key, **kw}
+
+
+_TARGET = {
+    "id": 287785,
+    "layer_key": "psagustus2026",
+    "lembaga": "LPHD MUARA MERANG",
+    "nama_prov": "Sumatera Selatan",
+    "geometry_json": {
+        "type": "Polygon",
+        "coordinates": [
+            [[104.0, -2.0], [104.1, -2.0], [104.1, -1.9], [104.0, -1.9], [104.0, -2.0]]
+        ],
+    },
+}
+
+
+def test_analyze_polygon_unknown_polygon_raises(monkeypatch) -> None:
+    svc = _svc()
+    svc.postgres_store = _FakeStore(None)
+    monkeypatch.setattr(svc, "_ensure_ee", lambda: _FakeEE())
+    with pytest.raises(LandCoverError):
+        svc.analyze_polygon(999999)
+
+
+def test_analyze_polygon_wrong_layer_key_raises(monkeypatch) -> None:
+    svc = _svc()
+    store = _FakeStore({**_TARGET, "layer_key": "layer_bukan_target"})
+    svc.postgres_store = store
+    monkeypatch.setattr(svc, "_ensure_ee", lambda: _FakeEE())
+    with pytest.raises(LandCoverError):
+        svc.analyze_polygon(287785)
+    assert store.saved is None
+    assert store.running is None  # tidak pernah mencapai try
+
+
+def test_analyze_polygon_happy_path_saves_all_years_classes(monkeypatch) -> None:
+    svc = _svc()
+    store = _FakeStore(_TARGET)
+    svc.postgres_store = store
+    monkeypatch.setattr(svc, "_ensure_ee", lambda: _FakeEE())
+
+    result = svc.analyze_polygon(287785)
+
+    assert result["years"] == list(YEARS)
+    assert result["classes"] == list(CLASS_KEYS)
+    assert result["oob_accuracy"] == pytest.approx(0.81)  # 1 - 0.19
+    assert store.running == (287785, "psagustus2026")
+    # 6 tahun x 5 kelas
+    assert len(store.saved["year_class_rows"]) == 30
+    assert store.saved["model_trees"] == 150
+    assert store.saved["n_training"] == 240 * 5 * 6
+    for year in YEARS:
+        pct_sum = sum(r["pct"] for r in store.saved["year_class_rows"] if r["year"] == year)
+        assert pct_sum == pytest.approx(100.0, abs=0.5)
+    assert set(result["net_change"].keys()) == set(CLASS_KEYS)
+    assert isinstance(result["summary_text"], str) and result["summary_text"]
+    # progres live dibersihkan di finally
+    assert 287785 not in _LAND_COVER_RUN_STATE
