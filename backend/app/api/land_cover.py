@@ -1,0 +1,115 @@
+"""Menu Tutupan Lahan per KPS: analisis on-demand Sentinel-2 + Random Forest
+(2020-2025), hasil di-cache permanen. Analisis butuh env GEE; membaca hasil
+tidak.
+"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query
+
+from app.core.config import get_settings
+from app.services.land_cover_service import (
+    CLASS_KEYS,
+    YEARS,
+    LandCoverService,
+    _build_summary_text,
+    _net_change,
+    land_cover_run_state,
+)
+from app.services.postgres_store import PostgresStore
+
+router = APIRouter()
+
+
+def _store() -> PostgresStore:
+    return PostgresStore(get_settings().database_url)
+
+
+@router.post("/land-cover/analyze", status_code=202)
+async def land_cover_analyze(
+    background_tasks: BackgroundTasks,
+    polygon_id: int = Body(..., embed=True),
+    force: bool = Query(default=False),
+) -> dict[str, object]:
+    service = LandCoverService()
+    if not service.enabled:
+        raise HTTPException(status_code=503, detail="GEE belum dikonfigurasi di server")
+
+    store = _store()
+    status = store.read_land_cover_status(polygon_id)
+    if status and status["status"] == "running":
+        raise HTTPException(status_code=409, detail="Analisis sedang berjalan")
+    if status and status["status"] == "done" and not force:
+        raise HTTPException(status_code=409, detail={"message": "sudah dianalisis", "done": True})
+
+    target = store.read_land_cover_target_polygon(polygon_id)
+    if not target:
+        raise HTTPException(
+            status_code=404,
+            detail="Poligon tidak ditemukan / tidak aktif / bukan KPS maupun Hutan Adat",
+        )
+    store.mark_land_cover_running(polygon_id, target["layer_key"])
+    background_tasks.add_task(LandCoverService().analyze_polygon, polygon_id)
+    return {"started": True, "polygon_id": polygon_id}
+
+
+@router.get("/land-cover/status")
+async def land_cover_status(polygon_id: int) -> dict[str, object]:
+    row = _store().read_land_cover_status(polygon_id)
+    live = land_cover_run_state(polygon_id)
+    return {
+        "state": row["status"] if row else "idle",
+        "step": live["step"] if live else None,
+        "error": row["error_message"] if row else None,
+        "computed_at": row["computed_at"] if row else None,
+    }
+
+
+@router.get("/land-cover/result")
+async def land_cover_result(polygon_id: int) -> dict[str, object]:
+    res = _store().read_land_cover_result(polygon_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Belum ada hasil analisis")
+    table: dict[int, dict[str, dict]] = {}
+    for r in res["year_class"]:
+        table.setdefault(r["year"], {})[r["class_key"]] = {
+            "area_ha": r["area_ha"], "pct": r["pct"],
+        }
+    return {
+        "meta": res["meta"],
+        "years": list(YEARS),
+        "classes": list(CLASS_KEYS),
+        "table": {str(y): table.get(y, {}) for y in YEARS},
+        "net_change": _net_change(table),
+        "summary_text": _build_summary_text(table),
+    }
+
+
+@router.get("/land-cover/overlay")
+async def land_cover_overlay(
+    polygon_id: int,
+    year: int = Query(...),
+) -> dict[str, object]:
+    if year not in YEARS:
+        raise HTTPException(status_code=404, detail="Tahun di luar rentang 2020-2025")
+    store = _store()
+    status = store.read_land_cover_status(polygon_id)
+    if not status or status["status"] != "done":
+        raise HTTPException(status_code=404, detail="Belum ada hasil analisis")
+    rows = store.read_land_cover_overlay(polygon_id, year)
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": r["geometry_json"],
+                "properties": {
+                    "class_key": r["class_key"],
+                    "area_ha": r["area_ha"],
+                    "pct": r["pct"],
+                },
+            }
+            for r in rows
+            if r.get("geometry_json")
+        ],
+    }

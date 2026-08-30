@@ -7,6 +7,7 @@ from app.api.cache import router as cache_router
 from app.api.export import router as export_router
 from app.api.hotspot_clusters import router as hotspot_clusters_router
 from app.api.hotspots import router as hotspots_router
+from app.api.land_cover import router as land_cover_router
 from app.api.layers import router as layers_router
 from app.api.metrics import router as metrics_router
 from app.api.point_match import router as point_match_router
@@ -41,6 +42,7 @@ router.include_router(wind_router, dependencies=_read_gate)
 router.include_router(weather_router, dependencies=_read_gate)
 router.include_router(burned_area_router, dependencies=_read_gate)
 router.include_router(early_warning_router, dependencies=_read_gate)
+router.include_router(land_cover_router, dependencies=_read_gate)
 api_router = router
 
 
