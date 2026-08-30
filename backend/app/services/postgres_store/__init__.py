@@ -18,6 +18,7 @@ from ._burned_area import _BurnedAreaMixin
 from ._cache import _CacheMixin
 from ._history import _HistoryArchiveMixin
 from ._hotspots import _HotspotObservationMixin
+from ._land_cover import _LandCoverMixin
 from ._layers import _LayerRegistryMixin
 from ._polygons import _PolygonMetadataMixin
 from ._relations import _PolygonRelationMixin
@@ -41,6 +42,7 @@ class PostgresStore(
     _SpatialMatchMixin,
     _BurnedAreaMixin,
     _S2BurnedAreaMixin,
+    _LandCoverMixin,
     _UserAccountMixin,
 ):
     """Fasad tunggal ke semua tabel aplikasi -- lihat docstring modul ini."""
