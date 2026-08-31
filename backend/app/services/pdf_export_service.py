@@ -19,7 +19,7 @@ from reportlab.graphics.shapes import Drawing, Rect, Circle, Line, String as DSt
 
 from app.models.query import HotspotQuery
 from app.services.hotspot_categories import confidence_category as _get_conf_cat, frp_category as _get_frp_cat
-from app.services.polygon_fields import sk_number
+from app.services.polygon_fields import fungsi_kawasan, sk_number
 from app.services.skema_stats import (
     build_skema_provinsi_matrix,
     collapse_skema_columns,
@@ -38,10 +38,10 @@ COLOR_BORDER = colors.HexColor("#e5e7eb")       # Border grey
 COLOR_WHITE = colors.HexColor("#ffffff")
 
 # Kolom Conf dilebarkan supaya muat "Sedang (28%)": kategori selalu tampil,
-# nilai mentahnya tetap ikut kalau satelitnya memberi angka. Kolom No. SK juga
-# ditambahkan. Total lebar dijaga tetap 769pt (lebar area cetak A4 lanskap),
-# jadi penambahan diambil dari kolom lain yang masih longgar.
-HOTSPOT_TABLE_COL_WIDTHS = [30, 136, 110, 68, 92, 56, 56, 62, 46, 46, 67]
+# nilai mentahnya tetap ikut kalau satelitnya memberi angka. Kolom No. SK dan
+# Fungsi Kawasan juga ditambahkan. Total lebar dijaga tetap 769pt (lebar area
+# cetak A4 lanskap), jadi penambahan diambil dari kolom lain yang masih longgar.
+HOTSPOT_TABLE_COL_WIDTHS = [30, 112, 92, 68, 84, 56, 56, 56, 46, 46, 58, 65]
 
 # reportlab Table dengan puluhan ribu baris (tiap sel dibungkus Paragraph)
 # butuh waktu jauh di luar wajar untuk di-layout -- ditemukan lewat laporan
@@ -855,6 +855,7 @@ def create_detailed_hotspot_rows(hotspots: list[dict]) -> list[list[str]]:
         "Bright (K)",
         "FRP (MW)",
         "Kategori FRP",
+        "Fungsi Kawasan",
     ]
 
     rows: list[list[str]] = [headers]
@@ -898,6 +899,7 @@ def create_detailed_hotspot_rows(hotspots: list[dict]) -> list[list[str]]:
             f"{hs.get('brightness', 'N/A')}",
             frp_display,
             frp_cat,
+            fungsi_kawasan(hs) or "-",
         ])
 
     if not hotspots:

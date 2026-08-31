@@ -118,6 +118,105 @@ def test_read_hotspot_observations_enriches_polygon_metadata(monkeypatch) -> Non
     assert "hotspot_polygon_relation" not in executed_query
 
 
+def _kawasan_row(**overrides: object) -> dict[str, object]:
+    row: dict[str, object] = {
+        "raw_payload": {
+            "source": "MODIS",
+            "satellite": "Terra",
+            "latitude": 4.1,
+            "longitude": 95.1,
+            "detected_at": "2026-05-02T12:00:00Z",
+            "layer_id": "sample_area",
+        },
+        "polygon_metadata_id": 99,
+        "lembaga": "LPHD Demo",
+        "properties_raw": {},
+    }
+    row.update(overrides)
+    return row
+
+
+def test_read_hotspot_observations_attaches_kawasan_hutan(monkeypatch) -> None:
+    from app.services.postgres_store import PostgresStore
+
+    rows = [
+        _kawasan_row(
+            khutan_kode=100300,
+            khutan_nama="Air Bangis",
+            khutan_kelompok="Lindung",
+            khutan_singkatan="HL",
+            khutan_fungsi="Hutan Lindung",
+        )
+    ]
+
+    store = PostgresStore("postgresql://demo")
+
+    class _FakeConnection:
+        def __init__(self) -> None:
+            self.cursor_obj = FakeCursor(rows)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def cursor(self):
+            return self.cursor_obj
+
+    fake_connection = _FakeConnection()
+    monkeypatch.setattr(store, "connection", lambda: fake_connection)
+
+    payloads = store.read_hotspot_observations(
+        start_date="2026-05-01",
+        end_date="2026-05-31",
+        sources=["MODIS"],
+        layer_ids=["sample_area"],
+    )
+
+    assert payloads[0]["kawasan_hutan"] == {
+        "kode": 100300,
+        "fungsi": "Hutan Lindung",
+        "singkatan": "HL",
+        "nama_kawasan": "Air Bangis",
+        "kelompok": "Lindung",
+    }
+
+    executed_query = fake_connection.cursor_obj.executed[0][0]
+    assert "LEFT JOIN hotspot_kawasan_hutan hkh" in executed_query
+    assert "LEFT JOIN ref_fungsi_kawasan_label lbl" in executed_query
+
+
+def test_read_hotspot_observations_omits_kawasan_hutan_when_unmatched(monkeypatch) -> None:
+    from app.services.postgres_store import PostgresStore
+
+    store = PostgresStore("postgresql://demo")
+
+    class _FakeConnection:
+        def __init__(self) -> None:
+            self.cursor_obj = FakeCursor([_kawasan_row()])
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def cursor(self):
+            return self.cursor_obj
+
+    monkeypatch.setattr(store, "connection", lambda: _FakeConnection())
+
+    payloads = store.read_hotspot_observations(
+        start_date="2026-05-01",
+        end_date="2026-05-31",
+        sources=["MODIS"],
+        layer_ids=["sample_area"],
+    )
+
+    assert "kawasan_hutan" not in payloads[0]
+
+
 def test_rebuild_polygon_hotspot_summary_uses_current_polygon_geometry(monkeypatch) -> None:
     from app.services.postgres_store import PostgresStore
 

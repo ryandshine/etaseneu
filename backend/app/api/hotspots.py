@@ -104,4 +104,15 @@ def _to_map_hotspot(hotspot: dict[str, object]) -> dict[str, object]:
     if wilker:
         payload["polygon_metadata"] = {"WILKER_BPS": wilker}
 
+    # Hanya 2 field ringkas dari atribusi fungsi kawasan hutan -- objek
+    # kawasan_hutan lengkap sengaja tidak dikirim ke peta.
+    kawasan = hotspot.get("kawasan_hutan")
+    if isinstance(kawasan, dict):
+        fungsi = kawasan.get("fungsi")
+        kelompok = kawasan.get("kelompok")
+        if fungsi:
+            payload["fungsi_kawasan"] = fungsi
+        if kelompok:
+            payload["kelompok"] = kelompok
+
     return payload

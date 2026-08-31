@@ -211,6 +211,7 @@ async def burned_area_s2_summary(
                 "area_ha": row["area_ha"],
                 "hotspot_count_month": row["hotspot_count_month"],
                 "has_hotspot": row["has_hotspot"],
+                "kawasan_dominan": row.get("kawasan_dominan"),
             },
         }
         for row in rows

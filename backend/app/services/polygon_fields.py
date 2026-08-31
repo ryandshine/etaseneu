@@ -66,6 +66,25 @@ def provinsi_name(hotspot: dict) -> str:
     return polygon_field(hotspot, "NAMA_PROV", "NAMA_PROVINSI", "PROVINSI") or PROVINSI_FALLBACK
 
 
+def fungsi_kawasan(hotspot: dict) -> str:
+    """Fungsi kawasan hutan titik panas (mis. "Hutan Lindung", "Hutan Produksi Tetap").
+
+    Sumbernya objek `kawasan_hutan` hasil enrich `read_hotspot_observations`
+    (lookup `hotspot_kawasan_hutan`). Kosong kalau titik di luar kawasan hutan.
+    """
+    return str((hotspot.get("kawasan_hutan") or {}).get("fungsi") or "")
+
+
+def nama_kawasan_hutan(hotspot: dict) -> str:
+    """Nama objek kawasan hutan (mis. "Air Bangis")."""
+    return str((hotspot.get("kawasan_hutan") or {}).get("nama_kawasan") or "")
+
+
+def kelompok_kawasan(hotspot: dict) -> str:
+    """Kelompok kawasan: Konservasi / Lindung / Produksi / Non-Kawasan Hutan."""
+    return str((hotspot.get("kawasan_hutan") or {}).get("kelompok") or "")
+
+
 def skema_name(hotspot: dict) -> str:
     """Skema perhutanan sosial (PPHD, PPHKm, PPHTR, PKK, Hutan Adat, IPHPS, ...).
 

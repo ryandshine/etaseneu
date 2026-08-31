@@ -141,6 +141,41 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   stdlib (BFS di `_graph_cluster`) — sengaja TIDAK pakai numpy/scipy/scikit-learn walau itu yang
   dipakai di prototipe awal, supaya `requirements.txt` tidak nambah dependency berat.
 
+### Atribusi Fungsi Kawasan Hutan (KWSHUTAN_AR_250K KLHK)
+
+Tiap hotspot & poligon estimasi bekas terbakar Sentinel-2 tahu masuk **fungsi kawasan hutan** yang
+mana (Hutan Lindung / HP / HPT / HPK / KSA-KPA / APL, dikelompokkan Konservasi/Lindung/Produksi/
+Non-Kawasan Hutan). Dibangun di luar repo langsung di DB (lihat `HANDOFF-fungsi-kawasan-hutan.md`),
+BUKAN lewat migrasi app:
+
+- **Tabel referensi DB** (dibuat manual via SQL, tidak ada `_ensure_*` di kode app):
+  `ref_kawasan_hutan` + `ref_kawasan_hutan_sub` (geometri detail penuh, ~2 GB, cuma dipakai saat
+  join), `hotspot_kawasan_hutan` (lookup `hotspot_id → fungsikws/nama_kawasan/kelompok`),
+  `burned_kawasan_hutan` (rincian `s2_burned_area.id × fungsi kawasan → luas_ha`),
+  `ref_fungsi_kawasan_label` (`kode numeric → singkatan/fungsi/kelompok`). Fungsi SQL
+  `refresh_kawasan_attribution()` me-refresh lookup (inkremental untuk hotspot, rebuild penuh untuk
+  burned) — dijadwalkan cron harian di host (`docker exec gealgeolgeo-postgis psql ... -c "SELECT
+  refresh_kawasan_attribution();"`), TIDAK dipanggil dari app.
+- **Enrich di request path = LEFT JOIN saja, tanpa operasi spasial baru**:
+  `postgres_store/_hotspots.py::read_hotspot_observations()` LEFT JOIN `hotspot_kawasan_hutan` +
+  `ref_fungsi_kawasan_label` → `payload["kawasan_hutan"] = {kode, fungsi, singkatan, nama_kawasan,
+  kelompok}` (key tidak ada kalau titik di luar semua kawasan). `hotspot_service._hydrate_polygon_metadata`
+  meneruskan key top-level itu apa adanya. `postgres_store/_s2_burned_area.py::read_s2_burned_area_for_polygons()`
+  & `read_s2_burned_area_overlay()` LEFT JOIN LATERAL `burned_kawasan_hutan` → `kawasan_rincian`
+  (list per fungsi) + `kawasan_dominan` (kelompok terluas).
+- **`get_hotspots_in_range()` (jalur cluster/Kompleks Kebakaran) sengaja TIDAK di-enrich** — outputnya
+  cuma untuk UI klaster, bukan laporan. Tambah LEFT JOIN yang sama kalau nanti masuk PDF/XLSX.
+- **Surface**: `helper polygon_fields.fungsi_kawasan/nama_kawasan_hutan/kelompok_kawasan`; XLSX sheet
+  "Data Hotspot" 3 kolom baru di akhir ("Fungsi Kawasan Hutan", "Nama Kawasan", "Kelompok"); PDF
+  `create_detailed_hotspot_rows` kolom "Fungsi Kawasan" (lebar tabel tetap 769pt); API peta
+  `_to_map_hotspot` cuma `fungsi_kawasan` + `kelompok` ringkas; `GET /api/burned-area/s2-summary`
+  & `s2-overlay` bawa `kawasan_rincian`/`kawasan_dominan`. **Belum ada tampilan di frontend** (popup
+  peta / KpsDetailView) — itu pekerjaan lanjutan.
+- **Overlay peta**: file `SHP_DIR/fungsi_kawasan_hutan.geojson` (~101 MB, disederhanakan ~110 m) —
+  otomatis kebaca `LayerService` (`glob("*.geojson")`), `layer_key = fungsi_kawasan_hutan`. Cuma
+  untuk tampilan; atribusi presisi pakai tabel PostGIS di atas. `_friendly_layer_name` belum diberi
+  nama/warna khusus.
+
 ## ⚠️ Bahaya #2: GEE sudah digantikan KLHK untuk luas bekas terbakar
 
 Google Earth Engine (MODIS/VIIRS) BUKAN lagi sumber data luas terbakar. Sumber resmi sekarang: file

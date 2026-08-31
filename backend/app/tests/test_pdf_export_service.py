@@ -75,6 +75,38 @@ def test_hotspot_table_number_column_is_wide_enough_for_three_digits() -> None:
     assert HOTSPOT_TABLE_COL_WIDTHS[0] >= 30
 
 
+def test_hotspot_table_col_widths_fit_a4_landscape_and_match_headers() -> None:
+    header_row = create_detailed_hotspot_rows([])[0]
+    assert len(HOTSPOT_TABLE_COL_WIDTHS) == len(header_row)
+    assert sum(HOTSPOT_TABLE_COL_WIDTHS) == 769
+
+
+def test_create_detailed_hotspot_rows_includes_fungsi_kawasan_column() -> None:
+    rows = create_detailed_hotspot_rows(
+        [
+            {
+                "layer_name": "LPHD X",
+                "source": "MODIS",
+                "detected_at": "2026-05-29T05:44:00Z",
+                "latitude": 1.0,
+                "longitude": 2.0,
+                "kawasan_hutan": {"fungsi": "Hutan Produksi Tetap", "kelompok": "Produksi"},
+            },
+            {
+                "layer_name": "LPHD Y",
+                "source": "MODIS",
+                "detected_at": "2026-05-29T05:44:00Z",
+                "latitude": 1.0,
+                "longitude": 2.0,
+            },
+        ]
+    )
+
+    assert rows[0][-1] == "Fungsi Kawasan"
+    assert rows[1][-1] == "Hutan Produksi Tetap"
+    assert rows[2][-1] == "-"
+
+
 def test_section_skema_provinsi_renders_crosstab_with_totals() -> None:
     from reportlab.platypus import Table
 

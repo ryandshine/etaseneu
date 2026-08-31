@@ -191,12 +191,29 @@ class _S2BurnedAreaMixin:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT polygon_metadata_id, layer_key, year, month,
-                           area_ha, hotspot_count_month, has_hotspot, computed_at,
-                           ST_AsGeoJSON(geometry)::json AS geometry_json
-                    FROM s2_burned_area
-                    WHERE polygon_metadata_id = ANY(%s)
-                    ORDER BY year DESC, month DESC
+                    SELECT s.polygon_metadata_id, s.layer_key, s.year, s.month,
+                           s.area_ha, s.hotspot_count_month, s.has_hotspot, s.computed_at,
+                           ST_AsGeoJSON(s.geometry)::json AS geometry_json,
+                           khutan.rincian AS kawasan_rincian,
+                           khutan.dominan AS kawasan_dominan
+                    FROM s2_burned_area s
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            jsonb_agg(jsonb_build_object(
+                                'kode', bkh.fungsikws,
+                                'fungsi', COALESCE(lbl.fungsi, 'Kode ' || bkh.fungsikws::text),
+                                'kelompok', bkh.kelompok,
+                                'luas_ha', round(bkh.luas_ha::numeric, 2)
+                            ) ORDER BY bkh.luas_ha DESC) AS rincian,
+                            (SELECT bkh2.kelompok FROM burned_kawasan_hutan bkh2
+                               WHERE bkh2.burned_id = s.id
+                               ORDER BY bkh2.luas_ha DESC LIMIT 1) AS dominan
+                        FROM burned_kawasan_hutan bkh
+                        LEFT JOIN ref_fungsi_kawasan_label lbl ON lbl.kode = bkh.fungsikws
+                        WHERE bkh.burned_id = s.id
+                    ) khutan ON TRUE
+                    WHERE s.polygon_metadata_id = ANY(%s)
+                    ORDER BY s.year DESC, s.month DESC
                     """,
                     (ids,),
                 )
@@ -212,6 +229,8 @@ class _S2BurnedAreaMixin:
                 "has_hotspot": bool(r["has_hotspot"]),
                 "computed_at": r["computed_at"].isoformat() if r.get("computed_at") else None,
                 "geometry_json": r.get("geometry_json"),
+                "kawasan_rincian": r.get("kawasan_rincian") or [],
+                "kawasan_dominan": r.get("kawasan_dominan"),
             }
             for r in rows
         ]
@@ -225,9 +244,26 @@ class _S2BurnedAreaMixin:
                     SELECT s.polygon_metadata_id, s.area_ha, s.dnbr_mean,
                            s.hotspot_count_month, s.has_hotspot, s.computed_at,
                            pm.lembaga, pm.nama_prov, pm.nama_kab,
-                           ST_AsGeoJSON(s.geometry)::json AS geometry_json
+                           ST_AsGeoJSON(s.geometry)::json AS geometry_json,
+                           khutan.rincian AS kawasan_rincian,
+                           khutan.dominan AS kawasan_dominan
                     FROM s2_burned_area s
                     JOIN polygon_metadata pm ON pm.id = s.polygon_metadata_id
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            jsonb_agg(jsonb_build_object(
+                                'kode', bkh.fungsikws,
+                                'fungsi', COALESCE(lbl.fungsi, 'Kode ' || bkh.fungsikws::text),
+                                'kelompok', bkh.kelompok,
+                                'luas_ha', round(bkh.luas_ha::numeric, 2)
+                            ) ORDER BY bkh.luas_ha DESC) AS rincian,
+                            (SELECT bkh2.kelompok FROM burned_kawasan_hutan bkh2
+                               WHERE bkh2.burned_id = s.id
+                               ORDER BY bkh2.luas_ha DESC LIMIT 1) AS dominan
+                        FROM burned_kawasan_hutan bkh
+                        LEFT JOIN ref_fungsi_kawasan_label lbl ON lbl.kode = bkh.fungsikws
+                        WHERE bkh.burned_id = s.id
+                    ) khutan ON TRUE
                     WHERE s.year = %s AND s.month = %s AND s.geometry IS NOT NULL
                     ORDER BY s.area_ha DESC
                     """,
@@ -248,6 +284,8 @@ class _S2BurnedAreaMixin:
                     "hotspot_count_month": int(r["hotspot_count_month"]),
                     "has_hotspot": bool(r["has_hotspot"]),
                     "computed_at": r["computed_at"].isoformat() if r.get("computed_at") else None,
+                    "kawasan_rincian": r.get("kawasan_rincian") or [],
+                    "kawasan_dominan": r.get("kawasan_dominan"),
                 },
             }
             for r in rows

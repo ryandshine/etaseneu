@@ -16,6 +16,9 @@ from app.services.hotspot_categories import (
     frp_category,
 )
 from app.services.polygon_fields import (
+    fungsi_kawasan,
+    kelompok_kawasan,
+    nama_kawasan_hutan,
     polygon_field,
     provinsi_name,
     sk_date,
@@ -51,6 +54,11 @@ EXPORT_HEADERS = [
     "Kategori FRP",
     "FRP (MW)",
     "Brightness",
+    # Atribusi fungsi kawasan hutan KLHK -- disisipkan di akhir supaya urutan
+    # kolom lama tidak bergeser untuk konsumen yang membaca berdasar posisi.
+    "Fungsi Kawasan Hutan",
+    "Nama Kawasan",
+    "Kelompok",
 ]
 
 DATA_SHEET_TITLE = "Data Hotspot"
@@ -142,6 +150,9 @@ def build_export_rows(hotspots: list[dict]) -> list[dict]:
                 "Kategori FRP": frp_category(hotspot),
                 "FRP (MW)": hotspot.get("frp", ""),
                 "Brightness": hotspot.get("brightness", ""),
+                "Fungsi Kawasan Hutan": fungsi_kawasan(hotspot),
+                "Nama Kawasan": nama_kawasan_hutan(hotspot),
+                "Kelompok": kelompok_kawasan(hotspot),
             }
         )
     return rows
@@ -232,7 +243,7 @@ def _write_data_sheet(sheet, rows: list[dict]) -> None:
         cell.alignment = Alignment(vertical="center", horizontal="left")
     sheet.row_dimensions[1].height = 22
 
-    widths = [5, 34, 40, 12, 14, 22, 20, 18, 15, 20, 12, 12, 12, 12, 10, 12]
+    widths = [5, 34, 40, 12, 14, 22, 20, 18, 15, 20, 12, 12, 12, 12, 10, 12, 26, 24, 20]
     for index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
 

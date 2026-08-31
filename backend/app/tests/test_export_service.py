@@ -60,6 +60,9 @@ def test_build_excel_file_writes_headers_and_row_values() -> None:
         "Kategori FRP",
         "FRP (MW)",
         "Brightness",
+        "Fungsi Kawasan Hutan",
+        "Nama Kawasan",
+        "Kelompok",
     ]
     # Sel kosong ("") dibaca kembali oleh openpyxl sebagai None.
     # detected_at tanpa offset diperlakukan sebagai UTC (sama seperti yang
@@ -83,6 +86,9 @@ def test_build_excel_file_writes_headers_and_row_values() -> None:
         "Rendah",
         None,
         330.4,
+        None,
+        None,
+        None,
     ]
 
 
@@ -135,6 +141,37 @@ def test_export_rows_include_balai_and_provinsi() -> None:
     assert rows[0]["Kabupaten"] == "Kubu Raya"
     assert rows[1]["Balai PS"] == "Balai PS Manokwari"
     assert rows[1]["Provinsi"] == "Papua Selatan"
+
+
+def test_export_rows_include_fungsi_kawasan_hutan() -> None:
+    from app.services.export_service import build_export_rows
+
+    rows = build_export_rows(
+        [
+            {
+                "layer_name": "LPHD X",
+                "source": "MODIS",
+                "detected_at": "2026-08-02T06:12:00Z",
+                "latitude": -1.0,
+                "longitude": 101.0,
+                "kawasan_hutan": {
+                    "kode": 100300,
+                    "fungsi": "Hutan Lindung",
+                    "singkatan": "HL",
+                    "nama_kawasan": "Air Bangis",
+                    "kelompok": "Lindung",
+                },
+            },
+            {"layer_name": "LPHD Y", "source": "MODIS", "detected_at": "2026-08-02T06:12:00Z"},
+        ]
+    )
+
+    assert rows[0]["Fungsi Kawasan Hutan"] == "Hutan Lindung"
+    assert rows[0]["Nama Kawasan"] == "Air Bangis"
+    assert rows[0]["Kelompok"] == "Lindung"
+    # Titik tanpa atribusi kawasan -> kolom kosong, bukan error.
+    assert rows[1]["Fungsi Kawasan Hutan"] == ""
+    assert rows[1]["Kelompok"] == ""
 
 
 def test_provinsi_falls_back_to_polygon_metadata_when_province_name_missing() -> None:

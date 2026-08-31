@@ -341,6 +341,63 @@ def test_save_burned_area_scheduler_state_upserts_single_row(monkeypatch) -> Non
     assert params[3] == 0
 
 
+def test_read_s2_burned_area_for_polygons_attaches_kawasan_breakdown(monkeypatch) -> None:
+    fake_rows = [
+        {
+            "polygon_metadata_id": 49463,
+            "layer_key": "psagustus2026",
+            "year": 2026,
+            "month": 8,
+            "area_ha": 12.34,
+            "hotspot_count_month": 3,
+            "has_hotspot": True,
+            "computed_at": None,
+            "geometry_json": {"type": "MultiPolygon", "coordinates": []},
+            "kawasan_rincian": [
+                {"kode": 100500, "fungsi": "Hutan Produksi Tetap", "kelompok": "Produksi", "luas_ha": 10.0},
+                {"kode": 100300, "fungsi": "Hutan Lindung", "kelompok": "Lindung", "luas_ha": 2.34},
+            ],
+            "kawasan_dominan": "Produksi",
+        }
+    ]
+    store, cursor = _store_with_fake_cursor(monkeypatch, fetchall_result=fake_rows)
+
+    result = store.read_s2_burned_area_for_polygons([49463])
+
+    assert result[0]["kawasan_dominan"] == "Produksi"
+    assert result[0]["kawasan_rincian"][0]["fungsi"] == "Hutan Produksi Tetap"
+    query = cursor.executed[-1][0]
+    assert "LEFT JOIN LATERAL" in query
+    assert "burned_kawasan_hutan bkh" in query
+
+
+def test_read_s2_burned_area_overlay_puts_kawasan_dominan_in_properties(monkeypatch) -> None:
+    fake_rows = [
+        {
+            "polygon_metadata_id": 49463,
+            "area_ha": 20.0,
+            "dnbr_mean": 0.51,
+            "hotspot_count_month": 1,
+            "has_hotspot": True,
+            "computed_at": None,
+            "lembaga": "KOPERASI X",
+            "nama_prov": "Riau",
+            "nama_kab": "Pelalawan",
+            "geometry_json": {"type": "MultiPolygon", "coordinates": []},
+            "kawasan_rincian": [
+                {"kode": 100300, "fungsi": "Hutan Lindung", "kelompok": "Lindung", "luas_ha": 20.0}
+            ],
+            "kawasan_dominan": "Lindung",
+        }
+    ]
+    store, cursor = _store_with_fake_cursor(monkeypatch, fetchall_result=fake_rows)
+
+    result = store.read_s2_burned_area_overlay(2026, 8)
+
+    assert result["features"][0]["properties"]["kawasan_dominan"] == "Lindung"
+    assert "LEFT JOIN LATERAL" in cursor.executed[-1][0]
+
+
 def test_read_burned_area_scheduler_state_returns_none_when_no_row(monkeypatch) -> None:
     store, _cursor = _store_with_fake_cursor(monkeypatch, fetchone_result=None)
     assert store.read_burned_area_scheduler_state() is None

@@ -182,12 +182,19 @@ class _HotspotObservationMixin:
                             p.jml_kk,
                             p.shape_leng,
                             p.shape_area,
-                            p.properties_raw
+                            p.properties_raw,
+                            hkh.fungsikws AS khutan_kode,
+                            hkh.nama_kawasan AS khutan_nama,
+                            hkh.kelompok AS khutan_kelompok,
+                            lbl.singkatan AS khutan_singkatan,
+                            COALESCE(lbl.fungsi, 'Kode ' || hkh.fungsikws::text) AS khutan_fungsi
                         FROM hotspot_observations obs
                         JOIN polygon_metadata p
                           ON p.layer_key = obs.layer_key
                          AND p.is_active = TRUE
                          AND ST_Covers(p.geometry, obs.geom)
+                        LEFT JOIN hotspot_kawasan_hutan hkh ON hkh.hotspot_id = obs.id
+                        LEFT JOIN ref_fungsi_kawasan_label lbl ON lbl.kode = hkh.fungsikws
                         WHERE obs.detected_at >= %s::timestamptz AND obs.detected_at < %s::timestamptz
                           AND obs.source = ANY(%s)
                           AND obs.layer_key = ANY(%s)
@@ -243,6 +250,18 @@ class _HotspotObservationMixin:
                 }
                 merged_metadata = {**orig_metadata, **db_metadata}
                 payload["polygon_metadata"] = merged_metadata
+
+                kode = row.get("khutan_kode")
+                kawasan = {
+                    "kode": int(kode) if kode is not None else None,
+                    "fungsi": row.get("khutan_fungsi"),
+                    "singkatan": row.get("khutan_singkatan"),
+                    "nama_kawasan": row.get("khutan_nama"),
+                    "kelompok": row.get("khutan_kelompok"),
+                }
+                if any(value not in (None, "") for value in kawasan.values()):
+                    payload["kawasan_hutan"] = kawasan
+
                 payloads.append(payload)
         return payloads
 
