@@ -37,7 +37,9 @@ async def land_cover_analyze(
 
     store = _store()
     status = store.read_land_cover_status(polygon_id)
-    if status and status["status"] == "running":
+    if status and status["status"] == "running" and not force:
+        # force=true dipakai tombol "Analisis ulang" -- juga jadi jalan keluar
+        # kalau ada baris 'running' basi (mis. container restart saat job jalan).
         raise HTTPException(status_code=409, detail="Analisis sedang berjalan")
     if status and status["status"] == "done" and not force:
         raise HTTPException(status_code=409, detail={"message": "sudah dianalisis", "done": True})

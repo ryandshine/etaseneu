@@ -71,6 +71,13 @@ def test_analyze_409_when_running(client):
     assert r.status_code == 409
 
 
+def test_analyze_force_overrides_stale_running(client):
+    client._store._status = {"status": "running", "error_message": None, "computed_at": None}
+    r = client.post("/api/land-cover/analyze?force=true", json={"polygon_id": 1})
+    assert r.status_code == 202
+    assert client._store.running_marked is True
+
+
 def test_analyze_409_when_done_without_force(client):
     client._store._status = {"status": "done", "error_message": None, "computed_at": "2026-08-30T00:00:00"}
     r = client.post("/api/land-cover/analyze", json={"polygon_id": 1})

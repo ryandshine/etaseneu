@@ -31,7 +31,11 @@ CLASS_KEYS: tuple[str, ...] = ("hutan", "semak", "pertanian", "terbuka", "air")
 _CLASS_IDX = {k: i for i, k in enumerate(CLASS_KEYS)}
 
 RF_TREES = 150
-SAMPLES_PER_CLASS_PER_YEAR = 240
+# Dikecilkan dari 240 -> 100: GEE tier gratis sering di "restricted mode"
+# (kuota compute terlampaui) sehingga tiap getInfo() di-throttle berat; sampel
+# lebih sedikit memangkas beban stratifiedSample per tahun tanpa mengubah
+# resolusi (scale tetap 10 m).
+SAMPLES_PER_CLASS_PER_YEAR = 100
 DW_CONF_MIN = 0.6
 FEATURE_NAMES = [
     "B2", "B3", "B4", "B8", "B11", "B12",

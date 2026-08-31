@@ -6,6 +6,7 @@ import pytest
 
 from app.services.land_cover_service import (
     CLASS_KEYS,
+    SAMPLES_PER_CLASS_PER_YEAR,
     TRAIN_BUFFER_M,
     YEARS,
     _LAND_COVER_RUN_STATE,
@@ -283,7 +284,7 @@ def test_analyze_polygon_happy_path_saves_all_years_classes(monkeypatch) -> None
     # 6 tahun x 5 kelas
     assert len(store.saved["year_class_rows"]) == 30
     assert store.saved["model_trees"] == 150
-    assert store.saved["n_training"] == 240 * 5 * 6
+    assert store.saved["n_training"] == SAMPLES_PER_CLASS_PER_YEAR * 5 * 6
     for year in YEARS:
         pct_sum = sum(r["pct"] for r in store.saved["year_class_rows"] if r["year"] == year)
         assert pct_sum == pytest.approx(100.0, abs=0.5)

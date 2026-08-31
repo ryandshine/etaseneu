@@ -246,8 +246,22 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
         <div className="lc-running" aria-live="polite">
           <span className="lc-running__bar" aria-hidden />
           <p>Menghitung dari citra satelit… {step ?? "menyiapkan"}</p>
-          <span className="lc-running__hint">Perlu 1–3 menit. Aman ditinggal.</span>
+          <span className="lc-running__hint">
+            Perlu 1–3 menit (lebih lama saat kuota GEE terbatas). Aman ditinggal —
+            hasilnya tetap tersimpan.
+          </span>
         </div>
+        <button
+          type="button"
+          className="lc-rerun"
+          onClick={() => {
+            if (window.confirm("Mulai ulang analisis? Proses yang sedang berjalan diabaikan.")) {
+              void runAnalyze(true);
+            }
+          }}
+        >
+          Mulai ulang
+        </button>
       </section>
     );
   }
