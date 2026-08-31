@@ -165,12 +165,17 @@ BUKAN lewat migrasi app:
   (list per fungsi) + `kawasan_dominan` (kelompok terluas).
 - **`get_hotspots_in_range()` (jalur cluster/Kompleks Kebakaran) sengaja TIDAK di-enrich** — outputnya
   cuma untuk UI klaster, bukan laporan. Tambah LEFT JOIN yang sama kalau nanti masuk PDF/XLSX.
-- **Surface**: `helper polygon_fields.fungsi_kawasan/nama_kawasan_hutan/kelompok_kawasan`; XLSX sheet
-  "Data Hotspot" 3 kolom baru di akhir ("Fungsi Kawasan Hutan", "Nama Kawasan", "Kelompok"); PDF
-  `create_detailed_hotspot_rows` kolom "Fungsi Kawasan" (lebar tabel tetap 769pt); API peta
-  `_to_map_hotspot` cuma `fungsi_kawasan` + `kelompok` ringkas; `GET /api/burned-area/s2-summary`
-  & `s2-overlay` bawa `kawasan_rincian`/`kawasan_dominan`. **Belum ada tampilan di frontend** (popup
-  peta / KpsDetailView) — itu pekerjaan lanjutan.
+- **Surface backend**: `helper polygon_fields.fungsi_kawasan/nama_kawasan_hutan/kelompok_kawasan`;
+  XLSX sheet "Data Hotspot" 3 kolom baru di akhir ("Fungsi Kawasan Hutan", "Nama Kawasan",
+  "Kelompok"); PDF `create_detailed_hotspot_rows` kolom "Fungsi Kawasan" (lebar tabel tetap 769pt);
+  API peta `_to_map_hotspot` cuma `fungsi_kawasan` + `kelompok` ringkas; `GET /api/burned-area/s2-summary`
+  & `s2-overlay` bawa `kawasan_rincian`/`kawasan_dominan`.
+- **Surface frontend**: `mapHotspotRecordToDashboardHotspot` (`lib/hotspotDisplay.ts`) memetakan
+  jadi `fungsiKawasan/namaKawasan/kelompokKawasan` (ambil dari objek `kawasan_hutan` view=full ATAU
+  field datar `fungsi_kawasan`/`kelompok` view=map). Tampil di: popup titik hotspot
+  (`HotspotPopupContent.tsx`, dipakai peta utama + peta KpsDetail), popup overlay "Estimasi Bekas
+  Terbakar" Sentinel-2 di `HotspotMap.tsx` (baris `kawasan_dominan`), dan kartu "Segmen Lokasi" di
+  `KpsDetailView.tsx`. HotspotMatrix (tabel dikelompokkan per KPS) sengaja tidak diberi kolom ini.
 - **Overlay peta**: file `SHP_DIR/fungsi_kawasan_hutan.geojson` (~101 MB, disederhanakan ~110 m) —
   otomatis kebaca `LayerService` (`glob("*.geojson")`), `layer_key = fungsi_kawasan_hutan`. Cuma
   untuk tampilan; atribusi presisi pakai tabel PostGIS di atas. `_friendly_layer_name` belum diberi

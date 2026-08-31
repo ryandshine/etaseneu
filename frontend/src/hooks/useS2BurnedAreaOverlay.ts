@@ -14,6 +14,7 @@ export type S2BurnedAreaFeature = {
     hotspot_count_month: number;
     has_hotspot: boolean;
     computed_at: string | null;
+    kawasan_dominan: string | null;
   };
 };
 

@@ -93,6 +93,19 @@ export interface HotspotRecord {
   agency_name?: string;
   province_name?: string;
   polygon_metadata?: Record<string, string>;
+  // Atribusi fungsi kawasan hutan KLHK. Bentuk objek `kawasan_hutan` datang
+  // dari view=full; `fungsi_kawasan`/`kelompok` datar datang dari view=map.
+  kawasan_hutan?: KawasanHutan | null;
+  fungsi_kawasan?: string;
+  kelompok?: string;
+}
+
+export interface KawasanHutan {
+  kode?: number | null;
+  fungsi?: string | null;
+  singkatan?: string | null;
+  nama_kawasan?: string | null;
+  kelompok?: string | null;
 }
 
 export interface StatsSummary {

@@ -18,6 +18,9 @@ export type PopupHotspot = {
   brightness: number | null;
   frp?: number | null;
   detectedAt: string;
+  fungsiKawasan?: string;
+  namaKawasan?: string;
+  kelompokKawasan?: string;
 };
 
 type SpotWeather = {
@@ -268,6 +271,16 @@ export function HotspotPopupContent({ hotspot }: { hotspot: PopupHotspot }) {
           <dt>Terdeteksi</dt>
           <dd>{formatTimestamp(hotspot.detectedAt)}</dd>
         </div>
+        {(hotspot.fungsiKawasan || hotspot.kelompokKawasan) && (
+          <div style={{ gridColumn: "span 2" }}>
+            <dt>Fungsi Kawasan Hutan</dt>
+            <dd>
+              {formatMetadataValue(hotspot.fungsiKawasan)}
+              {hotspot.kelompokKawasan ? ` (${hotspot.kelompokKawasan})` : ""}
+              {hotspot.namaKawasan ? ` — ${hotspot.namaKawasan}` : ""}
+            </dd>
+          </div>
+        )}
       </dl>
       <CoordinateActions lat={hotspot.latitude} lon={hotspot.longitude} />
       <HotspotWeatherPopup lat={hotspot.latitude} lon={hotspot.longitude} />

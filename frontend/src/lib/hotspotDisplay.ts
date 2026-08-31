@@ -29,6 +29,9 @@ export type MappedDashboardHotspot = {
   daynight: string;
   detectedAt: string;
   polygonMetadata: Record<string, string>;
+  fungsiKawasan: string;
+  namaKawasan: string;
+  kelompokKawasan: string;
 };
 
 export function mapHotspotRecordToDashboardHotspot(
@@ -58,7 +61,12 @@ export function mapHotspotRecordToDashboardHotspot(
     frp: hotspot.frp === null || hotspot.frp === undefined ? null : Number(hotspot.frp),
     confidence: String(hotspot.confidence ?? "Unknown"),
     daynight: String(hotspot.daynight ?? ""),
-    detectedAt: String(hotspot.detected_at ?? "")
+    detectedAt: String(hotspot.detected_at ?? ""),
+    // view=map memberi field datar (fungsi_kawasan/kelompok); view=full memberi
+    // objek kawasan_hutan. Ambil dari mana pun yang terisi.
+    fungsiKawasan: String(hotspot.fungsi_kawasan ?? hotspot.kawasan_hutan?.fungsi ?? ""),
+    namaKawasan: String(hotspot.kawasan_hutan?.nama_kawasan ?? ""),
+    kelompokKawasan: String(hotspot.kelompok ?? hotspot.kawasan_hutan?.kelompok ?? "")
   };
 }
 

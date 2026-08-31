@@ -37,6 +37,9 @@ export type DashboardHotspot = {
   daynight: string;
   detectedAt: string;
   polygonMetadata: Record<string, string>;
+  fungsiKawasan: string;
+  namaKawasan: string;
+  kelompokKawasan: string;
 };
 type RemoteStats = {
   total: number;

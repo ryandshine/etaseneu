@@ -54,6 +54,9 @@ type HotspotRecord = {
   confidence: string;
   daynight?: string;
   detectedAt: string;
+  fungsiKawasan?: string;
+  namaKawasan?: string;
+  kelompokKawasan?: string;
 };
 
 type LayerRecord = {
@@ -755,6 +758,9 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
                 const hotspotNote = props.has_hotspot
                   ? `<div>Hotspot bulan ini: <strong>${props.hotspot_count_month}</strong></div>`
                   : `<div style="color:#fca5a5">Tidak ada hotspot terdeteksi — terbakar tetap terekam citra.</div>`;
+                const kawasanNote = props.kawasan_dominan
+                  ? `<div>Fungsi kawasan (dominan): <strong>${props.kawasan_dominan}</strong></div>`
+                  : "";
                 layer.bindPopup(
                   `<div style="font-size:12px;font-family:sans-serif;min-width:200px">
                      <strong style="color:#b45309">Estimasi Bekas Terbakar</strong>
@@ -764,6 +770,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
                        Math.round(props.area_ha * 10) / 10
                      )} Ha</strong></div>
                      ${hotspotNote}
+                     ${kawasanNote}
                      <div style="margin-top:6px;color:#fbbf24;font-size:11px">
                        Analisis mandiri Sentinel-2 dNBR — estimasi, belum terverifikasi Kementerian Kehutanan.
                      </div>

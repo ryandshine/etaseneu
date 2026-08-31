@@ -118,6 +118,9 @@ function buildHotspot(overrides: Partial<DashboardHotspot> = {}): DashboardHotsp
     daynight: "D",
     detectedAt: "2026-05-28T00:10:59Z",
     polygonMetadata: { LEMBAGA: "LD LINGAT", polygon_metadata_id: "292425" },
+    fungsiKawasan: "",
+    namaKawasan: "",
+    kelompokKawasan: "",
     ...overrides
   };
 }

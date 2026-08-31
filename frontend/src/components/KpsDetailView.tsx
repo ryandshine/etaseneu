@@ -1174,6 +1174,16 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                 <span>Terdeteksi</span>
                 <strong>{formatTimestamp(selectedDetection.detectedAt)}</strong>
               </div>
+              {(selectedDetection.fungsiKawasan || selectedDetection.kelompokKawasan) && (
+                <div className="matrix-detail-item" style={{ gridColumn: "1 / -1" }}>
+                  <span>Fungsi Kawasan Hutan</span>
+                  <strong>
+                    {formatMetadataValue(selectedDetection.fungsiKawasan)}
+                    {selectedDetection.kelompokKawasan ? ` (${selectedDetection.kelompokKawasan})` : ""}
+                    {selectedDetection.namaKawasan ? ` — ${selectedDetection.namaKawasan}` : ""}
+                  </strong>
+                </div>
+              )}
             </div>
             <div className="matrix-code-block">
               <p className="matrix-code-block__label">Koordinat</p>
