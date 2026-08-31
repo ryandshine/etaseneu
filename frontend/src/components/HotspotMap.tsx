@@ -743,7 +743,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
             </Popup>
           </Marker>
         ))}
-        {showKawasan ? <KawasanHutanLayer opacity={0.55} /> : null}
+        {showKawasan ? <KawasanHutanLayer opacity={0.9} /> : null}
         <Pane name="batas-kps" style={{ zIndex: 400 }}>
           {layers
             .filter((layer) => layer.active)

@@ -38,7 +38,7 @@ const ArcgisExportTileLayer = L.TileLayer.extend({
  * di-bundle; simbol & warna dirender oleh server itu. Dipasang di pane
  * `kawasan-hutan` (z360) supaya berada di bawah batas KPS.
  */
-export function KawasanHutanLayer({ opacity = 0.6 }: { opacity?: number }) {
+export function KawasanHutanLayer({ opacity = 0.85 }: { opacity?: number }) {
   const map = useMap();
 
   useEffect(() => {
