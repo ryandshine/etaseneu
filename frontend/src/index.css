@@ -1326,36 +1326,6 @@ body {
   color: rgba(245, 239, 230, 0.5);
 }
 
-/* Overlay fungsi kawasan hutan: hijau (bukan palet merah bekas-terbakar). */
-.burned-toggle--kawasan.burned-toggle--active {
-  border-color: rgba(34, 139, 87, 0.55);
-  background: rgba(34, 139, 87, 0.18);
-  color: #86efac;
-}
-
-.kawasan-legend {
-  border-color: rgba(34, 139, 87, 0.5);
-  gap: 0.22rem;
-}
-
-.kawasan-legend__row {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.68rem;
-  font-weight: 500;
-  color: rgba(245, 239, 230, 0.82);
-}
-
-.kawasan-legend__swatch {
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 2px;
-  flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-}
-
 /* Tombol "Lokasi Saya" sengaja diletakkan di pojok kiri atas peta -- satu-
    satunya sudut yang kosong di desktop (kanan atas dipakai panel statistik,
    bawah sudah penuh kontrol zoom + legenda + tombol UI). */
