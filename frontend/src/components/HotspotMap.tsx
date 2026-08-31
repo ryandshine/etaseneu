@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { authFetch } from "../lib/api";
 import { formatHectares } from "../lib/hotspotDisplay";
 import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
-import { Flame, LocateFixed } from "lucide-react";
+import { Flame, LocateFixed, Trees } from "lucide-react";
 import { WindLayer } from "./WindLayer";
 import { WeatherOverlay } from "./WeatherOverlay";
 import {
@@ -32,6 +32,8 @@ import { useBurnedAreaOverlay } from "../hooks/useBurnedAreaOverlay";
 import type { BurnedAreaOverlayFeature } from "../hooks/useBurnedAreaOverlay";
 import { useS2BurnedAreaOverlay } from "../hooks/useS2BurnedAreaOverlay";
 import type { S2BurnedAreaFeature } from "../hooks/useS2BurnedAreaOverlay";
+import { KawasanHutanLayer } from "./KawasanHutanLayer";
+import { KAWASAN_HUTAN_LEGEND } from "../constants/kawasanHutan";
 import type { LayerBounds } from "../types/api";
 
 const MONTH_LABELS = [
@@ -407,6 +409,11 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
   const [showS2Burned, setShowS2Burned] = useState(false);
   const s2Burned = useS2BurnedAreaOverlay(showS2Burned);
 
+  // Overlay fungsi kawasan hutan (KWSHUTAN_AR_250K) diambil LIVE dari layanan
+  // ArcGIS resmi Ditjen Planologi Kehutanan (lihat KawasanHutanLayer). Mati
+  // secara default: cakupan nasional, menutupi peta kalau selalu nyala.
+  const [showKawasan, setShowKawasan] = useState(false);
+
   // Polygon bekas terbakar & titik hotspot BERBAGI satu Pane/renderer (lihat
   // JSX di bawah) supaya polygonnya bisa diklik sungguhan. Canvas renderer
   // Leaflet memasang listener klik langsung di elemen <canvas>-nya sendiri
@@ -593,6 +600,33 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
             </p>
           </div>
         ) : null}
+
+        <button
+          type="button"
+          className={`burned-toggle burned-toggle--kawasan${showKawasan ? " burned-toggle--active" : ""}`}
+          onClick={() => setShowKawasan((current) => !current)}
+          title={
+            showKawasan
+              ? "Sembunyikan fungsi kawasan hutan"
+              : "Tampilkan fungsi kawasan hutan (layanan ArcGIS Ditjen Planologi Kehutanan, KWSHUTAN 1:250.000)"
+          }
+          aria-pressed={showKawasan}
+        >
+          <Trees size={15} />
+          <span>Fungsi Kawasan Hutan</span>
+        </button>
+
+        {showKawasan ? (
+          <div className="burned-summary-chip kawasan-legend">
+            {KAWASAN_HUTAN_LEGEND.map((item) => (
+              <p key={item.label} className="kawasan-legend__row">
+                <span className="kawasan-legend__swatch" style={{ background: item.color }} />
+                {item.label}
+              </p>
+            ))}
+            <p className="burned-summary-chip__source">Sumber: geoportal.planologi.kehutanan.go.id</p>
+          </div>
+        ) : null}
       </div>
       {userLocation.error ? <p className="locate-error-toast">{userLocation.error}</p> : null}
 
@@ -709,12 +743,16 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
             </Popup>
           </Marker>
         ))}
+        {showKawasan ? <KawasanHutanLayer opacity={0.9} /> : null}
         <Pane name="batas-kps" style={{ zIndex: 400 }}>
           {layers
             .filter((layer) => layer.active)
             .map((layer) => (
               <GeoJSON
-                key={layer.id}
+                // Saat overlay ArcGIS kawasan hutan menyala, isian poligon KPS
+                // dimatikan (cuma garis batas) supaya warna kawasan hutan di
+                // bawahnya tidak tertutup tint hijau. Ganti key memaksa restyle.
+                key={`${layer.id}-${showKawasan ? "line" : "fill"}`}
                 data={layer.geojson as never}
                 interactive={false}
                 style={{
@@ -722,7 +760,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
                   weight: 4,
                   opacity: 1,
                   fillColor: layer.color,
-                  fillOpacity: 0.18,
+                  fillOpacity: showKawasan ? 0 : 0.18,
                   dashArray: "6 5",
                   lineCap: "round",
                   lineJoin: "round"

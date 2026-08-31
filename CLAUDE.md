@@ -176,18 +176,20 @@ BUKAN lewat migrasi app:
   (`HotspotPopupContent.tsx`, dipakai peta utama + peta KpsDetail), popup overlay "Estimasi Bekas
   Terbakar" Sentinel-2 di `HotspotMap.tsx` (baris `kawasan_dominan`), dan kartu "Segmen Lokasi" di
   `KpsDetailView.tsx`. HotspotMatrix (tabel dikelompokkan per KPS) sengaja tidak diberi kolom ini.
-- **TIDAK ada overlay di peta.** Sempat dicoba (file geojson statik, lalu raster live ArcGIS
-  `geoportal.planologi.kehutanan.go.id/.../KWSHUTAN_AR_250K/MapServer`) tapi dilepas atas permintaan
-  user — cakupan nasional menutupi isian poligon KPS & lapisan bekas terbakar. Atribusi fungsi
-  kawasan tetap muncul sebagai **teks** di popup hotspot + XLSX/PDF (jalur DB di atas), bukan sebagai
-  poligon. Kalau nanti diminta lagi: layanan ArcGIS itu bisa dipakai sebagai raster tile (tanpa
-  WMSServer / tanpa tile cache — minta endpoint `export` per-tile ala `L.TileLayer.WMS`); jangan
-  coba dissolve/simplify file geojson KWSHUTAN-nya (`ST_Union`/`unary_union`/`ogr2ogr -simplify`
-  **selalu gagal**: mixed-dimension, free-hole-to-shell).
-  - **Sejarah**: file KWSHUTAN 1:250k (30k+ fitur) sempat ditaruh di `SHP_DIR` →
-    `list_preview_layers()` jadi 135 dtk + payload 70 MB + `sync_all()` menulis 30k baris
-    `polygon_metadata` + 26k `hotspot_polygon_relation` (sudah di-DELETE). Raw disimpan di luar glob
-    (`SHP_DIR/fungsi_kawasan_hutan.geojson.raw`) sebagai arsip user.
+- **Overlay peta**: raster LIVE dari layanan ArcGIS resmi Ditjen Planologi Kehutanan
+  (`geoportal.planologi.kehutanan.go.id/.../KWSHUTAN_AR_250K/MapServer`, readonly). Layanan tanpa
+  WMSServer & tanpa tile cache → `components/KawasanHutanLayer.tsx` = `L.TileLayer` di-extend, minta
+  endpoint `export` per-tile (bbox-per-tile ala `L.TileLayer.WMS`). Simbol/warna dari server;
+  `constants/kawasanHutan.ts` cuma URL + salinan legenda. Tombol "Fungsi Kawasan Hutan" di
+  `HotspotMap.tsx` **default mati**, pane `kawasan-hutan` z360. Saat menyala, isian poligon KPS
+  (`batas-kps`) dimatikan (garis batas saja) supaya warna kawasan tidak ketutup tint hijau KPS.
+  BUKAN dari file geojson — file KWSHUTAN 1:250k JANGAN ditaruh di `SHP_DIR` (pernah bikin
+  `list_preview_layers()` 135 dtk + payload 70 MB + `sync_all()` menulis 30k `polygon_metadata` +
+  26k `hotspot_polygon_relation`, sudah di-DELETE) dan JANGAN dicoba di-dissolve/simplify
+  (`ST_Union`/`ogr2ogr -simplify` selalu gagal: mixed-dimension, free-hole-to-shell). Raw ada di
+  `SHP_DIR/fungsi_kawasan_hutan.geojson.raw` (di luar glob) sebagai arsip user.
+  nginx `/api/layers` cache dipangkas 1 jam+SWR24jam → 120 dtk supaya daftar layer yang dihapus
+  tidak nyangkut lama di browser/CDN.
 
 ## ⚠️ Bahaya #2: GEE sudah digantikan KLHK untuk luas bekas terbakar
 
