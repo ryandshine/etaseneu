@@ -32,9 +32,8 @@ import { useBurnedAreaOverlay } from "../hooks/useBurnedAreaOverlay";
 import type { BurnedAreaOverlayFeature } from "../hooks/useBurnedAreaOverlay";
 import { useS2BurnedAreaOverlay } from "../hooks/useS2BurnedAreaOverlay";
 import type { S2BurnedAreaFeature } from "../hooks/useS2BurnedAreaOverlay";
-import { useKawasanHutanOverlay } from "../hooks/useKawasanHutanOverlay";
-import type { KawasanHutanFeature } from "../hooks/useKawasanHutanOverlay";
-import { KAWASAN_HUTAN_LEGEND, kawasanColorFromKode } from "../constants/kawasanHutan";
+import { KawasanHutanLayer } from "./KawasanHutanLayer";
+import { KAWASAN_HUTAN_LEGEND } from "../constants/kawasanHutan";
 import type { LayerBounds } from "../types/api";
 
 const MONTH_LABELS = [
@@ -410,11 +409,10 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
   const [showS2Burned, setShowS2Burned] = useState(false);
   const s2Burned = useS2BurnedAreaOverlay(showS2Burned);
 
-  // Overlay fungsi kawasan hutan KLHK (KWSHUTAN_AR_250K) -- berkas statik ringan
-  // yang sudah di-dissolve per fungsi (lihat backend/build_kawasan_hutan_overlay.py).
-  // Mati secara default: cakupan nasional, menutupi peta kalau selalu nyala.
+  // Overlay fungsi kawasan hutan (KWSHUTAN_AR_250K) diambil LIVE dari layanan
+  // ArcGIS resmi Ditjen Planologi Kehutanan (lihat KawasanHutanLayer). Mati
+  // secara default: cakupan nasional, menutupi peta kalau selalu nyala.
   const [showKawasan, setShowKawasan] = useState(false);
-  const kawasan = useKawasanHutanOverlay(showKawasan);
 
   // Polygon bekas terbakar & titik hotspot BERBAGI satu Pane/renderer (lihat
   // JSX di bawah) supaya polygonnya bisa diklik sungguhan. Canvas renderer
@@ -605,14 +603,12 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
 
         <button
           type="button"
-          className={`burned-toggle burned-toggle--kawasan${showKawasan ? " burned-toggle--active" : ""}${
-            kawasan.loading ? " burned-toggle--loading" : ""
-          }`}
+          className={`burned-toggle burned-toggle--kawasan${showKawasan ? " burned-toggle--active" : ""}`}
           onClick={() => setShowKawasan((current) => !current)}
           title={
             showKawasan
               ? "Sembunyikan fungsi kawasan hutan"
-              : "Tampilkan fungsi kawasan hutan (KLHK KWSHUTAN 1:250.000)"
+              : "Tampilkan fungsi kawasan hutan (layanan ArcGIS Ditjen Planologi Kehutanan, KWSHUTAN 1:250.000)"
           }
           aria-pressed={showKawasan}
         >
@@ -620,7 +616,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
           <span>Fungsi Kawasan Hutan</span>
         </button>
 
-        {showKawasan && kawasan.data ? (
+        {showKawasan ? (
           <div className="burned-summary-chip kawasan-legend">
             {KAWASAN_HUTAN_LEGEND.map((item) => (
               <p key={item.label} className="kawasan-legend__row">
@@ -628,12 +624,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
                 {item.label}
               </p>
             ))}
-            <p className="burned-summary-chip__source">Sumber: KLHK KWSHUTAN_AR_250K</p>
-          </div>
-        ) : null}
-        {showKawasan && kawasan.error ? (
-          <div className="burned-summary-chip">
-            <p className="burned-summary-chip__source">Gagal memuat overlay kawasan hutan.</p>
+            <p className="burned-summary-chip__source">Sumber: geoportal.planologi.kehutanan.go.id</p>
           </div>
         ) : null}
       </div>
@@ -752,26 +743,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
             </Popup>
           </Marker>
         ))}
-        {showKawasan && kawasan.data ? (
-          <Pane name="kawasan-hutan" style={{ zIndex: 360 }}>
-            <GeoJSON
-              key={`kawasan-${kawasan.data.features.length}`}
-              data={kawasan.data as never}
-              interactive={false}
-              style={(feature) => {
-                const kode = (feature?.properties as KawasanHutanFeature["properties"])?.fungsikws;
-                const color = kawasanColorFromKode(kode);
-                return {
-                  color,
-                  weight: 0.3,
-                  opacity: 0.35,
-                  fillColor: color,
-                  fillOpacity: 0.55,
-                };
-              }}
-            />
-          </Pane>
-        ) : null}
+        {showKawasan ? <KawasanHutanLayer opacity={0.55} /> : null}
         <Pane name="batas-kps" style={{ zIndex: 400 }}>
           {layers
             .filter((layer) => layer.active)

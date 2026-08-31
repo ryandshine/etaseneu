@@ -176,17 +176,20 @@ BUKAN lewat migrasi app:
   (`HotspotPopupContent.tsx`, dipakai peta utama + peta KpsDetail), popup overlay "Estimasi Bekas
   Terbakar" Sentinel-2 di `HotspotMap.tsx` (baris `kawasan_dominan`), dan kartu "Segmen Lokasi" di
   `KpsDetailView.tsx`. HotspotMatrix (tabel dikelompokkan per KPS) sengaja tidak diberi kolom ini.
-- **Overlay peta**: TIDAK lewat `LayerService`. File KWSHUTAN 1:250k (30k+ fitur, geometri penuh
-  error topologi) pernah ditaruh di `SHP_DIR` → `list_preview_layers()` jadi 135 dtk + payload 70 MB
-  + `sync_all()` mencemari `polygon_metadata` dengan 30k baris (sudah dibersihkan). Sekarang: raw
-  disimpan di luar glob (`SHP_DIR/fungsi_kawasan_hutan.geojson.raw`), diringkas SEKALI oleh
-  `backend/build_kawasan_hutan_overlay.py` (murni pembulatan koordinat ke 2 desimal + buang sliver,
-  TANPA union/dissolve GEOS yang selalu gagal di data ini) jadi
-  `frontend/public/kawasan_hutan.min.json` (~17 MB, ~2,3 MB gzip, ~13k fitur, semua kode FUNGSIKWS).
-  Frontend: `useKawasanHutanOverlay` (fetch statik lazy saat toggle) + tombol "Fungsi Kawasan Hutan"
-  di `HotspotMap.tsx`, render canvas di pane `kawasan-hutan` (z360), warna per FUNGSIKWS ikut palet
-  SIGAP di `frontend/src/constants/kawasanHutan.ts`. Jalankan ulang builder hanya saat KLHK rilis
-  KWSHUTAN baru.
+- **Overlay peta**: TIDAK lewat `LayerService`, TIDAK ada berkas geojson di-bundle. Diambil **LIVE**
+  dari layanan ArcGIS resmi Ditjen Planologi Kehutanan
+  (`geoportal.planologi.kehutanan.go.id/.../KWSHUTAN_AR_250K/MapServer`, readonly). Layanan ini tanpa
+  cache tile & tanpa WMSServer, jadi `components/KawasanHutanLayer.tsx` memakai `L.TileLayer` yang
+  di-`extend` untuk minta endpoint `export` per-tile (pola bbox-per-tile ala `L.TileLayer.WMS`).
+  Simbol/warna dirender server itu; `constants/kawasanHutan.ts` cuma menyimpan URL + salinan legenda.
+  Tombol "Fungsi Kawasan Hutan" di `HotspotMap.tsx` (default mati), pane `kawasan-hutan` z360 di
+  bawah batas KPS.
+  - **Sejarah**: file KWSHUTAN 1:250k (30k+ fitur, geometri penuh error topologi) sempat ditaruh di
+    `SHP_DIR` → `list_preview_layers()` jadi 135 dtk + payload 70 MB + `sync_all()` menulis 30k baris
+    `polygon_metadata` + 26k `hotspot_polygon_relation` (sudah di-DELETE). Raw disimpan di luar glob
+    (`SHP_DIR/fungsi_kawasan_hutan.geojson.raw`) sebagai arsip user. Segala upaya `ST_Union`/
+    `unary_union`/`ogr2ogr -simplify` untuk men-dissolve file itu **selalu gagal** (mixed-dimension,
+    free-hole-to-shell) — jangan diulang; pakai layanan live di atas.
 
 ## ⚠️ Bahaya #2: GEE sudah digantikan KLHK untuk luas bekas terbakar
 
