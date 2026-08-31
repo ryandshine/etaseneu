@@ -1,6 +1,7 @@
 import type {
   ApiClient,
   BurnFrequencyResponse,
+  BurnedAreaKawasanResponse,
   ClusterCollectionResponse,
   HealthResponse,
   HistoryStatusResponse,
@@ -209,6 +210,7 @@ export function createApiClient(baseUrl = "/api"): ApiClient {
     hotspots: `${baseUrl}/hotspots`,
     hotspotClusters: `${baseUrl}/hotspots/clusters`,
     burnFrequency: `${baseUrl}/burned-area/frequency`,
+    burnedAreaKawasan: `${baseUrl}/burned-area/kawasan-summary`,
     stats: `${baseUrl}/stats`,
     cacheHistoryStatus: `${baseUrl}/cache/history/status`,
     cacheHistoryPrewarm: `${baseUrl}/cache/history/prewarm`,
@@ -237,6 +239,10 @@ export function createApiClient(baseUrl = "/api"): ApiClient {
         withQuery(endpoints.hotspotClusters, toClusterQueryRecord(params)),
       ),
     getBurnFrequency: () => fetchJson<BurnFrequencyResponse>(endpoints.burnFrequency),
+    getBurnedAreaByKawasan: (province?: string) =>
+      fetchJson<BurnedAreaKawasanResponse>(
+        withQuery(endpoints.burnedAreaKawasan, province ? { province } : {}),
+      ),
     getHistoryStatus: (params) =>
       fetchJson<HistoryStatusResponse>(
         withQuery(endpoints.cacheHistoryStatus, toHistoryQueryRecord(params)),

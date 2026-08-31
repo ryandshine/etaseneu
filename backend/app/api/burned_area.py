@@ -67,12 +67,29 @@ async def burned_area_by_skema(
 @router.get("/burned-area/frequency")
 async def burned_area_frequency() -> dict[str, object]:
     """Berapa periode (bulan) terpisah tiap KPS pernah tercatat terbakar
-    resmi KLHK -- dipakai kolom "Frekuensi" di Buku Besar (Matriks Data).
-    Tidak terikat filter waktu dashboard, dipanggil sekali saat halaman
-    dibuka."""
+    resmi Kementerian Kehutanan -- dipakai kolom "Frekuensi" di Buku Besar
+    (Matriks Data). Tidak terikat filter waktu dashboard, dipanggil sekali
+    saat halaman dibuka."""
     store = PostgresStore(get_settings().database_url)
     rows = store.burn_frequency_by_lembaga()
     return {"rows": rows}
+
+
+@router.get("/burned-area/kawasan-summary")
+async def burned_area_kawasan_summary(province: str | None = None) -> dict[str, object]:
+    """Rekap luas terbakar resmi Kementerian Kehutanan per FUNGSI kawasan
+    hutan (Hutan Lindung / HP / HPT / HPK / Konservasi / APL). Union geometry
+    per KPS lintas bulan lalu diiris dengan fungsi kawasan hutan, jadi
+    jumlah pecahannya = total luas terbakar. Filter provinsi opsional untuk
+    Matriks Data. Data resmi tersedia Januari-Juli 2026."""
+    store = PostgresStore(get_settings().database_url)
+    rows = store.read_burned_area_by_kawasan(province or None)
+    return {
+        "rows": rows,
+        "total_ha": round(sum(row["luas_ha"] for row in rows), 2),
+        "source": "Kementerian Kehutanan",
+        "period": "Januari–Juli 2026",
+    }
 
 
 @router.get("/burned-area/geometry")

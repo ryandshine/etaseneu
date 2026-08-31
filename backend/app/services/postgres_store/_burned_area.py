@@ -485,6 +485,52 @@ class _BurnedAreaMixin:
             for r in rows
         ]
 
+    def read_burned_area_by_kawasan(
+        self, province: str | None = None
+    ) -> list[dict[str, object]]:
+        """Rekap luas terbakar resmi Kementerian Kehutanan per FUNGSI kawasan
+        hutan (Hutan Lindung / HP / HPT / HPK / Konservasi / APL).
+
+        Sumbernya tabel materialized `burned_kemenhut_kawasan_hutan` yang
+        di-rebuild `refresh_kawasan_attribution()` (union geometry KLHK per KPS
+        lintas bulan -> iris `ref_kawasan_hutan`). Label diambil live dari
+        `ref_fungsi_kawasan_label`, jadi koreksi kode langsung kelihatan.
+        Filter provinsi opsional (lewat `polygon_metadata.nama_prov`)."""
+        params: list[object] = []
+        where = ""
+        if province:
+            where = "WHERE pm.nama_prov = %s"
+            params.append(str(province))
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT b.fungsikws::bigint AS kode,
+                           max(COALESCE(lbl.singkatan, '')) AS singkatan,
+                           max(COALESCE(lbl.fungsi, 'Kode ' || b.fungsikws::text)) AS fungsi,
+                           max(COALESCE(lbl.kelompok, b.kelompok)) AS kelompok,
+                           round(sum(b.luas_ha)::numeric, 2) AS luas_ha
+                    FROM burned_kemenhut_kawasan_hutan b
+                    LEFT JOIN ref_fungsi_kawasan_label lbl ON lbl.kode = b.fungsikws
+                    JOIN polygon_metadata pm ON pm.id = b.polygon_metadata_id
+                    {where}
+                    GROUP BY b.fungsikws
+                    ORDER BY luas_ha DESC
+                    """,
+                    params,
+                )
+                rows = cur.fetchall()
+        return [
+            {
+                "kode": int(r["kode"]) if r["kode"] is not None else None,
+                "singkatan": r["singkatan"],
+                "fungsi": r["fungsi"],
+                "kelompok": r["kelompok"],
+                "luas_ha": float(r["luas_ha"] or 0),
+            }
+            for r in rows
+        ]
+
     def burn_frequency_by_lembaga(self) -> list[dict[str, object]]:
         """Berapa PERIODE (bulan) TERPISAH tiap KPS pernah tercatat luas bekas
         terbakar resmi KLHK -- dasar kolom "Frekuensi" di Buku Besar. Beda

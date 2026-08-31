@@ -183,8 +183,16 @@ BUKAN lewat migrasi app:
   jadi `fungsiKawasan/namaKawasan/kelompokKawasan` (ambil dari objek `kawasan_hutan` view=full ATAU
   field datar `fungsi_kawasan`/`kelompok` view=map). Tampil di: popup titik hotspot
   (`HotspotPopupContent.tsx`, dipakai peta utama + peta KpsDetail), popup overlay "Estimasi Bekas
-  Terbakar" Sentinel-2 di `HotspotMap.tsx` (baris `kawasan_dominan`), dan kartu "Segmen Lokasi" di
-  `KpsDetailView.tsx`. HotspotMatrix (tabel dikelompokkan per KPS) sengaja tidak diberi kolom ini.
+  Terbakar" Sentinel-2 di `HotspotMap.tsx` (baris `kawasan_dominan`), kartu "Segmen Lokasi" di
+  `KpsDetailView.tsx`, dan **2 kartu di Matriks Data** (`HotspotMatrix.tsx`): "Titik per Kawasan
+  Hutan" (hitung client-side dari hotspot yang ter-filter) + "Luas Kebakaran per Kawasan Hutan"
+  (fetch endpoint di bawah, ikut filter provinsi Buku Besar).
+- **Luas terbakar resmi × fungsi kawasan**: tabel materialized `burned_kemenhut_kawasan_hutan`
+  (`polygon_metadata_id, fungsikws, kelompok, luas_ha`) di-rebuild `refresh_kawasan_attribution()`
+  (union geometry `burned_area_summary` per KPS lintas bulan → iris `ref_kawasan_hutan_sub`; jumlah
+  pecahan = total resmi 10.056 ha). `GET /api/burned-area/kawasan-summary?province=…` →
+  `postgres_store/_burned_area.py::read_burned_area_by_kawasan()` (label live dari
+  `ref_fungsi_kawasan_label`). Data resmi tersedia Jan–Jul 2026.
 - **Overlay peta**: raster LIVE dari layanan ArcGIS resmi Ditjen Planologi Kehutanan
   (`geoportal.planologi.kehutanan.go.id/.../KWSHUTAN_AR_250K/MapServer`, readonly). Layanan tanpa
   WMSServer & tanpa tile cache → `components/KawasanHutanLayer.tsx` = `L.TileLayer` di-extend, minta

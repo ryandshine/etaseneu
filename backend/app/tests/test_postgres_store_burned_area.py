@@ -398,6 +398,38 @@ def test_read_s2_burned_area_overlay_puts_kawasan_dominan_in_properties(monkeypa
     assert "LEFT JOIN LATERAL" in cursor.executed[-1][0]
 
 
+def test_read_burned_area_by_kawasan_maps_rows_and_omits_province_filter(monkeypatch) -> None:
+    fake_rows = [
+        {"kode": 100300, "singkatan": "HP", "fungsi": "Hutan Produksi Tetap",
+         "kelompok": "Produksi", "luas_ha": 6470.86},
+        {"kode": 100100, "singkatan": "HL", "fungsi": "Hutan Lindung",
+         "kelompok": "Lindung", "luas_ha": 2393.63},
+    ]
+    store, cursor = _store_with_fake_cursor(monkeypatch, fetchall_result=fake_rows)
+
+    result = store.read_burned_area_by_kawasan()
+
+    assert result[0] == {
+        "kode": 100300, "singkatan": "HP", "fungsi": "Hutan Produksi Tetap",
+        "kelompok": "Produksi", "luas_ha": 6470.86,
+    }
+    query, params = cursor.executed[0]
+    assert "burned_kemenhut_kawasan_hutan" in query
+    assert "ref_fungsi_kawasan_label" in query
+    assert "WHERE pm.nama_prov" not in query
+    assert params == []
+
+
+def test_read_burned_area_by_kawasan_applies_province_filter(monkeypatch) -> None:
+    store, cursor = _store_with_fake_cursor(monkeypatch, fetchall_result=[])
+
+    store.read_burned_area_by_kawasan("Riau")
+
+    query, params = cursor.executed[0]
+    assert "WHERE pm.nama_prov = %s" in query
+    assert params == ["Riau"]
+
+
 def test_read_burned_area_scheduler_state_returns_none_when_no_row(monkeypatch) -> None:
     store, _cursor = _store_with_fake_cursor(monkeypatch, fetchone_result=None)
     assert store.read_burned_area_scheduler_state() is None

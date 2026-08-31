@@ -1284,10 +1284,10 @@ def _section_burned_area(burned_area_report: dict | None, styles: dict) -> list:
         f"{item['skema']} {item['total_ha']:,.1f} Ha ({item['kps_count']} KPS)" for item in by_skema
     )
     narrative = (
-        f"Overlay batas KPS dengan poligon resmi KLHK mendeteksi <b>{total_ha:,.1f} hektar</b> "
+        f"Overlay batas KPS dengan poligon resmi Kementerian Kehutanan mendeteksi <b>{total_ha:,.1f} hektar</b> "
         f"area bekas terbakar pada <b>{kps_count} kawasan perhutanan sosial</b>. Rincian per "
-        f"skema: {skema_phrase}. Angka ini berasal dari rekap resmi KLHK \"Areal Kebakaran Hutan "
-        "dan Lahan\" (akurasi H/M -- terverifikasi hotspot, sesuai kriteria KLHK sendiri) dan "
+        f"skema: {skema_phrase}. Angka ini berasal dari rekap resmi Kementerian Kehutanan \"Areal Kebakaran Hutan "
+        "dan Lahan\" (akurasi H/M -- terverifikasi hotspot, sesuai kriteria Kementerian Kehutanan sendiri) dan "
         "dihitung sekali per kawasan meskipun terbakar berulang, sehingga <b>tidak dapat "
         "dijumlahkan langsung dengan jumlah titik panas</b> pada bagian sebelumnya."
     )

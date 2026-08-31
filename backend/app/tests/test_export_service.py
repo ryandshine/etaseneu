@@ -454,7 +454,7 @@ def test_burned_area_sheet_warns_that_hectares_are_not_comparable_to_hotspot_cou
     )
 
     assert "tidak dapat dijumlahkan langsung" in text
-    assert "KLHK" in text
+    assert "Kementerian Kehutanan" in text
 
 
 def test_burned_area_sheet_handles_empty_report() -> None:

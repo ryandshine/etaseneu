@@ -226,6 +226,21 @@ export interface BurnFrequencyResponse {
   rows: BurnFrequencyRecord[];
 }
 
+export interface BurnedAreaKawasanRow {
+  kode: number | null;
+  singkatan: string;
+  fungsi: string;
+  kelompok: string;
+  luas_ha: number;
+}
+
+export interface BurnedAreaKawasanResponse {
+  rows: BurnedAreaKawasanRow[];
+  total_ha: number;
+  source: string;
+  period: string;
+}
+
 export interface HistoryLayerStatus {
   layer_id: string;
   cached: boolean;
@@ -330,6 +345,7 @@ export interface ApiClient {
   getStats: (params: HotspotQueryParams) => Promise<StatsResponse>;
   getHotspotClusters: (params: HotspotClusterQueryParams) => Promise<ClusterCollectionResponse>;
   getBurnFrequency: () => Promise<BurnFrequencyResponse>;
+  getBurnedAreaByKawasan: (province?: string) => Promise<BurnedAreaKawasanResponse>;
   getHistoryStatus: (params: HotspotQueryParams & { year: number }) => Promise<HistoryStatusResponse>;
   prewarmHistory: (
     params: HotspotQueryParams & { year: number },

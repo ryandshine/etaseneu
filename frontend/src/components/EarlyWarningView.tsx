@@ -579,7 +579,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               <th style={{ padding: "0.75rem 0.8rem" }}>Nama KPS / Lembaga</th>
               <th style={{ padding: "0.75rem 0.8rem", width: "70px", textAlign: "center" }}>Skema</th>
               <th style={{ padding: "0.75rem 0.8rem" }}>Wilayah (Kab, Prov)</th>
-              <th style={{ padding: "0.75rem 0.8rem", textAlign: "right" }}>Luas Terbakar (KLHK)</th>
+              <th style={{ padding: "0.75rem 0.8rem", textAlign: "right" }}>Luas Terbakar (Kemenhut)</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center", minWidth: "180px" }}>
                 Hotspot Hari Ini, Jarak & Arah
                 <div style={{ fontSize: "0.68rem", fontWeight: "normal", color: "#6b7280" }}>[Total / Bekas / Jarak (km) & Arah]</div>
@@ -662,7 +662,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
                           <div style={{ display: "flex", gap: "0.25rem", fontSize: "0.68rem", flexWrap: "wrap", justifyContent: "center" }}>
                             {item.hotspots_today_strict_reburn > 0 ? (
                               <span
-                                title={`${item.hotspots_today_strict_reburn} titik jatuh tepat di atas koordinat bekas luka bakar KLHK lama`}
+                                title={`${item.hotspots_today_strict_reburn} titik jatuh tepat di atas koordinat bekas luka bakar Kementerian Kehutanan sebelumnya`}
                                 style={{ backgroundColor: "rgba(239,68,68,0.25)", color: "#fca5a5", padding: "0.1rem 0.35rem", borderRadius: "3px", fontWeight: "600" }}
                               >
                                 🔥 {item.hotspots_today_strict_reburn} Bekas

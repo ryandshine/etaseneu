@@ -212,7 +212,7 @@ def test_section_burned_area_warns_units_are_not_additive_with_hotspot_counts() 
     text = _burned_section_text(_BURNED_REPORT)
 
     assert "tidak dapat dijumlahkan langsung" in text
-    assert "KLHK" in text
+    assert "Kementerian Kehutanan" in text
 
 
 def test_section_burned_area_marks_estimated_rows() -> None:

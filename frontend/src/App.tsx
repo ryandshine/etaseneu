@@ -901,7 +901,9 @@ export default function App() {
                   brightness: hotspot.brightness,
                   frp: hotspot.frp,
                   confidence: hotspot.confidence,
-                  daynight: hotspot.daynight
+                  daynight: hotspot.daynight,
+                  fungsiKawasan: hotspot.fungsiKawasan,
+                  kelompokKawasan: hotspot.kelompokKawasan
                 }))}
                 geojsonStatus={geojsonStatus}
                 onExport={(filters) => void exportDashboard(filters)}

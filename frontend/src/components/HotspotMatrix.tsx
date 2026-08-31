@@ -3,7 +3,12 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, Re
 import { Download } from "lucide-react";
 
 import { BurnedAreaCard } from "./BurnedAreaCard";
-import type { BurnFrequencyRecord, GeoJsonStatusResponse, PolygonDetail } from "../types/api";
+import type {
+  BurnFrequencyRecord,
+  BurnedAreaKawasanResponse,
+  GeoJsonStatusResponse,
+  PolygonDetail,
+} from "../types/api";
 import { formatDateWIB, getTodayWIB } from "../lib/date";
 import { authFetch, createApiClient } from "../lib/api";
 import { TIME_PRESET_OPTIONS, type TimePreset } from "../constants/time-windows";
@@ -44,6 +49,8 @@ type MatrixHotspot = {
   frp: number | null;
   confidence: string;
   daynight: string;
+  fungsiKawasan?: string;
+  kelompokKawasan?: string;
 };
 
 function hotspotToGeoJsonFeature(hotspot: MatrixHotspot) {
@@ -315,6 +322,37 @@ function buildFrpDistribution(hotspots: MatrixHotspot[]): ChartItem[] {
     ...bin,
     value: hotspots.filter((hotspot) => getFrpCategory(hotspot) === bin.label).length,
   }));
+}
+
+// Jumlah titik panas per fungsi kawasan hutan (atribusi Fase 4: tiap hotspot
+// membawa `kawasanHutan`). Diurutkan terbanyak dulu; titik di luar semua
+// kawasan hutan dikumpulkan di label sendiri supaya total = jumlah hotspot.
+const KAWASAN_LUAR_LABEL = "Di luar kawasan";
+const KAWASAN_BAR_COLOR = "#2f855a";
+
+function shortKawasanLabel(fungsi: string): string {
+  return fungsi
+    .replace(/Hutan Produksi yang dapat Dikonversi/i, "HP Konversi")
+    .replace(/Hutan Produksi Terbatas/i, "HP Terbatas")
+    .replace(/Hutan Produksi Tetap/i, "HP Tetap")
+    .replace(/Kawasan Konservasi Laut/i, "Konservasi Laut")
+    .replace(/Kawasan Konservasi.*/i, "Konservasi")
+    .replace(/Areal Penggunaan Lain/i, "APL");
+}
+
+function buildKawasanDistribution(hotspots: MatrixHotspot[]): ChartItem[] {
+  const counts = new Map<string, number>();
+  for (const hotspot of hotspots) {
+    const label = (hotspot.fungsiKawasan || "").trim() || KAWASAN_LUAR_LABEL;
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([label, value]) => ({
+      label: label === KAWASAN_LUAR_LABEL ? label : shortKawasanLabel(label),
+      value,
+      color: label === KAWASAN_LUAR_LABEL ? "#4b5563" : KAWASAN_BAR_COLOR,
+    }))
+    .sort((a, b) => b.value - a.value);
 }
 
 const SKEMA_FALLBACK = "Tanpa Skema";
@@ -829,8 +867,64 @@ function renderCompactCard(title: string, data: any[], total: number, activeLabe
         })}
       </div>
 
+      {(title.toLowerCase().includes('confidence') || title.toLowerCase().includes('frp')) && (
+        <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.08)', fontSize: '0.75rem', color: '#9ca3af', lineHeight: 1.5 }}>
+          Mayoritas hotspot memiliki {title.toLowerCase().includes('confidence') ? 'confidence' : 'intensitas FRP'} <strong style={{ color: '#fff' }}>{domCategory?.label || '-'}</strong> ({total > 0 ? Math.round(((domCategory?.value || 0) / total) * 100) : 0}%).
+        </div>
+      )}
+    </section>
+  );
+}
+
+// Luas terbakar resmi Kementerian Kehutanan per fungsi kawasan hutan. Sumbernya
+// beda total dari titik hotspot (satuan hektar vs jumlah titik, kesegaran data
+// bulanan vs 3 jam) -- ditegaskan di catatan kaki kartu.
+function formatHa(value: number): string {
+  return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 }).format(value);
+}
+
+function renderKawasanBurnedCard(data: BurnedAreaKawasanResponse | null) {
+  const rows = data?.rows ?? [];
+  const totalHa = data?.total_ha ?? 0;
+  const maxVal = Math.max(...rows.map((row) => row.luas_ha), 1);
+  const dominant = [...rows].sort((a, b) => b.luas_ha - a.luas_ha)[0];
+
+  return (
+    <section className="matrix-chart-card glass-panel" style={{ display: 'flex', flexDirection: 'column', height: 'auto', minHeight: 'unset' }}>
+      <div style={{ marginBottom: '1.25rem' }}>
+        <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#fff', marginBottom: '0.25rem' }}>Luas Kebakaran per Kawasan Hutan</h3>
+        <p style={{ fontSize: '0.8rem', color: '#9ca3af' }}>
+          Total: <strong style={{ color: '#fff' }}>{formatHa(totalHa)} Ha</strong>
+        </p>
+      </div>
+
+      {rows.length === 0 ? (
+        <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>Belum ada data luas terbakar untuk pilihan ini.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {rows.map((row) => {
+            const pct = totalHa > 0 ? Math.round((row.luas_ha / totalHa) * 100) : 0;
+            const barWidth = Math.max((row.luas_ha / maxVal) * 100, 2);
+            return (
+              <div key={row.fungsi} style={{ display: 'flex', alignItems: 'center', fontSize: '0.85rem' }}>
+                <div style={{ width: '92px', color: '#d1d5db', fontWeight: '500' }}>{shortKawasanLabel(row.fungsi)}</div>
+                <div style={{ flex: 1, height: '12px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden', margin: '0 12px' }}>
+                  <div style={{ width: `${barWidth}%`, backgroundColor: '#9B2C2C', height: '100%', transition: 'width 0.3s ease' }} />
+                </div>
+                <div style={{ width: '104px', textAlign: 'right', color: '#fff' }}>
+                  {formatHa(row.luas_ha)} <span style={{ color: '#9ca3af', fontSize: '0.75rem' }}>({pct}%)</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.08)', fontSize: '0.75rem', color: '#9ca3af', lineHeight: 1.5 }}>
-        Mayoritas hotspot memiliki {title.toLowerCase().includes('confidence') ? 'confidence' : 'intensitas FRP'} <strong style={{ color: '#fff' }}>{domCategory?.label || '-'}</strong> ({total > 0 ? Math.round(((domCategory?.value || 0) / total) * 100) : 0}%).
+        {dominant ? (
+          <>Terbanyak di <strong style={{ color: '#fff' }}>{shortKawasanLabel(dominant.fungsi)}</strong>. </>
+        ) : null}
+        Sumber: {data?.source ?? "Kementerian Kehutanan"} · {data?.period ?? "Januari–Juli 2026"}. Satuan hektar, tidak sebanding langsung dengan jumlah titik panas.
       </div>
     </section>
   );
@@ -935,6 +1029,25 @@ export function HotspotMatrix({
       cancelled = true;
     };
   }, []);
+
+  // Luas terbakar resmi Kementerian Kehutanan per FUNGSI kawasan hutan
+  // (Jan-Jul 2026). Ikut filter provinsi Buku Besar -- di-fetch ulang tiap
+  // filter provinsi berubah.
+  const [burnedKawasan, setBurnedKawasan] = useState<BurnedAreaKawasanResponse | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getBurnedAreaByKawasan(provinceFilter || undefined)
+      .then((response) => {
+        if (!cancelled) setBurnedKawasan(response);
+      })
+      .catch(() => {
+        if (!cancelled) setBurnedKawasan(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [provinceFilter]);
 
   // Nama lembaga di data KLHK kadang punya whitespace tersisa (mis. "\r\n"
   // di akhir) -- di-trim di kedua sisi supaya tetap cocok dengan key dari
@@ -1127,6 +1240,7 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
 
   const confidenceDistribution = useMemo(() => buildConfidenceDistribution(filteredHotspots), [filteredHotspots]);
   const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [filteredHotspots]);
+  const kawasanDistribution = useMemo(() => buildKawasanDistribution(filteredHotspots), [filteredHotspots]);
   const topWilker = useMemo(() => buildTopWilker(filteredHotspots), [filteredHotspots]);
   const skemaProvinsiMatrix = useMemo(
     () => buildSkemaProvinsiMatrix(filteredHotspots),
@@ -1335,7 +1449,9 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
           
           {renderCompactCard("Confidence", confidenceDistribution, filteredHotspots.length)}
           {renderCompactCard("FRP", frpDistribution, filteredHotspots.length, activeFrpCategory, handleSelectFrpCategory)}
-          
+          {renderCompactCard("Titik per Kawasan Hutan", kawasanDistribution, filteredHotspots.length)}
+          {renderKawasanBurnedCard(burnedKawasan)}
+
           <SkemaProvinsiCard
             matrix={skemaProvinsiMatrix}
             activeSkema={skemaFilter}

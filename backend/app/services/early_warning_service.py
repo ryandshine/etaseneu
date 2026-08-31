@@ -520,7 +520,7 @@ class EarlyWarningService:
 
         headers = [
             "No", "ID", "Nama KPS / Lembaga", "Balai PS", "Skema", "Desa", "Kecamatan", "Kabupaten", "Provinsi",
-            "Luas SK (ha)", "Luas Terbakar KLHK (ha)", "Frekuensi Terbakar",
+            "Luas SK (ha)", "Luas Terbakar Kemenhut (ha)", "Frekuensi Terbakar",
             "Hotspot Hari Ini (Total)", "Tepat di Bekas Terbakar (Strict Re-burn)", "Perembetan Blok Baru",
             "Jarak Perambatan Min (KM)", "Jarak Perambatan Max (KM)", "Jarak Perambatan Rerata (KM)",
             "Arah Perambatan Kompas", "Sudut Azimuth (°)",
