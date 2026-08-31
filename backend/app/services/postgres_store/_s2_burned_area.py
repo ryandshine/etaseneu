@@ -202,7 +202,7 @@ class _S2BurnedAreaMixin:
                             jsonb_agg(jsonb_build_object(
                                 'kode', bkh.fungsikws,
                                 'fungsi', COALESCE(lbl.fungsi, 'Kode ' || bkh.fungsikws::text),
-                                'kelompok', bkh.kelompok,
+                                'kelompok', COALESCE(lbl.kelompok, bkh.kelompok),
                                 'luas_ha', round(bkh.luas_ha::numeric, 2)
                             ) ORDER BY bkh.luas_ha DESC) AS rincian,
                             (SELECT bkh2.kelompok FROM burned_kawasan_hutan bkh2
@@ -254,7 +254,7 @@ class _S2BurnedAreaMixin:
                             jsonb_agg(jsonb_build_object(
                                 'kode', bkh.fungsikws,
                                 'fungsi', COALESCE(lbl.fungsi, 'Kode ' || bkh.fungsikws::text),
-                                'kelompok', bkh.kelompok,
+                                'kelompok', COALESCE(lbl.kelompok, bkh.kelompok),
                                 'luas_ha', round(bkh.luas_ha::numeric, 2)
                             ) ORDER BY bkh.luas_ha DESC) AS rincian,
                             (SELECT bkh2.kelompok FROM burned_kawasan_hutan bkh2

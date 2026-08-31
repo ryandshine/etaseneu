@@ -156,6 +156,15 @@ BUKAN lewat migrasi app:
   `refresh_kawasan_attribution()` me-refresh lookup (inkremental untuk hotspot, rebuild penuh untuk
   burned) — dijadwalkan cron harian di host (`docker exec gealgeolgeo-postgis psql ... -c "SELECT
   refresh_kawasan_attribution();"`), TIDAK dipanggil dari app.
+  - **Otoritas kode FUNGSIKWS = renderer resmi layanan ArcGIS Planologi**
+    (`.../KWSHUTAN_AR_250K/MapServer/0?f=json` → `drawingInfo.renderer.uniqueValueInfos`), bukan
+    tebakan. Handoff awal salah geser (100100 dikira KSA-KPA); dikoreksi 2026-09-01:
+    **100100=Hutan Lindung, 100300=HP Tetap, 100400=HPT, 100500=HPK, 100700=APL**, `1002xx`=Konservasi.
+    `fungsi_kawasan_kelompok()` diubah dari range prefix ke enumerasi. `refresh` inkremental TIDAK
+    menulis ulang `kelompok` baris hotspot lama → kalau mapping berubah lagi, jalankan sekali:
+    `UPDATE hotspot_kawasan_hutan SET kelompok = fungsi_kawasan_kelompok(fungsikws);`. Query enrich
+    ambil `fungsi`/`singkatan`/`kelompok` dari `ref_fungsi_kawasan_label` live (`COALESCE(lbl.*, hkh.*)`),
+    jadi koreksi label langsung kelihatan tanpa refresh.
 - **Enrich di request path = LEFT JOIN saja, tanpa operasi spasial baru**:
   `postgres_store/_hotspots.py::read_hotspot_observations()` LEFT JOIN `hotspot_kawasan_hutan` +
   `ref_fungsi_kawasan_label` → `payload["kawasan_hutan"] = {kode, fungsi, singkatan, nama_kawasan,

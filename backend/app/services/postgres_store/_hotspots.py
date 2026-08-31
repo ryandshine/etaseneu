@@ -185,7 +185,7 @@ class _HotspotObservationMixin:
                             p.properties_raw,
                             hkh.fungsikws AS khutan_kode,
                             hkh.nama_kawasan AS khutan_nama,
-                            hkh.kelompok AS khutan_kelompok,
+                            COALESCE(lbl.kelompok, hkh.kelompok) AS khutan_kelompok,
                             lbl.singkatan AS khutan_singkatan,
                             COALESCE(lbl.fungsi, 'Kode ' || hkh.fungsikws::text) AS khutan_fungsi
                         FROM hotspot_observations obs
