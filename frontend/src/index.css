@@ -1220,9 +1220,36 @@ body {
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
+  gap: 0.5rem;
   width: max-content;
   max-width: 15rem;
+  /* Semua overlay + ringkasannya bisa lebih tinggi dari layar -- dibatasi ke
+     ruang antara baris kontrol atas dan kontrol zoom/legenda di kiri bawah,
+     lalu digulir di dalam. */
+  max-height: calc(100% - 6.5rem - 5.5rem);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding: 4px 6px 4px 4px;
+  margin: -4px -6px -4px -4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(245, 239, 230, 0.28) transparent;
+}
+
+.burned-control::-webkit-scrollbar {
+  width: 6px;
+}
+
+.burned-control::-webkit-scrollbar-thumb {
+  background: rgba(245, 239, 230, 0.28);
+  border-radius: 999px;
+}
+
+.overlay-group {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .burned-toggle {
@@ -1242,7 +1269,7 @@ body {
   letter-spacing: 0.01em;
   backdrop-filter: blur(8px);
   cursor: pointer;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
   transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
 }
 
@@ -1283,7 +1310,7 @@ body {
   border-bottom-right-radius: 0.6rem;
   background: rgba(19, 21, 26, 0.94);
   backdrop-filter: blur(8px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
 }
 
 .burned-summary-chip__figure {
@@ -1326,16 +1353,27 @@ body {
   color: rgba(245, 239, 230, 0.5);
 }
 
-/* Overlay fungsi kawasan hutan: hijau (bukan palet merah bekas-terbakar). */
+/* Overlay fungsi kawasan hutan: identitas hijau, bukan palet merah bekas-terbakar. */
 .burned-toggle--kawasan.burned-toggle--active {
-  border-color: rgba(34, 139, 87, 0.55);
-  background: rgba(34, 139, 87, 0.18);
+  border-color: rgba(52, 211, 153, 0.5);
+  background: rgba(52, 211, 153, 0.16);
   color: #86efac;
 }
 
 .kawasan-legend {
-  border-color: rgba(34, 139, 87, 0.5);
-  gap: 0.22rem;
+  gap: 0.5rem;
+  border-color: rgba(52, 211, 153, 0.4);
+  border-top-color: rgba(255, 255, 255, 0.09);
+}
+
+/* Legenda 7 kelas -- dua kolom supaya tidak memanjang menutupi peta. */
+.kawasan-legend__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem 0.7rem;
 }
 
 .kawasan-legend__row {
@@ -1345,7 +1383,8 @@ body {
   gap: 0.4rem;
   font-size: 0.68rem;
   font-weight: 500;
-  color: rgba(245, 239, 230, 0.82);
+  line-height: 1.2;
+  color: rgba(245, 239, 230, 0.86);
 }
 
 .kawasan-legend__swatch {
@@ -1353,7 +1392,11 @@ body {
   height: 0.7rem;
   border-radius: 2px;
   flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.kawasan-legend .burned-summary-chip__source {
+  overflow-wrap: anywhere;
 }
 
 /* Tombol "Lokasi Saya" sengaja diletakkan di pojok kiri atas peta -- satu-
@@ -6944,6 +6987,7 @@ a + a {
     right: 1rem;
     width: auto;
     max-width: none;
+    max-height: calc(100% - 108px - 5.5rem);
   }
 
   .burned-toggle {

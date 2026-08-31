@@ -535,98 +535,108 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
       </button>
 
       <div className="burned-control">
-        <button
-          type="button"
-          className={`burned-toggle${showBurnedArea ? " burned-toggle--active" : ""}${
-            burnedArea.loading ? " burned-toggle--loading" : ""
-          }${showBurnedArea && burnedArea.data ? " burned-toggle--merged" : ""}`}
-          onClick={() => setShowBurnedArea((current) => !current)}
-          title={
-            showBurnedArea
-              ? "Sembunyikan kawasan bekas terbakar"
-              : "Tampilkan kawasan bekas terbakar (sumber: Kementerian Kehutanan, akurasi H/M)"
-          }
-          aria-pressed={showBurnedArea}
-        >
-          <Flame size={15} />
-          <span>Bekas Terbakar</span>
-        </button>
+        <div className="overlay-group">
+          <button
+            type="button"
+            className={`burned-toggle${showBurnedArea ? " burned-toggle--active" : ""}${
+              burnedArea.loading ? " burned-toggle--loading" : ""
+            }${showBurnedArea && burnedArea.data ? " burned-toggle--merged" : ""}`}
+            onClick={() => setShowBurnedArea((current) => !current)}
+            title={
+              showBurnedArea
+                ? "Sembunyikan kawasan bekas terbakar"
+                : "Tampilkan kawasan bekas terbakar (sumber: Kementerian Kehutanan, akurasi H/M)"
+            }
+            aria-pressed={showBurnedArea}
+          >
+            <Flame size={15} />
+            <span>Bekas Terbakar</span>
+          </button>
 
-        {showBurnedArea && burnedArea.data ? (
-          <div className="burned-summary-chip">
-            <p className="burned-summary-chip__figure">
-              <span className="burned-summary-chip__value">
-                {formatHectares(burnedArea.data.total_ha)}
-              </span>
-              <span className="burned-summary-chip__unit">Ha</span>
-            </p>
-            <p className="burned-summary-chip__scope">
-              {formatHectares(burnedArea.data.kps_count)} KPS terdampak
-            </p>
-            <p className="burned-summary-chip__source">Sumber Kementerian Kehutanan · akurasi H/M</p>
-          </div>
-        ) : null}
-
-        <button
-          type="button"
-          className={`burned-toggle burned-toggle--s2${showS2Burned ? " burned-toggle--active" : ""}${
-            s2Burned.loading ? " burned-toggle--loading" : ""
-          }`}
-          onClick={() => setShowS2Burned((current) => !current)}
-          title={
-            showS2Burned
-              ? "Sembunyikan estimasi mandiri Sentinel-2"
-              : "Tampilkan estimasi bekas terbakar hasil analisis mandiri (Sentinel-2 dNBR, belum terverifikasi)"
-          }
-          aria-pressed={showS2Burned}
-        >
-          <Flame size={15} />
-          <span>Estimasi Sentinel-2</span>
-        </button>
-
-        {showS2Burned && s2Burned.data ? (
-          <div className="burned-summary-chip">
-            <p className="burned-summary-chip__figure">
-              <span className="burned-summary-chip__value">
-                {formatHectares(s2Burned.data.meta.total_ha)}
-              </span>
-              <span className="burned-summary-chip__unit">Ha</span>
-            </p>
-            <p className="burned-summary-chip__scope">
-              {formatHectares(s2Burned.data.meta.polygons)} KPS · {s2Burned.data.meta.no_hotspot_but_burned} tanpa hotspot
-            </p>
-            <p className="burned-summary-chip__source">
-              Analisis mandiri Sentinel-2 · estimasi, belum terverifikasi
-            </p>
-          </div>
-        ) : null}
-
-        <button
-          type="button"
-          className={`burned-toggle burned-toggle--kawasan${showKawasan ? " burned-toggle--active" : ""}`}
-          onClick={() => setShowKawasan((current) => !current)}
-          title={
-            showKawasan
-              ? "Sembunyikan fungsi kawasan hutan"
-              : "Tampilkan fungsi kawasan hutan (layanan ArcGIS Ditjen Planologi Kehutanan, KWSHUTAN 1:250.000)"
-          }
-          aria-pressed={showKawasan}
-        >
-          <Trees size={15} />
-          <span>Fungsi Kawasan Hutan</span>
-        </button>
-
-        {showKawasan ? (
-          <div className="burned-summary-chip kawasan-legend">
-            {KAWASAN_HUTAN_LEGEND.map((item) => (
-              <p key={item.label} className="kawasan-legend__row">
-                <span className="kawasan-legend__swatch" style={{ background: item.color }} />
-                {item.label}
+          {showBurnedArea && burnedArea.data ? (
+            <div className="burned-summary-chip">
+              <p className="burned-summary-chip__figure">
+                <span className="burned-summary-chip__value">
+                  {formatHectares(burnedArea.data.total_ha)}
+                </span>
+                <span className="burned-summary-chip__unit">Ha</span>
               </p>
-            ))}
-            <p className="burned-summary-chip__source">Sumber: geoportal.planologi.kehutanan.go.id</p>
-          </div>
-        ) : null}
+              <p className="burned-summary-chip__scope">
+                {formatHectares(burnedArea.data.kps_count)} KPS terdampak
+              </p>
+              <p className="burned-summary-chip__source">Sumber Kementerian Kehutanan · akurasi H/M</p>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="overlay-group">
+          <button
+            type="button"
+            className={`burned-toggle burned-toggle--s2${showS2Burned ? " burned-toggle--active" : ""}${
+              s2Burned.loading ? " burned-toggle--loading" : ""
+            }${showS2Burned && s2Burned.data ? " burned-toggle--merged" : ""}`}
+            onClick={() => setShowS2Burned((current) => !current)}
+            title={
+              showS2Burned
+                ? "Sembunyikan estimasi mandiri Sentinel-2"
+                : "Tampilkan estimasi bekas terbakar hasil analisis mandiri (Sentinel-2 dNBR, belum terverifikasi)"
+            }
+            aria-pressed={showS2Burned}
+          >
+            <Flame size={15} />
+            <span>Estimasi Sentinel-2</span>
+          </button>
+
+          {showS2Burned && s2Burned.data ? (
+            <div className="burned-summary-chip">
+              <p className="burned-summary-chip__figure">
+                <span className="burned-summary-chip__value">
+                  {formatHectares(s2Burned.data.meta.total_ha)}
+                </span>
+                <span className="burned-summary-chip__unit">Ha</span>
+              </p>
+              <p className="burned-summary-chip__scope">
+                {formatHectares(s2Burned.data.meta.polygons)} KPS · {s2Burned.data.meta.no_hotspot_but_burned} tanpa hotspot
+              </p>
+              <p className="burned-summary-chip__source">
+                Analisis mandiri Sentinel-2 · estimasi, belum terverifikasi
+              </p>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="overlay-group">
+          <button
+            type="button"
+            className={`burned-toggle burned-toggle--kawasan${showKawasan ? " burned-toggle--active" : ""}${
+              showKawasan ? " burned-toggle--merged" : ""
+            }`}
+            onClick={() => setShowKawasan((current) => !current)}
+            title={
+              showKawasan
+                ? "Sembunyikan fungsi kawasan hutan"
+                : "Tampilkan fungsi kawasan hutan (layanan ArcGIS Ditjen Planologi Kehutanan, KWSHUTAN 1:250.000)"
+            }
+            aria-pressed={showKawasan}
+          >
+            <Trees size={15} />
+            <span>Fungsi Kawasan Hutan</span>
+          </button>
+
+          {showKawasan ? (
+            <div className="burned-summary-chip kawasan-legend">
+              <ul className="kawasan-legend__list">
+                {KAWASAN_HUTAN_LEGEND.map((item) => (
+                  <li key={item.label} className="kawasan-legend__row">
+                    <span className="kawasan-legend__swatch" style={{ background: item.color }} />
+                    {item.label}
+                  </li>
+                ))}
+              </ul>
+              <p className="burned-summary-chip__source">Sumber: SIGAP Kehutanan · KWSHUTAN 1:250K</p>
+            </div>
+          ) : null}
+        </div>
       </div>
       {userLocation.error ? <p className="locate-error-toast">{userLocation.error}</p> : null}
 
