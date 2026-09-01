@@ -235,6 +235,24 @@ class _S2BurnedAreaMixin:
             for r in rows
         ]
 
+    def latest_s2_burned_area_period(self) -> tuple[int, int] | None:
+        with self.connection() as conn:
+            self._ensure_s2_burned_area_table(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT year, month
+                    FROM s2_burned_area
+                    WHERE geometry IS NOT NULL
+                    ORDER BY year DESC, month DESC
+                    LIMIT 1
+                    """
+                )
+                row = cur.fetchone()
+        if not row:
+            return None
+        return int(row["year"]), int(row["month"])
+
     def read_s2_burned_area_overlay(self, year: int, month: int) -> dict[str, object]:
         with self.connection() as conn:
             self._ensure_s2_burned_area_table(conn)

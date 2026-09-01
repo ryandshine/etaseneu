@@ -8342,6 +8342,62 @@ a + a {
   opacity: 0.45;
 }
 
+.kompleks-wind-divicon {
+  background: transparent;
+  border: none;
+}
+
+.kompleks-wind-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.9);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  border-radius: 9999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.kompleks-wind-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 13px;
+  line-height: 1;
+  color: #38bdf8;
+  transform-origin: center center;
+  transition: transform 0.3s ease;
+}
+
+.kompleks-spread-weather-card {
+  margin: 6px 0;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kompleks-spread-info {
+  color: #fca5a5;
+  line-height: 1.35;
+}
+
+.kompleks-wind-info {
+  color: #7dd3fc;
+  line-height: 1.35;
+}
+
 .kompleks-list {
   display: flex;
   flex-direction: column;

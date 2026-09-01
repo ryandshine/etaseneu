@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
+import L from "leaflet";
 import { Check, Copy } from "lucide-react";
 import {
   Circle,
   CircleMarker,
   GeoJSON,
   MapContainer,
+  Marker,
   Pane,
+  Polyline,
   Popup,
   ScaleControl,
   TileLayer,
@@ -13,12 +16,69 @@ import {
   useMap,
   ZoomControl
 } from "react-leaflet";
-import { createApiClient } from "../lib/api";
+import { authFetch, createApiClient } from "../lib/api";
 import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
 import type { ClusterCollectionResponse, ClusterPoint, ClusterRecord, ClusterSensitivity } from "../types/api";
 import type { DashboardLayer } from "../hooks/useDashboardData";
 
 const api = createApiClient();
+
+function calculatePropagation(points: ClusterPoint[]) {
+  if (points.length < 2) return null;
+  const sorted = [...points].sort(
+    (a, b) => new Date(a.detected_at).getTime() - new Date(b.detected_at).getTime()
+  );
+  const startPoint = sorted[0];
+  const endPoint = sorted[sorted.length - 1];
+  const lat1 = startPoint.latitude;
+  const lon1 = startPoint.longitude;
+  const lat2 = endPoint.latitude;
+  const lon2 = endPoint.longitude;
+
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const distanceKm = R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+
+  if (distanceKm < 0.05) return null;
+
+  const y = Math.sin(dLon) * Math.cos((lat2 * Math.PI) / 180);
+  const x =
+    Math.cos((lat1 * Math.PI) / 180) * Math.sin((lat2 * Math.PI) / 180) -
+    Math.sin((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.cos(dLon);
+  let bearingDeg = (Math.atan2(y, x) * 180) / Math.PI;
+  bearingDeg = (bearingDeg + 360) % 360;
+
+  const directions = ["Utara", "Timur Laut", "Timur", "Tenggara", "Selatan", "Barat Daya", "Barat", "Barat Laut"];
+  const cardinalDir = directions[Math.round(bearingDeg / 45) % 8];
+
+  const timeDiffMs = new Date(endPoint.detected_at).getTime() - new Date(startPoint.detected_at).getTime();
+  const spanHours = Math.max(timeDiffMs / (1000 * 60 * 60), 0.1);
+  const speedKmPerDay = distanceKm / (spanHours / 24);
+
+  return {
+    startPoint,
+    endPoint,
+    distanceKm,
+    bearingDeg,
+    cardinalDir,
+    speedKmPerDay,
+    spanHours,
+  };
+}
+
+function getWindCardinal(directionDeg: number): string {
+  const directions = ["Utara", "Timur Laut", "Timur", "Tenggara", "Selatan", "Barat Daya", "Barat", "Barat Laut"];
+  return directions[Math.round(directionDeg / 45) % 8];
+}
 
 type TimeRangeOption = { label: string; days: number };
 
@@ -409,6 +469,47 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
   );
   const selectedLocations = selectedCluster?.locations ?? [];
 
+  const propagation = useMemo(() => {
+    if (!selectedId) return null;
+    const memberPoints = clusterPoints.filter((p) => p.cluster_id === selectedId);
+    return calculatePropagation(memberPoints);
+  }, [clusterPoints, selectedId]);
+
+  const [clusterWeather, setClusterWeather] = useState<{
+    wind_speed: number;
+    wind_direction: number;
+    wind_gusts: number;
+    temperature: number;
+    humidity: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!selectedCluster) {
+      setClusterWeather(null);
+      return;
+    }
+    let active = true;
+    authFetch(`/api/weather/spot?lat=${selectedCluster.centroid_lat}&lon=${selectedCluster.centroid_lon}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload) => {
+        if (active && payload?.current) {
+          setClusterWeather({
+            wind_speed: payload.current.wind_speed,
+            wind_direction: payload.current.wind_direction,
+            wind_gusts: payload.current.wind_gusts,
+            temperature: payload.current.temperature,
+            humidity: payload.current.humidity,
+          });
+        }
+      })
+      .catch(() => {
+        if (active) setClusterWeather(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedCluster?.cluster_id, selectedCluster?.centroid_lat, selectedCluster?.centroid_lon]);
+
   const handleCopyReport = async () => {
     if (!data || loading) return;
     setCopyState("copying");
@@ -551,6 +652,8 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                   <span className="kompleks-map-legend__item" title="Gabungan radius ε semua titik inti"><i className="kompleks-map-legend__footprint" /> Selubung kompleks</span>
                   <span className="kompleks-map-legend__item"><i className="kompleks-map-legend__line" /> Polygon lembaga</span>
                   <span className="kompleks-map-legend__item" title="Mode audit radius ε per titik inti"><i className="kompleks-map-legend__radius" /> Ring radius ε</span>
+                  <span className="kompleks-map-legend__item"><i className="kompleks-map-legend__dot" style={{ background: "#ef4444" }} /> ➡️ Vektor Rambatan Api</span>
+                  <span className="kompleks-map-legend__item"><i className="kompleks-map-legend__dot" style={{ background: "#38bdf8" }} /> 💨 Arah Angin Aktual</span>
                 </div>
               </div>
               <div className="kompleks-map-audit" aria-live="polite">
@@ -829,6 +932,70 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                   ))}
                 </Pane>
                 <Pane name="kompleks-points" style={{ zIndex: 440 }}>
+                  {/* Garis & Panah Vektor Rambatan Api */}
+                  {propagation ? (
+                    <>
+                      <Polyline
+                        positions={[
+                          [propagation.startPoint.latitude, propagation.startPoint.longitude],
+                          [propagation.endPoint.latitude, propagation.endPoint.longitude]
+                        ]}
+                        pathOptions={{
+                          color: "#ef4444",
+                          weight: 3.5,
+                          dashArray: "8 6",
+                          opacity: 0.95
+                        }}
+                      />
+                      <CircleMarker
+                        center={[propagation.startPoint.latitude, propagation.startPoint.longitude]}
+                        radius={6}
+                        pathOptions={{
+                          color: "#fbbf24",
+                          weight: 2,
+                          fillColor: "#d97706",
+                          fillOpacity: 1
+                        }}
+                      >
+                        <Tooltip permanent direction="bottom" className="kompleks-location-label">
+                          📍 Asal Api ({new Date(propagation.startPoint.detected_at).toLocaleDateString("id-ID")})
+                        </Tooltip>
+                      </CircleMarker>
+                      <CircleMarker
+                        center={[propagation.endPoint.latitude, propagation.endPoint.longitude]}
+                        radius={7}
+                        pathOptions={{
+                          color: "#ffffff",
+                          weight: 2,
+                          fillColor: "#ef4444",
+                          fillOpacity: 1
+                        }}
+                      >
+                        <Tooltip permanent direction="top" className="kompleks-location-label">
+                          ⚡ Kepala Api (Menjalar ke {propagation.cardinalDir} · ~{propagation.speedKmPerDay.toFixed(1)} km/hr)
+                        </Tooltip>
+                      </CircleMarker>
+                    </>
+                  ) : null}
+
+                  {/* Indikator Arah & Kecepatan Angin Aktual */}
+                  {selectedCluster && clusterWeather ? (
+                    <Marker
+                      position={[selectedCluster.centroid_lat, selectedCluster.centroid_lon]}
+                      icon={L.divIcon({
+                        className: "kompleks-wind-divicon",
+                        html: `
+                          <div class="kompleks-wind-badge">
+                            <div class="kompleks-wind-arrow" style="transform: rotate(${clusterWeather.wind_direction}deg);">⬆</div>
+                            <span>💨 ${clusterWeather.wind_speed.toFixed(1)} m/s (${getWindCardinal(clusterWeather.wind_direction)})</span>
+                          </div>
+                        `,
+                        iconSize: [120, 26],
+                        iconAnchor: [60, 32]
+                      })}
+                    />
+                  ) : null}
+
                   {showIndividualPoints
                     ? clusterPoints.map((point) => (
                         <CircleMarker
@@ -1018,6 +1185,21 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                             </div>
                           ) : null}
 
+                          {isSelected && (propagation || clusterWeather) ? (
+                            <div className="kompleks-spread-weather-card">
+                              {propagation ? (
+                                <div className="kompleks-spread-info">
+                                  <strong>➡️ Rambatan Api:</strong> Menjalar ke {propagation.cardinalDir} ({propagation.bearingDeg.toFixed(0)}°) &middot; ~{propagation.speedKmPerDay.toFixed(1)} km/hari (Jarak: {propagation.distanceKm.toFixed(2)} km)
+                                </div>
+                              ) : null}
+                              {clusterWeather ? (
+                                <div className="kompleks-wind-info">
+                                  <strong>💨 Angin Aktual:</strong> Dari {getWindCardinal(clusterWeather.wind_direction)} ({clusterWeather.wind_direction}°) &middot; {clusterWeather.wind_speed.toFixed(1)} m/s (hembusan {clusterWeather.wind_gusts.toFixed(1)} m/s)
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+
                           Lokasi terindikasi: <strong>{cluster.location_count ?? "-"}</strong> · yang menyentuh polygon:{" "}
                           <strong>{cluster.locations_in_polygon ?? "-"}</strong>
                           <br />
@@ -1142,6 +1324,20 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                             <b>Episentrum Terparah:</b> {cluster.epicenter_lat.toFixed(4)}, {cluster.epicenter_lon.toFixed(4)}
                             {cluster.max_frp ? ` (${cluster.max_frp.toFixed(1)} MW)` : ""}
                           </span>
+                        ) : null}
+                        {isSelected && (propagation || clusterWeather) ? (
+                          <div className="kompleks-spread-weather-card">
+                            {propagation ? (
+                              <div className="kompleks-spread-info">
+                                <b>➡️ Rambatan:</b> Menjalar ke {propagation.cardinalDir} ({propagation.bearingDeg.toFixed(0)}°) &middot; ~{propagation.speedKmPerDay.toFixed(1)} km/hari
+                              </div>
+                            ) : null}
+                            {clusterWeather ? (
+                              <div className="kompleks-wind-info">
+                                <b>💨 Angin:</b> Dari {getWindCardinal(clusterWeather.wind_direction)} ({clusterWeather.wind_direction}°) &middot; {clusterWeather.wind_speed.toFixed(1)} m/s
+                              </div>
+                            ) : null}
+                          </div>
                         ) : null}
                         <span><b>Balai/Wilker:</b> {cluster.dominant_wilker ?? "Belum teridentifikasi"}</span>
                         <span><b>Provinsi:</b> {cluster.dominant_province ?? "Belum teridentifikasi"}</span>
