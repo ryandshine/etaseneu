@@ -33,6 +33,7 @@ import type { BurnedAreaOverlayFeature } from "../hooks/useBurnedAreaOverlay";
 import { useS2BurnedAreaOverlay } from "../hooks/useS2BurnedAreaOverlay";
 import type { S2BurnedAreaFeature } from "../hooks/useS2BurnedAreaOverlay";
 import { KawasanHutanLayer } from "./KawasanHutanLayer";
+import { PolygonInfoLayer } from "./PolygonInfoLayer";
 import { KAWASAN_HUTAN_LEGEND } from "../constants/kawasanHutan";
 import type { LayerBounds } from "../types/api";
 
@@ -700,6 +701,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
         )}
         <ZoomControl position="bottomleft" />
         <MapViewport hotspots={hotspots} layers={layers} selectedProvince={selectedProvince} />
+        <PolygonInfoLayer layers={layers} showKawasan={showKawasan} />
         <WindLayer visible={showWind ?? false} />
         <WeatherOverlay parameter={weatherOverlay ?? null} />
         {showUserLocation && userLocation.position ? (

@@ -552,6 +552,39 @@ class _BurnedAreaMixin:
             "burned_rebuild": int(row.get("burned_rebuild") or 0),
         }
 
+    def read_kawasan_at_point(self, lat: float, lon: float) -> dict[str, object] | None:
+        """Fungsi kawasan hutan di satu koordinat (untuk popup klik peta).
+        Uji titik-dalam-poligon di `ref_kawasan_hutan_sub` (GiST, cepat),
+        label live dari `ref_fungsi_kawasan_label`."""
+        if not self.enabled:
+            return None
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT s.fungsikws::bigint AS kode,
+                           s.namobj AS nama_kawasan,
+                           COALESCE(lbl.singkatan, '') AS singkatan,
+                           COALESCE(lbl.fungsi, 'Kode ' || s.fungsikws::text) AS fungsi,
+                           COALESCE(lbl.kelompok, '') AS kelompok
+                    FROM ref_kawasan_hutan_sub s
+                    LEFT JOIN ref_fungsi_kawasan_label lbl ON lbl.kode = s.fungsikws
+                    WHERE ST_Contains(s.geom, ST_SetSRID(ST_MakePoint(%s, %s), 4326))
+                    LIMIT 1
+                    """,
+                    (float(lon), float(lat)),
+                )
+                row = cur.fetchone()
+        if not row:
+            return None
+        return {
+            "kode": int(row["kode"]) if row["kode"] is not None else None,
+            "nama_kawasan": row["nama_kawasan"],
+            "singkatan": row["singkatan"],
+            "fungsi": row["fungsi"],
+            "kelompok": row["kelompok"],
+        }
+
     def burn_frequency_by_lembaga(self) -> list[dict[str, object]]:
         """Berapa PERIODE (bulan) TERPISAH tiap KPS pernah tercatat luas bekas
         terbakar resmi KLHK -- dasar kolom "Frekuensi" di Buku Besar. Beda

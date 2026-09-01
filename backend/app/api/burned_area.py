@@ -89,6 +89,15 @@ async def burned_area_refresh_kawasan(
     return {"status": "ok", **result}
 
 
+@router.get("/burned-area/kawasan-at")
+async def burned_area_kawasan_at(lat: float, lon: float) -> dict[str, object]:
+    """Fungsi kawasan hutan di satu koordinat (dipakai popup klik peta).
+    Mengembalikan `{kawasan: {...}}` atau `{kawasan: null}` bila titik di luar
+    semua kawasan hutan."""
+    store = PostgresStore(get_settings().database_url)
+    return {"kawasan": store.read_kawasan_at_point(lat, lon)}
+
+
 @router.get("/burned-area/kawasan-summary")
 async def burned_area_kawasan_summary(province: str | None = None) -> dict[str, object]:
     """Rekap luas terbakar resmi Kementerian Kehutanan per FUNGSI kawasan

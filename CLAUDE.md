@@ -235,7 +235,15 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               hotspot supaya polygon tetap bisa diklik. Titik hotspot dipaksa
               `bringToFront()` tiap render. KONSEKUENSI: `<Popup>` di dalam pane itu
               mewarisi pane z420 dan ketutup marker -> WAJIB `pane="popupPane"` di tiap
-              `<Popup>` hotspot, kalau tidak tombol di dalamnya tidak bisa diklik),
+              `<Popup>` hotspot, kalau tidak tombol di dalamnya tidak bisa diklik.
+              Batas KPS TETAP non-interaktif; info poligon saat diklik ditangani
+              `PolygonInfoLayer.tsx` = `useMapEvents({click})` + uji titik-dalam-poligon
+              sisi klien (`lib/polygonHit.ts`) atas geojson layer yang termuat, lalu
+              satu popup gabungan (layer apa + lembaga/skema/wilayah). Aman karena klik
+              hotspot/bekas-terbakar sudah `DomEvent.stop` lewat bindPopup -> map click
+              tidak fire. Kalau overlay Fungsi Kawasan Hutan nyala, fungsi kawasan di
+              titik itu ikut (fetch `GET /api/burned-area/kawasan-at?lat=&lon=` ->
+              `_burned_area.py::read_kawasan_at_point`, `ST_Contains` ke `ref_kawasan_hutan_sub`)),
               HotspotMatrix.tsx ("Matriks Data"), KpsDetailView.tsx,
               KompleksKebakaranView.tsx ("Kompleks Kebakaran" — peta+daftar klaster
               hotspot ST-DBSCAN, self-contained fetch sendiri lewat lib/api.ts, TIDAK
