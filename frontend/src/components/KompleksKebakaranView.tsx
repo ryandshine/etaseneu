@@ -554,15 +554,26 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                 </div>
               </div>
               <div className="kompleks-map-audit" aria-live="polite">
-                <button
-                  type="button"
-                  className="kompleks-map-audit__button"
-                  aria-pressed={showIndividualPoints}
-                  onClick={() => setShowIndividualPoints((visible) => !visible)}
-                  title="Sembunyikan atau tampilkan seluruh titik satelit individu"
-                >
-                  {showIndividualPoints ? "Mode Sentroid Bersih" : "Tampilkan Semua Titik"}
-                </button>
+                <div className="kompleks-mode-switcher" role="group" aria-label="Mode Tampilan Klaster">
+                  <button
+                    type="button"
+                    className={`kompleks-mode-btn ${!showIndividualPoints ? "kompleks-mode-btn--active" : ""}`}
+                    onClick={() => setShowIndividualPoints(false)}
+                    aria-pressed={!showIndividualPoints}
+                    title="Hanya tampilkan titik sentroid & episentrum terparah tanpa titik-titik kecil yang menumpuk"
+                  >
+                    🎯 Mode Sentroid Bersih
+                  </button>
+                  <button
+                    type="button"
+                    className={`kompleks-mode-btn ${showIndividualPoints ? "kompleks-mode-btn--active" : ""}`}
+                    onClick={() => setShowIndividualPoints(true)}
+                    aria-pressed={showIndividualPoints}
+                    title="Tampilkan seluruh titik hotspot satelit individu"
+                  >
+                    🔵 Semua Titik Satelit
+                  </button>
+                </div>
                 <button
                   type="button"
                   className="kompleks-map-audit__button"
@@ -575,7 +586,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                 <span>
                   {selectedCluster
                     ? `${selectedCorePoints.length.toLocaleString("id-ID")} titik inti · ε ${sensitivityParameters.epsKm} km`
-                    : "Pilih kompleks untuk melihat selubung & koordinat pusat"}
+                    : "Pilih kompleks untuk melihat selubung & koordinat"}
                 </span>
               </div>
               <MapContainer
@@ -788,7 +799,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                   ))}
                 </Pane>
                 <Pane name="kompleks-locations" style={{ zIndex: 430 }}>
-                  {selectedLocations.map((location) => (
+                  {showIndividualPoints && selectedLocations.map((location) => (
                     <CircleMarker
                       key={`location-${location.location_id}`}
                       center={[location.centroid_lat, location.centroid_lon]}
@@ -818,19 +829,16 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                   ))}
                 </Pane>
                 <Pane name="kompleks-points" style={{ zIndex: 440 }}>
-                  {(showIndividualPoints
-                    ? clusterPoints
-                    : selectedCluster
-                    ? clusterPoints.filter((p) => p.cluster_id === selectedId)
-                    : []
-                  ).map((point) => (
-                    <CircleMarker
-                      key={`point-${point.id}`}
-                      center={[point.latitude, point.longitude]}
-                      radius={point.cluster_id === selectedId ? 4 : 2.6}
-                      pathOptions={pointPathOptions(point, clusterById.get(point.cluster_id), selectedId)}
-                    />
-                  ))}
+                  {showIndividualPoints
+                    ? clusterPoints.map((point) => (
+                        <CircleMarker
+                          key={`point-${point.id}`}
+                          center={[point.latitude, point.longitude]}
+                          radius={point.cluster_id === selectedId ? 4 : 2.6}
+                          pathOptions={pointPathOptions(point, clusterById.get(point.cluster_id), selectedId)}
+                        />
+                      ))
+                    : null}
                   {selectedCluster &&
                   selectedCluster.epicenter_lat !== undefined &&
                   selectedCluster.epicenter_lon !== undefined ? (

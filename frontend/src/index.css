@@ -8265,16 +8265,57 @@ a + a {
   right: 1rem;
   z-index: 1000;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.55rem;
-  max-width: min(28rem, calc(100% - 2rem));
+  max-width: min(34rem, calc(100% - 2rem));
   padding: 0.4rem 0.5rem;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(19, 21, 26, 0.84);
+  background: rgba(19, 21, 26, 0.92);
   color: rgba(255, 255, 255, 0.72);
-  font-size: 0.62rem;
+  font-size: 0.65rem;
   line-height: 1.2;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(10px);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.kompleks-mode-switcher {
+  display: inline-flex;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.kompleks-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.65);
+  padding: 0.3rem 0.55rem;
+  font: inherit;
+  font-size: 0.65rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.kompleks-mode-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.kompleks-mode-btn--active {
+  background: #ea580c !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
 .kompleks-map-audit__button {
@@ -8283,19 +8324,22 @@ a + a {
   color: #fde68a;
   padding: 0.35rem 0.5rem;
   font: inherit;
+  font-size: 0.65rem;
   font-weight: 700;
   cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
 }
 
 .kompleks-map-audit__button:hover:not(:disabled),
 .kompleks-map-audit__button[aria-pressed="true"] {
-  background: rgba(251, 191, 36, 0.22);
+  background: rgba(251, 191, 36, 0.25);
   color: #fff7cc;
 }
 
 .kompleks-map-audit__button:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
 .kompleks-list {
