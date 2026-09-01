@@ -1261,7 +1261,7 @@ body {
   padding: 0 0.75rem;
   border-radius: 0.6rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(19, 21, 26, 0.92);
+  background: rgba(19, 21, 26, 0.96);
   color: #f5efe6;
   font-family: inherit;
   font-size: 0.74rem;
@@ -1273,14 +1273,19 @@ body {
   transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
 }
 
-.burned-toggle:hover {
-  background: rgba(220, 38, 38, 0.16);
-  color: #fff;
+@media (hover: hover) {
+  .burned-toggle:hover {
+    background: rgba(56, 22, 24, 0.96);
+    color: #fff;
+  }
 }
 
+/* Isian dijaga hampir buram: tombol melayang di atas peta yang bisa memuat
+   warna cerah (overlay kawasan hutan, popup krem) -- tint transparan bikin
+   teksnya tak terbaca. */
 .burned-toggle--active {
   border-color: rgba(220, 38, 38, 0.5);
-  background: rgba(220, 38, 38, 0.16);
+  background: rgba(52, 21, 23, 0.96);
   color: #fca5a5;
 }
 
@@ -1308,7 +1313,7 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.09);
   border-bottom-left-radius: 0.6rem;
   border-bottom-right-radius: 0.6rem;
-  background: rgba(19, 21, 26, 0.94);
+  background: rgba(19, 21, 26, 0.97);
   backdrop-filter: blur(8px);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
 }
@@ -1356,7 +1361,7 @@ body {
 /* Overlay fungsi kawasan hutan: identitas hijau, bukan palet merah bekas-terbakar. */
 .burned-toggle--kawasan.burned-toggle--active {
   border-color: rgba(52, 211, 153, 0.5);
-  background: rgba(52, 211, 153, 0.16);
+  background: rgba(18, 40, 32, 0.96);
   color: #86efac;
 }
 
@@ -6977,21 +6982,53 @@ a + a {
     max-width: none;
   }
 
-  /* Baris sendiri, konsisten dengan versi desktop. Ikon hamburger 48px cuma
-     menempati sudut sampai ~64px, jadi left:1rem di baris yang lebih rendah
-     ini aman. Kolomnya dibuat selebar layar (right:1rem) supaya tombol +
-     panel rata sisi; target sentuh tombol dinaikkan ke 44px. */
+  /* Di layar sempit panel ini TIDAK boleh selebar layar -- dulu begitu dan
+     langsung menutupi peta + popup titik hotspot. Sekarang kolom sempit di
+     kiri (target sentuh tombol tetap 44px), ruang kanan dibiarkan untuk peta
+     & popup, dan seluruh isi digulir di tinggi yang dibatasi ketat. */
   .burned-control {
-    top: 108px;
+    top: 104px;
     left: 1rem;
-    right: 1rem;
-    width: auto;
-    max-width: none;
-    max-height: calc(100% - 108px - 5.5rem);
+    right: auto;
+    width: max-content;
+    max-width: min(19rem, calc(100vw - 4.5rem));
+    max-height: calc(100% - 104px - 6rem);
+    max-height: calc(100dvh - 104px - 6rem);
   }
 
   .burned-toggle {
     height: 44px;
+  }
+
+  .burned-summary-chip {
+    padding: 0.5rem 0.65rem 0.55rem;
+    gap: 0.2rem;
+  }
+
+  .burned-summary-chip__value {
+    font-size: 1.1rem;
+  }
+
+  .burned-summary-chip__source {
+    font-size: 0.56rem;
+  }
+
+  .kawasan-legend {
+    gap: 0.4rem;
+  }
+
+  .kawasan-legend__list {
+    gap: 0.24rem 0.5rem;
+  }
+
+  .kawasan-legend__row {
+    font-size: 0.62rem;
+    gap: 0.32rem;
+  }
+
+  .kawasan-legend__swatch {
+    width: 0.6rem;
+    height: 0.6rem;
   }
 
   /* Tetap di baris atas yang sama (bukan ditumpuk ke bawah) supaya tidak
