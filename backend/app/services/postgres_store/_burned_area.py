@@ -531,6 +531,27 @@ class _BurnedAreaMixin:
             for r in rows
         ]
 
+    def refresh_kawasan_attribution(self) -> dict[str, int]:
+        """Jalankan fungsi plpgsql `refresh_kawasan_attribution()` di DB:
+        atribusi hotspot baru (inkremental) + rebuild penuh luas terbakar
+        (Sentinel-2 & Kementerian Kehutanan) per fungsi kawasan hutan.
+        ~20 dtk. Dipakai tombol Pengaturan + auto setelah refresh file
+        Kementerian Kehutanan. Cron harian tetap jalan sebagai jaring pengaman."""
+        if not self.enabled:
+            return {"hotspot_baru": 0, "hotspot_hapus": 0, "burned_rebuild": 0}
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT hotspot_baru, hotspot_hapus, burned_rebuild "
+                    "FROM refresh_kawasan_attribution()"
+                )
+                row = cur.fetchone() or {}
+        return {
+            "hotspot_baru": int(row.get("hotspot_baru") or 0),
+            "hotspot_hapus": int(row.get("hotspot_hapus") or 0),
+            "burned_rebuild": int(row.get("burned_rebuild") or 0),
+        }
+
     def burn_frequency_by_lembaga(self) -> list[dict[str, object]]:
         """Berapa PERIODE (bulan) TERPISAH tiap KPS pernah tercatat luas bekas
         terbakar resmi KLHK -- dasar kolom "Frekuensi" di Buku Besar. Beda

@@ -75,6 +75,20 @@ async def burned_area_frequency() -> dict[str, object]:
     return {"rows": rows}
 
 
+@router.post("/burned-area/refresh-kawasan")
+async def burned_area_refresh_kawasan(
+    _: None = Depends(require_admin_key),
+) -> dict[str, object]:
+    """Segarkan atribusi fungsi kawasan hutan: atribusi hotspot baru
+    (inkremental) + rebuild luas terbakar per fungsi kawasan (Sentinel-2 &
+    Kementerian Kehutanan). ~20 dtk. Dipakai tombol Pengaturan; juga dipanggil
+    otomatis setelah refresh file Kementerian Kehutanan. Cron harian 04:15
+    tetap jalan sebagai jaring pengaman."""
+    store = PostgresStore(get_settings().database_url)
+    result = store.refresh_kawasan_attribution()
+    return {"status": "ok", **result}
+
+
 @router.get("/burned-area/kawasan-summary")
 async def burned_area_kawasan_summary(province: str | None = None) -> dict[str, object]:
     """Rekap luas terbakar resmi Kementerian Kehutanan per FUNGSI kawasan
@@ -264,6 +278,20 @@ async def burned_area_refresh_klhk(
     safe_path = settings.resolved_klhk_burned_area_dir / Path(file_name).name
 
     try:
-        return refresh_burned_area_from_klhk_file(str(safe_path))
+        result = refresh_burned_area_from_klhk_file(str(safe_path))
     except BurnedAreaKlhkError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    # Data luas terbakar berubah -> segarkan atribusi per fungsi kawasan hutan
+    # supaya kartu "Luas Kebakaran per Kawasan Hutan" langsung ikut, tanpa
+    # menunggu cron harian. Kegagalan di sini tidak membatalkan refresh utama.
+    try:
+        result = {
+            **result,
+            "kawasan_attribution": PostgresStore(
+                get_settings().database_url
+            ).refresh_kawasan_attribution(),
+        }
+    except Exception:
+        pass
+    return result

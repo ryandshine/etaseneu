@@ -152,10 +152,15 @@ BUKAN lewat migrasi app:
   `ref_kawasan_hutan` + `ref_kawasan_hutan_sub` (geometri detail penuh, ~2 GB, cuma dipakai saat
   join), `hotspot_kawasan_hutan` (lookup `hotspot_id → fungsikws/nama_kawasan/kelompok`),
   `burned_kawasan_hutan` (rincian `s2_burned_area.id × fungsi kawasan → luas_ha`),
-  `ref_fungsi_kawasan_label` (`kode numeric → singkatan/fungsi/kelompok`). Fungsi SQL
+  `ref_fungsi_kawasan_label` (`kode numeric → singkatan/fungsi/kelompok`),
+  `burned_kemenhut_kawasan_hutan` (luas terbakar resmi × fungsi). Fungsi SQL
   `refresh_kawasan_attribution()` me-refresh lookup (inkremental untuk hotspot, rebuild penuh untuk
-  burned) — dijadwalkan cron harian di host (`docker exec gealgeolgeo-postgis psql ... -c "SELECT
-  refresh_kawasan_attribution();"`), TIDAK dipanggil dari app.
+  burned S2 + burned Kemenhut) — cron harian 04:15 di host (`docker exec gealgeolgeo-postgis psql
+  ... -c "SELECT refresh_kawasan_attribution();"`). **Sekarang juga dipanggil dari app**:
+  otomatis di akhir `POST /api/burned-area/refresh-klhk`, dan lewat tombol "Segarkan Atribusi
+  Kawasan Hutan" di Pengaturan → `POST /api/burned-area/refresh-kawasan` (admin) →
+  `_burned_area.py::refresh_kawasan_attribution()` (guard `self.enabled`; test WAJIB
+  monkeypatch method kelas ini — pernah lolos & jalan di DB produksi saat test).
   - **Otoritas kode FUNGSIKWS = renderer resmi layanan ArcGIS Planologi**
     (`.../KWSHUTAN_AR_250K/MapServer/0?f=json` → `drawingInfo.renderer.uniqueValueInfos`), bukan
     tebakan. Handoff awal salah geser (100100 dikira KSA-KPA); dikoreksi 2026-09-01:

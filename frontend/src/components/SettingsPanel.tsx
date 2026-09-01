@@ -194,6 +194,42 @@ export function SettingsPanel({ onRefreshLayers, adminKey, session, onLogout }: 
     },
   };
 
+  const [refreshingKawasan, setRefreshingKawasan] = useState(false);
+  const handleRefreshKawasan = async () => {
+    setRefreshingKawasan(true);
+    setFeedback(null);
+    try {
+      const response = await fetch("/api/burned-area/refresh-kawasan", {
+        method: "POST",
+        headers: adminActionHeaders,
+      });
+      const body = await response.json().catch(() => null);
+      if (response.ok) {
+        setFeedback({
+          tone: "success",
+          title: "Atribusi kawasan hutan disegarkan",
+          body:
+            `${body?.hotspot_baru ?? 0} titik hotspot baru ter-atribusi. ` +
+            `Luas terbakar per fungsi kawasan (Sentinel-2 & Kementerian Kehutanan) dihitung ulang.`,
+        });
+      } else {
+        setFeedback({
+          tone: "danger",
+          title: "Gagal menyegarkan atribusi",
+          body: body?.detail ?? "Terjadi kesalahan di server.",
+        });
+      }
+    } catch {
+      setFeedback({
+        tone: "danger",
+        title: "Koneksi Terputus",
+        body: "Terjadi kesalahan jaringan. Silakan coba lagi.",
+      });
+    } finally {
+      setRefreshingKawasan(false);
+    }
+  };
+
   const handleLayerAction = async (fileName: string, action: LayerAction) => {
     setProcessingFile(fileName);
     setFeedback(null);
@@ -562,6 +598,35 @@ export function SettingsPanel({ onRefreshLayers, adminKey, session, onLogout }: 
               Tidak ada file GeoJSON yang aktif terdaftar dalam sistem.
             </div>
           )}
+        </div>
+
+        <div style={{ background: "rgba(17, 24, 39, 0.5)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "12px", padding: "2rem" }}>
+          <h2 style={{ fontSize: "1.25rem", color: "#fff", fontWeight: "600", margin: "0 0 0.5rem" }}>
+            Pemeliharaan Atribusi Kawasan Hutan
+          </h2>
+          <p style={{ fontSize: "0.85rem", color: "#9ca3af", margin: "0 0 1.25rem", lineHeight: 1.6 }}>
+            Fungsi kawasan hutan untuk titik hotspot &amp; luas terbakar disegarkan otomatis tiap dini
+            hari (04:15) dan langsung setelah refresh data Kementerian Kehutanan. Jalankan manual di
+            sini setelah analisis Sentinel-2 yang baru, atau bila ingin langsung memasukkan hotspot
+            terbaru tanpa menunggu esok hari. Proses ± 20 detik.
+          </p>
+          <button
+            type="button"
+            onClick={handleRefreshKawasan}
+            disabled={refreshingKawasan}
+            style={{
+              background: refreshingKawasan ? "rgba(255,255,255,0.06)" : "rgba(45, 106, 79, 0.22)",
+              border: "1px solid rgba(52, 211, 153, 0.4)",
+              color: refreshingKawasan ? "#9ca3af" : "#86efac",
+              padding: "0.55rem 1rem",
+              borderRadius: "8px",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              cursor: refreshingKawasan ? "progress" : "pointer",
+            }}
+          >
+            {refreshingKawasan ? "Menyegarkan… (± 20 detik)" : "Segarkan Atribusi Kawasan Hutan"}
+          </button>
         </div>
 
         {session?.role === "admin" ? (

@@ -292,6 +292,16 @@ def test_burned_area_refresh_klhk_calls_service(monkeypatch) -> None:
         return {"file": "burned.geojson", "computed": 331}
 
     monkeypatch.setattr(burned_area_api, "refresh_burned_area_from_klhk_file", fake_refresh)
+    # Bahaya #1: endpoint memanggil PostgresStore().refresh_kawasan_attribution()
+    # langsung (bukan lewat DI) -- di-neuter di level kelas supaya test tidak
+    # menyentuh DB produksi.
+    from app.services.postgres_store import PostgresStore
+
+    monkeypatch.setattr(
+        PostgresStore,
+        "refresh_kawasan_attribution",
+        lambda self: {"hotspot_baru": 3, "hotspot_hapus": 0, "burned_rebuild": 42},
+    )
 
     app = create_app()
     app.dependency_overrides[require_admin_key] = lambda: None
@@ -300,7 +310,11 @@ def test_burned_area_refresh_klhk_calls_service(monkeypatch) -> None:
     response = client.post("/api/burned-area/refresh-klhk?file_name=burned.geojson")
 
     assert response.status_code == 200
-    assert response.json() == {"file": "burned.geojson", "computed": 331}
+    assert response.json() == {
+        "file": "burned.geojson",
+        "computed": 331,
+        "kawasan_attribution": {"hotspot_baru": 3, "hotspot_hapus": 0, "burned_rebuild": 42},
+    }
     assert len(calls) == 1
     assert calls[0].endswith("burned.geojson")
 
@@ -352,6 +366,45 @@ def test_burned_area_refresh_klhk_returns_404_when_file_missing(monkeypatch) -> 
     response = client.post("/api/burned-area/refresh-klhk?file_name=tidak-ada.geojson")
 
     assert response.status_code == 404
+
+
+def test_burned_area_refresh_kawasan_runs_attribution(monkeypatch) -> None:
+    from app.core.auth import require_admin_key
+    from app.main import create_app
+    from fastapi.testclient import TestClient
+    from app.services.postgres_store import PostgresStore
+
+    monkeypatch.setattr(
+        PostgresStore,
+        "refresh_kawasan_attribution",
+        lambda self: {"hotspot_baru": 5, "hotspot_hapus": 1, "burned_rebuild": 2155},
+    )
+
+    app = create_app()
+    app.dependency_overrides[require_admin_key] = lambda: None
+    client = TestClient(app)
+
+    response = client.post("/api/burned-area/refresh-kawasan")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "hotspot_baru": 5,
+        "hotspot_hapus": 1,
+        "burned_rebuild": 2155,
+    }
+
+
+def test_burned_area_refresh_kawasan_requires_admin_key(monkeypatch) -> None:
+    from app.main import create_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setenv("ADMIN_API_KEY", "secret")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    client = TestClient(create_app())
+    assert client.post("/api/burned-area/refresh-kawasan").status_code == 401
 
 
 
