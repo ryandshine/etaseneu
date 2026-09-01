@@ -168,11 +168,16 @@ def _spatial_location_groups(members: list[dict], eps_km: float) -> list[list[di
 def _location_summary(members: list[dict], location_id: int) -> dict[str, object]:
     detected_ats = [member["detected_at"] for member in members]
     polygon_members = [member for member in members if member.get("polygon_metadata_id") is not None]
+
+    total_w = sum(max(float(m.get("frp") or 0.0), 1.0) for m in members)
+    w_lat = sum(float(m["latitude"]) * max(float(m.get("frp") or 0.0), 1.0) for m in members)
+    w_lon = sum(float(m["longitude"]) * max(float(m.get("frp") or 0.0), 1.0) for m in members)
+
     return {
         "location_id": location_id,
         "hotspot_count": len(members),
-        "centroid_lat": sum(member["latitude"] for member in members) / len(members),
-        "centroid_lon": sum(member["longitude"] for member in members) / len(members),
+        "centroid_lat": w_lat / total_w if total_w > 0 else sum(member["latitude"] for member in members) / len(members),
+        "centroid_lon": w_lon / total_w if total_w > 0 else sum(member["longitude"] for member in members) / len(members),
         "first_detected_at": min(detected_ats),
         "last_detected_at": max(detected_ats),
         "polygon_hotspot_count": len(polygon_members),
@@ -270,12 +275,40 @@ def _summarize(
         dominant_polygon = polygon_summaries[0] if polygon_summaries else None
         polygon_hotspot_count = sum(len(polygon_members) for polygon_members in polygon_groups.values())
 
+        # Hitung FRP-Weighted Centroid & Titik Episentrum Api Terparah (Peak Hotspot)
+        total_weight = 0.0
+        weighted_lat = 0.0
+        weighted_lon = 0.0
+        max_frp = 0.0
+        peak_member = members[0]
+
+        for m in members:
+            frp_val = float(m.get("frp") or 0.0)
+            brightness_val = float(m.get("brightness") or 0.0)
+            weight = max(frp_val, 1.0)
+            weighted_lat += float(m["latitude"]) * weight
+            weighted_lon += float(m["longitude"]) * weight
+            total_weight += weight
+
+            cur_score = max(frp_val, brightness_val / 10.0)
+            best_score = max(float(peak_member.get("frp") or 0.0), float(peak_member.get("brightness") or 0.0) / 10.0)
+            if cur_score > best_score:
+                peak_member = m
+            if frp_val > max_frp:
+                max_frp = frp_val
+
+        centroid_lat = weighted_lat / total_weight if total_weight > 0 else sum(m["latitude"] for m in members) / len(members)
+        centroid_lon = weighted_lon / total_weight if total_weight > 0 else sum(m["longitude"] for m in members) / len(members)
+
         clusters.append(
             {
                 "cluster_id": cluster_id,
                 "hotspot_count": len(members),
-                "centroid_lat": sum(m["latitude"] for m in members) / len(members),
-                "centroid_lon": sum(m["longitude"] for m in members) / len(members),
+                "centroid_lat": centroid_lat,
+                "centroid_lon": centroid_lon,
+                "epicenter_lat": float(peak_member["latitude"]),
+                "epicenter_lon": float(peak_member["longitude"]),
+                "max_frp": max_frp if max_frp > 0 else None,
                 "first_detected_at": min(detected_ats),
                 "last_detected_at": max(detected_ats),
                 "dominant_agency": dominant_agency,

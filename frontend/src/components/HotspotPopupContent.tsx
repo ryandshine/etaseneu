@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { authFetch } from "../lib/api";
-import { Check, Copy, ExternalLink } from "lucide-react";
+import { Check, ChevronDown, CloudSun, Copy, ExternalLink, FileText } from "lucide-react";
 
 // Popup detail titik hotspot -- dipakai bareng oleh HotspotMap (peta utama)
 // dan KpsDetailView (peta di halaman Detail KPS) supaya isi & gaya popup-nya
@@ -227,17 +227,78 @@ export function HotspotWeatherPopup({ lat, lon }: { lat: number; lon: number }) 
   );
 }
 
-export function HotspotPopupContent({ hotspot }: { hotspot: PopupHotspot }) {
+export function HotspotPopupContent({
+  hotspot,
+  onOpenKpsDetail
+}: {
+  hotspot: PopupHotspot;
+  onOpenKpsDetail?: (agency: string) => void;
+}) {
+  const [showWeather, setShowWeather] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const hasValidAgency = Boolean(
+    hotspot.agencyName &&
+    hotspot.agencyName.trim() &&
+    hotspot.agencyName.trim() !== "Tidak tersedia" &&
+    hotspot.agencyName.trim() !== "-"
+  );
+
+  const handleCopy = async () => {
+    const text = `${hotspot.latitude.toFixed(5)}, ${hotspot.longitude.toFixed(5)}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // ignore
+    }
+  };
+
+  const frpVal = hotspot.frp ?? null;
+  const frpLevel = frpVal
+    ? frpVal > HIGH_FRP_THRESHOLD
+      ? "Tinggi"
+      : frpVal >= 10
+      ? "Sedang"
+      : "Rendah"
+    : null;
+
   return (
     <div className="popup-card">
       <div className="popup-head">
-        <strong>{hotspot.source}</strong>
-        <span>{hotspot.satellite}</span>
+        <div className="popup-head-main">
+          <strong>{hotspot.source}</strong>
+          <span>{hotspot.satellite}</span>
+        </div>
+        {frpVal !== null && (
+          <span
+            className={`popup-frp-badge popup-frp-badge--${
+              frpVal > HIGH_FRP_THRESHOLD ? "high" : frpVal >= 10 ? "med" : "low"
+            }`}
+          >
+            FRP {frpVal.toFixed(1)} MW
+          </span>
+        )}
       </div>
+
       <dl className="popup-grid popup-grid--tight">
-        <div>
-          <dt>Lembaga</dt>
-          <dd>{formatMetadataValue(hotspot.agencyName)}</dd>
+        <div style={{ gridColumn: "span 2" }}>
+          <dt>Lembaga / KPS</dt>
+          <dd>
+            {hasValidAgency && onOpenKpsDetail ? (
+              <button
+                type="button"
+                className="popup-kps-link"
+                onClick={() => onOpenKpsDetail(hotspot.agencyName.trim())}
+                title={`Buka detail KPS: ${hotspot.agencyName}`}
+              >
+                {hotspot.agencyName}
+              </button>
+            ) : (
+              formatMetadataValue(hotspot.agencyName)
+            )}
+          </dd>
         </div>
         <div>
           <dt>Satelit</dt>
@@ -248,32 +309,26 @@ export function HotspotPopupContent({ hotspot }: { hotspot: PopupHotspot }) {
           <dd>{formatMetadataValue(hotspot.provinceName)}</dd>
         </div>
         <div>
-          <dt>Lintang</dt>
-          <dd>{hotspot.latitude.toFixed(5)}</dd>
-        </div>
-        <div>
-          <dt>Bujur</dt>
-          <dd>{hotspot.longitude.toFixed(5)}</dd>
-        </div>
-        <div>
-          <dt>Kecerahan</dt>
-          <dd>{formatNumber(hotspot.brightness)}</dd>
-        </div>
-        <div>
-          <dt>FRP</dt>
-          <dd>{formatNumber(hotspot.frp ?? null)}</dd>
-        </div>
-        <div>
-          <dt>Intensitas FRP</dt>
-          <dd>{hotspot.frp ? (hotspot.frp > HIGH_FRP_THRESHOLD ? "Tinggi" : hotspot.frp >= 10 ? "Sedang" : "Rendah") : "Rendah"}</dd>
+          <dt>Koordinat</dt>
+          <dd>
+            {hotspot.latitude.toFixed(4)}, {hotspot.longitude.toFixed(4)}
+          </dd>
         </div>
         <div>
           <dt>Terdeteksi</dt>
           <dd>{formatTimestamp(hotspot.detectedAt)}</dd>
         </div>
+        <div>
+          <dt>Kecerahan</dt>
+          <dd>{hotspot.brightness ? `${formatNumber(hotspot.brightness)} K` : "Tidak tersedia"}</dd>
+        </div>
+        <div>
+          <dt>FRP</dt>
+          <dd>{frpVal !== null ? `${formatNumber(frpVal)} MW` : "Tidak tersedia"}</dd>
+        </div>
         {(hotspot.fungsiKawasan || hotspot.kelompokKawasan) && (
           <div style={{ gridColumn: "span 2" }}>
-            <dt>Fungsi Kawasan Hutan</dt>
+            <dt>Fungsi Kawasan</dt>
             <dd>
               {formatMetadataValue(hotspot.fungsiKawasan)}
               {hotspot.kelompokKawasan ? ` (${hotspot.kelompokKawasan})` : ""}
@@ -282,8 +337,62 @@ export function HotspotPopupContent({ hotspot }: { hotspot: PopupHotspot }) {
           </div>
         )}
       </dl>
-      <CoordinateActions lat={hotspot.latitude} lon={hotspot.longitude} />
-      <HotspotWeatherPopup lat={hotspot.latitude} lon={hotspot.longitude} />
+
+      <div className="popup-actions-row">
+        {hasValidAgency && onOpenKpsDetail && (
+          <button
+            type="button"
+            className="popup-action-btn popup-action-btn--primary"
+            onClick={() => onOpenKpsDetail(hotspot.agencyName.trim())}
+            title={`Buka Detail KPS: ${hotspot.agencyName}`}
+          >
+            <FileText size={12} />
+            <span>Detail KPS</span>
+          </button>
+        )}
+        <button
+          type="button"
+          className="popup-action-btn"
+          onClick={() => void handleCopy()}
+          title="Salin koordinat"
+        >
+          {copied ? <Check size={12} /> : <Copy size={12} />}
+          <span>{copied ? "Disalin!" : "Salin"}</span>
+        </button>
+        <a
+          href={`https://www.google.com/maps?q=${hotspot.latitude},${hotspot.longitude}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="popup-action-btn"
+          title="Buka titik ini di Google Maps"
+        >
+          <ExternalLink size={12} />
+          <span>G-Maps</span>
+        </a>
+      </div>
+
+      <div className="popup-weather-toggle-section">
+        <button
+          type="button"
+          className="popup-weather-toggle-btn"
+          onClick={() => setShowWeather((open) => !open)}
+          aria-expanded={showWeather}
+        >
+          <CloudSun size={12} />
+          <span>{showWeather ? "Sembunyikan Cuaca" : "Cuaca & Kualitas Udara"}</span>
+          <ChevronDown
+            size={12}
+            style={{
+              marginLeft: "auto",
+              transform: showWeather ? "rotate(180deg)" : "none",
+              transition: "transform 150ms ease"
+            }}
+          />
+        </button>
+        {showWeather && (
+          <HotspotWeatherPopup lat={hotspot.latitude} lon={hotspot.longitude} />
+        )}
+      </div>
     </div>
   );
 }

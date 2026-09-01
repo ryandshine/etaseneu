@@ -296,7 +296,20 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showCoreRadii, setShowCoreRadii] = useState(false);
+  const [showIndividualPoints, setShowIndividualPoints] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copying" | "copied" | "error">("idle");
+  const [copiedCoord, setCopiedCoord] = useState<string | null>(null);
+
+  const handleCopyCoord = async (lat: number, lon: number) => {
+    const text = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedCoord(text);
+      window.setTimeout(() => setCopiedCoord(null), 1500);
+    } catch {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -544,6 +557,15 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                 <button
                   type="button"
                   className="kompleks-map-audit__button"
+                  aria-pressed={showIndividualPoints}
+                  onClick={() => setShowIndividualPoints((visible) => !visible)}
+                  title="Sembunyikan atau tampilkan seluruh titik satelit individu"
+                >
+                  {showIndividualPoints ? "Mode Sentroid Bersih" : "Tampilkan Semua Titik"}
+                </button>
+                <button
+                  type="button"
+                  className="kompleks-map-audit__button"
                   disabled={!selectedCluster || selectedCorePoints.length === 0}
                   aria-pressed={showCoreRadii}
                   onClick={() => setShowCoreRadii((visible) => !visible)}
@@ -553,7 +575,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                 <span>
                   {selectedCluster
                     ? `${selectedCorePoints.length.toLocaleString("id-ID")} titik inti · ε ${sensitivityParameters.epsKm} km`
-                    : "Pilih kompleks untuk melihat selubung ε"}
+                    : "Pilih kompleks untuk melihat selubung & koordinat pusat"}
                 </span>
               </div>
               <MapContainer
@@ -796,7 +818,12 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                   ))}
                 </Pane>
                 <Pane name="kompleks-points" style={{ zIndex: 440 }}>
-                  {clusterPoints.map((point) => (
+                  {(showIndividualPoints
+                    ? clusterPoints
+                    : selectedCluster
+                    ? clusterPoints.filter((p) => p.cluster_id === selectedId)
+                    : []
+                  ).map((point) => (
                     <CircleMarker
                       key={`point-${point.id}`}
                       center={[point.latitude, point.longitude]}
@@ -804,9 +831,29 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                       pathOptions={pointPathOptions(point, clusterById.get(point.cluster_id), selectedId)}
                     />
                   ))}
+                  {selectedCluster &&
+                  selectedCluster.epicenter_lat !== undefined &&
+                  selectedCluster.epicenter_lon !== undefined ? (
+                    <CircleMarker
+                      key={`epicenter-marker-${selectedCluster.cluster_id}`}
+                      center={[selectedCluster.epicenter_lat, selectedCluster.epicenter_lon]}
+                      radius={8}
+                      pathOptions={{
+                        color: "#ffffff",
+                        weight: 2.5,
+                        fillColor: "#dc2626",
+                        fillOpacity: 1
+                      }}
+                    >
+                      <Tooltip permanent direction="top" className="kompleks-location-label">
+                        🔥 Episentrum ({selectedCluster.max_frp ? `${selectedCluster.max_frp.toFixed(0)} MW` : "Peak"})
+                      </Tooltip>
+                    </CircleMarker>
+                  ) : null}
                   {clusters.map((cluster) => {
                     const severity = severityOf(cluster.hotspot_count);
                     const isSelected = cluster.cluster_id === selectedId;
+                    const coordString = `${cluster.centroid_lat.toFixed(5)}, ${cluster.centroid_lon.toFixed(5)}`;
                     return (
                       <CircleMarker
                         key={cluster.cluster_id}
@@ -836,6 +883,133 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                           <br />
                           {formatActivity(cluster.last_detected_at).text}
                           <br />
+
+                          <div
+                            style={{
+                              margin: "6px 0",
+                              padding: "6px 8px",
+                              background: "rgba(255, 255, 255, 0.08)",
+                              borderRadius: "4px"
+                            }}
+                          >
+                            <span className="kompleks-popup-agency-label">Koordinat Pusat (FRP-Weighted)</span>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                marginTop: "3px",
+                                gap: "6px"
+                              }}
+                            >
+                              <strong style={{ fontSize: "11px", color: "#facc15" }}>{coordString}</strong>
+                              <div style={{ display: "flex", gap: "4px" }}>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleCopyCoord(cluster.centroid_lat, cluster.centroid_lon);
+                                  }}
+                                  style={{
+                                    fontSize: "10px",
+                                    padding: "2px 6px",
+                                    borderRadius: "3px",
+                                    border: "1px solid rgba(255,255,255,0.2)",
+                                    background: "rgba(255,255,255,0.12)",
+                                    color: "#ffffff",
+                                    cursor: "pointer"
+                                  }}
+                                >
+                                  {copiedCoord === coordString ? "Disalin!" : "Salin"}
+                                </button>
+                                <a
+                                  href={`https://www.google.com/maps?q=${cluster.centroid_lat},${cluster.centroid_lon}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    fontSize: "10px",
+                                    padding: "2px 6px",
+                                    borderRadius: "3px",
+                                    border: "1px solid rgba(56,189,248,0.4)",
+                                    background: "rgba(56,189,248,0.15)",
+                                    color: "#38bdf8",
+                                    textDecoration: "none"
+                                  }}
+                                >
+                                  Maps ↗
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+
+                          {cluster.epicenter_lat !== undefined && cluster.epicenter_lon !== undefined ? (
+                            <div
+                              style={{
+                                margin: "4px 0 6px 0",
+                                padding: "6px 8px",
+                                background: "rgba(239, 68, 68, 0.14)",
+                                border: "1px solid rgba(239, 68, 68, 0.3)",
+                                borderRadius: "4px"
+                              }}
+                            >
+                              <span className="kompleks-popup-agency-label" style={{ color: "#f87171" }}>
+                                🔥 Episentrum Api Terparah (Peak)
+                              </span>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  marginTop: "3px",
+                                  gap: "6px"
+                                }}
+                              >
+                                <strong style={{ fontSize: "11px", color: "#fca5a5" }}>
+                                  {cluster.epicenter_lat.toFixed(5)}, {cluster.epicenter_lon.toFixed(5)}
+                                  {cluster.max_frp ? ` (${cluster.max_frp.toFixed(1)} MW)` : ""}
+                                </strong>
+                                <div style={{ display: "flex", gap: "4px" }}>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void handleCopyCoord(cluster.epicenter_lat!, cluster.epicenter_lon!);
+                                    }}
+                                    style={{
+                                      fontSize: "10px",
+                                      padding: "2px 6px",
+                                      borderRadius: "3px",
+                                      border: "1px solid rgba(255,255,255,0.2)",
+                                      background: "rgba(255,255,255,0.12)",
+                                      color: "#ffffff",
+                                      cursor: "pointer"
+                                    }}
+                                  >
+                                    {copiedCoord === `${cluster.epicenter_lat.toFixed(5)}, ${cluster.epicenter_lon.toFixed(5)}`
+                                      ? "Disalin!"
+                                      : "Salin"}
+                                  </button>
+                                  <a
+                                    href={`https://www.google.com/maps?q=${cluster.epicenter_lat},${cluster.epicenter_lon}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      fontSize: "10px",
+                                      padding: "2px 6px",
+                                      borderRadius: "3px",
+                                      border: "1px solid rgba(248,113,113,0.4)",
+                                      background: "rgba(248,113,113,0.15)",
+                                      color: "#fca5a5",
+                                      textDecoration: "none"
+                                    }}
+                                  >
+                                    Maps ↗
+                                  </a>
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
+
                           Lokasi terindikasi: <strong>{cluster.location_count ?? "-"}</strong> · yang menyentuh polygon:{" "}
                           <strong>{cluster.locations_in_polygon ?? "-"}</strong>
                           <br />
@@ -954,6 +1128,13 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                         ) : null}
                       </span>
                       <span className="kompleks-row-context">
+                        <span><b>Pusat Klaster (FRP):</b> {cluster.centroid_lat.toFixed(4)}, {cluster.centroid_lon.toFixed(4)}</span>
+                        {cluster.epicenter_lat !== undefined && cluster.epicenter_lon !== undefined ? (
+                          <span style={{ color: "#fca5a5" }}>
+                            <b>Episentrum Terparah:</b> {cluster.epicenter_lat.toFixed(4)}, {cluster.epicenter_lon.toFixed(4)}
+                            {cluster.max_frp ? ` (${cluster.max_frp.toFixed(1)} MW)` : ""}
+                          </span>
+                        ) : null}
                         <span><b>Balai/Wilker:</b> {cluster.dominant_wilker ?? "Belum teridentifikasi"}</span>
                         <span><b>Provinsi:</b> {cluster.dominant_province ?? "Belum teridentifikasi"}</span>
                         <span><b>Lokasi terindikasi:</b> {cluster.location_count ?? "-"} · <b>Dalam polygon:</b> {cluster.polygon_hotspot_count ?? "-"} titik</span>

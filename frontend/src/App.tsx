@@ -737,6 +737,7 @@ export default function App() {
                 selectedWilker={effectiveWilker || selectedWilker}
                 showWind={showWind}
                 weatherOverlay={weatherOverlay}
+                onOpenKpsDetail={openKpsDetail}
               />
             </Suspense>
 

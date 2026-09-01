@@ -80,6 +80,7 @@ type HotspotMapProps = {
   selectedWilker?: string;
   showWind?: boolean;
   weatherOverlay?: "temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null;
+  onOpenKpsDetail?: (agency: string) => void;
 };
 
 function sourceColor(source: string) {
@@ -390,7 +391,15 @@ const rainIcon = divIcon({
   iconAnchor: [16, 16]
 });
 
-export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker, showWind, weatherOverlay }: HotspotMapProps) {
+export function HotspotMap({
+  hotspots,
+  layers,
+  selectedProvince,
+  selectedWilker,
+  showWind,
+  weatherOverlay,
+  onOpenKpsDetail
+}: HotspotMapProps) {
   const [rainyCoords, setRainyCoords] = useState<{ lat: number; lon: number; precipitation: number; label: string }[]>([]);
   const [showUserLocation, setShowUserLocation] = useState(false);
   const userLocation = useUserLocationWatch(showUserLocation);
@@ -881,7 +890,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
                   icon={getHighIntensityIcon(sourceColor(hotspot.source))}
                 >
                   <Popup pane="popupPane">
-                    <HotspotPopupContent hotspot={hotspot} />
+                    <HotspotPopupContent hotspot={hotspot} onOpenKpsDetail={onOpenKpsDetail} />
                   </Popup>
                 </Marker>
               ) : (
@@ -897,7 +906,7 @@ export function HotspotMap({ hotspots, layers, selectedProvince, selectedWilker,
                   }}
                 >
                   <Popup pane="popupPane">
-                    <HotspotPopupContent hotspot={hotspot} />
+                    <HotspotPopupContent hotspot={hotspot} onOpenKpsDetail={onOpenKpsDetail} />
                   </Popup>
                 </CircleMarker>
               )

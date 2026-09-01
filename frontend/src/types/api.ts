@@ -154,6 +154,9 @@ export interface ClusterRecord {
   hotspot_count: number;
   centroid_lat: number;
   centroid_lon: number;
+  epicenter_lat?: number;
+  epicenter_lon?: number;
+  max_frp?: number | null;
   first_detected_at: string;
   last_detected_at: string;
   dominant_agency: string | null;

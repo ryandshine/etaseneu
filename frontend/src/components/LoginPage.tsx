@@ -10,7 +10,8 @@ type LoginPageProps = {
 // atau produksi yang belum memasang key), widget tidak dirender dan tombol
 // "Masuk" tidak diblok -- backend juga melewati verifikasi captcha saat
 // TURNSTILE_SECRET_KEY kosong (fail-open, lihat backend config.py).
-const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() ?? "";
+const TURNSTILE_SITE_KEY =
+  import.meta.env.MODE === "test" ? "" : (import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() ?? "");
 
 // Gerbang login untuk seluruh aplikasi -- terpisah dari PasswordGateModal
 // (yang menjaga aksi admin di menu Pengaturan). Password diverifikasi ke

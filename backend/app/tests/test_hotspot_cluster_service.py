@@ -105,6 +105,26 @@ def test_summarize_computes_centroid_span_and_dominant_agency() -> None:
     }
 
 
+def test_summarize_computes_frp_weighted_centroid_and_epicenter() -> None:
+    t = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    points = [
+        {"id": 1, "latitude": -1.0, "longitude": 100.0, "frp": 10.0, "brightness": 320.0, "detected_at": t, "agency_name": "KPS A"},
+        {"id": 2, "latitude": -2.0, "longitude": 102.0, "frp": 90.0, "brightness": 380.0, "detected_at": t, "agency_name": "KPS A"},
+    ]
+    labels = {1: 0, 2: 0}
+
+    result = _summarize(points, labels)
+    cluster = result["clusters"][0]
+
+    # Weighted Lat: (-1.0*10 + -2.0*90) / 100 = -1.9
+    # Weighted Lon: (100.0*10 + 102.0*90) / 100 = 101.8
+    assert cluster["centroid_lat"] == pytest.approx(-1.9)
+    assert cluster["centroid_lon"] == pytest.approx(101.8)
+    assert cluster["epicenter_lat"] == pytest.approx(-2.0)
+    assert cluster["epicenter_lon"] == pytest.approx(102.0)
+    assert cluster["max_frp"] == pytest.approx(90.0)
+
+
 def test_summarize_ranks_clusters_by_size_descending() -> None:
     t = datetime(2026, 8, 1, tzinfo=timezone.utc)
     points = [

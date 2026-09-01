@@ -277,6 +277,12 @@ class _HotspotObservationMixin:
                         obs.id,
                         obs.latitude,
                         obs.longitude,
+                        obs.brightness,
+                        COALESCE(
+                            (obs.raw_payload->>'frp')::float,
+                            (obs.raw_payload->>'FRP')::float,
+                            0.0
+                        ) AS frp,
                         obs.detected_at,
                         obs.agency_name,
                         poly.polygon_metadata_id,
