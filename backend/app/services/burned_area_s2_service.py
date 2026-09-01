@@ -82,11 +82,16 @@ def _month_bounds(year: int, month: int) -> tuple[str, str, str, str]:
 
 
 class BurnedAreaS2Service:
-    def __init__(self, postgres_store: PostgresStore | None = None) -> None:
+    def __init__(
+        self,
+        postgres_store: PostgresStore | None = None,
+        enable_sar_fusion: bool = True,
+    ) -> None:
         settings = get_settings()
         self.settings = settings
         self.postgres_store = postgres_store or PostgresStore(settings.database_url)
         self._ee_initialized = False
+        self.enable_sar_fusion = enable_sar_fusion
 
     @property
     def enabled(self) -> bool:
@@ -137,6 +142,28 @@ class BurnedAreaS2Service:
 
         return _fn
 
+    def _sar_mask(self, ee, region_geom):
+        """Bangun mask bekas terbakar dari Sentinel-1 C-Band SAR (polaritas VH)
+        sebagai sensor aktif radar yang 100% menembus tutupan awan & asap tebal.
+        """
+        pre_start, pre_end, post_start, post_end = self._pre_post
+        try:
+            s1_coll = (
+                ee.ImageCollection("COPERNICUS/S1_GRD")
+                .filterBounds(region_geom)
+                .filter(ee.Filter.eq("instrumentMode", "IW"))
+                .filter(ee.Filter.listContains("transmitterReceiverPolarisation", "VH"))
+            )
+            vh_pre = s1_coll.filterDate(pre_start, pre_end).select("VH").median()
+            vh_post = s1_coll.filterDate(post_start, post_end).select("VH").median()
+            delta_vh = vh_pre.subtract(vh_post)
+            sar_scar = delta_vh.gte(2.0)
+            cpc_sar = sar_scar.selfMask().connectedPixelCount(MIN_CLUSTER_PX + 5, True)
+            return sar_scar.And(cpc_sar.gte(MIN_CLUSTER_PX))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("S1_SAR: Gagal memproses radar C-Band — %s", exc)
+            return None
+
     def _scar_mask(self, ee, region_geom):
         """Bangun mask bekas terbakar (scar_c) untuk satu bbox region."""
         pre_start, pre_end, post_start, post_end = self._pre_post
@@ -177,6 +204,12 @@ class BurnedAreaS2Service:
         )
         cpc = scar.selfMask().connectedPixelCount(MIN_CLUSTER_PX + 5, True)
         scar_c = scar.And(cpc.gte(MIN_CLUSTER_PX))
+
+        if getattr(self, "enable_sar_fusion", True):
+            sar_c = self._sar_mask(ee, region_geom)
+            if sar_c is not None:
+                scar_c = scar_c.Or(sar_c.And(nobs.lt(NOBS_MIN)))
+
         return scar_c, dnbr
 
     def _vectorize_burned_union(self, ee, scar_c, burned_polys: list[dict]):
