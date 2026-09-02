@@ -236,15 +236,34 @@ class EarlyWarningService:
                                     ELSE NULL
                                 END
                             ) as avg_distance_km_today,
-                            AVG(
-                                CASE 
-                                    WHEN h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')
-                                         AND b.burned_geom IS NOT NULL
-                                         AND NOT ST_Contains(b.burned_geom, h.geom)
-                                    THEN degrees(ST_Azimuth(ST_Centroid(b.burned_geom), h.geom))
-                                    ELSE NULL
-                                END
-                            ) as avg_fire_azimuth_today,
+                            -- Arah perambatan = CIRCULAR mean dari azimuth
+                            -- centroid-luka -> titik hari ini. Rata-rata linear
+                            -- keliru untuk sudut (350 deg + 10 deg jadi 180 deg,
+                            -- bukan 0 deg). Kalau vektor rata-ratanya pendek
+                            -- (< 0.15) berarti titik menyebar ke segala arah ->
+                            -- NULL (tidak ada arah dominan).
+                            (CASE
+                                WHEN sqrt(
+                                    power(AVG(CASE WHEN h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')
+                                                       AND b.burned_geom IS NOT NULL
+                                                       AND NOT ST_Contains(b.burned_geom, h.geom)
+                                                  THEN sin(ST_Azimuth(ST_Centroid(b.burned_geom), h.geom)) END), 2)
+                                  + power(AVG(CASE WHEN h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')
+                                                       AND b.burned_geom IS NOT NULL
+                                                       AND NOT ST_Contains(b.burned_geom, h.geom)
+                                                  THEN cos(ST_Azimuth(ST_Centroid(b.burned_geom), h.geom)) END), 2)
+                                ) < 0.15 THEN NULL
+                                ELSE degrees(atan2(
+                                    AVG(CASE WHEN h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')
+                                                  AND b.burned_geom IS NOT NULL
+                                                  AND NOT ST_Contains(b.burned_geom, h.geom)
+                                             THEN sin(ST_Azimuth(ST_Centroid(b.burned_geom), h.geom)) END),
+                                    AVG(CASE WHEN h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')
+                                                  AND b.burned_geom IS NOT NULL
+                                                  AND NOT ST_Contains(b.burned_geom, h.geom)
+                                             THEN cos(ST_Azimuth(ST_Centroid(b.burned_geom), h.geom)) END)
+                                ))
+                            END) as avg_fire_azimuth_today,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta' - INTERVAL '1 day') AND h.detected_at < DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta')) as h_yesterday,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta' - INTERVAL '7 days')) as h_7d,
                             COUNT(h.id) FILTER (
@@ -376,7 +395,9 @@ class EarlyWarningService:
             avg_dist = round(float(r["avg_distance_km_today"]), 2) if r["avg_distance_km_today"] is not None else None
 
             # Arah kompas perambatan
-            az = float(r["avg_fire_azimuth_today"]) if r["avg_fire_azimuth_today"] is not None else None
+            # atan2 mengembalikan (-180, 180]; normalkan ke [0, 360) sebelum
+            # dibuat 8 mata angin.
+            az = float(r["avg_fire_azimuth_today"]) % 360 if r["avg_fire_azimuth_today"] is not None else None
             fire_direction = dirs_map[int((az + 22.5) / 45) % 8] if az is not None else None
             az_deg = round(az, 1) if az is not None else None
 

@@ -23,56 +23,101 @@ import type { DashboardLayer } from "../hooks/useDashboardData";
 
 const api = createApiClient();
 
-function calculatePropagation(points: ClusterPoint[]) {
+type PropEnd = { lat: number; lon: number; at: string };
+type Propagation =
+  | { status: "one-window" }
+  | { status: "no-move" }
+  | {
+      status: "ok";
+      start: PropEnd;
+      end: PropEnd;
+      distanceKm: number;
+      bearingDeg: number;
+      cardinalDir: string;
+      spanHours: number;
+      speedKmPerDay: number | null;
+      lowConfidence: boolean;
+    };
+
+// Vektor rambatan = dari sebaran titik jendela-waktu PERTAMA ke jendela-waktu
+// TERAKHIR. Bukan jalur api; hanya indikasi arah dari urutan waktu titik panas.
+// Titik satu lintasan satelit sering berbagi timestamp -> itu sebaran, bukan
+// gerak, jadi butuh >= 2 jendela (bucket 30 menit) baru vektor ditarik.
+function calculatePropagation(points: ClusterPoint[]): Propagation | null {
   if (points.length < 2) return null;
-  const sorted = [...points].sort(
-    (a, b) => new Date(a.detected_at).getTime() - new Date(b.detected_at).getTime()
+
+  const BUCKET_MS = 30 * 60 * 1000;
+  const buckets = new Map<number, ClusterPoint[]>();
+  for (const p of points) {
+    const t = new Date(p.detected_at).getTime();
+    if (Number.isNaN(t)) continue;
+    const key = Math.round(t / BUCKET_MS);
+    const arr = buckets.get(key);
+    if (arr) arr.push(p);
+    else buckets.set(key, [p]);
+  }
+  const keys = [...buckets.keys()].sort((a, b) => a - b);
+  if (keys.length < 2) return { status: "one-window" };
+
+  const centroid = (pts: ClusterPoint[]): PropEnd => ({
+    lat: pts.reduce((s, p) => s + p.latitude, 0) / pts.length,
+    lon: pts.reduce((s, p) => s + p.longitude, 0) / pts.length,
+    at: pts.reduce((m, p) => (p.detected_at < m ? p.detected_at : m), pts[0].detected_at),
+  });
+  const startPts = buckets.get(keys[0]) as ClusterPoint[];
+  const endPts = buckets.get(keys[keys.length - 1]) as ClusterPoint[];
+  const start = centroid(startPts);
+  const end = centroid(endPts);
+  const endAtMax = endPts.reduce(
+    (m, p) => (p.detected_at > m ? p.detected_at : m),
+    endPts[0].detected_at
   );
-  const startPoint = sorted[0];
-  const endPoint = sorted[sorted.length - 1];
-  const lat1 = startPoint.latitude;
-  const lon1 = startPoint.longitude;
-  const lat2 = endPoint.latitude;
-  const lon2 = endPoint.longitude;
 
   const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(end.lat - start.lat);
+  const dLon = toRad(end.lon - start.lon);
   const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const distanceKm = R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(start.lat)) * Math.cos(toRad(end.lat)) * Math.sin(dLon / 2) ** 2;
+  const distanceKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  if (distanceKm < 0.1) return { status: "no-move" };
 
-  if (distanceKm < 0.05) return null;
-
-  const y = Math.sin(dLon) * Math.cos((lat2 * Math.PI) / 180);
+  const y = Math.sin(dLon) * Math.cos(toRad(end.lat));
   const x =
-    Math.cos((lat1 * Math.PI) / 180) * Math.sin((lat2 * Math.PI) / 180) -
-    Math.sin((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.cos(dLon);
-  let bearingDeg = (Math.atan2(y, x) * 180) / Math.PI;
-  bearingDeg = (bearingDeg + 360) % 360;
-
+    Math.cos(toRad(start.lat)) * Math.sin(toRad(end.lat)) -
+    Math.sin(toRad(start.lat)) * Math.cos(toRad(end.lat)) * Math.cos(dLon);
+  const bearingDeg = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
   const directions = ["Utara", "Timur Laut", "Timur", "Tenggara", "Selatan", "Barat Daya", "Barat", "Barat Laut"];
   const cardinalDir = directions[Math.round(bearingDeg / 45) % 8];
 
-  const timeDiffMs = new Date(endPoint.detected_at).getTime() - new Date(startPoint.detected_at).getTime();
-  const spanHours = Math.max(timeDiffMs / (1000 * 60 * 60), 0.1);
-  const speedKmPerDay = distanceKm / (spanHours / 24);
+  const spanHours =
+    (new Date(endAtMax).getTime() - new Date(start.at).getTime()) / 3_600_000;
+  const speedKmPerDay = spanHours >= 1 ? distanceKm / (spanHours / 24) : null;
+  const lowConfidence = spanHours < 3;
 
   return {
-    startPoint,
-    endPoint,
+    status: "ok",
+    start,
+    end,
     distanceKm,
     bearingDeg,
     cardinalDir,
-    speedKmPerDay,
     spanHours,
+    speedKmPerDay,
+    lowConfidence,
   };
+}
+
+function propagationText(p: Propagation | null): string | null {
+  if (!p) return null;
+  if (p.status === "one-window")
+    return "Semua titik terdeteksi dalam satu jendela waktu — arah & laju rambat tak dapat ditentukan.";
+  if (p.status === "no-move")
+    return "Titik menetap di lokasi yang sama — tidak ada rambatan terukur.";
+  const speed = p.speedKmPerDay != null ? ` · ~${p.speedKmPerDay.toFixed(1)} km/hari` : "";
+  const note = p.lowConfidence ? " — indikatif, rentang waktu pendek" : "";
+  return `Perkiraan rambatan ke ${p.cardinalDir} (${p.bearingDeg.toFixed(0)}°)${speed} · jarak ${p.distanceKm.toFixed(2)} km${note}`;
 }
 
 function getWindCardinal(directionDeg: number): string {
@@ -652,7 +697,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                   <span className="kompleks-map-legend__item" title="Gabungan radius ε semua titik inti"><i className="kompleks-map-legend__footprint" /> Selubung kompleks</span>
                   <span className="kompleks-map-legend__item"><i className="kompleks-map-legend__line" /> Polygon lembaga</span>
                   <span className="kompleks-map-legend__item" title="Mode audit radius ε per titik inti"><i className="kompleks-map-legend__radius" /> Ring radius ε</span>
-                  <span className="kompleks-map-legend__item"><i className="kompleks-map-legend__dot" style={{ background: "#ef4444" }} /> ➡️ Vektor Rambatan Api</span>
+                  <span className="kompleks-map-legend__item"><i className="kompleks-map-legend__dot" style={{ background: "#ef4444" }} /> ➡️ Perkiraan arah rambatan (indikatif)</span>
                   <span className="kompleks-map-legend__item"><i className="kompleks-map-legend__dot" style={{ background: "#38bdf8" }} /> 💨 Arah Angin Aktual</span>
                 </div>
               </div>
@@ -932,47 +977,41 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                   ))}
                 </Pane>
                 <Pane name="kompleks-points" style={{ zIndex: 440 }}>
-                  {/* Garis & Panah Vektor Rambatan Api */}
-                  {propagation ? (
+                  {/* Perkiraan arah rambatan: sebaran jendela-waktu pertama ->
+                      terakhir. Indikatif, bukan jalur api. */}
+                  {propagation?.status === "ok" ? (
                     <>
                       <Polyline
                         positions={[
-                          [propagation.startPoint.latitude, propagation.startPoint.longitude],
-                          [propagation.endPoint.latitude, propagation.endPoint.longitude]
+                          [propagation.start.lat, propagation.start.lon],
+                          [propagation.end.lat, propagation.end.lon]
                         ]}
                         pathOptions={{
-                          color: "#ef4444",
-                          weight: 3.5,
-                          dashArray: "8 6",
-                          opacity: 0.95
+                          color: propagation.lowConfidence ? "#9ca3af" : "#ef4444",
+                          weight: propagation.lowConfidence ? 2.5 : 3.5,
+                          dashArray: propagation.lowConfidence ? "4 8" : "8 6",
+                          opacity: propagation.lowConfidence ? 0.75 : 0.95
                         }}
                       />
                       <CircleMarker
-                        center={[propagation.startPoint.latitude, propagation.startPoint.longitude]}
+                        center={[propagation.start.lat, propagation.start.lon]}
                         radius={6}
-                        pathOptions={{
-                          color: "#fbbf24",
-                          weight: 2,
-                          fillColor: "#d97706",
-                          fillOpacity: 1
-                        }}
+                        pathOptions={{ color: "#fbbf24", weight: 2, fillColor: "#d97706", fillOpacity: 1 }}
                       >
                         <Tooltip permanent direction="bottom" className="kompleks-location-label">
-                          📍 Asal Api ({new Date(propagation.startPoint.detected_at).toLocaleDateString("id-ID")})
+                          Terdeteksi lebih awal ({new Date(propagation.start.at).toLocaleDateString("id-ID")})
                         </Tooltip>
                       </CircleMarker>
                       <CircleMarker
-                        center={[propagation.endPoint.latitude, propagation.endPoint.longitude]}
+                        center={[propagation.end.lat, propagation.end.lon]}
                         radius={7}
-                        pathOptions={{
-                          color: "#ffffff",
-                          weight: 2,
-                          fillColor: "#ef4444",
-                          fillOpacity: 1
-                        }}
+                        pathOptions={{ color: "#ffffff", weight: 2, fillColor: "#ef4444", fillOpacity: 1 }}
                       >
                         <Tooltip permanent direction="top" className="kompleks-location-label">
-                          ⚡ Kepala Api (Menjalar ke {propagation.cardinalDir} · ~{propagation.speedKmPerDay.toFixed(1)} km/hr)
+                          Terdeteksi lebih akhir &mdash; perkiraan arah {propagation.cardinalDir}
+                          {propagation.speedKmPerDay != null
+                            ? ` · ~${propagation.speedKmPerDay.toFixed(1)} km/hari`
+                            : ""}
                         </Tooltip>
                       </CircleMarker>
                     </>
@@ -1185,11 +1224,11 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                             </div>
                           ) : null}
 
-                          {isSelected && (propagation || clusterWeather) ? (
+                          {isSelected && (propagationText(propagation) || clusterWeather) ? (
                             <div className="kompleks-spread-weather-card">
-                              {propagation ? (
+                              {propagationText(propagation) ? (
                                 <div className="kompleks-spread-info">
-                                  <strong>➡️ Rambatan Api:</strong> Menjalar ke {propagation.cardinalDir} ({propagation.bearingDeg.toFixed(0)}°) &middot; ~{propagation.speedKmPerDay.toFixed(1)} km/hari (Jarak: {propagation.distanceKm.toFixed(2)} km)
+                                  <strong>➡️ Rambatan (indikasi):</strong> {propagationText(propagation)}
                                 </div>
                               ) : null}
                               {clusterWeather ? (
@@ -1325,11 +1364,11 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                             {cluster.max_frp ? ` (${cluster.max_frp.toFixed(1)} MW)` : ""}
                           </span>
                         ) : null}
-                        {isSelected && (propagation || clusterWeather) ? (
+                        {isSelected && (propagationText(propagation) || clusterWeather) ? (
                           <div className="kompleks-spread-weather-card">
-                            {propagation ? (
+                            {propagationText(propagation) ? (
                               <div className="kompleks-spread-info">
-                                <b>➡️ Rambatan:</b> Menjalar ke {propagation.cardinalDir} ({propagation.bearingDeg.toFixed(0)}°) &middot; ~{propagation.speedKmPerDay.toFixed(1)} km/hari
+                                <b>➡️ Rambatan (indikasi):</b> {propagationText(propagation)}
                               </div>
                             ) : null}
                             {clusterWeather ? (
