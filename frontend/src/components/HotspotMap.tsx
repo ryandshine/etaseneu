@@ -447,7 +447,7 @@ export function HotspotMap({
   // `PolygonInfoLayer` dan yang muncul popup "Poligon di titik ini", bukan
   // popup hotspot. `tolerance` dibaca saat klik, bukan saat gambar.
   const fireCanvasRenderer = useMemo(
-    () => canvas({ pane: "kps-interaktif", tolerance: 12 }),
+    () => canvas({ pane: "kps-interaktif", tolerance: 18 }),
     [],
   );
   // react-leaflet <GeoJSON> tidak mengetik prop `renderer`, tapi meneruskannya
@@ -727,7 +727,7 @@ export function HotspotMap({
         )}
         <ZoomControl position="bottomleft" />
         <MapViewport hotspots={hotspots} layers={layers} selectedProvince={selectedProvince} />
-        <PolygonInfoLayer layers={layers} showKawasan={showKawasan} />
+        <PolygonInfoLayer layers={layers} showKawasan={showKawasan} hotspots={hotspots} />
         <WindLayer visible={showWind ?? false} />
         <WeatherOverlay parameter={weatherOverlay ?? null} />
         {showUserLocation && userLocation.position ? (

@@ -634,7 +634,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
   // bekas terbakar + titik hotspot). `tolerance: 12` menaikkan radius uji-klik
   // titik ~6-7px jadi ~18px supaya bisa di-tap di HP.
   const fireCanvasRenderer = useMemo(
-    () => buildLeafletCanvas({ pane: "kps-interaktif", tolerance: 12 }),
+    () => buildLeafletCanvas({ pane: "kps-interaktif", tolerance: 18 }),
     [],
   );
   // react-leaflet <GeoJSON> tidak mengetik prop `renderer` tapi meneruskannya

@@ -15,7 +15,13 @@ type LayerLike = {
 type Props = {
   layers: LayerLike[];
   showKawasan: boolean;
+  // Titik hotspot di peta -- kalau tap jatuh dekat salah satunya, popup poligon
+  // ini TIDAK ditampilkan (user sedang menyasar titiknya; marker canvas kecil
+  // sering lolos di HP). Biar marker yang menangani.
+  hotspots?: Array<{ latitude: number; longitude: number }>;
 };
+
+const HOTSPOT_GUARD_PX = 30;
 
 type Hit = { layer: string; props: Record<string, unknown> };
 
@@ -91,12 +97,30 @@ function kawasanBlock(k: {
  * non-interaktif (lihat catatan pane `batas-kps` di HotspotMap). Bila overlay
  * Fungsi Kawasan Hutan menyala, fungsi kawasan di titik itu ikut ditambahkan.
  */
-export function PolygonInfoLayer({ layers, showKawasan }: Props) {
+export function PolygonInfoLayer({ layers, showKawasan, hotspots }: Props) {
   const popupRef = useRef<L.Popup | null>(null);
 
   const map = useMapEvents({
     click(e) {
       const { lat, lng } = e.latlng;
+
+      // Tap dekat titik hotspot -> jangan tampilkan popup poligon. Uji-klik
+      // canvas untuk titik 7px sering meleset di HP dan event-nya lolos ke sini;
+      // menampilkan popup poligon di situ bikin user mengira klik titik "rusak".
+      if (hotspots && hotspots.length > 0) {
+        const clickPt = map.latLngToContainerPoint(e.latlng);
+        const nearHotspot = hotspots.some(
+          (h) =>
+            clickPt.distanceTo(map.latLngToContainerPoint([h.latitude, h.longitude])) <=
+            HOTSPOT_GUARD_PX,
+        );
+        if (nearHotspot) {
+          popupRef.current?.close();
+          popupRef.current = null;
+          return;
+        }
+      }
+
       const hits: Hit[] = [];
       for (const layer of layers) {
         if (!layer.active) continue;

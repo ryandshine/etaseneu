@@ -245,11 +245,13 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               radius 7 -> uji-klik canvas = `radius + renderer.options.tolerance`; renderer
               pane default `tolerance` 0 = target tap ~8px, meleset dikit di HP -> lolos ke
               `PolygonInfoLayer`, muncul popup "Poligon di titik ini" bukan popup hotspot.
-              FIX: satu `L.canvas({ pane:"kps-interaktif", tolerance:12 })` dipakai bareng
-              SEMUA layer api di pane itu (dua `<GeoJSON>` bekas terbakar via spread
+              FIX: (1) satu `L.canvas({ pane:"kps-interaktif", tolerance:18 })` dipakai
+              bareng SEMUA layer api di pane itu (dua `<GeoJSON>` bekas terbakar via spread
               `{...fireRendererProp}` karena react-leaflet tak mengetik `renderer`, plus
-              `pointToLayer` circleMarker & `<CircleMarker>` hotspot). Wajib SATU canvas:
-              canvas terpisah bikin yang atas menelan klik yang bawah. Sama di
+              `pointToLayer` circleMarker & `<CircleMarker>` hotspot) -- target tap ~25px;
+              (2) `PolygonInfoLayer` terima prop `hotspots` -> kalau tap dalam 30px dari
+              titik mana pun, popup poligon TIDAK ditampilkan (return lebih dulu). Wajib
+              SATU canvas: canvas terpisah bikin yang atas menelan klik yang bawah. Sama di
               `KpsDetailView.tsx`. Kalau overlay Fungsi Kawasan Hutan nyala, fungsi kawasan di
               titik itu ikut (fetch `GET /api/burned-area/kawasan-at?lat=&lon=` ->
               `_burned_area.py::read_kawasan_at_point`, `ST_Contains` ke `ref_kawasan_hutan_sub`)),
@@ -352,7 +354,12 @@ precache app shell** (JS/CSS/HTML ber-hash, ~1 MB) — `/api` SENGAJA tidak di-c
 ada di `lib/dashboardPersistence.ts` yang tahu cara revalidasi; SW yang menyajikan JSON API basi
 malah mem-bypass itu). `navigateFallbackDenylist: [/^\/api\//]`. Manifest + ikon (`public/pwa-*.png`,
 `apple-touch-icon.png`, "ES" oranye di latar gelap) di-generate manual. CSP report-only sudah
-menambah `worker-src 'self'; manifest-src 'self'`.
+menambah `worker-src 'self'; manifest-src 'self'`. `sw.js` memanggil `skipWaiting` + `clientsClaim`
+(otomatis dari `autoUpdate`), tapi `registerSW.js` bawaan TIDAK me-reload halaman yang sedang jalan
+→ `lib/swReload.ts` (`watchServiceWorkerUpdate`, dipanggil di `main.tsx`) dengar `controllerchange`
+dan `location.reload()` SEKALI saat SW baru mengambil alih (aktivasi pertama di-skip). Konsekuensi:
+setelah deploy, kunjungan berikutnya reload sendiri sekali ke bundle baru — tidak perlu tutup semua
+tab dulu.
 
 ## Autentikasi
 
