@@ -83,6 +83,16 @@ type HotspotMapProps = {
   onOpenKpsDetail?: (agency: string) => void;
 };
 
+// <GeoJSON data={...}> Leaflet melempar "Invalid GeoJSON object" untuk objek
+// tanpa `type`/`features` -- bisa terjadi kalau `layer.geojson` datang dari
+// cache localStorage yang terdegradasi. Saring dulu sebelum render.
+function isRenderableGeojson(geojson: unknown): boolean {
+  if (!geojson || typeof geojson !== "object") return false;
+  const g = geojson as { type?: unknown; features?: unknown };
+  if (g.type === "FeatureCollection") return Array.isArray(g.features);
+  return typeof g.type === "string" && g.type.length > 0;
+}
+
 function sourceColor(source: string) {
   if (source === "MODIS") {
     return "#ff8c42";
@@ -784,7 +794,10 @@ export function HotspotMap({
         {showKawasan ? <KawasanHutanLayer opacity={0.9} /> : null}
         <Pane name="batas-kps" style={{ zIndex: 400 }}>
           {layers
-            .filter((layer) => layer.active)
+            // Guard: geojson yang tidak valid (mis. dari cache localStorage
+            // yang terdegradasi) bikin <GeoJSON> lempar "Invalid GeoJSON
+            // object" dan menjatuhkan seluruh tampilan peta ke ErrorBoundary.
+            .filter((layer) => layer.active && isRenderableGeojson(layer.geojson))
             .map((layer) => (
               <GeoJSON
                 // Saat overlay ArcGIS kawasan hutan menyala, isian poligon KPS

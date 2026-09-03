@@ -19,7 +19,10 @@ import { TIME_PRESET_OPTIONS, type TimePreset } from "../constants/time-windows"
 import type { DashboardHotspot, DashboardLayer } from "../hooks/useDashboardData";
 
 const FILTERS_KEY = "etaseneu.dashboard.filters.v1";
-const CACHE_KEY = "etaseneu.dashboard.cache.v1";
+// v2: v1 pernah menyimpan layer dengan geojson dikosongkan ({}) di jalur
+// degradasi kuota -> <GeoJSON data={{}}> crash "Invalid GeoJSON object".
+// Naikkan versi supaya semua cache v1 lama (yang mungkin rusak) diabaikan.
+const CACHE_KEY = "etaseneu.dashboard.cache.v2";
 
 // Data hotspot lebih tua dari ini tidak lagi dipakai sebagai placeholder --
 // menampilkan titik api 12 jam lalu seolah terkini bisa menyesatkan.
@@ -107,14 +110,29 @@ export function loadDashboardCache(): DashboardCachePayload | null {
         ? (parsed.remoteStats as RemoteStatsLike)
         : EMPTY_STATS;
 
+    // Hanya pertahankan layer yang geojson-nya benar-benar bisa dirender --
+    // <GeoJSON data={...}> Leaflet melempar "Invalid GeoJSON object" untuk objek
+    // tanpa `type`/`features`. Kalau ada yang cacat, buang SEMUA layer dari
+    // cache (peta boot tanpa batas KPS ~1 dtk sampai jaringan mengisi), jangan
+    // sampai crash render.
+    const layers = parsed.layers as DashboardLayer[];
+    const layersOk = layers.every((l) => isRenderableGeojson(l?.geojson));
+
     return {
-      layers: parsed.layers as DashboardLayer[],
+      layers: layersOk ? layers : [],
       hotspots: parsed.hotspots as DashboardHotspot[],
       remoteStats,
     };
   } catch {
     return null;
   }
+}
+
+function isRenderableGeojson(geojson: unknown): boolean {
+  if (!geojson || typeof geojson !== "object") return false;
+  const g = geojson as { type?: unknown; features?: unknown };
+  if (g.type === "FeatureCollection") return Array.isArray(g.features);
+  return typeof g.type === "string" && g.type.length > 0;
 }
 
 export function saveDashboardCache(payload: DashboardCachePayload): void {
@@ -137,14 +155,11 @@ export function saveDashboardCache(payload: DashboardCachePayload): void {
 
   if (write(payload.layers, hotspots)) return;
 
-  // Degradasi 1: kosongkan geojson layer (biasanya bagian terbesar dari payload).
-  // Peta akan tampil tanpa poligon sampai revalidasi selesai -- trade-off yang
-  // wajar demi tetap bisa menyimpan hotspot + stats.
-  const slimLayers: DashboardLayer[] = payload.layers.map((layer) => ({ ...layer, geojson: {} }));
-  if (write(slimLayers, hotspots)) return;
-
-  // Degradasi 2: potong hotspot lebih agresif. Kalau masih gagal, menyerah diam-diam.
-  write(slimLayers, hotspots.slice(0, CACHE_MIN_HOTSPOTS));
+  // Degradasi: kuota localStorage penuh. Buang layer SEPENUHNYA (bukan
+  // dikosongkan geojson-nya -- itu bikin <GeoJSON> crash saat hydrate). Cache
+  // cuma hotspot + stats; batas KPS di-load ulang dari jaringan.
+  if (write([], hotspots)) return;
+  write([], hotspots.slice(0, CACHE_MIN_HOTSPOTS));
 }
 
 export function clearDashboardCache(): void {

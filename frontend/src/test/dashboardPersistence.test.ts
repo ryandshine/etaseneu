@@ -9,7 +9,7 @@ import {
 } from "../lib/dashboardPersistence";
 
 const FILTERS_KEY = "etaseneu.dashboard.filters.v1";
-const CACHE_KEY = "etaseneu.dashboard.cache.v1";
+const CACHE_KEY = "etaseneu.dashboard.cache.v2";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -82,7 +82,9 @@ describe("persisted filters", () => {
 
 describe("dashboard cache", () => {
   const payload = {
-    layers: [{ id: "l1", name: "KPS A", active: true, geojson: { type: "FeatureCollection" } }],
+    layers: [
+      { id: "l1", name: "KPS A", active: true, geojson: { type: "FeatureCollection", features: [] } },
+    ],
     hotspots: [{ id: "h1", latitude: 1, longitude: 2 }],
     remoteStats: { total: 1, by_source: { MODIS: 1 }, by_layer: {} },
   } as unknown as Parameters<typeof saveDashboardCache>[0];
@@ -111,7 +113,7 @@ describe("dashboard cache", () => {
     expect(loadDashboardCache()).toBeNull();
   });
 
-  it("falls back to empty geojson when the first write hits quota", () => {
+  it("drops layers (not stub geojson) when the first write hits quota", () => {
     const real = Storage.prototype.setItem;
     let calls = 0;
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
@@ -127,7 +129,28 @@ describe("dashboard cache", () => {
     saveDashboardCache(payload);
 
     expect(calls).toBe(2);
-    expect(loadDashboardCache()?.layers[0].geojson).toEqual({});
+    const loaded = loadDashboardCache();
+    expect(loaded?.hotspots).toHaveLength(1);
+    // Layer TIDAK di-cache dengan geojson kosong ({}) -- itu bikin <GeoJSON> crash.
+    expect(loaded?.layers).toEqual([]);
+  });
+
+  it("discards all cached layers if any geojson is not renderable", () => {
+    window.localStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({
+        savedAt: Date.now(),
+        layers: [
+          { id: "ok", geojson: { type: "FeatureCollection", features: [] } },
+          { id: "bad", geojson: {} },
+        ],
+        hotspots: [{ id: "h1" }],
+        remoteStats: { total: 0, by_source: {}, by_layer: {} },
+      }),
+    );
+    const loaded = loadDashboardCache();
+    expect(loaded?.layers).toEqual([]);
+    expect(loaded?.hotspots).toHaveLength(1);
   });
 
   it("clearDashboardCache removes the entry", () => {
