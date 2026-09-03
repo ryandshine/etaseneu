@@ -7,7 +7,6 @@ import type {
   BurnFrequencyRecord,
   BurnedAreaKawasanResponse,
   GeoJsonStatusResponse,
-  PolygonDetail,
 } from "../types/api";
 import { formatDateWIB, getTodayWIB } from "../lib/date";
 import { authFetch, createApiClient } from "../lib/api";
@@ -92,30 +91,6 @@ function findLinkedPolygonId(hotspots: MatrixHotspot[]): number | null {
   return null;
 }
 
-function polygonDetailToGeoJsonFeature(detail: PolygonDetail) {
-  return {
-    type: "Feature" as const,
-    geometry: detail.geometry,
-    properties: {
-      id: detail.id,
-      layer_key: detail.layer_key,
-      lembaga: detail.lembaga,
-      nama_prov: detail.nama_prov,
-      nama_kab: detail.nama_kab,
-      nama_kec: detail.nama_kec,
-      nama_desa: detail.nama_desa,
-      skema: detail.skema,
-      no_sk: detail.no_sk,
-      tgl_sk: detail.tgl_sk,
-      status: detail.status,
-      wilker_bps: detail.wilker_bps,
-      ps_id: detail.ps_id,
-      luas_final: detail.luas_final,
-      jml_kk: detail.jml_kk
-    }
-  };
-}
-
 function downloadGeoJson(featureCollection: object, filename: string) {
   const blob = new Blob([JSON.stringify(featureCollection, null, 2)], {
     type: "application/geo+json"
@@ -163,6 +138,12 @@ type HotspotMatrixProps = {
   initialWilker?: string;
   lockedWilker?: string;
   onOpenKpsDetail?: (agency: string) => void;
+  /**
+   * Hanya role admin yang boleh mengunduh data spasial poligon KPS/Hutan Adat
+   * (kolom "Aksi" / tombol Unduh GeoJSON per-KPS). Non-admin tetap bisa
+   * melihat poligon di peta, tapi tidak diberi jalur ekspor berkas.
+   */
+  isAdmin?: boolean;
 };
 
 type ChartItem = {
@@ -946,7 +927,8 @@ export function HotspotMatrix({
   onTimePresetChange,
   initialWilker,
   lockedWilker,
-  onOpenKpsDetail
+  onOpenKpsDetail,
+  isAdmin = false
 }: HotspotMatrixProps) {
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -1279,10 +1261,14 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
       const polygonId = findLinkedPolygonId(group.hotspots);
 
       if (polygonId !== null) {
-        const response = await authFetch(`/api/polygons/${polygonId}`);
+        // Endpoint ekspor khusus admin -- mengirim geometry poligon presisi
+        // penuh (bukan versi kasar yang dilihat non-admin di /api/polygons/{id}).
+        const response = await authFetch(`/api/polygons/${polygonId}/export.geojson`);
         if (response.ok) {
-          const detail = (await response.json()) as PolygonDetail;
-          features.unshift(polygonDetailToGeoJsonFeature(detail));
+          const collection = (await response.json()) as { features?: object[] };
+          if (collection.features?.length) {
+            features.unshift(...collection.features);
+          }
         }
       }
 
@@ -1727,7 +1713,7 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                       <th scope="col">Satelit</th>
                       <th scope="col">Frekuensi</th>
                       <th scope="col">Periode</th>
-                      <th className="th-aksi" scope="col">Aksi</th>
+                      {isAdmin && <th className="th-aksi" scope="col">Aksi</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -1817,23 +1803,25 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                               <span className="muted-copy">-</span>
                             )}
                           </td>
-                          <td className="td-aksi" data-label="Aksi">
-                            <button
-                              type="button"
-                              className="matrix-row-download"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void handleDownloadKpsGeojson(group);
-                              }}
-                              disabled={downloadingKpsKey === group.key}
-                              title={`Unduh GeoJSON untuk ${group.key}`}
-                            >
-                              <Download size={14} />
-                              {downloadingKpsKey === group.key && (
-                                <span className="matrix-row-download__label">Mengunduh...</span>
-                              )}
-                            </button>
-                          </td>
+                          {isAdmin && (
+                            <td className="td-aksi" data-label="Aksi">
+                              <button
+                                type="button"
+                                className="matrix-row-download"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleDownloadKpsGeojson(group);
+                                }}
+                                disabled={downloadingKpsKey === group.key}
+                                title={`Unduh GeoJSON untuk ${group.key}`}
+                              >
+                                <Download size={14} />
+                                {downloadingKpsKey === group.key && (
+                                  <span className="matrix-row-download__label">Mengunduh...</span>
+                                )}
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}

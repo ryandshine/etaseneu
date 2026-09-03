@@ -9,11 +9,15 @@ class PolygonService:
     def __init__(self, database_url: str) -> None:
         self.postgres_store = PostgresStore(database_url)
 
-    def get_polygon_detail(self, polygon_metadata_id: int) -> PolygonDetail | None:
+    def get_polygon_detail(
+        self, polygon_metadata_id: int, *, tolerance: float | None = 0.0001
+    ) -> PolygonDetail | None:
         if not self.postgres_store.enabled:
             return None
 
-        row = self.postgres_store.read_polygon_detail(polygon_metadata_id)
+        row = self.postgres_store.read_polygon_detail(
+            polygon_metadata_id, tolerance=tolerance
+        )
         if row is None:
             return None
 

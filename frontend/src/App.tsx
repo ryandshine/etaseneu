@@ -921,6 +921,7 @@ export default function App() {
                 initialWilker={effectiveWilker || selectedWilker}
                 lockedWilker={session?.role === "bps" ? effectiveWilker : undefined}
                 onOpenKpsDetail={openKpsDetail}
+                isAdmin={session?.role === "admin"}
               />
             </Suspense>
           </section>

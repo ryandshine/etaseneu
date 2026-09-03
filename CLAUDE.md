@@ -414,6 +414,26 @@ Dataset Perhutanan Sosial dan Hutan Adat punya SKEMA PROPERTI BERBEDA (mis. Huta
 `_field_value()` di `geojson_sync_service.py` (atau alias yang sama) saat membaca properti mentah,
 jangan reimplementasi rantai `or` sendiri di file lain.
 
+### Ekspor geometry poligon = khusus admin
+
+Kekhawatiran: dataset batas KPS/Hutan Adat (geometry + atribut) bocor ke non-admin. Aturannya:
+non-admin (`user`/`bps`/anonim) boleh MELIHAT poligon di peta, tidak boleh MENGUNDUHnya sebagai
+berkas.
+
+- `GET /api/polygons/{id}` — `read_polygon_detail(tolerance=...)` sekarang parametrik. API-nya cek
+  `get_current_user_claims`: admin → `tolerance=0.0001` (~11m, perilaku lama); non-admin → `0.001`
+  (~110m, cukup buat outline peta detail KPS tapi terlalu kasar buat direpro jadi batas cadastral).
+  `tolerance=None` = geometry mentah, **cuma** dipakai endpoint di bawah.
+- `GET /api/polygons/{id}/export.geojson` — `Depends(require_admin_role)`, geometry presisi penuh,
+  `Content-Disposition: attachment`. Satu-satunya jalur yang mengeluarkan geometry mentah.
+- `GET /api/layers?view=full` / `GET /api/layers/{id}` — sudah `verify_admin_key` (tidak diubah).
+- Frontend: kolom "Aksi" + tombol "Unduh GeoJSON" per-KPS di `HotspotMatrix.tsx` hanya render kalau
+  prop `isAdmin` (`session?.role === "admin"` dari `App.tsx`); tombolnya fetch `/export.geojson`.
+  Tombol "Unduh GeoJSON" versi filter (titik hotspot saja, tanpa geometry poligon) TIDAK di-gate.
+- Sisa risiko yang diterima: `view=preview` (peta utama) + `/api/polygons/{id}` kasar masih membawa
+  atribut poligon (lembaga, no_sk, dll) untuk popup — bisa dipanen lewat network tab. Menutup itu =
+  strip atribut per-role, belum dikerjakan.
+
 ## Dokumen lain di repo ini
 
 - `docs/monitoring/scheduler-alerting.md` — nama metrik Prometheus/JSON untuk scheduler

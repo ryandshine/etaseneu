@@ -243,7 +243,9 @@ class _PolygonMetadataMixin:
 
         return [int(row["id"]) for row in rows]
 
-    def read_polygon_detail(self, polygon_metadata_id: int) -> dict[str, object] | None:
+    def read_polygon_detail(
+        self, polygon_metadata_id: int, *, tolerance: float | None = 0.0001
+    ) -> dict[str, object] | None:
         """Ambil satu polygon (geometry + atribut) buat halaman detail KPS --
         beda dari read_polygon_hotspot_summary yang query banyak sekaligus
         untuk agregat, ini query satu baris by primary key.
@@ -254,11 +256,25 @@ class _PolygonMetadataMixin:
         membuat render peta di HP nge-hang/gagal diam-diam. Toleransi
         0.0001 derajat (~11m) jauh di bawah presisi visual yang kelihatan
         setelah peta di-fit ke batas polygon ini.
+
+        `tolerance` bisa dinaikkan (mis. 0.001 ~110m) untuk penonton non-admin
+        supaya batas yang dikirim terlalu kasar untuk direproduksi sebagai
+        data cadastral, atau di-set `None` untuk mengirim geometry mentah
+        (dipakai endpoint ekspor khusus admin).
         """
+        if tolerance is None:
+            geometry_expr = "ST_AsGeoJSON(geometry)::json AS geometry_json"
+            geometry_params: tuple[object, ...] = ()
+        else:
+            geometry_expr = (
+                "ST_AsGeoJSON(COALESCE(ST_SimplifyPreserveTopology(geometry, %s), geometry))::json AS geometry_json"
+            )
+            geometry_params = (tolerance,)
+
         with self.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    """
+                    f"""
                     SELECT
                         id,
                         layer_key,
@@ -276,11 +292,11 @@ class _PolygonMetadataMixin:
                         ps_id,
                         luas_final,
                         jml_kk,
-                        ST_AsGeoJSON(COALESCE(ST_SimplifyPreserveTopology(geometry, 0.0001), geometry))::json AS geometry_json
+                        {geometry_expr}
                     FROM polygon_metadata
                     WHERE id = %s AND is_active = TRUE
                     """,
-                    (polygon_metadata_id,),
+                    (*geometry_params, polygon_metadata_id),
                 )
                 row = cur.fetchone()
 

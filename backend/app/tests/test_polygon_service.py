@@ -6,7 +6,8 @@ class FakePostgresStore:
         self.enabled = True
         self.rows: dict[int, dict[str, object]] = {}
 
-    def read_polygon_detail(self, polygon_metadata_id: int):
+    def read_polygon_detail(self, polygon_metadata_id: int, *, tolerance: float | None = 0.0001):
+        self.last_tolerance = tolerance
         return self.rows.get(polygon_metadata_id)
 
 
@@ -49,6 +50,21 @@ def test_get_polygon_detail_returns_model_when_found() -> None:
     assert detail.id == 42
     assert detail.lembaga == "LPHD SEBUBUS"
     assert detail.geometry["type"] == "Polygon"
+
+
+def test_get_polygon_detail_forwards_tolerance_to_store() -> None:
+    from app.services.polygon_service import PolygonService
+
+    service = PolygonService("postgresql://demo")
+    fake = FakePostgresStore()
+    fake.rows[7] = _sample_row(7)
+    service.postgres_store = fake
+
+    service.get_polygon_detail(7, tolerance=None)
+    assert fake.last_tolerance is None
+
+    service.get_polygon_detail(7, tolerance=0.001)
+    assert fake.last_tolerance == 0.001
 
 
 def test_get_polygon_detail_returns_none_when_not_found() -> None:

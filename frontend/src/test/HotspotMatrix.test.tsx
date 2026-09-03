@@ -310,4 +310,40 @@ describe("HotspotMatrix", () => {
     const dashes = await screen.findAllByText("-");
     expect(dashes.length).toBeGreaterThan(0);
   });
+
+  const baseProps = {
+    hotspots: [hotspot],
+    geojsonStatus: null,
+    onExport: () => undefined,
+    isExporting: false,
+    onExportPdf: () => undefined,
+    isExportingPdf: false,
+    onDateChange: () => undefined,
+    startDate: "2026-05-27",
+    endDate: "2026-05-28",
+    timeRange: {
+      startAt: new Date("2026-05-27T00:00:00Z"),
+      endAt: new Date("2026-05-28T00:00:00Z"),
+      label: "Hari ini"
+    },
+    dateRangeLabel: "Hari ini",
+    timePreset: "24h" as const,
+    onTimePresetChange: () => undefined
+  };
+
+  it("hides the per-KPS GeoJSON download column for non-admin users", async () => {
+    render(<HotspotMatrix {...baseProps} />);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(screen.queryByRole("columnheader", { name: "Aksi" })).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/Unduh GeoJSON untuk/)).not.toBeInTheDocument();
+  });
+
+  it("shows the per-KPS GeoJSON download column for admin users", async () => {
+    render(<HotspotMatrix {...baseProps} isAdmin />);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(screen.getByRole("columnheader", { name: "Aksi" })).toBeInTheDocument();
+    expect(screen.getByTitle(/Unduh GeoJSON untuk/)).toBeInTheDocument();
+  });
 });
