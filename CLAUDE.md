@@ -330,8 +330,20 @@ memasang: security header (`X-Content-Type-Options`, `X-Frame-Options: DENY`, `R
 mengganti bukan menggabung; **CSP `Content-Security-Policy-Report-Only`** (belum enforce — flip nama
 header ke `Content-Security-Policy` setelah console browser bersih); `limit_req` (login 5r/m,
 `point-match/analyze` & `export` 10r/m, umum 20r/s burst 40) + `real_ip` dari `X-Forwarded-For` (wajib
-di belakang Traefik). Ubah file ini → rebuild `web`. Uji `nginx -t` via
+di belakang Traefik); `location = /sw.js` & `/registerSW.js` & `/manifest.webmanifest` pakai
+`Cache-Control: no-cache` (file PWA bernama tetap, bukan ber-hash — kalau `sw.js` ke-cache lama
+update aplikasi tidak pernah sampai; `location =` menang atas regex `\.(js|…)$ immutable`). Ubah file
+ini → rebuild `web`. Uji `nginx -t` via
 `docker run --rm --add-host api:127.0.0.1 -v $PWD/deploy/nginx/etaseneu.conf:/etc/nginx/conf.d/default.conf:ro nginx:alpine nginx -t`.
+
+**PWA** (`vite-plugin-pwa`, config di `frontend/vite.config.ts`): `registerType: autoUpdate`,
+`injectRegister: auto` (registrasi lewat `/registerSW.js` yang di-inject ke `index.html` saat build —
+tidak ada import di source, jadi vitest tidak terpengaruh). Service worker `generateSW` **hanya
+precache app shell** (JS/CSS/HTML ber-hash, ~1 MB) — `/api` SENGAJA tidak di-cache SW (caching data
+ada di `lib/dashboardPersistence.ts` yang tahu cara revalidasi; SW yang menyajikan JSON API basi
+malah mem-bypass itu). `navigateFallbackDenylist: [/^\/api\//]`. Manifest + ikon (`public/pwa-*.png`,
+`apple-touch-icon.png`, "ES" oranye di latar gelap) di-generate manual. CSP report-only sudah
+menambah `worker-src 'self'; manifest-src 'self'`.
 
 ## Autentikasi
 

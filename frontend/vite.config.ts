@@ -1,8 +1,53 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // PWA: yang di-cache HANYA app shell (JS/CSS/HTML ber-hash) supaya cold-boot
+    // di HP -- Chrome Android agresif men-discard tab -- tidak perlu mengunduh
+    // ulang bundle. Data /api SENGAJA tidak di-cache di service worker: caching
+    // data ditangani di lapisan hook (lib/dashboardPersistence.ts) yang tahu
+    // cara revalidasi; SW yang menyajikan JSON API basi malah mem-bypass itu.
+    VitePWA({
+      registerType: "autoUpdate",
+      injectRegister: "auto",
+      includeAssets: ["favicon.svg", "apple-touch-icon.png"],
+      manifest: {
+        name: "ETA SENEU",
+        short_name: "ETA SENEU",
+        description:
+          "Peringatan dini & rekap titik panas di kawasan Perhutanan Sosial dan Hutan Adat.",
+        lang: "id",
+        theme_color: "#0f1115",
+        background_color: "#0a0b0e",
+        display: "standalone",
+        orientation: "portrait",
+        start_url: "/",
+        scope: "/",
+        icons: [
+          { src: "/pwa-192.png", sizes: "192x192", type: "image/png" },
+          { src: "/pwa-512.png", sizes: "512x512", type: "image/png" },
+          {
+            src: "/pwa-512-maskable.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+        ],
+      },
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,svg,woff,woff2}"],
+        navigateFallback: "/index.html",
+        // Jangan sajikan index.html untuk request /api -- biarkan lolos ke jaringan.
+        navigateFallbackDenylist: [/^\/api\//],
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+      },
+      devOptions: { enabled: false },
+    }),
+  ],
   build: {
     rollupOptions: {
       output: {

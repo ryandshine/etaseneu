@@ -8,6 +8,7 @@ backend/.env
 backend/.pytest_cache/
 frontend/node_modules/
 frontend/dist/
+frontend/dev-dist/
 *.geojson
 
 # Artefak run Playwright/tooling: ditulis ulang tiap kali dijalankan, bukan
