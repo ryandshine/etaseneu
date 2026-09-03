@@ -276,6 +276,20 @@ ke `endDate` (state "custom end date"), bukan selalu ke waktu sekarang — norma
 ini, tapi kalau pernah diubah lewat mode Custom lalu berpindah ke preset lain, `endDate` TIDAK
 otomatis kembali ke hari ini (lihat komentar di `buildTimeRange`).
 
+Persistensi state (`lib/dashboardPersistence.ts`, dipakai `useDashboardData`): Chrome Android agresif
+men-discard tab latar → cold-boot bikin dashboard kosong + reset filter. Dua hal disimpan di
+localStorage (kunci ber-versi `etaseneu.dashboard.{filters,cache}.v1`, semua akses `try/catch`):
+(1) **filter** — preset waktu, satelit, tanggal custom; dipulihkan saat mount (tanggal custom hanya
+kalau preset = `custom`, biar preset lain tetap relatif hari ini). (2) **cache data** — `layers` +
+`hotspots` + `remoteStats` terakhir, TTL 6 jam, cap 6000 titik, degradasi bertahap kalau kuota penuh
+(kosongkan `geojson` layer → potong hotspot). Cache cuma placeholder visual: kalau ada, boot tidak
+menampilkan overlay loading, `isInitLoaded` mulai `true`, `loadInitialData()` tetap jalan diam-diam
+dan menimpa (kalau gagal → tetap tampilkan data cache + `loadError`, tidak blank). Hook mengembalikan
+`usingCachedData` → banner "Menampilkan data tersimpan — memperbarui…" di `App.tsx`. Cache dihapus
+saat logout & saat 401 (`clearDashboardCache`), supaya data user lain tidak bocor sekilas. **Kalau
+mengubah bentuk `DashboardHotspot`/`DashboardLayer`, naikkan versi kunci cache.** Filter wilker
+(state lokal `HotspotMatrix`) BELUM ikut dipersist.
+
 ## Testing
 
 **Backend**: `cd backend && .venv/bin/python -m pytest app/tests -q` (pytest-cov terpasang tapi

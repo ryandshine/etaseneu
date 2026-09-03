@@ -7,6 +7,7 @@ import { PasswordGateModal } from "./components/PasswordGateModal";
 import { SidebarNav } from "./components/SidebarNav";
 import { useDashboardData } from "./hooks/useDashboardData";
 import { setAuthToken, setUnauthorizedHandler } from "./lib/api";
+import { clearDashboardCache } from "./lib/dashboardPersistence";
 import { getTodayWIB, formatDateTimeWIB } from "./lib/date";
 import type { AppSession } from "./types/api";
 
@@ -180,6 +181,7 @@ export default function App() {
     setUnauthorizedHandler(() => {
       setAuthToken(null);
       persistSession(null);
+      clearDashboardCache();
       setSession(null);
     });
     return () => setUnauthorizedHandler(null);
@@ -242,6 +244,7 @@ export default function App() {
     const current = session;
     setAuthToken(null);
     persistSession(null);
+    clearDashboardCache();
     setAdminKey(null);
     setSession(null);
     if (current?.token) {
@@ -371,6 +374,7 @@ export default function App() {
     toggleSatellite,
     updateDate,
     initialLoading,
+    usingCachedData,
     retryInitialLoad
   } = useDashboardData(activeView, adminKey, session?.token ?? null, Boolean(session) && !restoringSession);
 
@@ -726,6 +730,12 @@ export default function App() {
       />
 
       <main className="workspace">
+      {usingCachedData && (
+        <div className="cached-data-banner" role="status">
+          <span className="cached-data-banner__dot" />
+          Menampilkan data tersimpan — memperbarui&hellip;
+        </div>
+      )}
       <ErrorBoundary key={activeView} label={`tampilan ${activeView}`}>
         {activeView === "map" ? (
           <section aria-label="Dashboard workspace" className="workspace-stage workspace-stage--map">

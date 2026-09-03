@@ -5,6 +5,12 @@ import { type TimePreset } from "../constants/time-windows";
 import { authFetch, createApiClient, setAuthToken } from "../lib/api";
 import { getCurrentDateWIB, formatDateWIB, getTodayWIB } from "../lib/date";
 import { mapHotspotRecordToDashboardHotspot, normalizeLembagaName } from "../lib/hotspotDisplay";
+import {
+  loadDashboardCache,
+  loadPersistedFilters,
+  saveDashboardCache,
+  savePersistedFilters,
+} from "../lib/dashboardPersistence";
 import type {
   GeoJsonStatusResponse,
   HistoryStatusResponse,
@@ -259,21 +265,39 @@ export function useDashboardData(
   }, [authToken]);
 
   const today = getCurrentDateWIB();
-  const [layers, setLayers] = useState<DashboardLayer[]>([]);
-  const [hotspots, setHotspots] = useState<DashboardHotspot[]>([]);
-  const [selectedSatellites, setSelectedSatellites] = useState<string[]>([
-    ...SATELLITE_OPTIONS.map((option) => option.value)
-  ]);
-  const [timePreset, setTimePreset] = useState<TimePreset>("24h");
-  const [startDate, setStartDate] = useState(() => getDefaultCustomStartDate(today));
-  const [endDate, setEndDate] = useState(() => getDefaultCustomEndDate(today));
+
+  // Dibaca sekali saat mount. localStorage: filter (kecil) + cache data terakhir
+  // (placeholder visual saja, selalu di-revalidate). Lihat lib/dashboardPersistence.
+  const persistedFilters = useMemo(() => loadPersistedFilters(), []);
+  const cachedDashboard = useMemo(() => loadDashboardCache(), []);
+  const hadCacheRef = useRef(cachedDashboard !== null);
+  const restoredPreset: TimePreset = persistedFilters?.timePreset ?? "24h";
+  // Tanggal tersimpan hanya relevan saat preset "custom" -- untuk preset lain,
+  // jendela waktu dihitung relatif hari ini (lihat buildTimeRange), jadi
+  // memulihkan endDate lama malah menampilkan data basi.
+  const restoredCustomDates =
+    restoredPreset === "custom" &&
+    typeof persistedFilters?.startDate === "string" &&
+    typeof persistedFilters?.endDate === "string";
+
+  const [layers, setLayers] = useState<DashboardLayer[]>(() => cachedDashboard?.layers ?? []);
+  const [hotspots, setHotspots] = useState<DashboardHotspot[]>(() => cachedDashboard?.hotspots ?? []);
+  const [usingCachedData, setUsingCachedData] = useState(hadCacheRef.current);
+  const [selectedSatellites, setSelectedSatellites] = useState<string[]>(
+    () => persistedFilters?.selectedSatellites ?? [...SATELLITE_OPTIONS.map((option) => option.value)]
+  );
+  const [timePreset, setTimePreset] = useState<TimePreset>(restoredPreset);
+  const [startDate, setStartDate] = useState(() =>
+    restoredCustomDates ? (persistedFilters!.startDate as string) : getDefaultCustomStartDate(today)
+  );
+  const [endDate, setEndDate] = useState(() =>
+    restoredCustomDates ? (persistedFilters!.endDate as string) : getDefaultCustomEndDate(today)
+  );
   const [clockTick, setClockTick] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [remoteStats, setRemoteStats] = useState<RemoteStats>({
-    total: 0,
-    by_source: {},
-    by_layer: {}
-  });
+  const [remoteStats, setRemoteStats] = useState<RemoteStats>(
+    () => cachedDashboard?.remoteStats ?? { total: 0, by_source: {}, by_layer: {} }
+  );
   const [historyStatus, setHistoryStatus] = useState<HistoryStatusResponse | null>(null);
   const [geojsonStatus, setGeojsonStatus] = useState<GeoJsonStatusResponse | null>(null);
   const [storageStatus, setStorageStatus] = useState<StorageStatusResponse | null>(null);
@@ -287,11 +311,13 @@ export function useDashboardData(
   const [isTriggeringManualSync, setIsTriggeringManualSync] = useState(false);
   const [isPending, startTransition] = useTransition();
 
+  // Kalau ada cache, tampilkan datanya langsung: jangan blokir dengan overlay
+  // loading, dan anggap init "sudah termuat" supaya efek refresh berkala aktif.
   const [initialLoading, setInitialLoading] = useState({
-    isLoading: true,
+    isLoading: !hadCacheRef.current,
     error: null as string | null,
   });
-  const [isInitLoaded, setIsInitLoaded] = useState(false);
+  const [isInitLoaded, setIsInitLoaded] = useState(hadCacheRef.current);
   const hasStartedInitialLoadRef = useRef(false);
   // "kps" (halaman detail satu KPS) butuh dataset penuh juga -- perlu
   // menyaring semua hotspot milik satu polygon, bukan cuma yang masuk viewport
@@ -304,8 +330,12 @@ export function useDashboardData(
   }, []);
 
   const loadInitialData = useCallback(async () => {
-    setInitialLoading({ isLoading: true, error: null });
-    setIsInitLoaded(false);
+    // Kalau layar sudah menampilkan data cache, jangan tutup dengan overlay --
+    // refresh berjalan diam-diam di belakang.
+    if (!hadCacheRef.current) {
+      setInitialLoading({ isLoading: true, error: null });
+      setIsInitLoaded(false);
+    }
 
     try {
       const [schedulerRes, storageRes, layersRes] = await Promise.all([
@@ -335,6 +365,13 @@ export function useDashboardData(
       setStorageStatus(storageRes);
       setHotspots(mappedHotspots);
       setRemoteStats(hotspotsRes.stats);
+      setUsingCachedData(false);
+      setLoadError(null);
+      saveDashboardCache({
+        layers: mappedLayers,
+        hotspots: mappedHotspots,
+        remoteStats: hotspotsRes.stats,
+      });
 
       // Data ready — dismiss overlay immediately, no animation
       setIsInitLoaded(true);
@@ -342,9 +379,20 @@ export function useDashboardData(
 
     } catch (err) {
       console.error("Failed to load initial dashboard data", err);
-      setInitialLoading({ isLoading: true, error: "Gagal Memuat Data" });
+      if (hadCacheRef.current) {
+        // Sudah ada data cache di layar -> jangan blank, cukup beri tanda gagal segarkan.
+        setLoadError("Gagal memperbarui data. Menampilkan data tersimpan terakhir.");
+      } else {
+        setInitialLoading({ isLoading: true, error: "Gagal Memuat Data" });
+      }
     }
   }, [clockTick, endDate, hotspotView, selectedSatellites, startDate, timePreset]);
+
+  // Simpan filter tiap berubah supaya cold-boot berikutnya (tab di-discard HP)
+  // kembali ke konteks yang sama, bukan default.
+  useEffect(() => {
+    savePersistedFilters({ selectedSatellites, timePreset, startDate, endDate });
+  }, [selectedSatellites, timePreset, startDate, endDate]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -468,9 +516,12 @@ export function useDashboardData(
         .getHotspots(hotspotQueryParams)
         .then((response) => {
           if (!isMounted) return;
-          setHotspots(response.hotspots.map(mapHotspotRecordToDashboardHotspot));
+          const mapped = response.hotspots.map(mapHotspotRecordToDashboardHotspot);
+          setHotspots(mapped);
           setRemoteStats(response.stats);
           setLoadError(null);
+          setUsingCachedData(false);
+          saveDashboardCache({ layers, hotspots: mapped, remoteStats: response.stats });
         })
         .catch(() => {
           if (!isMounted) return;
@@ -756,6 +807,7 @@ export function useDashboardData(
     prewarmHistory,
     exportPdf,
     initialLoading,
+    usingCachedData,
     onLoadingFadeEnd: handleLoadingFadeEnd,
     retryInitialLoad: loadInitialData
   };
