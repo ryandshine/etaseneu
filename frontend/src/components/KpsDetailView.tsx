@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Download } from "lucide-react";
 import { CircleMarker, GeoJSON, LayerGroup, MapContainer, Pane, Popup, TileLayer, useMap } from "react-leaflet";
-import { circleMarker as buildLeafletCircleMarker, geoJSON as buildLeafletGeoJSON } from "leaflet";
+import { canvas as buildLeafletCanvas, circleMarker as buildLeafletCircleMarker, geoJSON as buildLeafletGeoJSON } from "leaflet";
 import type { LayerGroup as LLayerGroup } from "leaflet";
 
 import { SATELLITE_OPTIONS } from "../constants/satellites";
@@ -630,6 +630,18 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
   // hotspot selalu dipaksa `bringToFront()` ulang tiap kali daftarnya atau
   // geometry bekas terbakar berubah -- tanpa ini, urutan menang bisa terbalik
   // tergantung siapa yang lebih dulu selesai fetch.
+  // Canvas tunggal berbagi untuk semua layer di Pane `kps-interaktif` (polygon
+  // bekas terbakar + titik hotspot). `tolerance: 12` menaikkan radius uji-klik
+  // titik ~6-7px jadi ~18px supaya bisa di-tap di HP.
+  const fireCanvasRenderer = useMemo(
+    () => buildLeafletCanvas({ pane: "kps-interaktif", tolerance: 12 }),
+    [],
+  );
+  // react-leaflet <GeoJSON> tidak mengetik prop `renderer` tapi meneruskannya
+  // ke L.geoJSON -> L.Polygon. Spread lewat objek any.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fireRendererProp: any = { renderer: fireCanvasRenderer };
+
   const hotspotLayerGroupRef = useRef<LLayerGroup | null>(null);
   useEffect(() => {
     const group = hotspotLayerGroupRef.current;
@@ -973,6 +985,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                 <GeoJSON
                   key={`s2burned-${polygonId}-${customStartDate}-${customEndDate}`}
                   data={effectiveS2Geometry as never}
+                  {...fireRendererProp}
                   style={{
                     color: "#f59e0b",
                     weight: 1.2,
@@ -1014,6 +1027,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                   // ini overlay tidak ikut menyempit saat filter diganti.
                   key={`burned-${polygonId}-${customStartDate}-${customEndDate}`}
                   data={effectiveBurnedGeometry as never}
+                  {...fireRendererProp}
                   style={{
                     color: "#dc2626",
                     weight: 1,
@@ -1034,7 +1048,8 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                       weight: 2,
                       dashArray: "4 3",
                       fillColor: "#dc2626",
-                      fillOpacity: 0.25
+                      fillOpacity: 0.25,
+                      renderer: fireCanvasRenderer
                     })
                   }
                   onEachFeature={(feature, layer) => {
@@ -1128,6 +1143,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                     key={hotspot.id}
                     center={[hotspot.latitude, hotspot.longitude]}
                     radius={6}
+                    renderer={fireCanvasRenderer}
                     pathOptions={{
                       color: "#1b120d",
                       weight: 2,

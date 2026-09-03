@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { authFetch } from "../lib/api";
 import { formatHectares } from "../lib/hotspotDisplay";
 import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
@@ -440,6 +440,23 @@ export function HotspotMap({
   // tetap deterministik walau data bekas terbakar datang belakangan lewat
   // fetch async, titik hotspot selalu dipaksa `bringToFront()` ulang tiap
   // kali daftarnya atau data bekas terbakar berubah.
+  // Renderer canvas TUNGGAL yang dibagi polygon bekas terbakar + titik hotspot
+  // (semuanya di Pane `kps-interaktif` -- lihat komentar panjang di atas soal
+  // kenapa harus satu canvas). `tolerance: 12` menaikkan radius uji-klik
+  // titik 7px jadi ~19px: tanpa ini di HP tap yang meleset sedikit lolos ke
+  // `PolygonInfoLayer` dan yang muncul popup "Poligon di titik ini", bukan
+  // popup hotspot. `tolerance` dibaca saat klik, bukan saat gambar.
+  const fireCanvasRenderer = useMemo(
+    () => canvas({ pane: "kps-interaktif", tolerance: 12 }),
+    [],
+  );
+  // react-leaflet <GeoJSON> tidak mengetik prop `renderer`, tapi meneruskannya
+  // apa adanya ke L.geoJSON -> L.Polygon (yang menghormatinya). Spread lewat
+  // objek any supaya polygon bekas terbakar ikut canvas yang sama dengan titik
+  // hotspot (WAJIB satu canvas -- lihat komentar di atas).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fireRendererProp: any = { renderer: fireCanvasRenderer };
+
   const hotspotLayerGroupRef = useRef<LLayerGroup | null>(null);
   useEffect(() => {
     const group = hotspotLayerGroupRef.current;
@@ -805,6 +822,7 @@ export function HotspotMap({
             <GeoJSON
               key={`s2-burned-${s2Burned.data.meta.year}-${s2Burned.data.meta.month}-${s2Burned.data.meta.polygons}`}
               data={s2Burned.data as never}
+              {...fireRendererProp}
               style={{
                 color: "#f59e0b",
                 weight: 1.5,
@@ -842,6 +860,7 @@ export function HotspotMap({
             <GeoJSON
               key={`burned-overlay-${burnedArea.data.kps_count}`}
               data={burnedArea.data as never}
+              {...fireRendererProp}
               style={{
                 color: "#dc2626",
                 weight: 1.5,
@@ -855,7 +874,8 @@ export function HotspotMap({
                   weight: 2,
                   dashArray: "4 3",
                   fillColor: "#dc2626",
-                  fillOpacity: 0.22
+                  fillOpacity: 0.22,
+                  renderer: fireCanvasRenderer
                 })
               }
               onEachFeature={(feature, layer) => {
@@ -898,6 +918,7 @@ export function HotspotMap({
                   key={hotspot.id}
                   center={[hotspot.latitude, hotspot.longitude]}
                   radius={7}
+                  renderer={fireCanvasRenderer}
                   pathOptions={{
                     color: "#1b120d",
                     weight: 2,

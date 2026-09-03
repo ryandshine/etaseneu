@@ -16,9 +16,13 @@ const fitBoundsMock = vi.fn();
 const mapContainerPropsMock = vi.fn();
 const mapZoomMock = vi.fn(() => 5);
 const geoJsonPropsMock = vi.fn();
+const circleMarkerPropsMock = vi.fn();
 
 vi.mock("react-leaflet", () => ({
-  CircleMarker: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  CircleMarker: ({ children, ...props }: { children?: ReactNode }) => {
+    circleMarkerPropsMock(props);
+    return <div>{children}</div>;
+  },
   GeoJSON: ({ children, ...props }: { children?: ReactNode }) => {
     geoJsonPropsMock(props);
     return <div data-testid="geojson-layer">{children}</div>;
@@ -171,6 +175,7 @@ describe("Hotspot map integration", () => {
   beforeEach(() => {
     fitBoundsMock.mockReset();
     mapContainerPropsMock.mockReset();
+    circleMarkerPropsMock.mockReset();
     mapZoomMock.mockReset();
     geoJsonPropsMock.mockReset();
     mapZoomMock.mockReturnValue(5);
@@ -429,5 +434,18 @@ describe("Hotspot map integration", () => {
 
     expect(geoJsonPropsMock).toHaveBeenCalled();
     expect(geoJsonPropsMock.mock.calls[0]?.[0]).toMatchObject({ interactive: false });
+  });
+
+  it("gives every hotspot marker one shared canvas renderer (touch hit-area fix)", async () => {
+    render(<App />);
+    await loginThroughUI();
+
+    expect(await screen.findByTestId("leaflet-map", {}, { timeout: 5000 })).toBeInTheDocument();
+
+    const rendererProps = circleMarkerPropsMock.mock.calls.map(([props]) => props?.renderer);
+    expect(rendererProps.length).toBeGreaterThan(0);
+    // Semua titik pakai renderer eksplisit yang SAMA -- kalau ini hilang,
+    // titik jatuh ke canvas pane default (tolerance 0) dan sulit di-tap di HP.
+    expect(rendererProps.every((r) => r != null && r === rendererProps[0])).toBe(true);
   });
 });

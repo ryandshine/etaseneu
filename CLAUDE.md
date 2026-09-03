@@ -241,7 +241,16 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               sisi klien (`lib/polygonHit.ts`) atas geojson layer yang termuat, lalu
               satu popup gabungan (layer apa + lembaga/skema/wilayah). Aman karena klik
               hotspot/bekas-terbakar sudah `DomEvent.stop` lewat bindPopup -> map click
-              tidak fire. Kalau overlay Fungsi Kawasan Hutan nyala, fungsi kawasan di
+              tidak fire -- TAPI cuma untuk hit pas di geometri. `preferCanvas` + titik
+              radius 7 -> uji-klik canvas = `radius + renderer.options.tolerance`; renderer
+              pane default `tolerance` 0 = target tap ~8px, meleset dikit di HP -> lolos ke
+              `PolygonInfoLayer`, muncul popup "Poligon di titik ini" bukan popup hotspot.
+              FIX: satu `L.canvas({ pane:"kps-interaktif", tolerance:12 })` dipakai bareng
+              SEMUA layer api di pane itu (dua `<GeoJSON>` bekas terbakar via spread
+              `{...fireRendererProp}` karena react-leaflet tak mengetik `renderer`, plus
+              `pointToLayer` circleMarker & `<CircleMarker>` hotspot). Wajib SATU canvas:
+              canvas terpisah bikin yang atas menelan klik yang bawah. Sama di
+              `KpsDetailView.tsx`. Kalau overlay Fungsi Kawasan Hutan nyala, fungsi kawasan di
               titik itu ikut (fetch `GET /api/burned-area/kawasan-at?lat=&lon=` ->
               `_burned_area.py::read_kawasan_at_point`, `ST_Contains` ke `ref_kawasan_hutan_sub`)),
               HotspotMatrix.tsx ("Matriks Data"), KpsDetailView.tsx,

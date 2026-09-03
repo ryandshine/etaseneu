@@ -17,6 +17,7 @@ export type PopupHotspot = {
   provinceName: string;
   brightness: number | null;
   frp?: number | null;
+  confidence?: string | null;
   detectedAt: string;
   fungsiKawasan?: string;
   namaKawasan?: string;
@@ -97,6 +98,25 @@ export function formatNumber(value: number | null): string {
 
 function formatMetadataValue(value?: string): string {
   return value && value.trim() ? value : "Tidak tersedia";
+}
+
+// Tingkat keyakinan deteksi NASA FIRMS. VIIRS memakai kode huruf (l/n/h),
+// MODIS memakai angka 0-100. Ditampilkan sebagai label Indonesia + nilai asli.
+function formatConfidence(value?: string | null): string {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return "Tidak tersedia";
+  }
+  const raw = String(value).trim();
+  const key = raw.toLowerCase();
+  if (key === "l" || key === "low") return "Rendah";
+  if (key === "n" || key === "nominal") return "Nominal";
+  if (key === "h" || key === "high") return "Tinggi";
+  const num = Number(key);
+  if (Number.isFinite(num)) {
+    const band = num >= 80 ? "tinggi" : num >= 30 ? "sedang" : "rendah";
+    return `${num}% (${band})`;
+  }
+  return raw;
 }
 
 // Dipakai di popup hotspot maupun popup lokasi user -- salin koordinat ke
@@ -325,6 +345,10 @@ export function HotspotPopupContent({
         <div>
           <dt>FRP</dt>
           <dd>{frpVal !== null ? `${formatNumber(frpVal)} MW` : "Tidak tersedia"}</dd>
+        </div>
+        <div>
+          <dt>Keyakinan</dt>
+          <dd>{formatConfidence(hotspot.confidence)}</dd>
         </div>
         {(hotspot.fungsiKawasan || hotspot.kelompokKawasan) && (
           <div style={{ gridColumn: "span 2" }}>

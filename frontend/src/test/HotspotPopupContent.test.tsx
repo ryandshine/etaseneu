@@ -72,4 +72,21 @@ describe("HotspotPopupContent", () => {
 
     expect(screen.queryByText("Detail KPS")).not.toBeInTheDocument();
   });
+
+  it("shows a human label for the VIIRS letter confidence code", () => {
+    render(<HotspotPopupContent hotspot={{ ...mockHotspot, confidence: "h" }} />);
+    expect(screen.getByText("Keyakinan")).toBeInTheDocument();
+    expect(screen.getByText("Tinggi")).toBeInTheDocument();
+  });
+
+  it("bands the MODIS numeric confidence", () => {
+    render(<HotspotPopupContent hotspot={{ ...mockHotspot, confidence: "72" }} />);
+    expect(screen.getByText("72% (sedang)")).toBeInTheDocument();
+  });
+
+  it("falls back gracefully when confidence is missing", () => {
+    render(<HotspotPopupContent hotspot={mockHotspot} />);
+    const dt = screen.getByText("Keyakinan");
+    expect(dt.parentElement).toHaveTextContent("Tidak tersedia");
+  });
 });
