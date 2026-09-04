@@ -3,7 +3,7 @@ Forest). Tiga tabel terisolasi — tidak menyentuh `burned_area_summary`
 maupun `s2_burned_area`. Hasil di-cache permanen: satu poligon dianalisis
 sekali, lalu dibaca berkali-kali.
 
-Kunci kelas: hutan|semak|pertanian|terbuka|air (pemukiman di-skip).
+Kunci kelas: hutan|kebun|semak|pertanian|terbuka|air (pemukiman di-skip).
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import json
 from collections.abc import Sequence
 
 _TARGET_LAYERS = ("psagustus2026", "HUTAN_ADAT_APR26")
-CLASS_KEYS = ("hutan", "semak", "pertanian", "terbuka", "air")
+CLASS_KEYS = ("hutan", "kebun", "semak", "pertanian", "terbuka", "air")
 _CLASS_ORDER = {k: i for i, k in enumerate(CLASS_KEYS)}
 
 

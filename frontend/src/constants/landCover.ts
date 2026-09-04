@@ -1,4 +1,4 @@
-export type LandCoverClassKey = "hutan" | "semak" | "pertanian" | "terbuka" | "air";
+export type LandCoverClassKey = "hutan" | "kebun" | "semak" | "pertanian" | "terbuka" | "air";
 
 export const LAND_COVER_CLASSES: ReadonlyArray<{
   key: LandCoverClassKey;
@@ -6,6 +6,7 @@ export const LAND_COVER_CLASSES: ReadonlyArray<{
   color: string;
 }> = [
   { key: "hutan", label: "Hutan", color: "#1B7A3D" },
+  { key: "kebun", label: "Kebun Sawit", color: "#6B8E23" },
   { key: "semak", label: "Semak/Belukar", color: "#9CC55B" },
   { key: "pertanian", label: "Pertanian/Kebun", color: "#E8B84B" },
   { key: "terbuka", label: "Lahan Terbuka", color: "#C97B4A" },

@@ -3,9 +3,9 @@ import { LAND_COVER_CLASSES, LAND_COVER_YEARS } from "../constants/landCover";
 import { buildChartData, formatDelta, landCoverColor } from "../lib/landCover";
 
 describe("landCover constants", () => {
-  it("has 5 classes in fixed order with hex colors", () => {
+  it("has 6 classes in fixed order with hex colors", () => {
     expect(LAND_COVER_CLASSES.map((c) => c.key)).toEqual([
-      "hutan", "semak", "pertanian", "terbuka", "air",
+      "hutan", "kebun", "semak", "pertanian", "terbuka", "air",
     ]);
     for (const c of LAND_COVER_CLASSES) {
       expect(c.color).toMatch(/^#[0-9A-Fa-f]{6}$/);

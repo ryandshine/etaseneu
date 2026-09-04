@@ -229,7 +229,7 @@ describe("LandCoverPanel", () => {
     expect(screen.queryByText("Pertanian/Kebun")).not.toBeInTheDocument();
     expect(screen.queryByText("Lahan Terbuka")).not.toBeInTheDocument();
     expect(screen.queryByText("Badan Air")).not.toBeInTheDocument();
-    expect(screen.getByText(/3 kelas lain tidak ditemukan di poligon ini/i)).toBeInTheDocument();
+    expect(screen.getByText(/4 kelas lain tidak ditemukan di poligon ini/i)).toBeInTheDocument();
   });
 
   it("done: 'Hapus hasil' sends DELETE and returns the panel to idle", async () => {

@@ -3,8 +3,19 @@ Sentinel-2 L2A via Google Earth Engine, Random Forest dengan guru label
 Google Dynamic World. On-demand per poligon; hasil di-cache permanen di
 tabel `land_cover_*` (lihat postgres_store/_land_cover.py).
 
-Estimasi, bukan angka resmi. "Hutan" = tutupan berpohon (kebun berpohon
-seperti sawit/karet belum tentu terpisah pada versi ini).
+Estimasi, bukan angka resmi. "Hutan" = tutupan berpohon selain sawit;
+kelas "kebun" = perkebunan sawit (guru label peta sawit global Descals
+2019 -- karet/kebun campur berpohon masih ikut "hutan").
+
+Formula (2026-09-05, revisi setelah audit vs Dynamic World/Hansen/Descals):
+1. Komposit tahunan = median MUSIM KEMARAU (Mei-Okt); celah diisi median
+   setahun penuh. Median setahun penuh di musim hujan menyisakan haze/awan
+   berbeda tiap tahun -> luas kelas "berosilasi" ratusan ha antar-tahun.
+2. Label latih = argmax rata-rata probabilitas DW setahun (konsisten dengan
+   ambang keyakinan), bukan mode label yang bisa menunjuk kelas lain.
+3. Sawit: piksel DW=trees yang ada di peta sawit Descals dilabel "kebun".
+4. Pasca-klasifikasi: isi lubang awan, filter mayoritas 3x3, lalu hapus
+   lonjakan satu tahun (kelas t != t-1 == t+1 -> pakai t-1).
 """
 
 from __future__ import annotations
@@ -27,7 +38,7 @@ S2_COLLECTION = "COPERNICUS/S2_SR_HARMONIZED"
 DW_COLLECTION = "GOOGLE/DYNAMICWORLD/V1"
 
 YEARS: tuple[int, ...] = (2021, 2022, 2023, 2024, 2025)
-CLASS_KEYS: tuple[str, ...] = ("hutan", "semak", "pertanian", "terbuka", "air")
+CLASS_KEYS: tuple[str, ...] = ("hutan", "kebun", "semak", "pertanian", "terbuka", "air")
 _CLASS_IDX = {k: i for i, k in enumerate(CLASS_KEYS)}
 
 RF_TREES = 150
@@ -37,6 +48,11 @@ RF_TREES = 150
 # resolusi (scale tetap 10 m).
 SAMPLES_PER_CLASS_PER_YEAR = 100
 DW_CONF_MIN = 0.6
+# Peta sawit global Descals dkk. 2021 (referensi 2019, 10 m):
+# 1 = perkebunan industri, 2 = sawit rakyat, 3 = bukan sawit.
+OILPALM_COLLECTION = "BIOPAMA/GlobalOilPalm/v1"
+# Musim kemarau Indonesia (Sumatra/Kalimantan/Jawa/Bali) -- komposit utama.
+DRY_SEASON = ("05-01", "10-31")
 FEATURE_NAMES = [
     "B2", "B3", "B4", "B8", "B11", "B12",
     "ndvi", "nbr", "mndwi", "ndbi", "elevation", "slope",
@@ -67,8 +83,12 @@ _S2_BANDS = ["B2", "B3", "B4", "B8", "B11", "B12"]
 # Klasifikasi & pengukuran luas tetap dibatasi ke poligon asli.
 TRAIN_BUFFER_M = 3000
 
-# {0..8} Dynamic World label -> kunci kelas 5-kategori (6=built, 8=snow dibuang)
+# {0..8} Dynamic World label -> kunci kelas (6=built, 8=snow dibuang)
 _DW_MAP = {0: "air", 1: "hutan", 2: "semak", 3: "semak", 4: "pertanian", 5: "semak", 7: "terbuka"}
+_DW_PROBS = [
+    "water", "trees", "grass", "flooded_vegetation", "crops",
+    "shrub_and_scrub", "built", "bare", "snow_and_ice",
+]
 
 # Progres langkah live — boleh hilang saat restart; status final ada di DB.
 _LAND_COVER_RUN_STATE: dict[int, dict] = {}
@@ -111,8 +131,8 @@ def _net_change(table: dict[int, dict[str, dict]]) -> dict[str, float]:
 
 
 _CLASS_LABEL = {
-    "hutan": "Hutan", "semak": "Semak/Belukar", "pertanian": "Pertanian/Kebun",
-    "terbuka": "Lahan Terbuka", "air": "Badan Air",
+    "hutan": "Hutan", "kebun": "Kebun Sawit", "semak": "Semak/Belukar",
+    "pertanian": "Pertanian/Kebun", "terbuka": "Lahan Terbuka", "air": "Badan Air",
 }
 
 # Ambang "berarti" dalam hektar -- dipakai supaya kalimat ringkasan tidak
@@ -206,19 +226,38 @@ class LandCoverService:
             end = today
         return start.isoformat(), end.isoformat()
 
-    def _year_feature_image(self, ee, roi, year: int, region=None):
-        start, end = self._year_window(year)
-        clip_to = region if region is not None else roi
-        s2 = (
+    def _dry_window(self, year: int) -> tuple[str, str]:
+        start = date.fromisoformat(f"{year}-{DRY_SEASON[0]}")
+        end = date.fromisoformat(f"{year}-{DRY_SEASON[1]}")
+        today = date.today()
+        if end >= today:
+            end = today
+        return start.isoformat(), end.isoformat()
+
+    def _s2_median(self, ee, region, start: str, end: str):
+        return (
             ee.ImageCollection(S2_COLLECTION)
-            .filterBounds(clip_to)
+            .filterBounds(region)
             .filterDate(start, end)
             .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", _MAX_CLOUD))
             .select(_S2_BANDS + ["SCL"])
             .map(self._scl_scale(ee))
             .median()
-            .clip(clip_to)
         )
+
+    def _year_feature_image(self, ee, roi, year: int, region=None):
+        clip_to = region if region is not None else roi
+        # Prioritas musim kemarau: lebih sedikit awan/haze dan fenologi lebih
+        # seragam antar-tahun. Piksel yang tetap kosong (kemarau berawan
+        # terus, lazim di Kalbar/Riau) diisi median setahun penuh.
+        dry_start, dry_end = self._dry_window(year)
+        full_start, full_end = self._year_window(year)
+        dry = self._s2_median(ee, clip_to, dry_start, dry_end)
+        if dry_start >= dry_end:
+            # tahun berjalan sebelum Mei: belum ada data kemarau
+            s2 = self._s2_median(ee, clip_to, full_start, full_end).clip(clip_to)
+        else:
+            s2 = dry.unmask(self._s2_median(ee, clip_to, full_start, full_end)).clip(clip_to)
         ndvi = s2.normalizedDifference(["B8", "B4"]).rename("ndvi")
         nbr = s2.normalizedDifference(["B8", "B12"]).rename("nbr")
         mndwi = s2.normalizedDifference(["B3", "B11"]).rename("mndwi")
@@ -244,15 +283,29 @@ class LandCoverService:
             .filterBounds(roi)
             .filterDate(start, end)
         )
-        label = dw.select("label").mode()
+        # Label = argmax RATA-RATA probabilitas setahun (bukan mode label):
+        # lebih stabil terhadap scene berawan, dan pasti konsisten dengan
+        # ambang keyakinan di bawah (dulu mode label bisa menunjuk kelas lain
+        # dari kelas yang probabilitasnya dipakai buat ambang).
+        mean_prob = dw.select(_DW_PROBS).mean()
+        label = mean_prob.toArray().arrayArgmax().arrayGet(0)
         from_list = [k for k in _DW_MAP]
         to_list = [_CLASS_IDX[_DW_MAP[k]] for k in from_list]
         class_idx = label.remap(from_list, to_list).rename("class_idx")
+        # Sawit: DW menyebutnya "trees". Piksel berpohon yang ada di peta
+        # sawit Descals dilabel "kebun" -- RF lalu belajar ciri spektral sawit
+        # lokal dan menerapkannya per tahun (peta Descals cuma guru, bukan
+        # hasil akhir, jadi sawit yang ditebang/ditanam setelah 2019 tetap
+        # terdeteksi dari citra).
+        oilpalm = (
+            ee.ImageCollection(OILPALM_COLLECTION).select("classification").mosaic()
+        )
+        is_palm = oilpalm.eq(1).Or(oilpalm.eq(2))
+        class_idx = class_idx.where(
+            class_idx.eq(_CLASS_IDX["hutan"]).And(is_palm), _CLASS_IDX["kebun"]
+        )
         if confidence_masked:
-            prob = dw.select(
-                ["water", "trees", "grass", "flooded_vegetation", "crops",
-                 "shrub_and_scrub", "built", "bare", "snow_and_ice"]
-            ).mean().reduce(ee.Reducer.max())
+            prob = mean_prob.reduce(ee.Reducer.max())
             class_idx = class_idx.updateMask(prob.gte(DW_CONF_MIN))
         return class_idx
 
@@ -320,6 +373,21 @@ class LandCoverService:
             img = img.unmask(gap_fill).clip(roi)
         img = img.focal_mode(1, "square", "pixels").rename("class_idx")
         return img.setDefaultProjection("EPSG:3857", None, 10)
+
+    def _despike_years(self, ee, per_year: dict[int, object]) -> dict[int, object]:
+        """Hapus lonjakan satu tahun: kalau kelas tahun t berbeda dari t-1 DAN
+        t-1 == t+1, kelas t diganti t-1. Tutupan lahan sungguhan tidak
+        berubah lalu balik lagi dalam setahun -- pola itu hampir selalu sisa
+        awan/haze di komposit tahun tersebut. Tahun pertama & terakhir tidak
+        diubah (tidak punya kedua tetangga), jadi perubahan nyata di 2025
+        tetap terlihat. Biaya: tiap tahun tengah mengevaluasi 3 komposit."""
+        years = sorted(per_year)
+        out = dict(per_year)
+        for i in range(1, len(years) - 1):
+            prev, cur, nxt = per_year[years[i - 1]], per_year[years[i]], per_year[years[i + 1]]
+            spike = cur.neq(prev).And(prev.eq(nxt))
+            out[years[i]] = cur.where(spike, prev).rename("class_idx")
+        return out
 
     def _year_area_expr(self, ee, roi, classified):
         """Ekspresi (belum di-evaluate) luas per kelas: ee.Dictionary {groups}."""
@@ -488,6 +556,23 @@ class LandCoverService:
                 model_trees = 0
                 n_training = 0
 
+            # Klasifikasi & pengukuran cukup di dalam poligon: klip ke ROI
+            # supaya GEE tidak menghitung komposit/RF untuk seluruh bbox
+            # ber-buffer 3 km (yang cuma perlu saat sampling latih).
+            per_year: dict[int, object] = {}
+            for year in YEARS:
+                dw_img = self._dw_class_image(
+                    ee, roi, year, confidence_masked=False
+                ).rename("class_idx")
+                if use_rf:
+                    classified = feat_by_year[year].clip(roi).classify(rf).rename("class_idx")
+                    per_year[year] = self._postprocess_classified(
+                        ee, roi, classified, gap_fill=dw_img
+                    )
+                else:
+                    per_year[year] = self._postprocess_classified(ee, roi, dw_img)
+            per_year = self._despike_years(ee, per_year)
+
             table: dict[int, dict[str, dict]] = {}
             year_class_rows: list[dict] = []
             year_geom_rows: list[dict] = []
@@ -497,18 +582,7 @@ class LandCoverService:
                     "step": f"{year} ({i + 1}/{len(YEARS)}) — klasifikasi",
                     "started_at": date.today().isoformat(),
                 }
-                # Klasifikasi & pengukuran cukup di dalam poligon: klip ke ROI
-                # supaya GEE tidak menghitung komposit/RF untuk seluruh bbox
-                # ber-buffer 3 km (yang cuma perlu saat sampling latih).
-                dw_img = self._dw_class_image(
-                    ee, roi, year, confidence_masked=False
-                ).rename("class_idx")
-                if use_rf:
-                    classified = feat_by_year[year].clip(roi).classify(rf).rename("class_idx")
-                    classified = self._postprocess_classified(ee, roi, classified, gap_fill=dw_img)
-                else:
-                    classified = self._postprocess_classified(ee, roi, dw_img)
-                grouped, vectors = self._year_evaluate(ee, roi, classified)
+                grouped, vectors = self._year_evaluate(ee, roi, per_year[year])
                 areas = self._parse_area_by_class(grouped)
                 total = sum(areas.values()) or 1.0
                 table[year] = {}

@@ -118,8 +118,20 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
 - `land_cover_service.py` — **analisis tutupan lahan per poligon** KPS/Hutan Adat, 2021–2025 (5
   tahun, dipersempit dari 2020–2025 semula), dari
   Sentinel-2 L2A via GEE + Random Forest (`ee.Classifier.smileRandomForest`, guru label Google
-  Dynamic World, filter keyakinan ≥0,6, komposit median tahunan). 5 kelas: `hutan|semak|pertanian|
-  terbuka|air` (pemukiman di-skip). **Hemat kuota GEE (2026-09-04)**: sampel latih 5 tahun
+  Dynamic World, filter keyakinan ≥0,6). **6 kelas**: `hutan|kebun|semak|pertanian|terbuka|air`
+  (pemukiman di-skip; `kebun` = sawit, ditambahkan 2026-09-05). **Formula hasil audit 2026-09-05**
+  (dibandingkan vs DW mentah/Hansen/Descals di 5 poligon; versi lama: luas berosilasi ratusan ha
+  antar-tahun & sawit 271 ha di Muaro Jambi terhitung "hutan"): (1) komposit = median **musim
+  kemarau Mei–Okt** (`DRY_SEASON`), celah di-`unmask` median setahun penuh; (2) label latih =
+  **argmax rata-rata probabilitas DW** setahun (bukan `mode()` label — bisa beda kelas dari yang
+  dipakai ambang keyakinan); (3) piksel DW=trees yang ada di peta sawit Descals
+  (`BIOPAMA/GlobalOilPalm/v1`, ref 2019, kelas 1/2) dilabel `kebun` — peta itu cuma GURU, RF
+  tetap mengklasifikasi tiap tahun dari citra; (4) `_postprocess_classified`: `setDefaultProjection`
+  10 m → `unmask(DW tahun itu)` (lubang awan tadinya dibuang diam-diam, total < luas poligon) →
+  `focal_mode` 3×3; (5) `_despike_years`: kelas t ≠ t−1 dan t−1 = t+1 → pakai t−1 (tahun ujung
+  tidak diubah). OOB turun ke ~0,84 di area sawit — itu lebih jujur, bukan regresi. Karet/kebun
+  campur berpohon masih "hutan". Kalau menambah kelas lagi: `CLASS_KEYS` ada di DUA tempat
+  (`land_cover_service.py` + `postgres_store/_land_cover.py`) + `frontend/src/constants/landCover.ts`. **Hemat kuota GEE (2026-09-04)**: sampel latih 5 tahun
   di-`getInfo()` SEKALI lalu dikirim balik sebagai `FeatureCollection` literal
   (`_materialize_samples`) — tanpa ini tiap request berikutnya memaksa GEE mengulang
   `stratifiedSample` + komposit region ber-buffer 3 km dari nol; vektor per tahun = SATU
@@ -132,10 +144,7 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   `setDefaultProjection("EPSG:3857", None, 10)` dulu. (2) `reduceToVectors` yang dievaluasi di
   DALAM `ee.Dictionary({...}).getInfo()` selalu mengembalikan 0 fitur (bahkan dengan `reproject`
   eksplisit) — `_year_evaluate` sengaja memakai DUA `getInfo()` terpisah (luas, lalu vektor),
-  jangan digabung lagi demi hemat 5 request. **Pasca-klasifikasi** (`_postprocess_classified`, 2026-09-05): `setDefaultProjection` 10 m →
-  `unmask(label Dynamic World tahun itu)` (lubang awan/SCL tadinya dibuang diam-diam → total luas <
-  luas poligon; sekarang total per tahun = luas poligon) → `focal_mode` 3×3 (buang salt-and-pepper).
-  Semua `reduceRegion`/`reduceToVectors`
+  jangan digabung lagi demi hemat 5 request. Semua `reduceRegion`/`reduceToVectors`
   pakai `tileScale=GEE_TILE_SCALE` (4): poligon besar pernah gagal "User memory limit exceeded"
   (batas memori per-request GEE, bukan server kita); kalau masih habis, `_year_evaluate` mengulang
   SEKALI dengan vektor `VECTOR_FALLBACK_SCALE` (20 m) — luas per kelas tetap 10 m. On-demand: `POST /api/land-cover/analyze` `{polygon_id}` (query

@@ -211,7 +211,7 @@ def test_result_shape_when_done(client):
     body = r.json()
     assert body["years"] == list(YEARS)
     assert body["table"]["2021"]["hutan"]["pct"] == 20.0
-    assert set(body["net_change"].keys()) == {"hutan", "semak", "pertanian", "terbuka", "air"}
+    assert set(body["net_change"].keys()) == {"hutan", "kebun", "semak", "pertanian", "terbuka", "air"}
 
 
 def test_overlay_404_for_year_out_of_range(client):

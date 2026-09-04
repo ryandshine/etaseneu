@@ -154,7 +154,7 @@ class _FakeImg:
 
     def reduceRegion(self, *a, **k):
         # satu grup per kelas idx 0..4, luas 100 ha (1e6 m2) tiap kelas
-        return _FakeGetInfo({"groups": [{"class": i, "sum": 1_000_000.0} for i in range(5)]})
+        return _FakeGetInfo({"groups": [{"class": i, "sum": 1_000_000.0} for i in range(len(CLASS_KEYS))]})
 
     def getInfo(self):
         # Materialisasi sampel latih (`samples.getInfo()`): 5 kelas hadir
@@ -162,7 +162,7 @@ class _FakeImg:
         from app.services.land_cover_service import FEATURE_NAMES
 
         feats = []
-        for cls in range(5):
+        for cls in range(len(CLASS_KEYS)):
             for _ in range(SAMPLES_PER_CLASS_PER_YEAR * len(YEARS)):
                 props = {name: 0.1 for name in FEATURE_NAMES}
                 props["class_idx"] = cls
@@ -184,7 +184,7 @@ class _FakeImg:
                             ],
                         },
                     }
-                    for i in range(5)
+                    for i in range(len(CLASS_KEYS))
                 ]
             }
         )
@@ -341,9 +341,9 @@ def test_analyze_polygon_happy_path_saves_all_years_classes(monkeypatch) -> None
     assert result["oob_accuracy"] == pytest.approx(0.81)  # 1 - 0.19
     assert store.running == (287785, "psagustus2026")
     # 5 tahun x 5 kelas
-    assert len(store.saved["year_class_rows"]) == len(YEARS) * 5
+    assert len(store.saved["year_class_rows"]) == len(YEARS) * len(CLASS_KEYS)
     assert store.saved["model_trees"] == 150
-    assert store.saved["n_training"] == SAMPLES_PER_CLASS_PER_YEAR * 5 * len(YEARS)
+    assert store.saved["n_training"] == SAMPLES_PER_CLASS_PER_YEAR * len(CLASS_KEYS) * len(YEARS)
     for year in YEARS:
         pct_sum = sum(r["pct"] for r in store.saved["year_class_rows"] if r["year"] == year)
         assert pct_sum == pytest.approx(100.0, abs=0.5)
@@ -356,7 +356,7 @@ def test_analyze_polygon_happy_path_saves_all_years_classes(monkeypatch) -> None
     # geometri, masing-masing sudah dinormalkan ke MultiPolygon. Tanpa assert ini,
     # regresi yang membuang pengisian year_geom_rows tidak akan ketahuan (Task 4
     # membaca year_geom_rows untuk lapisan peta).
-    assert len(store.saved["year_geom_rows"]) == len(YEARS) * 5
+    assert len(store.saved["year_geom_rows"]) == len(YEARS) * len(CLASS_KEYS)
     first_geom = store.saved["year_geom_rows"][0]
     assert set(first_geom) == {"year", "class_key", "geometry_geojson"}
     assert first_geom["geometry_geojson"]["type"] == "MultiPolygon"
@@ -475,8 +475,8 @@ def test_analyze_polygon_falls_back_to_dynamic_world_when_single_training_class(
     assert result["oob_accuracy"] is None
     assert store.saved["model_trees"] == 0
     assert store.saved["n_training"] == 0
-    assert len(store.saved["year_class_rows"]) == len(YEARS) * 5
-    assert len(store.saved["year_geom_rows"]) == len(YEARS) * 5
+    assert len(store.saved["year_class_rows"]) == len(YEARS) * len(CLASS_KEYS)
+    assert len(store.saved["year_geom_rows"]) == len(YEARS) * len(CLASS_KEYS)
     assert 287785 not in _LAND_COVER_RUN_STATE
 
 
