@@ -12,8 +12,8 @@ describe("landCover constants", () => {
     }
   });
 
-  it("covers 2020..2025", () => {
-    expect(LAND_COVER_YEARS).toEqual([2020, 2021, 2022, 2023, 2024, 2025]);
+  it("covers 2021..2025", () => {
+    expect(LAND_COVER_YEARS).toEqual([2021, 2022, 2023, 2024, 2025]);
   });
 });
 
@@ -27,11 +27,11 @@ describe("landCoverColor", () => {
 describe("buildChartData", () => {
   it("emits one row per year with pct per class, zero-filled", () => {
     const rows = buildChartData({
-      "2020": { hutan: { area_ha: 80, pct: 80 }, air: { area_ha: 20, pct: 20 } },
-      "2021": { hutan: { area_ha: 60, pct: 60 } },
+      "2021": { hutan: { area_ha: 80, pct: 80 }, air: { area_ha: 20, pct: 20 } },
+      "2022": { hutan: { area_ha: 60, pct: 60 } },
     });
-    expect(rows[0]).toMatchObject({ year: "2020", hutan: 80, air: 20, semak: 0 });
-    expect(rows[1]).toMatchObject({ year: "2021", hutan: 60, air: 0 });
+    expect(rows[0]).toMatchObject({ year: "2021", hutan: 80, air: 20, semak: 0 });
+    expect(rows[1]).toMatchObject({ year: "2022", hutan: 60, air: 0 });
   });
 });
 

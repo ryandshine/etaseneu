@@ -1,5 +1,5 @@
 """Menu Tutupan Lahan per KPS: analisis on-demand Sentinel-2 + Random Forest
-(2020-2025), hasil di-cache permanen. Analisis butuh env GEE; membaca hasil
+(2021-2025), hasil di-cache permanen. Analisis butuh env GEE; membaca hasil
 tidak.
 """
 
@@ -14,6 +14,7 @@ from app.services.land_cover_service import (
     LandCoverService,
     _build_summary_text,
     _net_change,
+    land_cover_any_running,
     land_cover_run_state,
 )
 from app.services.postgres_store import PostgresStore
@@ -35,6 +36,20 @@ async def land_cover_analyze(
     if not service.enabled:
         raise HTTPException(status_code=503, detail="GEE belum dikonfigurasi di server")
 
+    # Lock GLOBAL, TIDAK ikut ditimpa force -- force cuma untuk override state
+    # basi poligon INI sendiri (lihat komentar di bawah), bukan buat motong
+    # antrean saat poligon LAIN beneran sedang jalan (itu yang mau dicegah:
+    # rebutan kuota GEE & CPU RF training kalau banyak user klik bersamaan).
+    running_elsewhere = land_cover_any_running()
+    if running_elsewhere and running_elsewhere["polygon_id"] != polygon_id:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Ada analisis KPS/Hutan Adat lain sedang berjalan, coba lagi nanti",
+                "busy_elsewhere": True,
+            },
+        )
+
     store = _store()
     status = store.read_land_cover_status(polygon_id)
     if status and status["status"] == "running" and not force:
@@ -55,15 +70,25 @@ async def land_cover_analyze(
     return {"started": True, "polygon_id": polygon_id}
 
 
+@router.get("/land-cover/polygons")
+async def land_cover_polygons() -> list[dict[str, object]]:
+    return _store().list_polygons_with_land_cover_status()
+
+
 @router.get("/land-cover/status")
 async def land_cover_status(polygon_id: int) -> dict[str, object]:
     row = _store().read_land_cover_status(polygon_id)
     live = land_cover_run_state(polygon_id)
+    running_elsewhere = land_cover_any_running()
     return {
         "state": row["status"] if row else "idle",
         "step": live["step"] if live else None,
         "error": row["error_message"] if row else None,
         "computed_at": row["computed_at"] if row else None,
+        # true kalau poligon LAIN (bukan ini) sedang dianalisis di proses ini
+        # sekarang -- dipakai frontend buat nonaktifkan tombol "Jalankan
+        # Analisis" sementara, biar tidak rebutan kuota GEE/CPU.
+        "busy_elsewhere": bool(running_elsewhere and running_elsewhere["polygon_id"] != polygon_id),
     }
 
 
@@ -93,7 +118,7 @@ async def land_cover_overlay(
     year: int = Query(...),
 ) -> dict[str, object]:
     if year not in YEARS:
-        raise HTTPException(status_code=404, detail="Tahun di luar rentang 2020-2025")
+        raise HTTPException(status_code=404, detail="Tahun di luar rentang 2021-2025")
     store = _store()
     status = store.read_land_cover_status(polygon_id)
     if not status or status["status"] != "done":

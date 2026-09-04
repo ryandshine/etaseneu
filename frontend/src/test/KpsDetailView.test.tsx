@@ -216,4 +216,22 @@ describe("KpsDetailView", () => {
 
     vi.useRealTimers();
   });
+
+  it("shows the land-cover summary link and hands off polygon id on click", async () => {
+    const onOpenTutupanLahan = vi.fn();
+    render(
+      <KpsDetailView
+        agency="LD LINGAT"
+        hotspots={[buildHotspot()]}
+        onClose={() => undefined}
+        onExportPdf={() => undefined}
+        isExportingPdf={false}
+        onOpenTutupanLahan={onOpenTutupanLahan}
+      />
+    );
+
+    const link = await screen.findByText("Belum dianalisis →");
+    fireEvent.click(link.closest("button") as HTMLButtonElement);
+    expect(onOpenTutupanLahan).toHaveBeenCalledWith(292425);
+  });
 });

@@ -244,15 +244,169 @@ body {
   box-shadow: 0 0 12px rgba(255, 78, 0, 0.15);
 }
 
-.side-nav-mark {
-  width: 0.55rem;
-  height: 0.55rem;
-  min-width: 0.55rem;
-  min-height: 0.55rem;
-  border-radius: 0.125rem;
-  background: currentColor;
+/* Dulu titik dekoratif 0.55rem sebelum label. Sejak sidebar punya mode icon
+   rail, tiap menu punya ikon lucide sungguhan (.side-nav-icon) yang juga
+   berfungsi sebagai satu-satunya penanda saat label disembunyikan. */
+.side-nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  transform: translateY(-1.5px);
+}
+
+/* ============================================================================
+   Sidebar mode ringkas (icon rail) -- HANYA desktop >=1024px.
+   Prop `collapsed` di SidebarNav sudah digabung dengan cek viewport di
+   App.tsx (useIsDesktopWide), jadi kelas .side-rail--collapsed di bawah
+   TIDAK perlu media query lagi: dia mustahil aktif di tablet/mobile.
+   Satu-satunya yang butuh media query adalah lebar kolom grid (.app-frame),
+   karena aturan lebar sidebar di tablet/mobile diatur blok lain yang tidak
+   boleh terganggu.
+   ============================================================================ */
+@media (min-width: 1024px) {
+  .app-frame--collapsed {
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+  }
+}
+
+.side-rail--collapsed .side-nav {
+  padding: 0.6rem 0.5rem;
+}
+
+.side-rail--collapsed .side-nav-link {
+  justify-content: center;
+  gap: 0;
+  padding: 0 !important;
+}
+
+.side-rail--collapsed .side-logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  /* Margin 0.75rem kiri-kanan menyisakan lebar tak terpakai di rail 4.5rem. */
+  width: calc(100% - 1rem);
+  margin: 0.3rem 0.5rem 0.1rem;
+}
+
+.side-brand--collapsed {
+  justify-content: center;
+  padding: 0.8rem 0.5rem;
+}
+
+.side-collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin-left: auto;
+  flex-shrink: 0;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(245, 239, 230, 0.7);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+.side-collapse-toggle:hover {
+  background: rgba(255, 142, 66, 0.16);
+  border-color: rgba(255, 142, 66, 0.4);
+  color: #ffb173;
+}
+.side-brand--collapsed .side-collapse-toggle {
+  margin-left: 0;
+}
+
+/* Filter peta saat rail ringkas: tombol ikon + flyout ke KANAN (rail terlalu
+   sempit untuk FilterPanel utuh). Visualnya mengikuti .tl-filter-popover
+   di TutupanLahanView supaya bahasa desainnya konsisten. */
+.side-filter-anchor {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0;
+}
+
+.side-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(245, 239, 230, 0.75);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+.side-filter-toggle:hover,
+.side-filter-toggle--open {
+  background: rgba(255, 142, 66, 0.16);
+  border-color: rgba(255, 142, 66, 0.45);
+  color: #ffb173;
+}
+
+.side-filter-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: transparent;
+}
+
+.side-filter-popover {
+  position: absolute;
+  z-index: 1201;
+  top: 0;
+  left: calc(100% + 0.5rem);
+  width: 20rem;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 0.75rem;
+  border-radius: 0.6rem;
+  background: #1a120d;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* Footer ringkas: titik status + aksi admin, tanpa grid detail. */
+.side-footer--collapsed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.side-health-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.side-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(245, 239, 230, 0.7);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+.side-mini-btn:hover:not(:disabled) {
+  background: rgba(255, 142, 66, 0.16);
+  color: #ffb173;
+}
+.side-mini-btn:disabled {
+  opacity: 0.45;
+  cursor: wait;
 }
 
 .side-nav-link > span {
@@ -265,6 +419,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 0.6rem;
   width: calc(100% - 1.5rem);
   height: 40px;
   margin: 0.3rem 0.75rem 0.1rem;
@@ -728,6 +883,46 @@ body {
   }
 }
 
+/* Baris ringkas tutupan lahan di Detail KPS (KpsDetailView.tsx) -- panel
+   lengkapnya (peta rona, grafik, tombol analisis) sudah dipindah ke menu
+   sendiri "Tutupan Lahan" (TutupanLahanView.tsx); ini cuma tautan masuk. */
+.lc-summary-link {
+  margin-top: 1rem;
+  padding: 0.6rem 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  background: transparent;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.lc-summary-link:hover {
+  background: rgba(255, 142, 66, 0.06);
+}
+
+.lc-summary-link__label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #f5efe6;
+}
+
+.lc-summary-link__status {
+  font-size: 0.72rem;
+  color: #ffb173;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* ================= Panel Tutupan Lahan (LandCoverPanel.tsx) ================= */
 .land-cover-panel {
   margin-top: 1rem;
@@ -787,6 +982,12 @@ body {
 }
 .lc-cta:active {
   transform: translateY(1px);
+}
+.lc-cta:disabled,
+.lc-rerun:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .lc-rerun {
@@ -860,11 +1061,136 @@ body {
   font-size: 0.76rem;
 }
 
-.lc-yearbar {
+/* Lock global antar-user (bukan error) -- ada analisis KPS lain sedang
+   jalan, biar kuota GEE & CPU tidak diperebutkan. Warna kuning (bukan
+   merah) supaya tidak terbaca sebagai kegagalan. */
+.lc-busy {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.4rem;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fcd34d;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+/* Segmented control "Peta Spasial" / "Tren Historis" -- pill sederhana,
+   bukan tab bergaris ala browser. Menggantikan tumpukan panjang lama
+   (peta -> legenda -> grafik -> tabel -> ringkasan dalam satu scroll). */
+.lc-tabs {
+  display: inline-flex;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  align-self: flex-start;
+}
+.lc-tab {
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: rgba(245, 239, 230, 0.55);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+.lc-tab:hover {
+  color: rgba(245, 239, 230, 0.85);
+}
+.lc-tab--active {
+  background: rgba(255, 142, 66, 0.18);
+  color: #ffd9bf;
+}
+
+/* Peta jadi elemen dominan tunggal di tab "Peta Spasial" -- toolbar tahun &
+   ringkasan kelas mengambang DI ATAS peta (glassmorphism), bukan block
+   statis yang mendorong peta jadi kecil. */
+.lc-mapstage {
+  position: relative;
+  border-radius: 0.6rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.lc-mapstage .leaflet-container {
+  width: 100%;
+  height: 70vh;
+  min-height: 420px;
+  max-height: 760px;
+  background: #0c0907;
+}
+
+.lc-mapstage__toolbar {
+  position: absolute;
+  z-index: 500;
+  top: 0.85rem;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(20, 15, 11, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  width: min(20rem, calc(100% - 2rem));
 }
+
+/* Ringkasan luas per kelas TAHUN TERPILIH -- kartu mengambang di sudut peta.
+   Di layar sempit (sama ambang useIsMobile, <=639px) glass mengambang
+   menutupi peta alih-alih membantu, jadi diturunkan jadi block biasa di
+   bawah peta. */
+.lc-floatcard {
+  position: absolute;
+  z-index: 500;
+  bottom: 0.85rem;
+  left: 0.85rem;
+  max-width: 20rem;
+  padding: 0.6rem;
+  border-radius: 0.6rem;
+  background: rgba(20, 15, 11, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+@media (max-width: 639px) {
+  .lc-floatcard {
+    position: static;
+    max-width: none;
+    margin-top: 0.6rem;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+.lc-map__empty {
+  position: absolute;
+  z-index: 500;
+  inset: auto 0 0 0;
+  margin: 0;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: rgba(245, 239, 230, 0.7);
+  background: rgba(12, 9, 7, 0.82);
+  backdrop-filter: blur(2px);
+}
+
+.lc-trend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
 .lc-step {
   display: inline-flex;
   align-items: center;
@@ -940,48 +1266,60 @@ body {
   color: #f5efe6;
 }
 
-.lc-map {
-  position: relative;
-  border-radius: 0.5rem;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-.lc-map .leaflet-container {
-  width: 100%;
-  height: 220px;
-  background: #0c0907;
-}
-@media (min-width: 900px) {
-  .lc-map .leaflet-container {
-    height: 260px;
-  }
-}
-.lc-map__empty {
-  position: absolute;
-  inset: auto 0 0 0;
-  margin: 0;
-  padding: 0.45rem 0.6rem;
-  font-size: 0.68rem;
-  line-height: 1.35;
-  color: rgba(245, 239, 230, 0.7);
-  background: rgba(12, 9, 7, 0.82);
-  backdrop-filter: blur(2px);
-}
+/* LandCoverPanel sekarang cuma dirender di panel detail TutupanLahanView
+   (lebar, lihat .tl-detail) -- BUKAN lagi di sidebar sempit Detail KPS
+   (panelnya sudah dicabut dari sana, diganti .lc-summary-link). Jadi aman
+   dibuat lebar & tinggi tanpa mikirin konteks sempit yang lain. Tata letak
+   dua-kolom lama (.lc-visual/.lc-map) sudah diganti .lc-mapstage + kartu
+   mengambang (lihat dekat .lc-tabs di atas) -- peta jadi satu-satunya
+   elemen dominan di tab "Peta Spasial". */
 
-.lc-legend {
+/* Ringkasan luas per kelas UNTUK TAHUN TERPILIH -- sekarang isi kartu
+   mengambang (.lc-floatcard), jadi 2 kolom tetap (bukan auto-fill lebar)
+   biar muat di kartu sempit ~20rem. */
+.lc-classgrid {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem 0.85rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  align-content: start;
 }
-.lc-legend li {
-  display: inline-flex;
+.lc-classgrid__item--zero {
+  opacity: 0.4;
+}
+.lc-classgrid__item {
+  display: grid;
+  grid-template-columns: auto 1fr;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.7rem;
+  column-gap: 0.4rem;
+  row-gap: 0.05rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: 0.4rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.lc-classgrid__label {
+  font-size: 0.66rem;
+  font-weight: 600;
   color: rgba(245, 239, 230, 0.72);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lc-classgrid__value {
+  grid-column: 2;
+  font-size: 1rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #f5efe6;
+}
+.lc-classgrid__pct {
+  grid-column: 2;
+  font-size: 0.68rem;
+  color: rgba(245, 239, 230, 0.5);
+  font-variant-numeric: tabular-nums;
 }
 .lc-swatch {
   width: 11px;
@@ -1075,8 +1413,27 @@ body {
   left: 0;
   background: #1a120d;
 }
-.lc-pct {
+/* Sel tabel: hektar tebal-terang di atas, persen kecil-redup di bawah --
+   sebelumnya inline sebaris ("100 60.0%") yang saling berhimpit. */
+.lc-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+}
+.lc-cell__ha {
+  font-weight: 700;
+  color: #f5efe6;
+}
+.lc-cell__pct {
+  font-size: 0.64rem;
   color: rgba(245, 239, 230, 0.45);
+}
+.lc-hidden-note {
+  margin: 0.4rem 0 0;
+  padding: 0 0.55rem;
+  font-size: 0.62rem;
+  color: rgba(245, 239, 230, 0.4);
 }
 .lc-delta {
   font-weight: 600;
@@ -1225,9 +1582,11 @@ body {
   width: max-content;
   max-width: 15rem;
   /* Semua overlay + ringkasannya bisa lebih tinggi dari layar -- dibatasi ke
-     ruang antara baris kontrol atas dan kontrol zoom/legenda di kiri bawah,
-     lalu digulir di dalam. */
-  max-height: calc(100% - 6.5rem - 5.5rem);
+     ruang antara baris kontrol atas dan LEGENDA di kiri bawah (legenda
+     sendiri sudah di atas kontrol zoom: bottom 6.5rem + tinggi ~9rem saat
+     5 baris), lalu digulir di dalam. Dulu cuma menyisakan 5.5rem (tinggi
+     zoom) sehingga di laptop pendek (768px) kolom ini menimpa legenda. */
+  max-height: calc(100% - 6.5rem - 16rem);
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
@@ -1719,6 +2078,21 @@ body {
   position: static;
   max-width: none;
   margin: 0 0 1rem;
+}
+
+/* Di layar sempit, .toast-error polos (loadError) tadinya tetap top:1rem;
+   right:1rem; max-width:20rem -- pada layar <=430px itu terentang dari
+   dekat kiri sampai kanan dan menutupi tombol hamburger 48px di pojok
+   kiri-atas. Digeser ke bawah baris hamburger dan dilebarkan penuh dengan
+   margin, senada .locate-error-toast. */
+@media (max-width: 639px) {
+  .toast-error:not(.toast-error--bottom) {
+    top: calc(4.2rem + env(safe-area-inset-top));
+    left: 0.75rem;
+    right: 0.75rem;
+    max-width: none;
+    text-align: center;
+  }
 }
 
 @media (max-width: 1100px) {
@@ -8672,5 +9046,1082 @@ a + a {
     left: 0.75rem;
     right: 0.75rem;
     max-width: none;
+  }
+}
+
+/* ============================================================================
+   Tutupan Lahan -- daftar (kiri) + detail (kanan, reuse LandCoverPanel).
+   Kerangka sama seperti .kompleks-shell (absolute inset:0, lihat komentar di
+   sana untuk alasan tinggi eksplisit), tapi rasio kolom dibalik: di sini
+   daftarnya yang ramping (poligon), detailnya yang lebar (peta rona + grafik
+   dari LandCoverPanel, punya layout sendiri).
+   ============================================================================ */
+.tl-shell {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  color: #f4f5f7;
+}
+
+.tl-topbar {
+  padding: 0.55rem 1.25rem 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.tl-topbar-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem 1.5rem;
+  flex-wrap: wrap;
+}
+
+.tl-topbar h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.tl-summary {
+  font-size: 0.78rem;
+  color: rgba(244, 245, 247, 0.65);
+}
+
+.tl-summary strong {
+  font-size: 0.95rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #f4f5f7;
+}
+
+.tl-lede {
+  margin: 0;
+  font-size: 0.74rem;
+  color: rgba(244, 245, 247, 0.5);
+  max-width: 62rem;
+}
+
+.tl-alert {
+  margin: 0.6rem 1.25rem 0;
+  padding: 0.55rem 0.8rem;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+  font-size: 0.8rem;
+}
+
+.tl-body {
+  display: grid;
+  grid-template-columns: 22rem minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+.tl-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tl-list-head {
+  padding: 0.75rem 0.85rem 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Filter jadi popover+pills (bukan 4 select berbaris) -- ringkas sesuai
+   permintaan desain "compact filter pills/popover". */
+.tl-filterbar {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tl-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f4f5f7;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tl-filter-toggle:hover {
+  border-color: rgba(255, 142, 66, 0.4);
+}
+.tl-filter-toggle[aria-expanded="true"] {
+  border-color: rgba(255, 142, 66, 0.55);
+  background: rgba(255, 142, 66, 0.1);
+}
+
+.tl-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: #ff8c42;
+  color: #1a120d;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.tl-filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.tl-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 142, 66, 0.3);
+  background: rgba(255, 142, 66, 0.08);
+  color: #ffd9bf;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  max-width: 11rem;
+}
+.tl-filter-pill span {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+.tl-filter-pill:hover {
+  background: rgba(255, 142, 66, 0.16);
+}
+
+.tl-filter-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: transparent;
+}
+.tl-filter-popover {
+  position: absolute;
+  z-index: 41;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  width: 19rem;
+  max-width: calc(100vw - 2rem);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: 0.6rem;
+  background: #1a120d;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+.tl-filter-popover .matrix-field {
+  min-width: 0;
+}
+
+.tl-filter-count {
+  margin: 0;
+  font-size: 0.66rem;
+  color: rgba(244, 245, 247, 0.5);
+}
+
+.tl-list-scroll {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 0.4rem;
+}
+
+.tl-empty {
+  padding: 1rem 0.6rem;
+  color: #6b7280;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.tl-empty--detail {
+  padding: 3rem 1.5rem;
+  font-size: 0.85rem;
+}
+
+/* Kolom vertikal (bukan lagi nama-vs-badge berebut satu baris) -- nama
+   dapat ruang penuh untuk 2 baris tanpa elipsis, badge status jadi baris
+   sendiri yang tenang. */
+.tl-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;
+  padding: 0.65rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tl-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tl-row--active {
+  background: rgba(255, 78, 0, 0.14);
+  border-color: rgba(255, 78, 0, 0.35);
+}
+
+.tl-row-name {
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tl-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.68rem;
+  color: #9ca3af;
+}
+
+.tl-row-layer {
+  flex-shrink: 0;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #ffb173;
+}
+
+/* Titik warna + teks redup, bukan chip warna solid -- "tenang &
+   proporsional" alih-alih mencolok merebut atensi dari nama poligon. */
+.tl-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  align-self: flex-start;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+.tl-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
+}
+
+.tl-badge--idle {
+  color: #9ca3af;
+}
+
+.tl-badge--running {
+  color: #fcd34d;
+}
+
+.tl-badge--done {
+  color: #6ee7b7;
+}
+
+.tl-badge--error {
+  color: #fca5a5;
+}
+
+.tl-detail {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1rem 1.25rem 1.5rem;
+}
+
+.tl-back-btn {
+  margin-bottom: 0.7rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  color: #d1d5db;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tl-back-btn:hover {
+  border-color: rgba(255, 142, 66, 0.5);
+  color: #ffb173;
+}
+
+.tl-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.75rem;
+}
+
+.tl-detail-head h3 {
+  margin: 0 0 0.15rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.tl-detail-meta {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #9ca3af;
+}
+
+.tl-detail-link {
+  flex-shrink: 0;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 142, 66, 0.35);
+  background: rgba(255, 142, 66, 0.1);
+  color: #ff8c42;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tl-detail-link:hover {
+  background: rgba(255, 142, 66, 0.2);
+  border-color: rgba(255, 142, 66, 0.55);
+}
+
+@media (max-width: 900px) {
+  .tl-body {
+    display: block;
+    flex: none;
+    min-height: auto;
+  }
+
+  .tl-list {
+    border-right: none;
+  }
+
+  .tl-detail {
+    padding: 0.85rem 1rem 1.5rem;
+  }
+}
+
+/* ============================================================================
+   Peta live -- indikator skala (semua ukuran layar)
+   react-leaflet <ScaleControl>: default-nya kotak putih bergaris hitam yang
+   mencolok di atas basemap gelap. Diberi perlakuan gelap tipis supaya menyatu.
+   ============================================================================ */
+.map-frame .leaflet-control-scale {
+  margin: 0 0 0 0.5rem;
+}
+
+.map-frame .leaflet-control-scale-line {
+  border: 1px solid rgba(245, 239, 230, 0.55);
+  border-top: none;
+  background: rgba(19, 21, 26, 0.72);
+  backdrop-filter: blur(6px);
+  color: #f5efe6;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  padding: 1px 6px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+}
+
+.map-frame .leaflet-control-scale-line:not(:first-child) {
+  border-top: 1px solid rgba(245, 239, 230, 0.55);
+  border-bottom: none;
+  margin-top: -1px;
+}
+
+/* ============================================================================
+   Peta live -- antarmuka mobile ringkas (<=639px)
+   HotspotMap merender <MapControls> + <MapSheet> menggantikan .map-legend,
+   .burned-control, .basemap-switcher, .locate-btn yang di lebar ini TIDAK
+   lagi ada di DOM. Panel statistik + pemicunya milik App.tsx digantikan
+   seksi "Ringkasan" di dalam sheet, jadi disembunyikan agar tak ada dua sheet.
+   ============================================================================ */
+@media (max-width: 639px) {
+  .workspace-stage--map .control-overlay--top-right,
+  .workspace-stage--map .stats-sheet-toggle,
+  .workspace-stage--map .stats-panel-reopen,
+  .workspace-stage--map .ui-toggle-btn {
+    display: none !important;
+  }
+
+  /* Kontrol bawaan Leaflet (skala + atribusi) diangkat di atas peek bar sheet
+     (~50px + safe-area) supaya tidak ketutup. */
+  .workspace-stage--map .leaflet-bottom {
+    bottom: calc(58px + env(safe-area-inset-bottom));
+  }
+
+  .workspace-stage--map .leaflet-control-attribution {
+    font-size: 0.56rem;
+  }
+
+  .workspace-stage--map .leaflet-control-scale {
+    margin-bottom: 4px;
+  }
+
+  /* ---- Kolom FAB kanan-bawah: zoom +/- dan lokasi ---- */
+  .map-fab {
+    position: absolute;
+    right: 0.75rem;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: stretch;
+    transition: opacity 200ms ease, transform 200ms ease;
+  }
+
+  .map-fab--hidden {
+    opacity: 0;
+    transform: translateX(24px);
+    pointer-events: none;
+  }
+
+  .map-fab__cluster {
+    display: flex;
+    flex-direction: column;
+    border-radius: 0.7rem;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+  }
+
+  .map-fab__divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .map-fab__btn {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: rgba(19, 21, 26, 0.92);
+    color: #f5efe6;
+    backdrop-filter: blur(8px);
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease;
+  }
+
+  .map-fab__btn:active {
+    background: rgba(255, 78, 0, 0.18);
+  }
+
+  .map-fab__btn--solo {
+    border-radius: 0.7rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+  }
+
+  .map-fab__btn--active {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.16);
+    border-color: rgba(56, 189, 248, 0.4);
+  }
+
+  .map-fab__btn--loading svg {
+    animation: locate-btn-spin 1.1s linear infinite;
+  }
+
+  /* ---- Bottom sheet ---- */
+  .map-sheet__scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 1090;
+    border: none;
+    margin: 0;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.45);
+    animation: map-sheet-fade 160ms ease;
+  }
+
+  @keyframes map-sheet-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .map-sheet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1100;
+    display: flex;
+    flex-direction: column;
+    background: rgba(17, 19, 24, 0.97);
+    backdrop-filter: blur(14px);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1.1rem 1.1rem 0 0;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.45);
+    padding-bottom: env(safe-area-inset-bottom);
+    transition: max-height 260ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .map-sheet--peek {
+    max-height: calc(54px + env(safe-area-inset-bottom));
+  }
+
+  .map-sheet--half {
+    max-height: 46dvh;
+  }
+
+  .map-sheet--full {
+    max-height: 88dvh;
+  }
+
+  .map-sheet__handle {
+    flex: 0 0 auto;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.5rem 1rem 0.55rem;
+    background: none;
+    border: none;
+    color: #f5efe6;
+    font: inherit;
+    cursor: pointer;
+    touch-action: none;
+  }
+
+  .map-sheet__grip {
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.25);
+  }
+
+  .map-sheet__peekline {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    color: rgba(245, 239, 230, 0.9);
+  }
+
+  .map-sheet__peekline strong {
+    color: #fff;
+    font-weight: 700;
+  }
+
+  .map-sheet__peekline em {
+    font-style: normal;
+    color: rgba(245, 239, 230, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 44vw;
+  }
+
+  /* Tata letak BLOK (bukan kolom flex) dengan sengaja: kolom flex + area
+     gulir memampat anak-anaknya (flex-shrink default 1) begitu kontennya
+     mendekati tinggi sheet, sehingga baris "Estimasi Sentinel-2" / "Fungsi
+     Kawasan Hutan" kehilangan tinggi dan teks + toggle-nya saling tindih.
+     Blok + margin = tiap seksi selalu setinggi kontennya, body yang menggulir. */
+  .map-sheet__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.25rem 1rem 1.25rem;
+  }
+
+  .map-sheet__body > * + * {
+    margin-top: 0.35rem;
+  }
+
+  /* Jarak lebih lega sebelum tiap judul seksi (menang atas aturan generik
+     di atas karena lebih spesifik). */
+  .map-sheet__body > .map-sheet__title {
+    margin-top: 0.9rem;
+  }
+
+  .map-sheet__body > .map-sheet__title:first-child {
+    margin-top: 0.2rem;
+  }
+
+  .map-sheet__title {
+    margin: 0.7rem 0 0.15rem;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.42);
+  }
+
+  .map-sheet__title:first-child {
+    margin-top: 0.2rem;
+  }
+
+  .map-sheet__row {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.7rem;
+    background: rgba(255, 255, 255, 0.02);
+    overflow: hidden;
+  }
+
+  .map-sheet__row.is-active {
+    border-color: rgba(220, 38, 38, 0.4);
+    background: rgba(220, 38, 38, 0.08);
+  }
+
+  .map-sheet__rowbtn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.7rem 0.8rem;
+    background: none;
+    border: none;
+    color: #f5efe6;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .map-sheet__rowicon {
+    flex: 0 0 auto;
+    display: flex;
+    color: rgba(245, 239, 230, 0.7);
+  }
+
+  .map-sheet__row.is-active .map-sheet__rowicon {
+    color: #fca5a5;
+  }
+
+  .map-sheet__rowtext {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .map-sheet__rowlabel {
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .map-sheet__rowhint {
+    font-size: 0.64rem;
+    color: rgba(245, 239, 230, 0.45);
+  }
+
+  .map-sheet__switch {
+    flex: 0 0 auto;
+    width: 38px;
+    height: 22px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    position: relative;
+    transition: background 160ms ease;
+  }
+
+  .map-sheet__switch::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #f5efe6;
+    transition: transform 160ms ease;
+  }
+
+  .map-sheet__row.is-active .map-sheet__switch {
+    background: rgba(220, 38, 38, 0.7);
+  }
+
+  .map-sheet__row.is-active .map-sheet__switch::after {
+    transform: translateX(16px);
+  }
+
+  .map-sheet__switch.is-loading {
+    opacity: 0.55;
+  }
+
+  .map-sheet__stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    margin: 0;
+    padding: 0 0.8rem 0.7rem 2.85rem;
+    font-size: 0.7rem;
+    color: rgba(245, 239, 230, 0.7);
+  }
+
+  .map-sheet__stat span:first-child {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #fca5a5;
+  }
+
+  .map-sheet__legend {
+    list-style: none;
+    margin: 0;
+    padding: 0 0.8rem 0.7rem 2.85rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.8rem;
+  }
+
+  .map-sheet__legend--flush {
+    padding-left: 0;
+    padding-bottom: 0;
+  }
+
+  .map-sheet__legend li {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.68rem;
+    color: rgba(245, 239, 230, 0.8);
+  }
+
+  .map-sheet__legend li > span {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    flex: 0 0 auto;
+  }
+
+  .map-sheet__legend-pulse {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ef4444;
+    box-shadow: 0 0 6px #ef4444;
+  }
+
+  .map-sheet__segmented {
+    display: flex;
+    gap: 0.4rem;
+  }
+
+  .map-sheet__segmented button {
+    flex: 1 1 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    height: 40px;
+    border-radius: 0.6rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(245, 239, 230, 0.7);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .map-sheet__segmented button.is-active {
+    border-color: rgba(255, 142, 66, 0.5);
+    background: rgba(255, 142, 66, 0.16);
+    color: #ff8c42;
+  }
+
+  .map-sheet__conf {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: rgba(245, 239, 230, 0.85);
+  }
+
+  .map-sheet__conf span {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .map-sheet__conf i {
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    flex: 0 0 auto;
+  }
+
+  .map-sheet__conf b {
+    margin-left: auto;
+    color: #fff;
+  }
+
+  .map-sheet__conf em {
+    font-style: normal;
+    color: rgba(245, 239, 230, 0.4);
+    min-width: 3.4em;
+    text-align: right;
+  }
+
+  .map-sheet__sat {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.5rem;
+    font-size: 0.72rem;
+    color: #f5efe6;
+  }
+
+  .map-sheet__sat th,
+  .map-sheet__sat td {
+    padding: 0.28rem 0.3rem;
+    text-align: center;
+  }
+
+  .map-sheet__sat th {
+    color: rgba(245, 239, 230, 0.45);
+    font-weight: 600;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .map-sheet__sat th:first-child,
+  .map-sheet__sat td:first-child {
+    text-align: left;
+  }
+
+  .map-sheet__sat tbody tr {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .map-sheet__empty {
+    font-size: 0.75rem;
+    color: rgba(245, 239, 230, 0.5);
+    margin: 0.2rem 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .map-sheet,
+    .map-fab {
+      transition: none;
+    }
+
+    .map-sheet__scrim {
+      animation: none;
+    }
+
+    .map-sheet__switch,
+    .map-sheet__switch::after {
+      transition: none;
+    }
+
+    .map-fab__btn--loading svg {
+      animation: none;
+    }
+  }
+}
+
+/* ---- Pemutar waktu hotspot (timeline animasi) ----
+   Melayang di bawah-tengah peta utama. Di mobile diangkat di atas peek
+   bottom-sheet (MapSheet) & kolom FAB supaya tidak saling tumpang tindih. */
+.timeline-control {
+  position: absolute;
+  /* Desktop: TIDAK dipusatkan dengan translate(-50%) -- di laptop 1366px
+     pil 680px yang dipusatkan menabrak legenda (kiri) dan panel statistik
+     (kanan). Dijepit lewat left/right (legenda ~16rem, panel statistik 18rem
+     + margin) lalu max-width + margin auto memusatkannya di ruang yang
+     tersisa. bottom 4.75rem = di atas tombol "Sembunyikan UI" (bottom 30px
+     + tinggi ~38px) yang sama-sama di bawah-tengah. */
+  left: 17rem;
+  right: 20rem;
+  bottom: 4.75rem;
+  margin: 0 auto;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: 680px;
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(19, 21, 26, 0.96);
+  color: #f5efe6;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.timeline-control__play,
+.timeline-control__speed,
+.timeline-control__close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  min-width: 30px;
+  padding: 0 0.5rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(12, 13, 17, 0.9);
+  color: #f5efe6;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.timeline-control__play:hover,
+.timeline-control__speed:hover {
+  border-color: rgba(255, 140, 66, 0.6);
+}
+.timeline-control__close {
+  border: none;
+  background: transparent;
+  color: rgba(245, 239, 230, 0.6);
+}
+.timeline-control__close:hover {
+  color: #f5efe6;
+}
+.timeline-control__scrub {
+  position: relative;
+  flex: 1 1 auto;
+  height: 34px;
+}
+.timeline-control__hist {
+  position: absolute;
+  inset: 0 0 8px 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  pointer-events: none;
+}
+.timeline-control__bar {
+  flex: 1 1 0;
+  min-height: 2px;
+  background: rgba(245, 239, 230, 0.18);
+  border-radius: 1px 1px 0 0;
+  transition: background 120ms ease;
+}
+.timeline-control__bar--past {
+  background: rgba(255, 140, 66, 0.55);
+}
+.timeline-control__bar--now {
+  background: #ff8c42;
+}
+.timeline-control__range {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  accent-color: #ff8c42;
+  cursor: pointer;
+}
+.timeline-control__label {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 8.5rem;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.timeline-control__label-time {
+  font-size: 0.72rem;
+  color: rgba(245, 239, 230, 0.9);
+}
+.timeline-control__label-count {
+  font-size: 0.64rem;
+  color: rgba(245, 239, 230, 0.55);
+}
+@media (prefers-reduced-motion: reduce) {
+  .timeline-control__bar {
+    transition: none;
+  }
+}
+@media (max-width: 639px) {
+  .timeline-control {
+    /* di atas peek MapSheet (~5rem); di mobile tidak ada legenda/panel
+       statistik, jadi jepitan kiri/kanan desktop dilepas. */
+    left: 0.5rem;
+    right: 0.5rem;
+    bottom: 6.25rem;
+    max-width: none;
+    gap: 0.4rem;
+    padding: 0.4rem 0.5rem;
+    flex-wrap: wrap;
+  }
+  .timeline-control__label {
+    order: 5;
+    width: 100%;
+    flex-direction: row;
+    justify-content: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+}
+
+/* ---- Laptop kecil / tablet lanskap: kontrol kiri peta berebut tinggi ----
+   Di Acer TravelMate 1366x768 (peta ~600px tinggi) kolom kiri berisi
+   Lokasi+Basemap, .burned-control (4 chip + legenda kawasan), legenda, dan
+   zoom sekaligus. Legenda dibuat mendatar (2-3 baris) supaya .burned-control
+   dapat ruang gulir yang masuk akal. */
+@media (min-width: 640px) and (max-height: 820px) {
+  .map-legend {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 0.7rem;
+    row-gap: 0.3rem;
+    max-width: 17rem;
+    bottom: 6rem;
+  }
+  .map-legend-title {
+    width: 100%;
+  }
+  .map-legend-divider {
+    display: none;
+  }
+  .burned-control {
+    max-height: calc(100% - 6.5rem - 11.5rem);
+  }
+}
+
+/* Tablet lanskap (sidebar 200px): tidak cukup ruang untuk menjepit pemutar
+   waktu di antara legenda & panel statistik -- pemutar melebar penuh dan
+   legenda mengalah selama pemutar terbuka. */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .timeline-control {
+    left: 1rem;
+    right: 1rem;
+  }
+  .map-frame:has(.timeline-control) .map-legend {
+    display: none;
   }
 }

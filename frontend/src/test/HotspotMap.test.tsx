@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom/vitest";
+import { forwardRef } from "react";
 import type { ReactNode } from "react";
 import {
   cleanup,
@@ -18,11 +19,21 @@ const mapZoomMock = vi.fn(() => 5);
 const geoJsonPropsMock = vi.fn();
 const circleMarkerPropsMock = vi.fn();
 
+// Overlay Fungsi Kawasan Hutan (default nyala sejak 2026-09-04, lihat
+// HotspotMap.tsx) manipulasi L.Map asli (getPane/createPane/addLayer) lewat
+// useMap() -- di luar jangkauan mock react-leaflet ringan di bawah. Diganti
+// no-op supaya render map tetap bisa diuji tanpa mensimulasikan Leaflet penuh.
+vi.mock("../components/KawasanHutanLayer", () => ({
+  KawasanHutanLayer: () => null
+}));
+
 vi.mock("react-leaflet", () => ({
-  CircleMarker: ({ children, ...props }: { children?: ReactNode }) => {
+  // forwardRef: HotspotMarkersLayer memasang callback-ref per marker untuk
+  // driver timeline animasi -- tanpa forwardRef React memuntahkan warning.
+  CircleMarker: forwardRef(({ children, ...props }: { children?: ReactNode }, _ref) => {
     circleMarkerPropsMock(props);
     return <div>{children}</div>;
-  },
+  }),
   GeoJSON: ({ children, ...props }: { children?: ReactNode }) => {
     geoJsonPropsMock(props);
     return <div data-testid="geojson-layer">{children}</div>;
@@ -40,12 +51,13 @@ vi.mock("react-leaflet", () => ({
   // atas polygon bekas terbakar (satu Pane/renderer yang sama) -- lihat
   // catatan di HotspotMap.tsx.
   LayerGroup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Marker: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Marker: forwardRef(({ children }: { children?: ReactNode }, _ref) => <div>{children}</div>),
   Circle: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Popup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   TileLayer: () => <div data-testid="tile-layer" />,
   ZoomControl: () => <div data-testid="zoom-control" />,
+  ScaleControl: () => <div data-testid="scale-control" />,
   useMap: () => ({ fitBounds: fitBoundsMock, getZoom: mapZoomMock }),
   useMapEvents: () => ({})
 }));
@@ -447,5 +459,19 @@ describe("Hotspot map integration", () => {
     // Semua titik pakai renderer eksplisit yang SAMA -- kalau ini hilang,
     // titik jatuh ke canvas pane default (tolerance 0) dan sulit di-tap di HP.
     expect(rendererProps.every((r) => r != null && r === rendererProps[0])).toBe(true);
+  });
+
+  it("shows a Timeline toggle that opens the playback bar", async () => {
+    render(<App />);
+    await loginThroughUI();
+    await screen.findByTestId("leaflet-map", {}, { timeout: 5000 });
+
+    const toggle = await screen.findByRole("button", { name: /timeline/i });
+    expect(toggle).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: /pemutar waktu hotspot/i })).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(await screen.findByRole("group", { name: /pemutar waktu hotspot/i })).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: /posisi waktu/i })).toBeInTheDocument();
   });
 });

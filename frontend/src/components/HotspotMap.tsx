@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { authFetch } from "../lib/api";
 import { formatHectares } from "../lib/hotspotDisplay";
 import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
-import { Flame, LocateFixed, Trees } from "lucide-react";
+import { Clock, Flame, LocateFixed, Trees } from "lucide-react";
+import { useHotspotTimeline } from "../hooks/useHotspotTimeline";
+import { opacityForBucket } from "../lib/hotspotTimeline";
+import { HotspotTimelineControl } from "./HotspotTimelineControl";
 import { WindLayer } from "./WindLayer";
 import { WeatherOverlay } from "./WeatherOverlay";
 import {
@@ -21,12 +24,18 @@ import {
   Pane,
   Popup,
   Marker,
+  ScaleControl,
   TileLayer,
   useMap,
   ZoomControl
 } from "react-leaflet";
 import { canvas, circleMarker as buildLeafletCircleMarker, latLngBounds, divIcon } from "leaflet";
-import type { LayerGroup as LLayerGroup } from "leaflet";
+import type {
+  CircleMarker as LCircleMarker,
+  LayerGroup as LLayerGroup,
+  Map as LeafletMap,
+  Marker as LMarker,
+} from "leaflet";
 
 import { useBurnedAreaOverlay } from "../hooks/useBurnedAreaOverlay";
 import type { BurnedAreaOverlayFeature } from "../hooks/useBurnedAreaOverlay";
@@ -35,6 +44,9 @@ import type { S2BurnedAreaFeature } from "../hooks/useS2BurnedAreaOverlay";
 import { KawasanHutanLayer } from "./KawasanHutanLayer";
 import { PolygonInfoLayer } from "./PolygonInfoLayer";
 import { KAWASAN_HUTAN_LEGEND } from "../constants/kawasanHutan";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { MapSheet } from "./MapSheet";
+import { MapControls } from "./MapControls";
 import type { LayerBounds } from "../types/api";
 
 const MONTH_LABELS = [
@@ -401,6 +413,80 @@ const rainIcon = divIcon({
   iconAnchor: [16, 16]
 });
 
+type MarkerLayer = LCircleMarker | LMarker;
+
+type MarkersLayerProps = {
+  hotspots: HotspotRecord[];
+  renderer: ReturnType<typeof canvas>;
+  onOpenKpsDetail?: (agency: string) => void;
+  registerMarker: (id: string, layer: MarkerLayer | null) => void;
+};
+
+// Daftar marker diekstrak ke child `memo` supaya animasi timeline TIDAK
+// me-render ulang ribuan <CircleMarker> tiap tick -- playback menata style
+// marker secara imperatif lewat ref (lihat driver useEffect di HotspotMap).
+// JSX per-item TIDAK berubah dari sebelumnya (Popup pane="popupPane",
+// renderer canvas bersama, radius 7) -- cuma ditambah `ref`.
+const HotspotMarkersLayer = memo(function HotspotMarkersLayer({
+  hotspots,
+  renderer,
+  onOpenKpsDetail,
+  registerMarker,
+}: MarkersLayerProps) {
+  return (
+    <>
+      {hotspots.map((hotspot) =>
+        (hotspot.frp ?? 0) > HIGH_FRP_THRESHOLD ? (
+          <Marker
+            key={hotspot.id}
+            position={[hotspot.latitude, hotspot.longitude]}
+            icon={getHighIntensityIcon(sourceColor(hotspot.source))}
+            ref={(l) => registerMarker(hotspot.id, (l as unknown as LMarker | null) ?? null)}
+          >
+            <Popup pane="popupPane">
+              <HotspotPopupContent hotspot={hotspot} onOpenKpsDetail={onOpenKpsDetail} />
+            </Popup>
+          </Marker>
+        ) : (
+          <CircleMarker
+            key={hotspot.id}
+            center={[hotspot.latitude, hotspot.longitude]}
+            radius={7}
+            renderer={renderer}
+            ref={(l) => registerMarker(hotspot.id, (l as unknown as LCircleMarker | null) ?? null)}
+            pathOptions={{
+              color: "#1b120d",
+              weight: 2,
+              fillColor: sourceColor(hotspot.source),
+              fillOpacity: 0.98
+            }}
+          >
+            <Popup pane="popupPane">
+              <HotspotPopupContent hotspot={hotspot} onOpenKpsDetail={onOpenKpsDetail} />
+            </Popup>
+          </CircleMarker>
+        )
+      )}
+    </>
+  );
+});
+
+function applyMarkerOpacity(layer: MarkerLayer, o: number) {
+  const cm = layer as LCircleMarker;
+  if (typeof cm.setStyle === "function") {
+    cm.setStyle({ fillOpacity: o === 0 ? 0 : o * 0.98, opacity: o === 0 ? 0 : 1 });
+    // Titik "masa depan" tidak boleh menelan klik peta.
+    cm.options.interactive = o > 0;
+    return;
+  }
+  const mk = layer as LMarker;
+  if (typeof mk.setOpacity === "function") {
+    mk.setOpacity(o === 0 ? 0 : 1);
+    const el = mk.getElement?.();
+    if (el) el.style.pointerEvents = o > 0 ? "" : "none";
+  }
+}
+
 export function HotspotMap({
   hotspots,
   layers,
@@ -430,9 +516,19 @@ export function HotspotMap({
   const s2Burned = useS2BurnedAreaOverlay(showS2Burned);
 
   // Overlay fungsi kawasan hutan (KWSHUTAN_AR_250K) diambil LIVE dari layanan
-  // ArcGIS resmi Ditjen Planologi Kehutanan (lihat KawasanHutanLayer). Mati
-  // secara default: cakupan nasional, menutupi peta kalau selalu nyala.
-  const [showKawasan, setShowKawasan] = useState(false);
+  // ArcGIS resmi Ditjen Planologi Kehutanan (lihat KawasanHutanLayer).
+  // Default NYALA (mobile & desktop) atas permintaan eksplisit -- sebelumnya
+  // mati karena cakupan nasional bisa menutupi peta; tombolnya tetap ada
+  // untuk yang mau menyembunyikannya.
+  const [showKawasan, setShowKawasan] = useState(true);
+
+  // Mobile: kontrol mengambang (legenda, toggle lapisan, peralihan basemap)
+  // digantikan satu bottom sheet + kolom FAB ringkas. Lihat MapSheet /
+  // MapControls. Instance peta dibutuhkan FAB untuk zoom karena ia dirender
+  // di luar <MapContainer>.
+  const isMobile = useIsMobile();
+  const [mapInstance, setMapInstance] = useState<LeafletMap | null>(null);
+  const [sheetExpanded, setSheetExpanded] = useState(false);
 
   // Polygon bekas terbakar & titik hotspot BERBAGI satu Pane/renderer (lihat
   // JSX di bawah) supaya polygonnya bisa diklik sungguhan. Canvas renderer
@@ -479,6 +575,33 @@ export function HotspotMap({
       }
     });
   }, [hotspots, burnedArea.data]);
+
+  // ---- Pemutar waktu (timeline animasi) ----
+  // Registry ref marker per id; diisi lewat callback-ref di HotspotMarkersLayer.
+  const markerRefs = useRef(new Map<string, MarkerLayer>());
+  const registerMarker = useCallback((id: string, layer: MarkerLayer | null) => {
+    if (layer) markerRefs.current.set(id, layer);
+    else markerRefs.current.delete(id);
+  }, []);
+
+  const [timelineOn, setTimelineOn] = useState(false);
+  const timelineEnabled = timelineOn && hotspots.length > 0;
+  const timeline = useHotspotTimeline(hotspots, { enabled: timelineEnabled });
+
+  // Driver: tata ulang style tiap marker secara imperatif tiap playhead maju
+  // (full sweep; <= beberapa ribu marker masih ringan). Saat timeline mati,
+  // kembalikan semua ke tampilan penuh.
+  useEffect(() => {
+    const refs = markerRefs.current;
+    if (!timelineEnabled) {
+      refs.forEach((layer) => applyMarkerOpacity(layer, 1));
+      return;
+    }
+    refs.forEach((layer, id) => {
+      const b = timeline.bucketIndexById.get(id) ?? 0;
+      applyMarkerOpacity(layer, opacityForBucket(timeline.playheadIndex, b));
+    });
+  }, [timelineEnabled, timeline.playheadIndex, timeline.bucketIndexById, hotspots]);
 
   useEffect(() => {
     const activeLayers = layers.filter(l => l.active);
@@ -538,6 +661,8 @@ export function HotspotMap({
 
   return (
     <div className="map-frame">
+      {!isMobile ? (
+      <>
       <div className="map-legend">
         <span className="map-legend-title">Legenda</span>
         <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#ff8c42" }} />MODIS</div>
@@ -674,9 +799,30 @@ export function HotspotMap({
             </div>
           ) : null}
         </div>
+
+        <div className="overlay-group">
+          <button
+            type="button"
+            className={`burned-toggle burned-toggle--timeline${timelineOn ? " burned-toggle--active" : ""}`}
+            onClick={() => setTimelineOn((current) => !current)}
+            disabled={hotspots.length === 0}
+            title={
+              timelineOn
+                ? "Tutup pemutar waktu hotspot"
+                : "Putar sebaran titik panas dari awal ke akhir rentang waktu terpilih"
+            }
+            aria-pressed={timelineOn}
+          >
+            <Clock size={15} />
+            <span>Timeline</span>
+          </button>
+        </div>
       </div>
+      </>
+      ) : null}
       {userLocation.error ? <p className="locate-error-toast">{userLocation.error}</p> : null}
 
+      {!isMobile ? (
       <div className="basemap-switcher" role="group" aria-label="Gaya peta">
         <button
           type="button"
@@ -695,6 +841,7 @@ export function HotspotMap({
           Satelit
         </button>
       </div>
+      ) : null}
 
       <MapContainer
         center={[-2.5, 118]}
@@ -702,6 +849,7 @@ export function HotspotMap({
         preferCanvas
         {...SMOOTH_ZOOM_MAP_PROPS}
         zoomControl={false}
+        ref={setMapInstance}
         style={{ height: "100%", width: "100%" }}
       >
         {mapStyle === "satellite" ? (
@@ -735,7 +883,8 @@ export function HotspotMap({
             />
           </>
         )}
-        <ZoomControl position="bottomleft" />
+        {!isMobile ? <ZoomControl position="bottomleft" /> : null}
+        <ScaleControl position="bottomleft" imperial={false} />
         <MapViewport hotspots={hotspots} layers={layers} selectedProvince={selectedProvince} />
         <PolygonInfoLayer layers={layers} showKawasan={showKawasan} hotspots={hotspots} />
         <WindLayer visible={showWind ?? false} />
@@ -915,39 +1064,58 @@ export function HotspotMap({
             />
           ) : null}
           <LayerGroup ref={hotspotLayerGroupRef}>
-            {hotspots.map((hotspot) =>
-              (hotspot.frp ?? 0) > HIGH_FRP_THRESHOLD ? (
-                <Marker
-                  key={hotspot.id}
-                  position={[hotspot.latitude, hotspot.longitude]}
-                  icon={getHighIntensityIcon(sourceColor(hotspot.source))}
-                >
-                  <Popup pane="popupPane">
-                    <HotspotPopupContent hotspot={hotspot} onOpenKpsDetail={onOpenKpsDetail} />
-                  </Popup>
-                </Marker>
-              ) : (
-                <CircleMarker
-                  key={hotspot.id}
-                  center={[hotspot.latitude, hotspot.longitude]}
-                  radius={7}
-                  renderer={fireCanvasRenderer}
-                  pathOptions={{
-                    color: "#1b120d",
-                    weight: 2,
-                    fillColor: sourceColor(hotspot.source),
-                    fillOpacity: 0.98
-                  }}
-                >
-                  <Popup pane="popupPane">
-                    <HotspotPopupContent hotspot={hotspot} onOpenKpsDetail={onOpenKpsDetail} />
-                  </Popup>
-                </CircleMarker>
-              )
-            )}
+            <HotspotMarkersLayer
+              hotspots={hotspots}
+              renderer={fireCanvasRenderer}
+              onOpenKpsDetail={onOpenKpsDetail}
+              registerMarker={registerMarker}
+            />
           </LayerGroup>
         </Pane>
       </MapContainer>
+
+      {timelineEnabled && timeline.buckets.length > 0 ? (
+        <HotspotTimelineControl
+          buckets={timeline.buckets}
+          playheadIndex={timeline.playheadIndex}
+          isPlaying={timeline.isPlaying}
+          speed={timeline.speed}
+          label={timeline.label}
+          toggle={timeline.toggle}
+          seek={timeline.seek}
+          cycleSpeed={timeline.cycleSpeed}
+          onClose={() => setTimelineOn(false)}
+        />
+      ) : null}
+
+      {isMobile ? (
+        <>
+          <MapControls
+            map={mapInstance}
+            hidden={sheetExpanded}
+            userLocationActive={showUserLocation}
+            userLocationLoading={userLocation.loading}
+            onToggleUserLocation={() => setShowUserLocation((current) => !current)}
+          />
+          <MapSheet
+            hotspots={hotspots}
+            mapStyle={mapStyle}
+            onMapStyleChange={setMapStyle}
+            showBurnedArea={showBurnedArea}
+            onToggleBurnedArea={() => setShowBurnedArea((current) => !current)}
+            burnedArea={burnedArea}
+            showS2Burned={showS2Burned}
+            onToggleS2Burned={() => setShowS2Burned((current) => !current)}
+            s2Burned={s2Burned}
+            showKawasan={showKawasan}
+            onToggleKawasan={() => setShowKawasan((current) => !current)}
+            timelineOn={timelineOn}
+            onToggleTimeline={() => setTimelineOn((current) => !current)}
+            timelineDisabled={hotspots.length === 0}
+            onExpandedChange={setSheetExpanded}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

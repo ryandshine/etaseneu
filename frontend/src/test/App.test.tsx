@@ -6,6 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { loginThroughUI } from "./testHelpers";
 
+// Overlay Fungsi Kawasan Hutan (default nyala sejak 2026-09-04, lihat
+// HotspotMap.tsx) manipulasi L.Map asli (getPane/createPane/addLayer) lewat
+// useMap() -- di luar jangkauan mock react-leaflet ringan di bawah. Diganti
+// no-op supaya render map tetap bisa diuji tanpa mensimulasikan Leaflet penuh.
+vi.mock("../components/KawasanHutanLayer", () => ({
+  KawasanHutanLayer: () => null
+}));
+
 vi.mock("react-leaflet", () => ({
   CircleMarker: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   GeoJSON: ({ children }: { children?: ReactNode }) => (
@@ -28,6 +36,7 @@ vi.mock("react-leaflet", () => ({
   Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   TileLayer: () => <div data-testid="tile-layer" />,
   ZoomControl: () => <div data-testid="zoom-control" />,
+  ScaleControl: () => <div data-testid="scale-control" />,
   useMap: () => ({ fitBounds: vi.fn(), getZoom: () => 5 }),
   useMapEvents: () => ({})
 }));
@@ -317,6 +326,13 @@ describe("App", () => {
         );
       }
 
+      if (url.startsWith("/api/land-cover/polygons")) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
       throw new Error(`Unexpected fetch: ${url}`);
     });
 
@@ -448,6 +464,88 @@ describe("App", () => {
     });
 
     expect(window.location.search).toBe("");
+  });
+
+  it("restores the landcover view from the URL on load", async () => {
+    window.history.replaceState({}, "", "/?view=landcover");
+    render(<App />);
+    await loginThroughUI();
+
+    await act(async () => {
+      await vi.dynamicImportSettled();
+    });
+
+    expect(screen.getByRole("heading", { name: "Tutupan Lahan" })).toBeInTheDocument();
+  });
+
+  it("writes the landcover view to the URL when navigating there", async () => {
+    render(<App />);
+    await loginThroughUI();
+
+    await act(async () => {
+      await vi.dynamicImportSettled();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /tutupan lahan/i }));
+    await act(async () => {
+      await vi.dynamicImportSettled();
+    });
+
+    expect(window.location.search).toBe("?view=landcover");
+  });
+
+  it("collapses the sidebar to an icon rail on desktop and remembers the choice on remount", async () => {
+    // useIsDesktopWide dites terpisah lewat matchMedia sungguhan -- di sini
+    // di-stub eksplisit supaya perilakunya deterministik terlepas dari
+    // ukuran viewport default jsdom. jsdom TIDAK menyediakan window.matchMedia
+    // sama sekali (hook lain di app sudah bergantung pada itu lewat guard
+    // `typeof window.matchMedia !== "function"`) -- jadi nilai aslinya
+    // ditangkap dan dikembalikan persis (bukan vi.unstubAllGlobals(), yang
+    // ternyata tidak memulihkan window.matchMedia dengan benar di sini dan
+    // membocorkan stub rusak ke test lain).
+    const originalMatchMedia = window.matchMedia;
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes("1024px"),
+        media: query,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined
+      }))
+    );
+
+    // try/finally: kalau assertion di bawah gagal, matchMedia HARUS tetap
+    // dipulihkan -- kalau tidak, stub vi.fn() ini ke-reset (bukan ke-hapus)
+    // oleh vi.restoreAllMocks() di afterEach global file ini, lalu bocor jadi
+    // "function yang manggil balik undefined" ke SEMUA test sesudahnya (beda
+    // dari kondisi asli window.matchMedia yang memang tidak ada sama sekali).
+    try {
+      const { unmount } = render(<App />);
+      await loginThroughUI();
+      await act(async () => {
+        await vi.dynamicImportSettled();
+      });
+
+      expect(screen.getByText("Matriks Data")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /perkecil menu samping/i }));
+
+      // Label teks hilang, tapi menu tetap bisa dijangkau lewat nama aksesibel.
+      expect(screen.queryByText("Matriks Data")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Matriks Data" })).toBeInTheDocument();
+      expect(window.localStorage.getItem("etaseneu.sidebar.collapsed.v1")).toBe("1");
+
+      unmount();
+
+      // Remount (mis. reload halaman) -- sesi SUDAH persisted (pola sama
+      // seperti test "memulihkan sesi tersimpan...") jadi tidak login ulang,
+      // langsung cek preferensi collapsed dipulihkan tanpa klik ulang.
+      render(<App />);
+      expect(await screen.findByRole("button", { name: /pengaturan/i })).toBeInTheDocument();
+      expect(screen.queryByText("Matriks Data")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Matriks Data" })).toBeInTheDocument();
+    } finally {
+      vi.stubGlobal("matchMedia", originalMatchMedia);
+    }
   });
 
   it("renders the frontend shell heading", async () => {

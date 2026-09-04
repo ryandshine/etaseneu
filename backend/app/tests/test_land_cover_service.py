@@ -15,6 +15,7 @@ from app.services.land_cover_service import (
     _build_summary_text,
     _dw_label_to_class,
     _net_change,
+    land_cover_any_running,
 )
 
 
@@ -23,7 +24,21 @@ def _svc() -> LandCoverService:
 
 
 def test_years_constant() -> None:
-    assert YEARS == (2020, 2021, 2022, 2023, 2024, 2025)
+    assert YEARS == (2021, 2022, 2023, 2024, 2025)
+
+
+def test_land_cover_any_running_none_when_empty() -> None:
+    assert not _LAND_COVER_RUN_STATE
+    assert land_cover_any_running() is None
+
+
+def test_land_cover_any_running_returns_the_running_polygon() -> None:
+    _LAND_COVER_RUN_STATE[42] = {"state": "running", "step": "2021 (1/5) — sampel"}
+    try:
+        result = land_cover_any_running()
+        assert result == {"polygon_id": 42, "step": "2021 (1/5) — sampel"}
+    finally:
+        _LAND_COVER_RUN_STATE.pop(42, None)
 
 
 @pytest.mark.parametrize(
@@ -67,7 +82,7 @@ def test_ensure_ee_raises_when_not_configured(monkeypatch) -> None:
 
 def test_net_change_and_summary() -> None:
     table = {
-        2020: {"hutan": {"area_ha": 5400.0, "pct": 74.9}, "semak": {"area_ha": 1150.0, "pct": 15.9},
+        2021: {"hutan": {"area_ha": 5400.0, "pct": 74.9}, "semak": {"area_ha": 1150.0, "pct": 15.9},
                "pertanian": {"area_ha": 380.0, "pct": 5.3}, "terbuka": {"area_ha": 180.0, "pct": 2.5},
                "air": {"area_ha": 101.0, "pct": 1.4}},
         2025: {"hutan": {"area_ha": 4470.0, "pct": 62.0}, "semak": {"area_ha": 1560.0, "pct": 21.6},
@@ -81,8 +96,35 @@ def test_net_change_and_summary() -> None:
     assert "Hutan" in text and "930" in text
 
 
+def test_summary_says_stabil_when_hutan_change_is_negligible() -> None:
+    # Delta hutan 0,3 ha -- di bawah ambang _MEANINGFUL_HA (0,5), tidak boleh
+    # dibilang "naik 0 ha" (kontradiktif: 0 tapi disebut "naik").
+    table = {
+        2021: {"hutan": {"area_ha": 5400.0, "pct": 74.9}},
+        2025: {"hutan": {"area_ha": 5400.3, "pct": 74.9}},
+    }
+    text = _build_summary_text(table)
+    assert "relatif stabil" in text
+    assert "naik" not in text and "turun" not in text
+
+
+def test_summary_omits_gainers_below_meaningful_threshold() -> None:
+    # net_change semak = 0,2 ha -- lolos filter lama (> 0) tapi dibulatkan
+    # jadi "+0 ha" kalau ditampilkan; sekarang harus disaring habis, bukan
+    # muncul sebagai "Beralih terutama ke Semak/Belukar (+0 ha)".
+    table = {
+        2021: {"hutan": {"area_ha": 5400.0, "pct": 90.0}, "semak": {"area_ha": 100.0, "pct": 10.0}},
+        2025: {"hutan": {"area_ha": 4470.0, "pct": 74.5}, "semak": {"area_ha": 100.2, "pct": 10.0}},
+    }
+    text = _build_summary_text(table)
+    assert "+0 ha" not in text
+    assert "Beralih terutama ke" not in text
+    text = _build_summary_text(table)
+    assert "Hutan" in text and "930" in text
+
+
 def test_summary_incomplete_data() -> None:
-    assert "tidak lengkap" in _build_summary_text({2020: {}}).lower()
+    assert "tidak lengkap" in _build_summary_text({2021: {}}).lower()
 
 
 # ---------------------------------------------------------------------------
@@ -114,23 +156,35 @@ class _FakeImg:
         # satu grup per kelas idx 0..4, luas 100 ha (1e6 m2) tiap kelas
         return _FakeGetInfo({"groups": [{"class": i, "sum": 1_000_000.0} for i in range(5)]})
 
-    def aggregate_histogram(self, *a, **k):
-        # sample latih default: 5 kelas hadir -> jalur Random Forest
-        return _FakeGetInfo({str(i): 40 for i in range(5)})
+    def getInfo(self):
+        # Materialisasi sampel latih (`samples.getInfo()`): 5 kelas hadir
+        # -> jalur Random Forest. Jumlah baris = target sampel penuh.
+        from app.services.land_cover_service import FEATURE_NAMES
+
+        feats = []
+        for cls in range(5):
+            for _ in range(SAMPLES_PER_CLASS_PER_YEAR * len(YEARS)):
+                props = {name: 0.1 for name in FEATURE_NAMES}
+                props["class_idx"] = cls
+                feats.append({"properties": props})
+        return {"features": feats}
 
     def reduceToVectors(self, *a, **k):
+        # satu fitur per kelas (labelProperty="class_idx"), semua di dalam ROI
         return _FakeGetInfo(
             {
                 "features": [
                     {
+                        "properties": {"class_idx": i},
                         "geometry": {
                             "type": "Polygon",
                             "coordinates": [
                                 [[104.0, -2.0], [104.05, -2.0], [104.05, -1.95],
                                  [104.0, -1.95], [104.0, -2.0]]
                             ],
-                        }
+                        },
                     }
+                    for i in range(5)
                 ]
             }
         )
@@ -202,6 +256,11 @@ class _FakeEE:
     Geometry = _FakeGeom
     Feature = staticmethod(lambda *a, **k: object())
     FeatureCollection = _FakeFC
+    # ee.Dictionary({...}).getInfo() -> evaluasi tiap nilai (luas + vektor
+    # per tahun dalam satu request)
+    Dictionary = staticmethod(
+        lambda d: _FakeGetInfo({k: v.getInfo() for k, v in d.items()})
+    )
     Filter = type("F", (), {"lt": staticmethod(lambda *a, **k: "flt")})
     Reducer = _FakeReducer()
     Classifier = type(
@@ -281,10 +340,10 @@ def test_analyze_polygon_happy_path_saves_all_years_classes(monkeypatch) -> None
     assert result["classes"] == list(CLASS_KEYS)
     assert result["oob_accuracy"] == pytest.approx(0.81)  # 1 - 0.19
     assert store.running == (287785, "psagustus2026")
-    # 6 tahun x 5 kelas
-    assert len(store.saved["year_class_rows"]) == 30
+    # 5 tahun x 5 kelas
+    assert len(store.saved["year_class_rows"]) == len(YEARS) * 5
     assert store.saved["model_trees"] == 150
-    assert store.saved["n_training"] == SAMPLES_PER_CLASS_PER_YEAR * 5 * 6
+    assert store.saved["n_training"] == SAMPLES_PER_CLASS_PER_YEAR * 5 * len(YEARS)
     for year in YEARS:
         pct_sum = sum(r["pct"] for r in store.saved["year_class_rows"] if r["year"] == year)
         assert pct_sum == pytest.approx(100.0, abs=0.5)
@@ -293,11 +352,11 @@ def test_analyze_polygon_happy_path_saves_all_years_classes(monkeypatch) -> None
     # progres live dibersihkan di finally
     assert 287785 not in _LAND_COVER_RUN_STATE
     # Loop _year_class_geom benar-benar jalan: fake reduceToVectors mengembalikan
-    # satu poligon di dalam ROI untuk tiap kelas -> 6 tahun x 5 kelas = 30 baris
+    # satu poligon di dalam ROI untuk tiap kelas -> 5 tahun x 5 kelas = 25 baris
     # geometri, masing-masing sudah dinormalkan ke MultiPolygon. Tanpa assert ini,
     # regresi yang membuang pengisian year_geom_rows tidak akan ketahuan (Task 4
     # membaca year_geom_rows untuk lapisan peta).
-    assert len(store.saved["year_geom_rows"]) == 30
+    assert len(store.saved["year_geom_rows"]) == len(YEARS) * 5
     first_geom = store.saved["year_geom_rows"][0]
     assert set(first_geom) == {"year", "class_key", "geometry_geojson"}
     assert first_geom["geometry_geojson"]["type"] == "MultiPolygon"
@@ -324,6 +383,27 @@ def test_analyze_polygon_error_inside_try_marks_error_and_rewraps(monkeypatch) -
     assert "boom" in store.errored
     assert store.running == (287785, "psagustus2026")  # running di-set sebelum gagal
     assert 287785 not in _LAND_COVER_RUN_STATE  # finally tetap membersihkan
+
+
+def test_materialize_samples_drops_masked_rows_and_counts_classes() -> None:
+    """Sampel latih ditarik ke klien SEKALI; baris yang salah satu fiturnya
+    None (piksel ter-mask) atau tanpa class_idx dibuang sebelum dikirim balik
+    sebagai FeatureCollection literal."""
+    from app.services.land_cover_service import FEATURE_NAMES
+
+    good = {n: 0.2 for n in FEATURE_NAMES} | {"class_idx": 1, "system:index": "x"}
+    masked = {n: 0.2 for n in FEATURE_NAMES} | {"class_idx": 2, "ndvi": None}
+    no_cls = {n: 0.2 for n in FEATURE_NAMES}
+    other = {n: 0.3 for n in FEATURE_NAMES} | {"class_idx": 3}
+    samples = _FakeGetInfo(
+        {"features": [{"properties": p} for p in (good, masked, no_cls, other)]}
+    )
+    svc = _svc()
+    rows, fc = svc._materialize_samples(_FakeEE(), samples)
+    assert len(rows) == 2
+    assert "system:index" not in rows[0]
+    assert isinstance(fc, _FakeFC)
+    assert svc._distinct_class_count(rows) == 2
 
 
 def test_train_buffer_constant_is_sane() -> None:
@@ -366,7 +446,7 @@ def test_analyze_polygon_falls_back_to_dynamic_world_when_single_training_class(
     monkeypatch,
 ) -> None:
     """Poligon homogen: sample latih < 2 kelas -> RF di-skip, klasifikasi
-    pakai Dynamic World langsung. Hasil tetap 6 tahun x 5 kelas tersimpan,
+    pakai Dynamic World langsung. Hasil tetap 5 tahun x 5 kelas tersimpan,
     tanpa metrik RF."""
     svc = _svc()
     store = _FakeStore(_TARGET)
@@ -395,6 +475,6 @@ def test_analyze_polygon_falls_back_to_dynamic_world_when_single_training_class(
     assert result["oob_accuracy"] is None
     assert store.saved["model_trees"] == 0
     assert store.saved["n_training"] == 0
-    assert len(store.saved["year_class_rows"]) == 30
-    assert len(store.saved["year_geom_rows"]) == 30
+    assert len(store.saved["year_class_rows"]) == len(YEARS) * 5
+    assert len(store.saved["year_geom_rows"]) == len(YEARS) * 5
     assert 287785 not in _LAND_COVER_RUN_STATE

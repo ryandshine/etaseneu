@@ -115,10 +115,18 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   Detail KPS (`KpsDetailView.tsx` → `GET /api/burned-area/s2-summary?polygon_ids=...`), terpisah dari
   angka KLHK di kartu yang sama. Analisis dijalankan `analyze_month()` (butuh env GEE); menampilkan
   hasilnya TIDAK butuh env — cuma baca tabel.
-- `land_cover_service.py` — **analisis tutupan lahan per poligon** KPS/Hutan Adat, 2020–2025, dari
+- `land_cover_service.py` — **analisis tutupan lahan per poligon** KPS/Hutan Adat, 2021–2025 (5
+  tahun, dipersempit dari 2020–2025 semula), dari
   Sentinel-2 L2A via GEE + Random Forest (`ee.Classifier.smileRandomForest`, guru label Google
   Dynamic World, filter keyakinan ≥0,6, komposit median tahunan). 5 kelas: `hutan|semak|pertanian|
-  terbuka|air` (pemukiman di-skip). On-demand: `POST /api/land-cover/analyze` `{polygon_id}` (query
+  terbuka|air` (pemukiman di-skip). **Hemat kuota GEE (2026-09-04)**: sampel latih 5 tahun
+  di-`getInfo()` SEKALI lalu dikirim balik sebagai `FeatureCollection` literal
+  (`_materialize_samples`) — tanpa ini tiap request berikutnya memaksa GEE mengulang
+  `stratifiedSample` + komposit region ber-buffer 3 km dari nol; luas + vektor per tahun digabung
+  dalam SATU `ee.Dictionary(...).getInfo()` (`_year_evaluate`, `reduceToVectors` pakai
+  `labelProperty="class_idx"`, bukan 1 panggilan per kelas); citra klasifikasi di-`clip(roi)`
+  (buffer cuma untuk sampling). Total ≈ 7 request GEE per poligon (dulu ≈ 32). Jangan tambah
+  `getInfo()` di dalam loop tahun/kelas tanpa alasan kuat. On-demand: `POST /api/land-cover/analyze` `{polygon_id}` (query
   `?force=true` untuk analisis ulang) → job `BackgroundTasks` (`LandCoverService.analyze_polygon`,
   ~1–3 mnt), progres langkah live di dict modul-global `_LAND_COVER_RUN_STATE` (boleh hilang saat
   restart), **sumber kebenaran status = kolom `land_cover_analysis.status`**. Hasil di tabel
@@ -126,12 +134,41 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   `postgres_store/_land_cover.py`, `_ensure_land_cover_tables` bikin tabel sendiri — tanpa migrasi
   manual) — di-cache permanen, tiap poligon dianalisis sekali. Baca hasil:
   `GET /api/land-cover/{status,result,overlay}` (TIDAK butuh env GEE). Guard: `not service.enabled`
-  → 503; status `running` → 409; status `done` tanpa `force` → 409. "Hutan" = tutupan berpohon
-  (kebun berpohon seperti sawit/karet belum tentu terpisah). Tampil di `KpsDetailView.tsx` →
-  `LandCoverPanel.tsx` (peta rona per tahun + grafik batang bertumpuk + tabel Δ + ringkasan).
-  Konstanta warna kelas dipakai bersama di `frontend/src/constants/landCover.ts`. Tidak ada
-  scheduler, tidak ada analisis massal. nginx: `POST /api/land-cover/analyze` di grup rate-limit
-  `eta_heavy` (10r/m).
+  → 503; status `running` (poligon sendiri) → 409; status `done` tanpa `force` → 409. **Lock GLOBAL**
+  (beda dari guard per-poligon di atas): `land_cover_any_running()` baca `_LAND_COVER_RUN_STATE`
+  (dict proses, BUKAN kolom DB) — kalau poligon LAIN sedang beneran jalan di proses ini, `/analyze`
+  balas 409 `{"busy_elsewhere": true}` dan `/status` ikut membawa `busy_elsewhere` — **`force` TIDAK
+  melewati lock ini** (force cuma untuk override state basi poligon itu sendiri). Tujuannya satu
+  analisis GEE/RF-training saja yang boleh jalan bersamaan di seluruh sistem, supaya user lain tidak
+  rebutan kuota GEE/CPU. **Asumsi satu proses `api` (tanpa multi-worker)** — kalau nanti di-scale
+  horizontal, lock ini perlu pindah ke DB/Redis. "Hutan" = tutupan berpohon (kebun berpohon seperti
+  sawit/karet belum tentu terpisah).
+  - **Menu tersendiri "Tutupan Lahan"** (`TutupanLahanView.tsx`, self-contained fetch sendiri lewat
+    `authFetch` — pola sama seperti `KompleksKebakaranView.tsx`, TIDAK lewat `useDashboardData`):
+    daftar SEMUA poligon KPS+Hutan Adat sekaligus status analisisnya (`GET /api/land-cover/polygons`
+    — bulk `LEFT JOIN polygon_metadata ↔ land_cover_analysis`, method
+    `list_polygons_with_land_cover_status` di `postgres_store/_land_cover.py`), cari + filter
+    Provinsi/Kabupaten/Wilker BPS/Status (ringkas jadi tombol "Filter" + popover + pill yang bisa
+    dilepas satu-satu, bukan 4 `<select>` berbaris — client-side, dasarnya masih pola Matriks Data),
+    klik satu baris → detail me-reuse `LandCoverPanel.tsx` apa adanya. Detailnya dua tab
+    ("Peta Spasial" default / "Tren Historis", state lokal `tab`, berbagi state `year` yang sama):
+    tab Peta = peta jadi elemen dominan tunggal (`.lc-mapstage`, tinggi `70vh`) dengan toolbar tahun
+    & grid ringkasan luas-per-kelas mengambang di atasnya (glassmorphism, `.lc-mapstage__toolbar` /
+    `.lc-floatcard` — static/tanpa blur di layar <640px biar tidak menutupi peta); tab Tren = grafik
+    garis multi-kelas (bukan stacked bar lagi — recharts `LineChart`), tabel Δ (sel ha tebal/persen
+    redup bertingkat vertikal), ringkasan teks, tombol "Jalankan Analisis" manual — TIDAK ada tombol
+    massal. Kelas yang tidak pernah punya luas ≥0,5 ha di poligon itu (`_MEANINGFUL_HA` — konstanta
+    sama persis di frontend `LandCoverPanel.tsx` dan backend `land_cover_service.py`) disembunyikan
+    total dari tabel/grafik/kartu (bukan ditampilkan "0 ha" yang merebut atensi); `_build_summary_text`
+    juga pakai ambang yang sama supaya kalimat ringkasan tidak bilang "beralih ke X (+0 ha)" yang
+    kontradiktif atau "naik 0 ha" saat perubahan hutan sebenarnya dianggap "relatif stabil".
+    `LandCoverPanel` sekarang **cuma** dirender
+    di sini (panel penuhnya dicabut dari `KpsDetailView.tsx`, diganti satu baris ringkas
+    `.lc-summary-link` yang fetch `GET /api/land-cover/status` lalu buka menu ini via callback
+    `onOpenTutupanLahan` dari `App.tsx`, pola sama seperti `onOpenKpsDetail`). URL
+    `?view=landcover&polygon=<id>` bisa dibagikan (`App.tsx`). Konstanta warna kelas dipakai bersama
+    di `frontend/src/constants/landCover.ts`. Tidak ada scheduler, tidak ada analisis massal. nginx:
+    `POST /api/land-cover/analyze` di grup rate-limit `eta_heavy` (10r/m).
 - `hotspot_cluster_service.py` — menu "Kompleks Kebakaran": mengelompokkan titik hotspot yang
   berdekatan ruang (~2km) DAN waktu (~48 jam) sekaligus jadi satu "kompleks" (ST-DBSCAN), dipanggil
   dari `GET /api/hotspots/clusters` (preset `sensitivity` ketat/sedang/longgar, bukan eps/min_samples
@@ -203,7 +240,8 @@ BUKAN lewat migrasi app:
   WMSServer & tanpa tile cache → `components/KawasanHutanLayer.tsx` = `L.TileLayer` di-extend, minta
   endpoint `export` per-tile (bbox-per-tile ala `L.TileLayer.WMS`). Simbol/warna dari server;
   `constants/kawasanHutan.ts` cuma URL + salinan legenda. Tombol "Fungsi Kawasan Hutan" di
-  `HotspotMap.tsx` **default mati**, pane `kawasan-hutan` z360. Saat menyala, isian poligon KPS
+  `HotspotMap.tsx` **default NYALA** (mobile & desktop, sejak 2026-09-04 — sebelumnya mati),
+  pane `kawasan-hutan` z360. Saat menyala, isian poligon KPS
   (`batas-kps`) dimatikan (garis batas saja) supaya warna kawasan tidak ketutup tint hijau KPS.
   BUKAN dari file geojson — file KWSHUTAN 1:250k JANGAN ditaruh di `SHP_DIR` (pernah bikin
   `list_preview_layers()` 135 dtk + payload 70 MB + `sync_all()` menulis 30k `polygon_metadata` +
@@ -260,10 +298,74 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               hotspot ST-DBSCAN, self-contained fetch sendiri lewat lib/api.ts, TIDAK
               lewat useDashboardData), FilterPanel.tsx, SidebarNav.tsx (satu area gulir
               di `.side-rail`; menu Pengaturan menampilkan info akun untuk semua role,
-              prop `isAdmin` → role user hanya tidak melihat tombol Sync/Prewarm),
+              prop `isAdmin` → role user hanya tidak melihat tombol Sync/Prewarm).
+              **Sidebar collapse (icon rail)** — HANYA aktif di desktop lebar
+              (`hooks/useIsDesktopWide.ts`, matchMedia `>=1024px`); preferensi user
+              (`localStorage` `etaseneu.sidebar.collapsed.v1`, default expanded) digabung
+              dengan cek viewport itu SEKALI di `App.tsx` (`sidebarCollapsed =
+              sidebarCollapsedPref && isDesktopWide`) lalu diteruskan ke `SidebarNav` sebagai
+              prop `collapsed` yang sudah final — `SidebarNav` sendiri TIDAK cek viewport
+              lagi. Sengaja dibatasi desktop-only: lebar sidebar tablet (640-1023px, fixed
+              200px hardcoded) & mobile (off-canvas drawer, <640px) diatur tiga aturan CSS
+              terpisah yang sudah pernah bikin bug (lihat komentar `.app-frame`/`.side-rail`
+              di index.css) — collapse cuma nambah SATU aturan aditif baru
+              (`.app-frame--collapsed` scoped `@media (min-width:1024px)`), tidak menyentuh
+              tiga itu. Saat collapsed: label teks nav disembunyikan tapi `aria-label` tetap
+              ada (nama aksesibel tidak berubah, query test berbasis `getByRole(...,{name})`
+              tetap valid); `filterSlot` (FilterPanel, cuma ada di Live Map) jadi tombol ikon
+              yang buka flyout `.side-filter-popover` ke kanan; blok status sinkronisasi
+              (grid last-sync/next-sync/scheduler/dst) diringkas SENGAJA jadi cuma titik
+              kesehatan + 2 tombol ikon admin (Sync/Prewarm langsung, tanpa detail) — bukan
+              dipadatkan jadi tooltip, karena grid itu tidak masuk akal diringkas tanpa
+              kehilangan makna; detail lengkap kembali begitu di-expand.
               BurnedAreaCard.tsx, WeatherOverlay.tsx, dll.
+              PETA LIVE — MOBILE vs DESKTOP DIVERGEN: `HotspotMap.tsx` pakai
+              `hooks/useIsMobile.ts` (matchMedia `<=639px`). Di desktop kontrol
+              tetap mengambang (`.map-legend`, `.locate-btn`, `.burned-control`,
+              `.basemap-switcher`, `<ZoomControl>`) — di mobile SEMUA itu TIDAK
+              dirender, diganti `MapControls.tsx` (kolom FAB kanan-bawah: zoom
+              +/- via instance peta dari `ref` MapContainer, + lokasi-saya) dan
+              `MapSheet.tsx` (bottom sheet 3-detent peek/half/full berisi
+              Lapisan+Basemap+Legenda+Ringkasan). "Ringkasan" di sheet menghitung
+              ulang T/S/R + per-satelit dari prop `hotspots` dengan algoritma
+              IDENTIK `App.tsx::dynamicConfidenceStats` — kalau ambang FRP/
+              normalisasi nama satelit diubah di satu tempat, ubah juga di sini.
+              Panel statistik + `.stats-sheet-toggle` + `.ui-toggle-btn` milik
+              App.tsx disembunyikan via CSS di `@media (max-width:639px)`
+              (`.workspace-stage--map ...`) supaya tidak ada dua sheet.
+              `<ScaleControl>` (react-leaflet, metrik) dirender di SEMUA lebar.
+              Mock `react-leaflet` di test WAJIB ekspor `ScaleControl`
+              (App.test.tsx, HotspotMap.test.tsx sudah).
+              **Pemutar waktu "Timeline"** (toggle default mati; desktop di deret
+              `burned-control`, mobile baris di `MapSheet` via prop
+              `onToggleTimeline`): `hooks/useHotspotTimeline.ts` + fungsi murni
+              `lib/hotspotTimeline.ts` (bucketing granularitas otomatis 1j/3j/1h
+              ≤120 frame, `opacityForBucket` kumulatif-berpudar, label WIB) —
+              loop `setInterval` `TICK_MS/speed`, kecepatan 1/2/4×. Daftar marker
+              diekstrak ke `HotspotMarkersLayer` (`React.memo`) — playback TIDAK
+              me-render ulang list: `useEffect` driver menata style tiap marker
+              imperatif lewat `markerRefs` (`Map<id, L.CircleMarker|L.Marker>`,
+              diisi callback-ref) → `applyMarkerOpacity` (setStyle/setOpacity +
+              `interactive=false` untuk titik "masa depan"). Bar kontrol
+              `HotspotTimelineControl.tsx` (histogram-scrubber + `<input
+              type=range>` a11y) dirender di `.map-frame` DI LUAR `<MapContainer>`.
+              Murni client-side atas `hotspots` termuat; tak ada endpoint/persist.
+              `openKpsDetail` di `App.tsx` di-`useCallback` demi memo ini. Mock
+              `CircleMarker`/`Marker` di HotspotMap.test.tsx WAJIB `forwardRef`.
+              **Tata letak kontrol melayang (desktop)**: kolom kiri = Lokasi+
+              Basemap (top 1rem) → `.burned-control` (top 6.5rem, gulir) →
+              `.map-legend` (bottom 6.5rem) → zoom. `max-height` burned-control
+              WAJIB menyisakan ruang legenda (`calc(100% - 6.5rem - 16rem)`),
+              bukan cuma zoom — dulu 5.5rem dan di laptop 1366×768 kolom itu
+              menimpa legenda. `@media (min-width:640px) and (max-height:820px)`
+              legenda jadi mendatar. `.timeline-control` TIDAK dipusatkan pakai
+              translate: dijepit `left:17rem; right:20rem; max-width:680px;
+              margin:auto` (lolos legenda kiri & panel statistik kanan) dan
+              `bottom:4.75rem` di atas tombol "Sembunyikan UI" (`.ui-toggle-btn`,
+              juga bawah-tengah). Tablet 640–1023px: pemutar melebar penuh dan
+              legenda disembunyikan via `.map-frame:has(.timeline-control)`.
 hooks/        useDashboardData.ts (hook utama, ~800 baris — lihat di bawah),
-              useBurnedAreaOverlay.ts
+              useBurnedAreaOverlay.ts, useIsMobile.ts
 lib/          api.ts (client fetch bertipe; `authFetch`/`downloadWithAuth` untuk panggilan
               /api langsung — WAJIB dipakai ganti `fetch` mentah supaya token JWT ikut saat
               API_REQUIRE_AUTH menyala), date.ts (helper WIB/Asia-Jakarta), hotspotDisplay.ts

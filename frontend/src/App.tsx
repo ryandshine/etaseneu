@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FilterPanel } from "./components/FilterPanel";
@@ -6,6 +6,7 @@ import { LoginPage } from "./components/LoginPage";
 import { PasswordGateModal } from "./components/PasswordGateModal";
 import { SidebarNav } from "./components/SidebarNav";
 import { useDashboardData } from "./hooks/useDashboardData";
+import { useIsDesktopWide } from "./hooks/useIsDesktopWide";
 import { setAuthToken, setUnauthorizedHandler } from "./lib/api";
 import { clearDashboardCache } from "./lib/dashboardPersistence";
 import { getTodayWIB, formatDateTimeWIB } from "./lib/date";
@@ -36,6 +37,11 @@ const KompleksKebakaranView = lazy(async () => {
   return { default: module.KompleksKebakaranView };
 });
 
+const TutupanLahanView = lazy(async () => {
+  const module = await import("./components/TutupanLahanView");
+  return { default: module.TutupanLahanView };
+});
+
 const EarlyWarningView = lazy(async () => {
   const module = await import("./components/EarlyWarningView");
   return { default: module.EarlyWarningView };
@@ -50,7 +56,7 @@ function isSchedulerFailureStatus(status?: string | null): boolean {
   return status === "failure" || status === "failed";
 }
 
-type AppView = "map" | "matrix" | "pointmatch" | "kompleks" | "earlywarning" | "settings" | "kps";
+type AppView = "map" | "matrix" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "settings" | "kps";
 
 const PERSISTED_SESSION_KEY = "etaseneu.session.v1";
 
@@ -92,6 +98,30 @@ function persistSession(session: AppSession | null): void {
   window.localStorage.setItem(PERSISTED_SESSION_KEY, JSON.stringify(session));
 }
 
+// Preferensi sidebar ringkas (icon rail). Default expanded -- user lama tidak
+// dikagetkan; sekali di-collapse manual, pilihannya diingat. Semua akses
+// localStorage dibungkus try/catch (pola sama seperti lib/dashboardPersistence.ts:
+// Chrome Android / mode privat bisa melempar saat storage dimatikan).
+const SIDEBAR_COLLAPSED_KEY = "etaseneu.sidebar.collapsed.v1";
+
+function readSidebarCollapsedPref(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function persistSidebarCollapsedPref(collapsed: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+  } catch {
+    /* storage dimatikan -- preferensi cuma berlaku untuk sesi ini */
+  }
+}
+
 /**
  * View aktif disimpan di query string supaya refresh dan tombol back tidak
  * selalu melempar pengguna kembali ke Live Map, dan tautan ke Matriks Data
@@ -124,6 +154,9 @@ function readViewFromUrl(): AppView {
   if (view === "kompleks") {
     return "kompleks";
   }
+  if (view === "landcover") {
+    return "landcover";
+  }
   if (view === "earlywarning") {
     return "earlywarning";
   }
@@ -139,6 +172,19 @@ function readKpsAgencyFromUrl(): string | null {
   }
   // URLSearchParams.get() sudah mendekode persen-encoding sendiri.
   return new URLSearchParams(window.location.search).get("kps");
+}
+
+// Preseleksi poligon di menu Tutupan Lahan (mis. tautan dari baris ringkas
+// di Detail KPS). Opsional -- menu itu tetap bisa dibuka tanpa ini, listnya
+// sendiri yang jadi titik masuk utama.
+function readLandCoverPolygonIdFromUrl(): number | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const raw = new URLSearchParams(window.location.search).get("polygon");
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function ViewLoader({ label }: { label: string }) {
@@ -158,7 +204,23 @@ export default function App() {
   const [weatherOverlay, setWeatherOverlay] = useState<"temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null>(null);
   const [activeView, setActiveView] = useState<AppView>(readViewFromUrl);
   const [kpsAgency, setKpsAgency] = useState<string | null>(readKpsAgencyFromUrl);
+  const [landCoverPolygonId, setLandCoverPolygonId] = useState<number | null>(readLandCoverPolygonIdFromUrl);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Preferensi user (persisted) vs kondisi efektif: collapse SENGAJA cuma
+  // berlaku di desktop lebar (>=1024px). Di tablet/mobile lebar sidebar diatur
+  // aturan lain yang sudah rapuh (lihat index.css sekitar .app-frame), jadi
+  // preferensi ini diabaikan di sana -- bukan dipaksakan.
+  const [sidebarCollapsedPref, setSidebarCollapsedPref] = useState<boolean>(readSidebarCollapsedPref);
+  const isDesktopWide = useIsDesktopWide();
+  const sidebarCollapsed = sidebarCollapsedPref && isDesktopWide;
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsedPref((prev) => {
+      const next = !prev;
+      persistSidebarCollapsedPref(next);
+      return next;
+    });
+  };
   const [passwordGateOpen, setPasswordGateOpen] = useState(false);
   const [passwordGateError, setPasswordGateError] = useState<string | null>(null);
   const [passwordGateVerifying, setPasswordGateVerifying] = useState(false);
@@ -260,12 +322,16 @@ export default function App() {
     if (view !== "kps") {
       setKpsAgency(null);
     }
+    if (view !== "landcover") {
+      setLandCoverPolygonId(null);
+    }
 
     // Pengaturan tidak ditulis ke URL supaya tautannya tidak bisa dipakai
     // melewati gerbang password di atas.
     const params = new URLSearchParams(window.location.search);
     params.delete("kps");
-    if (view === "matrix" || view === "pointmatch" || view === "kompleks") {
+    params.delete("polygon");
+    if (view === "matrix" || view === "pointmatch" || view === "kompleks" || view === "landcover") {
       params.set("view", view);
     } else {
       params.delete("view");
@@ -287,12 +353,29 @@ export default function App() {
   // Dipicu dari klik baris KPS di Buku Besar -- beda dari commitViewChange
   // karena butuh menulis nama KPS juga ke URL supaya tautan halaman detail
   // ini bisa dibagikan/di-bookmark.
-  const openKpsDetail = (agency: string) => {
+  // `useCallback` supaya `HotspotMarkersLayer` (React.memo di HotspotMap)
+  // tidak ikut re-render tiap state App lain berubah -- penting saat
+  // timeline animasi jalan.
+  const openKpsDetail = useCallback((agency: string) => {
     setKpsAgency(agency);
     setActiveView("kps");
     const params = new URLSearchParams(window.location.search);
     params.set("view", "kps");
     params.set("kps", agency);
+    window.history.pushState({}, "", `?${params.toString()}`);
+  }, []);
+
+  // Dipicu dari baris ringkas "Tutupan Lahan" di Detail KPS -- beda dari
+  // commitViewChange karena butuh menulis polygon_metadata_id juga ke URL
+  // supaya tautan langsung ke satu poligon di menu Tutupan Lahan bisa
+  // dibagikan/di-bookmark (pola sama seperti openKpsDetail di atas).
+  const openTutupanLahan = (polygonId: number) => {
+    setLandCoverPolygonId(polygonId);
+    setActiveView("landcover");
+    const params = new URLSearchParams(window.location.search);
+    params.delete("kps");
+    params.set("view", "landcover");
+    params.set("polygon", String(polygonId));
     window.history.pushState({}, "", `?${params.toString()}`);
   };
 
@@ -660,7 +743,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-frame grid-lines">
+    <div className={`app-frame grid-lines${sidebarCollapsed ? " app-frame--collapsed" : ""}`}>
       {/* Mobile Hamburger Button */}
       <button
         className="mobile-hamburger"
@@ -704,6 +787,8 @@ export default function App() {
         hasLatestHotspot={!!latestHotspot}
         isAdmin={session?.role === "admin"}
         mobileOpen={mobileMenuOpen}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={toggleSidebarCollapsed}
         filterSlot={activeView === "map" ? (
           <FilterPanel
             selectedSatellites={selectedSatellites}
@@ -947,6 +1032,15 @@ export default function App() {
               <KompleksKebakaranView onOpenKpsDetail={openKpsDetail} layers={layers} />
             </Suspense>
           </section>
+        ) : activeView === "landcover" ? (
+          <section aria-label="Tutupan Lahan workspace" className="workspace-stage workspace-stage--landcover">
+            <Suspense fallback={<ViewLoader label="Memuat tutupan lahan..." />}>
+              <TutupanLahanView
+                initialPolygonId={landCoverPolygonId}
+                onOpenKpsDetail={openKpsDetail}
+              />
+            </Suspense>
+          </section>
         ) : activeView === "earlywarning" ? (
           <section aria-label="Peringatan Dini workspace" className="workspace-stage workspace-stage--earlywarning">
             <Suspense fallback={<ViewLoader label="Memuat peringatan dini..." />}>
@@ -967,6 +1061,7 @@ export default function App() {
                   onClose={() => commitViewChange("matrix")}
                   onExportPdf={(filters) => void exportPdf(filters)}
                   isExportingPdf={isExportingPdf}
+                  onOpenTutupanLahan={openTutupanLahan}
                 />
               ) : null}
             </Suspense>
