@@ -478,3 +478,47 @@ def test_analyze_polygon_falls_back_to_dynamic_world_when_single_training_class(
     assert len(store.saved["year_class_rows"]) == len(YEARS) * 5
     assert len(store.saved["year_geom_rows"]) == len(YEARS) * 5
     assert 287785 not in _LAND_COVER_RUN_STATE
+
+
+def test_year_evaluate_retries_vectors_at_coarser_scale_on_gee_memory_limit() -> None:
+    """GEE "User memory limit exceeded" pada vektorisasi 10 m -> ulang sekali
+    dengan VECTOR_FALLBACK_SCALE (20 m); error lain tetap dilempar apa adanya."""
+    from app.services.land_cover_service import VECTOR_FALLBACK_SCALE
+
+    calls: list[int] = []
+
+    class _Img(_FakeImg):
+        def reduceToVectors(self, *a, **k):
+            calls.append(k["scale"])
+            if k["scale"] == 10:
+                return _FakeGetInfo(_Boom("User memory limit exceeded."))
+            return _FakeGetInfo({"features": []})
+
+    class _Boom:
+        def __init__(self, msg):
+            self.msg = msg
+
+
+    def _dict(d):
+        out = {}
+        for key, v in d.items():
+            val = v.getInfo()
+            if isinstance(val, _Boom):
+                raise RuntimeError(val.msg)
+            out[key] = val
+        return _FakeGetInfo(out)
+
+    ee = _FakeEE()
+    ee.Dictionary = staticmethod(_dict)
+    svc = _svc()
+    areas, vectors = svc._year_evaluate(ee, _FakeImg(), _Img())
+    assert calls == [10, VECTOR_FALLBACK_SCALE]
+    assert areas["groups"]
+    assert vectors == {"features": []}
+
+    class _Other(_FakeImg):
+        def reduceToVectors(self, *a, **k):
+            return _FakeGetInfo(_Boom("Computation timed out."))
+
+    with pytest.raises(RuntimeError, match="timed out"):
+        svc._year_evaluate(ee, _FakeImg(), _Other())

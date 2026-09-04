@@ -48,6 +48,14 @@ FEATURE_NAMES = [
 SIMPLIFY_TOL = 0.00004
 MIN_MMU_PX = 10         # buang patch < 10 px (~0.1 ha @ 10 m) dari peta rona
                         # (luas per kelas TIDAK terpengaruh -- dihitung piksel)
+# tileScale>1 membuat GEE memproses ubin lebih kecil per worker -> memori per
+# request turun (ubin lebih banyak, sedikit lebih lambat). Poligon besar /
+# terfragmentasi pernah gagal "User memory limit exceeded" pada vektorisasi
+# 10 m dengan tileScale 1 (default).
+GEE_TILE_SCALE = 4
+# Kalau dengan tileScale pun masih kehabisan memori, vektor peta rona
+# diturunkan ke resolusi ini (luas per kelas tetap dihitung di 10 m).
+VECTOR_FALLBACK_SCALE = 20
 # Scene dengan awan > 60% dibuang sebelum masking SCL: median jadi lebih bersih
 # (lebih sedikit sisa haze/bayangan) DAN koleksi yang diproses lebih kecil.
 _MAX_CLOUD = 60
@@ -303,10 +311,11 @@ class LandCoverService:
                 scale=10,
                 maxPixels=1e9,
                 bestEffort=True,
+                tileScale=GEE_TILE_SCALE,
             )
         )
 
-    def _year_vectors_expr(self, ee, roi, classified):
+    def _year_vectors_expr(self, ee, roi, classified, scale: int = 10):
         """Ekspresi vektor per kelas untuk lapisan peta — SATU `reduceToVectors`
         per tahun (label per fitur = `class_idx`), bukan satu per kelas.
         `connectedPixelCount` menghitung komponen per NILAI piksel, jadi MMU
@@ -314,9 +323,9 @@ class LandCoverService:
         cpc = classified.connectedPixelCount(MIN_MMU_PX + 1, True)
         mask = classified.updateMask(cpc.gte(MIN_MMU_PX))
         return mask.reduceToVectors(
-            geometry=roi, scale=10, geometryType="polygon",
+            geometry=roi, scale=scale, geometryType="polygon",
             labelProperty="class_idx", eightConnected=True,
-            maxPixels=1e9, bestEffort=True,
+            maxPixels=1e9, bestEffort=True, tileScale=GEE_TILE_SCALE,
         )
 
     def _year_evaluate(self, ee, roi, classified) -> tuple[dict, dict]:
@@ -324,10 +333,27 @@ class LandCoverService:
         ekspresi GEE mendedup subgraf identik, jadi komposit median + RF
         classify tahun itu dihitung sekali untuk keduanya (dulu: dua kali
         untuk luas, lalu 5 kali lagi untuk vektor per kelas)."""
-        payload = ee.Dictionary({
-            "areas": self._year_area_expr(ee, roi, classified),
-            "vectors": self._year_vectors_expr(ee, roi, classified),
-        }).getInfo() or {}
+        try:
+            payload = ee.Dictionary({
+                "areas": self._year_area_expr(ee, roi, classified),
+                "vectors": self._year_vectors_expr(ee, roi, classified),
+            }).getInfo() or {}
+        except Exception as exc:  # noqa: BLE001
+            if "memory limit" not in str(exc).lower():
+                raise
+            # Vektorisasi 10 m poligon besar bisa melampaui memori per-request
+            # GEE walau sudah tileScale. Ulang dengan vektor 20 m supaya
+            # analisis tetap selesai (luas per kelas tetap 10 m), bukan gagal.
+            logger.warning(
+                "LAND_COVER: memori GEE habis pada vektorisasi 10 m, ulang dengan %d m",
+                VECTOR_FALLBACK_SCALE,
+            )
+            payload = ee.Dictionary({
+                "areas": self._year_area_expr(ee, roi, classified),
+                "vectors": self._year_vectors_expr(
+                    ee, roi, classified, scale=VECTOR_FALLBACK_SCALE
+                ),
+            }).getInfo() or {}
         return payload.get("areas") or {}, payload.get("vectors") or {}
 
     def _parse_area_by_class(self, grouped: dict) -> dict[str, float]:

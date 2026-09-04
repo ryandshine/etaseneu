@@ -126,7 +126,10 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   dalam SATU `ee.Dictionary(...).getInfo()` (`_year_evaluate`, `reduceToVectors` pakai
   `labelProperty="class_idx"`, bukan 1 panggilan per kelas); citra klasifikasi di-`clip(roi)`
   (buffer cuma untuk sampling). Total ≈ 7 request GEE per poligon (dulu ≈ 32). Jangan tambah
-  `getInfo()` di dalam loop tahun/kelas tanpa alasan kuat. On-demand: `POST /api/land-cover/analyze` `{polygon_id}` (query
+  `getInfo()` di dalam loop tahun/kelas tanpa alasan kuat. Semua `reduceRegion`/`reduceToVectors`
+  pakai `tileScale=GEE_TILE_SCALE` (4): poligon besar pernah gagal "User memory limit exceeded"
+  (batas memori per-request GEE, bukan server kita); kalau masih habis, `_year_evaluate` mengulang
+  SEKALI dengan vektor `VECTOR_FALLBACK_SCALE` (20 m) — luas per kelas tetap 10 m. On-demand: `POST /api/land-cover/analyze` `{polygon_id}` (query
   `?force=true` untuk analisis ulang) → job `BackgroundTasks` (`LandCoverService.analyze_polygon`,
   ~1–3 mnt), progres langkah live di dict modul-global `_LAND_COVER_RUN_STATE` (boleh hilang saat
   restart), **sumber kebenaran status = kolom `land_cover_analysis.status`**. Hasil di tabel
