@@ -728,6 +728,46 @@ body {
   }
 }
 
+/* Baris ringkas tutupan lahan di Detail KPS (KpsDetailView.tsx) -- panel
+   lengkapnya (peta rona, grafik, tombol analisis) sudah dipindah ke menu
+   sendiri "Tutupan Lahan" (TutupanLahanView.tsx); ini cuma tautan masuk. */
+.lc-summary-link {
+  margin-top: 1rem;
+  padding: 0.6rem 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  background: transparent;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.lc-summary-link:hover {
+  background: rgba(255, 142, 66, 0.06);
+}
+
+.lc-summary-link__label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #f5efe6;
+}
+
+.lc-summary-link__status {
+  font-size: 0.72rem;
+  color: #ffb173;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* ================= Panel Tutupan Lahan (LandCoverPanel.tsx) ================= */
 .land-cover-panel {
   margin-top: 1rem;
@@ -8687,6 +8727,297 @@ a + a {
     left: 0.75rem;
     right: 0.75rem;
     max-width: none;
+  }
+}
+
+/* ============================================================================
+   Tutupan Lahan -- daftar (kiri) + detail (kanan, reuse LandCoverPanel).
+   Kerangka sama seperti .kompleks-shell (absolute inset:0, lihat komentar di
+   sana untuk alasan tinggi eksplisit), tapi rasio kolom dibalik: di sini
+   daftarnya yang ramping (poligon), detailnya yang lebar (peta rona + grafik
+   dari LandCoverPanel, punya layout sendiri).
+   ============================================================================ */
+.tl-shell {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  color: #f4f5f7;
+}
+
+.tl-topbar {
+  padding: 0.55rem 1.25rem 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.tl-topbar-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem 1.5rem;
+  flex-wrap: wrap;
+}
+
+.tl-topbar h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.tl-summary {
+  font-size: 0.78rem;
+  color: rgba(244, 245, 247, 0.65);
+}
+
+.tl-summary strong {
+  font-size: 0.95rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #f4f5f7;
+}
+
+.tl-lede {
+  margin: 0;
+  font-size: 0.74rem;
+  color: rgba(244, 245, 247, 0.5);
+  max-width: 62rem;
+}
+
+.tl-alert {
+  margin: 0.6rem 1.25rem 0;
+  padding: 0.55rem 0.8rem;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+  font-size: 0.8rem;
+}
+
+.tl-body {
+  display: grid;
+  grid-template-columns: 22rem minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+.tl-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tl-list-head {
+  padding: 0.75rem 0.85rem 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tl-filters {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tl-filters .matrix-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.tl-list-scroll {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 0.4rem;
+}
+
+.tl-empty {
+  padding: 1rem 0.6rem;
+  color: #6b7280;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.tl-empty--detail {
+  padding: 3rem 1.5rem;
+  font-size: 0.85rem;
+}
+
+.tl-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.6rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tl-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tl-row--active {
+  background: rgba(255, 78, 0, 0.14);
+  border-color: rgba(255, 78, 0, 0.35);
+}
+
+.tl-row-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.tl-row-top {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tl-row-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tl-row-layer {
+  flex-shrink: 0;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+.tl-row-meta {
+  font-size: 0.68rem;
+  color: #9ca3af;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tl-badge {
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.tl-badge--idle {
+  background: rgba(107, 114, 128, 0.2);
+  color: #d1d5db;
+}
+
+.tl-badge--running {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fcd34d;
+}
+
+.tl-badge--done {
+  background: rgba(16, 185, 129, 0.16);
+  color: #6ee7b7;
+}
+
+.tl-badge--error {
+  background: rgba(239, 68, 68, 0.16);
+  color: #fca5a5;
+}
+
+.tl-detail {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1rem 1.25rem 1.5rem;
+}
+
+.tl-back-btn {
+  margin-bottom: 0.7rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  color: #d1d5db;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tl-back-btn:hover {
+  border-color: rgba(255, 142, 66, 0.5);
+  color: #ffb173;
+}
+
+.tl-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.75rem;
+}
+
+.tl-detail-head h3 {
+  margin: 0 0 0.15rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.tl-detail-meta {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #9ca3af;
+}
+
+.tl-detail-link {
+  flex-shrink: 0;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 142, 66, 0.35);
+  background: rgba(255, 142, 66, 0.1);
+  color: #ff8c42;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tl-detail-link:hover {
+  background: rgba(255, 142, 66, 0.2);
+  border-color: rgba(255, 142, 66, 0.55);
+}
+
+@media (max-width: 900px) {
+  .tl-body {
+    display: block;
+    flex: none;
+    min-height: auto;
+  }
+
+  .tl-list {
+    border-right: none;
+  }
+
+  .tl-detail {
+    padding: 0.85rem 1rem 1.5rem;
   }
 }
 

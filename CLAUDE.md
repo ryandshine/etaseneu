@@ -115,7 +115,8 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   Detail KPS (`KpsDetailView.tsx` → `GET /api/burned-area/s2-summary?polygon_ids=...`), terpisah dari
   angka KLHK di kartu yang sama. Analisis dijalankan `analyze_month()` (butuh env GEE); menampilkan
   hasilnya TIDAK butuh env — cuma baca tabel.
-- `land_cover_service.py` — **analisis tutupan lahan per poligon** KPS/Hutan Adat, 2020–2025, dari
+- `land_cover_service.py` — **analisis tutupan lahan per poligon** KPS/Hutan Adat, 2021–2025 (5
+  tahun, dipersempit dari 2020–2025 semula), dari
   Sentinel-2 L2A via GEE + Random Forest (`ee.Classifier.smileRandomForest`, guru label Google
   Dynamic World, filter keyakinan ≥0,6, komposit median tahunan). 5 kelas: `hutan|semak|pertanian|
   terbuka|air` (pemukiman di-skip). On-demand: `POST /api/land-cover/analyze` `{polygon_id}` (query

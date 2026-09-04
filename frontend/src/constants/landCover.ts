@@ -12,4 +12,4 @@ export const LAND_COVER_CLASSES: ReadonlyArray<{
   { key: "air", label: "Badan Air", color: "#2E7BBF" },
 ] as const;
 
-export const LAND_COVER_YEARS: readonly number[] = [2020, 2021, 2022, 2023, 2024, 2025];
+export const LAND_COVER_YEARS: readonly number[] = [2021, 2022, 2023, 2024, 2025];

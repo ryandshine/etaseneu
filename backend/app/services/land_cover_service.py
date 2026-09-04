@@ -1,4 +1,4 @@
-"""Klasifikasi tutupan lahan per poligon KPS/Hutan Adat (2020-2025) dari
+"""Klasifikasi tutupan lahan per poligon KPS/Hutan Adat (2021-2025) dari
 Sentinel-2 L2A via Google Earth Engine, Random Forest dengan guru label
 Google Dynamic World. On-demand per poligon; hasil di-cache permanen di
 tabel `land_cover_*` (lihat postgres_store/_land_cover.py).
@@ -26,7 +26,7 @@ logger = logging.getLogger("land_cover")
 S2_COLLECTION = "COPERNICUS/S2_SR_HARMONIZED"
 DW_COLLECTION = "GOOGLE/DYNAMICWORLD/V1"
 
-YEARS: tuple[int, ...] = (2020, 2021, 2022, 2023, 2024, 2025)
+YEARS: tuple[int, ...] = (2021, 2022, 2023, 2024, 2025)
 CLASS_KEYS: tuple[str, ...] = ("hutan", "semak", "pertanian", "terbuka", "air")
 _CLASS_IDX = {k: i for i, k in enumerate(CLASS_KEYS)}
 

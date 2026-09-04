@@ -326,6 +326,13 @@ describe("App", () => {
         );
       }
 
+      if (url.startsWith("/api/land-cover/polygons")) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
       throw new Error(`Unexpected fetch: ${url}`);
     });
 
@@ -457,6 +464,34 @@ describe("App", () => {
     });
 
     expect(window.location.search).toBe("");
+  });
+
+  it("restores the landcover view from the URL on load", async () => {
+    window.history.replaceState({}, "", "/?view=landcover");
+    render(<App />);
+    await loginThroughUI();
+
+    await act(async () => {
+      await vi.dynamicImportSettled();
+    });
+
+    expect(screen.getByRole("heading", { name: "Tutupan Lahan" })).toBeInTheDocument();
+  });
+
+  it("writes the landcover view to the URL when navigating there", async () => {
+    render(<App />);
+    await loginThroughUI();
+
+    await act(async () => {
+      await vi.dynamicImportSettled();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /tutupan lahan/i }));
+    await act(async () => {
+      await vi.dynamicImportSettled();
+    });
+
+    expect(window.location.search).toBe("?view=landcover");
   });
 
   it("renders the frontend shell heading", async () => {

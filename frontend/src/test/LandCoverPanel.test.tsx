@@ -27,7 +27,7 @@ vi.mock("recharts", () => ({
 
 import { LandCoverPanel } from "../components/LandCoverPanel";
 
-const YEARS = (start = 2020) => Array.from({ length: 6 }, (_, i) => start + i);
+const YEARS = (start = 2021) => Array.from({ length: 5 }, (_, i) => start + i);
 
 function jsonResponse(body: unknown, status = 200): Response {
   return { ok: status < 400, status, json: async () => body } as Response;
@@ -58,7 +58,7 @@ const RESULT = {
     ]),
   ),
   net_change: { hutan: -50, semak: 20, pertanian: 20, terbuka: 8, air: 2 },
-  summary_text: "Tutupan Hutan turun 50 ha (-9.1%) dari 2020 ke 2025.",
+  summary_text: "Tutupan Hutan turun 50 ha (-9.1%) dari 2021 ke 2025.",
 };
 
 beforeEach(() => {

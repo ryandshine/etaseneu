@@ -23,7 +23,7 @@ def _svc() -> LandCoverService:
 
 
 def test_years_constant() -> None:
-    assert YEARS == (2020, 2021, 2022, 2023, 2024, 2025)
+    assert YEARS == (2021, 2022, 2023, 2024, 2025)
 
 
 @pytest.mark.parametrize(
@@ -67,7 +67,7 @@ def test_ensure_ee_raises_when_not_configured(monkeypatch) -> None:
 
 def test_net_change_and_summary() -> None:
     table = {
-        2020: {"hutan": {"area_ha": 5400.0, "pct": 74.9}, "semak": {"area_ha": 1150.0, "pct": 15.9},
+        2021: {"hutan": {"area_ha": 5400.0, "pct": 74.9}, "semak": {"area_ha": 1150.0, "pct": 15.9},
                "pertanian": {"area_ha": 380.0, "pct": 5.3}, "terbuka": {"area_ha": 180.0, "pct": 2.5},
                "air": {"area_ha": 101.0, "pct": 1.4}},
         2025: {"hutan": {"area_ha": 4470.0, "pct": 62.0}, "semak": {"area_ha": 1560.0, "pct": 21.6},
@@ -82,7 +82,7 @@ def test_net_change_and_summary() -> None:
 
 
 def test_summary_incomplete_data() -> None:
-    assert "tidak lengkap" in _build_summary_text({2020: {}}).lower()
+    assert "tidak lengkap" in _build_summary_text({2021: {}}).lower()
 
 
 # ---------------------------------------------------------------------------
@@ -281,10 +281,10 @@ def test_analyze_polygon_happy_path_saves_all_years_classes(monkeypatch) -> None
     assert result["classes"] == list(CLASS_KEYS)
     assert result["oob_accuracy"] == pytest.approx(0.81)  # 1 - 0.19
     assert store.running == (287785, "psagustus2026")
-    # 6 tahun x 5 kelas
-    assert len(store.saved["year_class_rows"]) == 30
+    # 5 tahun x 5 kelas
+    assert len(store.saved["year_class_rows"]) == len(YEARS) * 5
     assert store.saved["model_trees"] == 150
-    assert store.saved["n_training"] == SAMPLES_PER_CLASS_PER_YEAR * 5 * 6
+    assert store.saved["n_training"] == SAMPLES_PER_CLASS_PER_YEAR * 5 * len(YEARS)
     for year in YEARS:
         pct_sum = sum(r["pct"] for r in store.saved["year_class_rows"] if r["year"] == year)
         assert pct_sum == pytest.approx(100.0, abs=0.5)
@@ -293,11 +293,11 @@ def test_analyze_polygon_happy_path_saves_all_years_classes(monkeypatch) -> None
     # progres live dibersihkan di finally
     assert 287785 not in _LAND_COVER_RUN_STATE
     # Loop _year_class_geom benar-benar jalan: fake reduceToVectors mengembalikan
-    # satu poligon di dalam ROI untuk tiap kelas -> 6 tahun x 5 kelas = 30 baris
+    # satu poligon di dalam ROI untuk tiap kelas -> 5 tahun x 5 kelas = 25 baris
     # geometri, masing-masing sudah dinormalkan ke MultiPolygon. Tanpa assert ini,
     # regresi yang membuang pengisian year_geom_rows tidak akan ketahuan (Task 4
     # membaca year_geom_rows untuk lapisan peta).
-    assert len(store.saved["year_geom_rows"]) == 30
+    assert len(store.saved["year_geom_rows"]) == len(YEARS) * 5
     first_geom = store.saved["year_geom_rows"][0]
     assert set(first_geom) == {"year", "class_key", "geometry_geojson"}
     assert first_geom["geometry_geojson"]["type"] == "MultiPolygon"
@@ -366,7 +366,7 @@ def test_analyze_polygon_falls_back_to_dynamic_world_when_single_training_class(
     monkeypatch,
 ) -> None:
     """Poligon homogen: sample latih < 2 kelas -> RF di-skip, klasifikasi
-    pakai Dynamic World langsung. Hasil tetap 6 tahun x 5 kelas tersimpan,
+    pakai Dynamic World langsung. Hasil tetap 5 tahun x 5 kelas tersimpan,
     tanpa metrik RF."""
     svc = _svc()
     store = _FakeStore(_TARGET)
@@ -395,6 +395,6 @@ def test_analyze_polygon_falls_back_to_dynamic_world_when_single_training_class(
     assert result["oob_accuracy"] is None
     assert store.saved["model_trees"] == 0
     assert store.saved["n_training"] == 0
-    assert len(store.saved["year_class_rows"]) == 30
-    assert len(store.saved["year_geom_rows"]) == 30
+    assert len(store.saved["year_class_rows"]) == len(YEARS) * 5
+    assert len(store.saved["year_geom_rows"]) == len(YEARS) * 5
     assert 287785 not in _LAND_COVER_RUN_STATE

@@ -26,7 +26,7 @@ class _LandCoverMixin:
                     polygon_metadata_id BIGINT NOT NULL REFERENCES polygon_metadata(id),
                     layer_key TEXT NOT NULL,
                     status TEXT NOT NULL DEFAULT 'pending',
-                    year_start INTEGER NOT NULL DEFAULT 2020,
+                    year_start INTEGER NOT NULL DEFAULT 2021,
                     year_end INTEGER NOT NULL DEFAULT 2025,
                     model_trees INTEGER,
                     n_training INTEGER,
@@ -247,6 +247,48 @@ class _LandCoverMixin:
             key=lambda r: (r["year"], _CLASS_ORDER.get(r["class_key"], 99)),
         )
         return {"meta": meta_out, "year_class": year_class}
+
+    def list_polygons_with_land_cover_status(self) -> list[dict[str, object]]:
+        """Semua poligon aktif (KPS + Hutan Adat) + status analisis tutupan lahan
+        (LEFT JOIN -- status None kalau poligon itu belum pernah dianalisis).
+        Dipakai menu "Tutupan Lahan" untuk daftar+cari semua poligon sekaligus,
+        BUKAN untuk map/geometry (tidak ada kolom geometry di hasil)."""
+        with self.connection() as conn:
+            self._ensure_land_cover_tables(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT p.id, p.layer_key, p.lembaga, p.nama_prov, p.nama_kab,
+                           p.nama_kec, p.skema, p.luas_final,
+                           lc.status AS land_cover_status,
+                           lc.computed_at AS land_cover_computed_at
+                    FROM polygon_metadata p
+                    LEFT JOIN land_cover_analysis lc ON lc.polygon_metadata_id = p.id
+                    WHERE p.is_active = TRUE AND p.layer_key = ANY(%s)
+                    ORDER BY p.nama_prov NULLS LAST, p.lembaga NULLS LAST
+                    """,
+                    (list(_TARGET_LAYERS),),
+                )
+                rows = cur.fetchall()
+        return [
+            {
+                "polygon_metadata_id": int(r["id"]),
+                "layer_key": r["layer_key"],
+                "lembaga": r.get("lembaga"),
+                "nama_prov": r.get("nama_prov"),
+                "nama_kab": r.get("nama_kab"),
+                "nama_kec": r.get("nama_kec"),
+                "skema": r.get("skema"),
+                "luas_final": float(r["luas_final"]) if r.get("luas_final") is not None else None,
+                "land_cover_status": r.get("land_cover_status"),
+                "land_cover_computed_at": (
+                    r["land_cover_computed_at"].isoformat()
+                    if r.get("land_cover_computed_at")
+                    else None
+                ),
+            }
+            for r in rows
+        ]
 
     def read_land_cover_overlay(self, polygon_id: int, year: int) -> list[dict[str, object]]:
         with self.connection() as conn:

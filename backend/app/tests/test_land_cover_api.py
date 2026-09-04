@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 import app.api.land_cover as lc_mod
 from app.main import create_app
 
-YEARS = (2020, 2021, 2022, 2023, 2024, 2025)
+YEARS = (2021, 2022, 2023, 2024, 2025)
 
 
 class _FakeService:
@@ -23,11 +23,15 @@ class _FakeService:
 
 
 class _FakeStore:
-    def __init__(self, status=None, result=None, overlay=None):
+    def __init__(self, status=None, result=None, overlay=None, polygons=None):
         self._status = status
         self._result = result
         self._overlay = overlay or []
+        self._polygons = polygons or []
         self.running_marked = False
+
+    def list_polygons_with_land_cover_status(self):
+        return self._polygons
 
     def read_land_cover_status(self, polygon_id):
         return self._status
@@ -92,6 +96,24 @@ def test_analyze_202_starts_job(client):
     assert client._store.running_marked is True
 
 
+def test_polygons_list_returns_store_rows(client):
+    client._store._polygons = [
+        {"polygon_metadata_id": 1, "layer_key": "psagustus2026", "lembaga": "A",
+         "nama_prov": "Riau", "nama_kab": "Kampar", "nama_kec": None, "skema": "HD",
+         "luas_final": 120.5, "land_cover_status": "done",
+         "land_cover_computed_at": "2026-08-30T00:00:00"},
+        {"polygon_metadata_id": 2, "layer_key": "HUTAN_ADAT_APR26", "lembaga": "B",
+         "nama_prov": "Riau", "nama_kab": "Kampar", "nama_kec": None, "skema": None,
+         "luas_final": 50.0, "land_cover_status": None, "land_cover_computed_at": None},
+    ]
+    r = client.get("/api/land-cover/polygons")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body) == 2
+    assert body[0]["land_cover_status"] == "done"
+    assert body[1]["land_cover_status"] is None
+
+
 def test_status_idle_when_no_row(client):
     r = client.get("/api/land-cover/status", params={"polygon_id": 1})
     assert r.status_code == 200
@@ -117,7 +139,7 @@ def test_result_shape_when_done(client):
     assert r.status_code == 200
     body = r.json()
     assert body["years"] == list(YEARS)
-    assert body["table"]["2020"]["hutan"]["pct"] == 20.0
+    assert body["table"]["2021"]["hutan"]["pct"] == 20.0
     assert set(body["net_change"].keys()) == {"hutan", "semak", "pertanian", "terbuka", "air"}
 
 
@@ -132,7 +154,7 @@ def test_overlay_featurecollection_when_done(client):
         {"class_key": "hutan", "area_ha": 100.0, "pct": 50.0,
          "geometry_json": {"type": "MultiPolygon", "coordinates": []}},
     ]
-    r = client.get("/api/land-cover/overlay", params={"polygon_id": 1, "year": 2020})
+    r = client.get("/api/land-cover/overlay", params={"polygon_id": 1, "year": 2021})
     assert r.status_code == 200
     fc = r.json()
     assert fc["type"] == "FeatureCollection"

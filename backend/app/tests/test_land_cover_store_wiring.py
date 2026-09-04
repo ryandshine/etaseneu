@@ -11,6 +11,7 @@ EXPECTED = [
     "read_land_cover_status",
     "read_land_cover_result",
     "read_land_cover_overlay",
+    "list_polygons_with_land_cover_status",
 ]
 
 

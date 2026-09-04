@@ -1,5 +1,5 @@
 """Menu Tutupan Lahan per KPS: analisis on-demand Sentinel-2 + Random Forest
-(2020-2025), hasil di-cache permanen. Analisis butuh env GEE; membaca hasil
+(2021-2025), hasil di-cache permanen. Analisis butuh env GEE; membaca hasil
 tidak.
 """
 
@@ -55,6 +55,11 @@ async def land_cover_analyze(
     return {"started": True, "polygon_id": polygon_id}
 
 
+@router.get("/land-cover/polygons")
+async def land_cover_polygons() -> list[dict[str, object]]:
+    return _store().list_polygons_with_land_cover_status()
+
+
 @router.get("/land-cover/status")
 async def land_cover_status(polygon_id: int) -> dict[str, object]:
     row = _store().read_land_cover_status(polygon_id)
@@ -93,7 +98,7 @@ async def land_cover_overlay(
     year: int = Query(...),
 ) -> dict[str, object]:
     if year not in YEARS:
-        raise HTTPException(status_code=404, detail="Tahun di luar rentang 2020-2025")
+        raise HTTPException(status_code=404, detail="Tahun di luar rentang 2021-2025")
     store = _store()
     status = store.read_land_cover_status(polygon_id)
     if not status or status["status"] != "done":

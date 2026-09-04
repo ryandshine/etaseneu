@@ -13,7 +13,6 @@ import { getTodayWIB } from "../lib/date";
 import type { PolygonDetail } from "../types/api";
 import { HotspotPopupContent } from "./HotspotPopupContent";
 import { WeatherConditionCard } from "./WeatherConditionCard";
-import { LandCoverPanel } from "./LandCoverPanel";
 import {
   buildComparison,
   formatMetadataValue,
@@ -79,7 +78,64 @@ type KpsDetailViewProps = {
   onClose: () => void;
   onExportPdf: (filters: { agency?: string }) => void;
   isExportingPdf: boolean;
+  /** Buka menu "Tutupan Lahan" langsung ke poligon ini. Opsional -- kalau
+   *  tidak diberikan, baris ringkas tutupan lahan tidak dirender sama sekali. */
+  onOpenTutupanLahan?: (polygonId: number) => void;
 };
+
+// Baris ringkas pengganti panel tutupan lahan penuh (dipindah jadi menu
+// tersendiri, lihat TutupanLahanView.tsx) -- cuma fetch status ringan, BUKAN
+// hasil/overlay. Satu sumber kebenaran visual: grafik & peta rona lengkapnya
+// cuma ada di menu itu.
+function LandCoverSummaryLink({
+  polygonId,
+  onOpen,
+}: {
+  polygonId: number;
+  onOpen: (polygonId: number) => void;
+}) {
+  const [state, setState] = useState<"loading" | "idle" | "running" | "done" | "error">("loading");
+  const [computedAt, setComputedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setState("loading");
+    authFetch(`/api/land-cover/status?polygon_id=${polygonId}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return (await res.json()) as { state: string; computed_at: string | null };
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setState((data.state as typeof state) || "idle");
+        setComputedAt(data.computed_at);
+      })
+      .catch(() => {
+        if (!cancelled) setState("idle");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [polygonId]);
+
+  if (state === "loading") return null;
+
+  const label =
+    state === "done"
+      ? `Terklasifikasi${computedAt ? ` · diperbarui ${new Date(computedAt).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}` : ""}`
+      : state === "running"
+        ? "Sedang diproses"
+        : state === "error"
+          ? "Gagal, coba lagi"
+          : "Belum dianalisis";
+
+  return (
+    <button type="button" className="lc-summary-link" onClick={() => onOpen(polygonId)}>
+      <span className="lc-summary-link__label">Tutupan Lahan</span>
+      <span className="lc-summary-link__status">{label} →</span>
+    </button>
+  );
+}
 
 function sourceColor(source: string): string {
   if (source === "MODIS") {
@@ -235,7 +291,7 @@ const INFO_FIELDS: Array<[label: string, key: keyof PolygonDetail]> = [
   ["Jumlah KK", "jml_kk"]
 ];
 
-export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExportingPdf }: KpsDetailViewProps) {
+export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExportingPdf, onOpenTutupanLahan }: KpsDetailViewProps) {
   // Filter waktu independen, khusus halaman ini -- kosong (default) berarti
   // "ikuti apa pun rentang dashboard yang aktif" (perilaku lama, tidak
   // berubah). Begitu keduanya terisi, `customHotspots` menggantikan `hotspots`
@@ -929,7 +985,9 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
               </div>
             )}
 
-            {polygonId !== null && <LandCoverPanel polygonId={polygonId} />}
+            {polygonId !== null && onOpenTutupanLahan && (
+              <LandCoverSummaryLink polygonId={polygonId} onOpen={onOpenTutupanLahan} />
+            )}
           </div>
         </aside>
 

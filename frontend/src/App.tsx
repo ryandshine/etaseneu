@@ -36,6 +36,11 @@ const KompleksKebakaranView = lazy(async () => {
   return { default: module.KompleksKebakaranView };
 });
 
+const TutupanLahanView = lazy(async () => {
+  const module = await import("./components/TutupanLahanView");
+  return { default: module.TutupanLahanView };
+});
+
 const EarlyWarningView = lazy(async () => {
   const module = await import("./components/EarlyWarningView");
   return { default: module.EarlyWarningView };
@@ -50,7 +55,7 @@ function isSchedulerFailureStatus(status?: string | null): boolean {
   return status === "failure" || status === "failed";
 }
 
-type AppView = "map" | "matrix" | "pointmatch" | "kompleks" | "earlywarning" | "settings" | "kps";
+type AppView = "map" | "matrix" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "settings" | "kps";
 
 const PERSISTED_SESSION_KEY = "etaseneu.session.v1";
 
@@ -124,6 +129,9 @@ function readViewFromUrl(): AppView {
   if (view === "kompleks") {
     return "kompleks";
   }
+  if (view === "landcover") {
+    return "landcover";
+  }
   if (view === "earlywarning") {
     return "earlywarning";
   }
@@ -139,6 +147,19 @@ function readKpsAgencyFromUrl(): string | null {
   }
   // URLSearchParams.get() sudah mendekode persen-encoding sendiri.
   return new URLSearchParams(window.location.search).get("kps");
+}
+
+// Preseleksi poligon di menu Tutupan Lahan (mis. tautan dari baris ringkas
+// di Detail KPS). Opsional -- menu itu tetap bisa dibuka tanpa ini, listnya
+// sendiri yang jadi titik masuk utama.
+function readLandCoverPolygonIdFromUrl(): number | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const raw = new URLSearchParams(window.location.search).get("polygon");
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function ViewLoader({ label }: { label: string }) {
@@ -158,6 +179,7 @@ export default function App() {
   const [weatherOverlay, setWeatherOverlay] = useState<"temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null>(null);
   const [activeView, setActiveView] = useState<AppView>(readViewFromUrl);
   const [kpsAgency, setKpsAgency] = useState<string | null>(readKpsAgencyFromUrl);
+  const [landCoverPolygonId, setLandCoverPolygonId] = useState<number | null>(readLandCoverPolygonIdFromUrl);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [passwordGateOpen, setPasswordGateOpen] = useState(false);
   const [passwordGateError, setPasswordGateError] = useState<string | null>(null);
@@ -260,12 +282,16 @@ export default function App() {
     if (view !== "kps") {
       setKpsAgency(null);
     }
+    if (view !== "landcover") {
+      setLandCoverPolygonId(null);
+    }
 
     // Pengaturan tidak ditulis ke URL supaya tautannya tidak bisa dipakai
     // melewati gerbang password di atas.
     const params = new URLSearchParams(window.location.search);
     params.delete("kps");
-    if (view === "matrix" || view === "pointmatch" || view === "kompleks") {
+    params.delete("polygon");
+    if (view === "matrix" || view === "pointmatch" || view === "kompleks" || view === "landcover") {
       params.set("view", view);
     } else {
       params.delete("view");
@@ -293,6 +319,20 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     params.set("view", "kps");
     params.set("kps", agency);
+    window.history.pushState({}, "", `?${params.toString()}`);
+  };
+
+  // Dipicu dari baris ringkas "Tutupan Lahan" di Detail KPS -- beda dari
+  // commitViewChange karena butuh menulis polygon_metadata_id juga ke URL
+  // supaya tautan langsung ke satu poligon di menu Tutupan Lahan bisa
+  // dibagikan/di-bookmark (pola sama seperti openKpsDetail di atas).
+  const openTutupanLahan = (polygonId: number) => {
+    setLandCoverPolygonId(polygonId);
+    setActiveView("landcover");
+    const params = new URLSearchParams(window.location.search);
+    params.delete("kps");
+    params.set("view", "landcover");
+    params.set("polygon", String(polygonId));
     window.history.pushState({}, "", `?${params.toString()}`);
   };
 
@@ -947,6 +987,15 @@ export default function App() {
               <KompleksKebakaranView onOpenKpsDetail={openKpsDetail} layers={layers} />
             </Suspense>
           </section>
+        ) : activeView === "landcover" ? (
+          <section aria-label="Tutupan Lahan workspace" className="workspace-stage workspace-stage--landcover">
+            <Suspense fallback={<ViewLoader label="Memuat tutupan lahan..." />}>
+              <TutupanLahanView
+                initialPolygonId={landCoverPolygonId}
+                onOpenKpsDetail={openKpsDetail}
+              />
+            </Suspense>
+          </section>
         ) : activeView === "earlywarning" ? (
           <section aria-label="Peringatan Dini workspace" className="workspace-stage workspace-stage--earlywarning">
             <Suspense fallback={<ViewLoader label="Memuat peringatan dini..." />}>
@@ -967,6 +1016,7 @@ export default function App() {
                   onClose={() => commitViewChange("matrix")}
                   onExportPdf={(filters) => void exportPdf(filters)}
                   isExportingPdf={isExportingPdf}
+                  onOpenTutupanLahan={openTutupanLahan}
                 />
               ) : null}
             </Suspense>

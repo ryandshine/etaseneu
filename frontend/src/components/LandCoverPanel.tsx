@@ -227,7 +227,7 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
   if (state === "idle") {
     return (
       <section className="land-cover-panel">
-        <h3 className="lc-title">Tutupan Lahan 2020–2025</h3>
+        <h3 className="lc-title">Tutupan Lahan 2021–2025</h3>
         <p className="lc-lede">
           Klasifikasi Sentinel-2 + Random Forest, 5 kelas. Sekali hitung per KPS,
           hasilnya tersimpan permanen.
@@ -242,7 +242,7 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
   if (state === "running") {
     return (
       <section className="land-cover-panel">
-        <h3 className="lc-title">Tutupan Lahan 2020–2025</h3>
+        <h3 className="lc-title">Tutupan Lahan 2021–2025</h3>
         <div className="lc-running" aria-live="polite">
           <span className="lc-running__bar" aria-hidden />
           <p>Menghitung dari citra satelit… {step ?? "menyiapkan"}</p>
@@ -269,7 +269,7 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
   if (state === "error") {
     return (
       <section className="land-cover-panel">
-        <h3 className="lc-title">Tutupan Lahan 2020–2025</h3>
+        <h3 className="lc-title">Tutupan Lahan 2021–2025</h3>
         <p className="lc-error" role="alert">
           {errorMsg ?? "Terjadi kesalahan saat analisis."}
         </p>
@@ -283,7 +283,7 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
   return (
     <section className="land-cover-panel">
       <header className="lc-head">
-        <h3 className="lc-title">Tutupan Lahan 2020–2025</h3>
+        <h3 className="lc-title">Tutupan Lahan 2021–2025</h3>
         <button
           type="button"
           className="lc-rerun"
