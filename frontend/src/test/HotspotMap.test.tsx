@@ -46,6 +46,7 @@ vi.mock("react-leaflet", () => ({
   Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   TileLayer: () => <div data-testid="tile-layer" />,
   ZoomControl: () => <div data-testid="zoom-control" />,
+  ScaleControl: () => <div data-testid="scale-control" />,
   useMap: () => ({ fitBounds: fitBoundsMock, getZoom: mapZoomMock }),
   useMapEvents: () => ({})
 }));

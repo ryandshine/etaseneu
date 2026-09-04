@@ -262,8 +262,25 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               di `.side-rail`; menu Pengaturan menampilkan info akun untuk semua role,
               prop `isAdmin` → role user hanya tidak melihat tombol Sync/Prewarm),
               BurnedAreaCard.tsx, WeatherOverlay.tsx, dll.
+              PETA LIVE — MOBILE vs DESKTOP DIVERGEN: `HotspotMap.tsx` pakai
+              `hooks/useIsMobile.ts` (matchMedia `<=639px`). Di desktop kontrol
+              tetap mengambang (`.map-legend`, `.locate-btn`, `.burned-control`,
+              `.basemap-switcher`, `<ZoomControl>`) — di mobile SEMUA itu TIDAK
+              dirender, diganti `MapControls.tsx` (kolom FAB kanan-bawah: zoom
+              +/- via instance peta dari `ref` MapContainer, + lokasi-saya) dan
+              `MapSheet.tsx` (bottom sheet 3-detent peek/half/full berisi
+              Lapisan+Basemap+Legenda+Ringkasan). "Ringkasan" di sheet menghitung
+              ulang T/S/R + per-satelit dari prop `hotspots` dengan algoritma
+              IDENTIK `App.tsx::dynamicConfidenceStats` — kalau ambang FRP/
+              normalisasi nama satelit diubah di satu tempat, ubah juga di sini.
+              Panel statistik + `.stats-sheet-toggle` + `.ui-toggle-btn` milik
+              App.tsx disembunyikan via CSS di `@media (max-width:639px)`
+              (`.workspace-stage--map ...`) supaya tidak ada dua sheet.
+              `<ScaleControl>` (react-leaflet, metrik) dirender di SEMUA lebar.
+              Mock `react-leaflet` di test WAJIB ekspor `ScaleControl`
+              (App.test.tsx, HotspotMap.test.tsx sudah).
 hooks/        useDashboardData.ts (hook utama, ~800 baris — lihat di bawah),
-              useBurnedAreaOverlay.ts
+              useBurnedAreaOverlay.ts, useIsMobile.ts
 lib/          api.ts (client fetch bertipe; `authFetch`/`downloadWithAuth` untuk panggilan
               /api langsung — WAJIB dipakai ganti `fetch` mentah supaya token JWT ikut saat
               API_REQUIRE_AUTH menyala), date.ts (helper WIB/Asia-Jakarta), hotspotDisplay.ts

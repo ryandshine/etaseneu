@@ -21,12 +21,13 @@ import {
   Pane,
   Popup,
   Marker,
+  ScaleControl,
   TileLayer,
   useMap,
   ZoomControl
 } from "react-leaflet";
 import { canvas, circleMarker as buildLeafletCircleMarker, latLngBounds, divIcon } from "leaflet";
-import type { LayerGroup as LLayerGroup } from "leaflet";
+import type { LayerGroup as LLayerGroup, Map as LeafletMap } from "leaflet";
 
 import { useBurnedAreaOverlay } from "../hooks/useBurnedAreaOverlay";
 import type { BurnedAreaOverlayFeature } from "../hooks/useBurnedAreaOverlay";
@@ -35,6 +36,9 @@ import type { S2BurnedAreaFeature } from "../hooks/useS2BurnedAreaOverlay";
 import { KawasanHutanLayer } from "./KawasanHutanLayer";
 import { PolygonInfoLayer } from "./PolygonInfoLayer";
 import { KAWASAN_HUTAN_LEGEND } from "../constants/kawasanHutan";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { MapSheet } from "./MapSheet";
+import { MapControls } from "./MapControls";
 import type { LayerBounds } from "../types/api";
 
 const MONTH_LABELS = [
@@ -434,6 +438,14 @@ export function HotspotMap({
   // secara default: cakupan nasional, menutupi peta kalau selalu nyala.
   const [showKawasan, setShowKawasan] = useState(false);
 
+  // Mobile: kontrol mengambang (legenda, toggle lapisan, peralihan basemap)
+  // digantikan satu bottom sheet + kolom FAB ringkas. Lihat MapSheet /
+  // MapControls. Instance peta dibutuhkan FAB untuk zoom karena ia dirender
+  // di luar <MapContainer>.
+  const isMobile = useIsMobile();
+  const [mapInstance, setMapInstance] = useState<LeafletMap | null>(null);
+  const [sheetExpanded, setSheetExpanded] = useState(false);
+
   // Polygon bekas terbakar & titik hotspot BERBAGI satu Pane/renderer (lihat
   // JSX di bawah) supaya polygonnya bisa diklik sungguhan. Canvas renderer
   // Leaflet memasang listener klik langsung di elemen <canvas>-nya sendiri
@@ -538,6 +550,8 @@ export function HotspotMap({
 
   return (
     <div className="map-frame">
+      {!isMobile ? (
+      <>
       <div className="map-legend">
         <span className="map-legend-title">Legenda</span>
         <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#ff8c42" }} />MODIS</div>
@@ -675,8 +689,11 @@ export function HotspotMap({
           ) : null}
         </div>
       </div>
+      </>
+      ) : null}
       {userLocation.error ? <p className="locate-error-toast">{userLocation.error}</p> : null}
 
+      {!isMobile ? (
       <div className="basemap-switcher" role="group" aria-label="Gaya peta">
         <button
           type="button"
@@ -695,6 +712,7 @@ export function HotspotMap({
           Satelit
         </button>
       </div>
+      ) : null}
 
       <MapContainer
         center={[-2.5, 118]}
@@ -702,6 +720,7 @@ export function HotspotMap({
         preferCanvas
         {...SMOOTH_ZOOM_MAP_PROPS}
         zoomControl={false}
+        ref={setMapInstance}
         style={{ height: "100%", width: "100%" }}
       >
         {mapStyle === "satellite" ? (
@@ -735,7 +754,8 @@ export function HotspotMap({
             />
           </>
         )}
-        <ZoomControl position="bottomleft" />
+        {!isMobile ? <ZoomControl position="bottomleft" /> : null}
+        <ScaleControl position="bottomleft" imperial={false} />
         <MapViewport hotspots={hotspots} layers={layers} selectedProvince={selectedProvince} />
         <PolygonInfoLayer layers={layers} showKawasan={showKawasan} hotspots={hotspots} />
         <WindLayer visible={showWind ?? false} />
@@ -948,6 +968,32 @@ export function HotspotMap({
           </LayerGroup>
         </Pane>
       </MapContainer>
+
+      {isMobile ? (
+        <>
+          <MapControls
+            map={mapInstance}
+            hidden={sheetExpanded}
+            userLocationActive={showUserLocation}
+            userLocationLoading={userLocation.loading}
+            onToggleUserLocation={() => setShowUserLocation((current) => !current)}
+          />
+          <MapSheet
+            hotspots={hotspots}
+            mapStyle={mapStyle}
+            onMapStyleChange={setMapStyle}
+            showBurnedArea={showBurnedArea}
+            onToggleBurnedArea={() => setShowBurnedArea((current) => !current)}
+            burnedArea={burnedArea}
+            showS2Burned={showS2Burned}
+            onToggleS2Burned={() => setShowS2Burned((current) => !current)}
+            s2Burned={s2Burned}
+            showKawasan={showKawasan}
+            onToggleKawasan={() => setShowKawasan((current) => !current)}
+            onExpandedChange={setSheetExpanded}
+          />
+        </>
+      ) : null}
     </div>
   );
 }
