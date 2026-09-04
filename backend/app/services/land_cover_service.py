@@ -42,8 +42,11 @@ FEATURE_NAMES = [
     "ndvi", "nbr", "mndwi", "ndbi", "elevation", "slope",
 ]
 SIMPLIFY_TOL = 0.0003
-MIN_MMU_PX = 5          # buang patch < 5 px (~0.2 ha @ 20 m)
-_MAX_CLOUD = 70
+MIN_MMU_PX = 5          # buang patch < 5 px (~0.05 ha @ 10 m)
+# Scene dengan awan > 60% dibuang sebelum masking SCL: median jadi lebih bersih
+# (lebih sedikit sisa haze/bayangan) DAN koleksi yang diproses lebih kecil.
+_MAX_CLOUD = 60
+_S2_BANDS = ["B2", "B3", "B4", "B8", "B11", "B12"]
 
 # Titik latih diambil dari bbox poligon + buffer ini (meter), bukan dari
 # dalam poligon saja: poligon KPS yang hampir seluruhnya satu kelas (mis.
@@ -198,6 +201,7 @@ class LandCoverService:
             .filterBounds(clip_to)
             .filterDate(start, end)
             .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", _MAX_CLOUD))
+            .select(_S2_BANDS + ["SCL"])
             .map(self._scl_scale(ee))
             .median()
             .clip(clip_to)
@@ -252,21 +256,40 @@ class LandCoverService:
             geometries=False,
         )
 
-    def _distinct_class_count(self, samples) -> int:
-        """Berapa nilai `class_idx` berbeda ada di sampel latih gabungan.
-        < 2 -> Random Forest tak bisa dilatih, orkestrasi jatuh ke Dynamic World.
+    def _materialize_samples(self, ee, samples) -> tuple[list[dict], object]:
+        """Tarik sampel latih ke klien SEKALI, lalu kirim balik sebagai
+        FeatureCollection literal.
+
+        Ini optimasi terpenting: tanpa ini, tiap `getInfo()` berikutnya
+        (luas per tahun, vektor per tahun, OOB) memaksa GEE mengulang
+        stratifiedSample 5 tahun + median komposit region ber-buffer dari nol,
+        karena GEE tidak menyimpan hasil antar-request. Payload-nya kecil
+        (~500 titik x 12 fitur), jauh lebih murah daripada mengulang sampling.
         """
-        try:
-            hist = samples.aggregate_histogram("class_idx").getInfo() or {}
-            return len([k for k, v in hist.items() if v])
-        except Exception:  # noqa: BLE001 -- gagal hitung -> anggap degenerate
-            logger.warning("LAND_COVER: gagal menghitung kelas sampel latih", exc_info=True)
-            return 0
+        info = samples.getInfo() or {}
+        rows: list[dict] = []
+        keep = set(FEATURE_NAMES) | {"class_idx"}
+        for f in info.get("features", []):
+            props = f.get("properties") or {}
+            if props.get("class_idx") is None:
+                continue
+            if any(props.get(k) is None for k in FEATURE_NAMES):
+                continue  # piksel tertutup mask di salah satu band -> buang
+            rows.append({k: props[k] for k in keep})
+        fc = ee.FeatureCollection([ee.Feature(None, r) for r in rows])
+        return rows, fc
+
+    def _distinct_class_count(self, rows: list[dict]) -> int:
+        """Berapa nilai `class_idx` berbeda ada di sampel latih (sudah
+        dimaterialisasi). < 2 -> Random Forest tak bisa dilatih, orkestrasi
+        jatuh ke Dynamic World."""
+        return len({int(r["class_idx"]) for r in rows})
 
     # -- ekstraksi hasil per tahun ----------------------------------------------
 
-    def _year_area_by_class(self, ee, roi, classified) -> dict[str, float]:
-        grouped = (
+    def _year_area_expr(self, ee, roi, classified):
+        """Ekspresi (belum di-evaluate) luas per kelas: ee.Dictionary {groups}."""
+        return (
             ee.Image.pixelArea()
             .addBands(classified)
             .reduceRegion(
@@ -276,8 +299,33 @@ class LandCoverService:
                 maxPixels=1e9,
                 bestEffort=True,
             )
-            .getInfo()
         )
+
+    def _year_vectors_expr(self, ee, roi, classified):
+        """Ekspresi vektor per kelas untuk lapisan peta — SATU `reduceToVectors`
+        per tahun (label per fitur = `class_idx`), bukan satu per kelas.
+        `connectedPixelCount` menghitung komponen per NILAI piksel, jadi MMU
+        tetap berlaku per kelas."""
+        cpc = classified.connectedPixelCount(MIN_MMU_PX + 1, True)
+        mask = classified.updateMask(cpc.gte(MIN_MMU_PX))
+        return mask.reduceToVectors(
+            geometry=roi, scale=10, geometryType="polygon",
+            labelProperty="class_idx", eightConnected=True,
+            maxPixels=1e9, bestEffort=True,
+        )
+
+    def _year_evaluate(self, ee, roi, classified) -> tuple[dict, dict]:
+        """Luas + vektor satu tahun dalam SATU `getInfo()`. Dalam satu
+        ekspresi GEE mendedup subgraf identik, jadi komposit median + RF
+        classify tahun itu dihitung sekali untuk keduanya (dulu: dua kali
+        untuk luas, lalu 5 kali lagi untuk vektor per kelas)."""
+        payload = ee.Dictionary({
+            "areas": self._year_area_expr(ee, roi, classified),
+            "vectors": self._year_vectors_expr(ee, roi, classified),
+        }).getInfo() or {}
+        return payload.get("areas") or {}, payload.get("vectors") or {}
+
+    def _parse_area_by_class(self, grouped: dict) -> dict[str, float]:
         out = {k: 0.0 for k in CLASS_KEYS}
         for grp in grouped.get("groups", []):
             idx = int(grp.get("class", -1))
@@ -285,25 +333,21 @@ class LandCoverService:
                 out[CLASS_KEYS[idx]] = float(grp.get("sum") or 0.0) / 10000.0
         return out
 
-    def _year_class_geom(self, ee, roi, classified, raw_geom) -> dict[str, dict]:
+    def _parse_class_geom(self, vectors: dict, raw_geom) -> dict[str, dict]:
         boundary = shapely_shape(raw_geom).buffer(0)
         out: dict[str, dict] = {}
-        for idx, key in enumerate(CLASS_KEYS):
-            try:
-                cpc = classified.eq(idx).selfMask().connectedPixelCount(MIN_MMU_PX + 1, True)
-                mask = classified.eq(idx).And(cpc.gte(MIN_MMU_PX)).selfMask()
-                vectors = mask.reduceToVectors(
-                    geometry=roi, scale=10, geometryType="polygon",
-                    eightConnected=True, maxPixels=1e9, bestEffort=True,
-                ).getInfo()
-            except Exception as exc:  # noqa: BLE001 -- non-fatal, peta rona di-skip kelas ini
-                logger.warning("LAND_COVER: reduceToVectors gagal (%s) — %s", key, exc)
+        parts_by_key: dict[str, list] = {k: [] for k in CLASS_KEYS}
+        for f in vectors.get("features", []):
+            geom = f.get("geometry")
+            props = f.get("properties") or {}
+            if not geom or props.get("class_idx") is None:
                 continue
-            parts = [
-                shapely_shape(f["geometry"]).buffer(0)
-                for f in vectors.get("features", [])
-                if f.get("geometry")
-            ]
+            idx = int(props["class_idx"])
+            if not 0 <= idx < len(CLASS_KEYS):
+                continue
+            parts_by_key[CLASS_KEYS[idx]].append(shapely_shape(geom).buffer(0))
+        for key in CLASS_KEYS:
+            parts = parts_by_key[key]
             if not parts:
                 continue
             try:
@@ -353,10 +397,17 @@ class LandCoverService:
                 pts = self._year_training_points(ee, roi, feat, year, region=train_region)
                 samples = pts if samples is None else samples.merge(pts)
 
-            use_rf = self._distinct_class_count(samples) >= 2
+            _LAND_COVER_RUN_STATE[pid] = {
+                "state": "running",
+                "step": "mengunduh sampel latih",
+                "started_at": date.today().isoformat(),
+            }
+            sample_rows, samples_fc = self._materialize_samples(ee, samples)
+            use_rf = self._distinct_class_count(sample_rows) >= 2
             if use_rf:
+                _LAND_COVER_RUN_STATE[pid]["step"] = "melatih Random Forest"
                 rf = ee.Classifier.smileRandomForest(RF_TREES, seed=42).train(
-                    features=samples, classProperty="class_idx", inputProperties=FEATURE_NAMES
+                    features=samples_fc, classProperty="class_idx", inputProperties=FEATURE_NAMES
                 )
                 try:
                     oob_err = rf.explain().getInfo().get("outOfBagErrorEstimate")
@@ -364,7 +415,7 @@ class LandCoverService:
                 except Exception:  # noqa: BLE001
                     oob_accuracy = None
                 model_trees = RF_TREES
-                n_training = SAMPLES_PER_CLASS_PER_YEAR * len(CLASS_KEYS) * len(YEARS)
+                n_training = len(sample_rows)
             else:
                 # Poligon homogen: sampel latih < 2 kelas. Random Forest tak
                 # bisa dilatih ("Only one class") -> pakai Dynamic World langsung.
@@ -387,13 +438,17 @@ class LandCoverService:
                     "step": f"{year} ({i + 1}/{len(YEARS)}) — klasifikasi",
                     "started_at": date.today().isoformat(),
                 }
+                # Klasifikasi & pengukuran cukup di dalam poligon: klip ke ROI
+                # supaya GEE tidak menghitung komposit/RF untuk seluruh bbox
+                # ber-buffer 3 km (yang cuma perlu saat sampling latih).
                 if use_rf:
-                    classified = feat_by_year[year].classify(rf).rename("class_idx")
+                    classified = feat_by_year[year].clip(roi).classify(rf).rename("class_idx")
                 else:
                     classified = self._dw_class_image(
-                        ee, train_region, year, confidence_masked=False
+                        ee, roi, year, confidence_masked=False
                     ).rename("class_idx")
-                areas = self._year_area_by_class(ee, roi, classified)
+                grouped, vectors = self._year_evaluate(ee, roi, classified)
+                areas = self._parse_area_by_class(grouped)
                 total = sum(areas.values()) or 1.0
                 table[year] = {}
                 for key in CLASS_KEYS:
@@ -402,7 +457,7 @@ class LandCoverService:
                     year_class_rows.append(
                         {"year": year, "class_key": key, "area_ha": round(areas[key], 2), "pct": pct}
                     )
-                geoms = self._year_class_geom(ee, roi, classified, raw_geom)
+                geoms = self._parse_class_geom(vectors, raw_geom)
                 for key, geom in geoms.items():
                     year_geom_rows.append({"year": year, "class_key": key, "geometry_geojson": geom})
 

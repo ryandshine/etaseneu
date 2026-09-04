@@ -156,23 +156,35 @@ class _FakeImg:
         # satu grup per kelas idx 0..4, luas 100 ha (1e6 m2) tiap kelas
         return _FakeGetInfo({"groups": [{"class": i, "sum": 1_000_000.0} for i in range(5)]})
 
-    def aggregate_histogram(self, *a, **k):
-        # sample latih default: 5 kelas hadir -> jalur Random Forest
-        return _FakeGetInfo({str(i): 40 for i in range(5)})
+    def getInfo(self):
+        # Materialisasi sampel latih (`samples.getInfo()`): 5 kelas hadir
+        # -> jalur Random Forest. Jumlah baris = target sampel penuh.
+        from app.services.land_cover_service import FEATURE_NAMES
+
+        feats = []
+        for cls in range(5):
+            for _ in range(SAMPLES_PER_CLASS_PER_YEAR * len(YEARS)):
+                props = {name: 0.1 for name in FEATURE_NAMES}
+                props["class_idx"] = cls
+                feats.append({"properties": props})
+        return {"features": feats}
 
     def reduceToVectors(self, *a, **k):
+        # satu fitur per kelas (labelProperty="class_idx"), semua di dalam ROI
         return _FakeGetInfo(
             {
                 "features": [
                     {
+                        "properties": {"class_idx": i},
                         "geometry": {
                             "type": "Polygon",
                             "coordinates": [
                                 [[104.0, -2.0], [104.05, -2.0], [104.05, -1.95],
                                  [104.0, -1.95], [104.0, -2.0]]
                             ],
-                        }
+                        },
                     }
+                    for i in range(5)
                 ]
             }
         )
@@ -244,6 +256,11 @@ class _FakeEE:
     Geometry = _FakeGeom
     Feature = staticmethod(lambda *a, **k: object())
     FeatureCollection = _FakeFC
+    # ee.Dictionary({...}).getInfo() -> evaluasi tiap nilai (luas + vektor
+    # per tahun dalam satu request)
+    Dictionary = staticmethod(
+        lambda d: _FakeGetInfo({k: v.getInfo() for k, v in d.items()})
+    )
     Filter = type("F", (), {"lt": staticmethod(lambda *a, **k: "flt")})
     Reducer = _FakeReducer()
     Classifier = type(
@@ -366,6 +383,27 @@ def test_analyze_polygon_error_inside_try_marks_error_and_rewraps(monkeypatch) -
     assert "boom" in store.errored
     assert store.running == (287785, "psagustus2026")  # running di-set sebelum gagal
     assert 287785 not in _LAND_COVER_RUN_STATE  # finally tetap membersihkan
+
+
+def test_materialize_samples_drops_masked_rows_and_counts_classes() -> None:
+    """Sampel latih ditarik ke klien SEKALI; baris yang salah satu fiturnya
+    None (piksel ter-mask) atau tanpa class_idx dibuang sebelum dikirim balik
+    sebagai FeatureCollection literal."""
+    from app.services.land_cover_service import FEATURE_NAMES
+
+    good = {n: 0.2 for n in FEATURE_NAMES} | {"class_idx": 1, "system:index": "x"}
+    masked = {n: 0.2 for n in FEATURE_NAMES} | {"class_idx": 2, "ndvi": None}
+    no_cls = {n: 0.2 for n in FEATURE_NAMES}
+    other = {n: 0.3 for n in FEATURE_NAMES} | {"class_idx": 3}
+    samples = _FakeGetInfo(
+        {"features": [{"properties": p} for p in (good, masked, no_cls, other)]}
+    )
+    svc = _svc()
+    rows, fc = svc._materialize_samples(_FakeEE(), samples)
+    assert len(rows) == 2
+    assert "system:index" not in rows[0]
+    assert isinstance(fc, _FakeFC)
+    assert svc._distinct_class_count(rows) == 2
 
 
 def test_train_buffer_constant_is_sane() -> None:
