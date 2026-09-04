@@ -69,6 +69,41 @@ def test_analyze_503_when_gee_disabled(client, monkeypatch):
     assert r.status_code == 503
 
 
+def test_analyze_409_when_busy_elsewhere(client, monkeypatch):
+    # Poligon LAIN (999) sedang jalan di memori proses -- lock global harus
+    # menolak permintaan analisis poligon 1, terlepas dari status poligon 1
+    # sendiri (idle di sini).
+    monkeypatch.setattr(
+        lc_mod, "land_cover_any_running", lambda: {"polygon_id": 999, "step": "2021 (1/5) — sampel"}
+    )
+    r = client.post("/api/land-cover/analyze", json={"polygon_id": 1})
+    assert r.status_code == 409
+    assert r.json()["detail"]["busy_elsewhere"] is True
+    assert client._store.running_marked is False
+
+
+def test_analyze_busy_lock_ignores_force(client, monkeypatch):
+    # force=true cuma untuk override state basi poligon INI sendiri, BUKAN
+    # buat motong antrean saat poligon lain beneran sedang jalan.
+    monkeypatch.setattr(
+        lc_mod, "land_cover_any_running", lambda: {"polygon_id": 999, "step": "x"}
+    )
+    r = client.post("/api/land-cover/analyze?force=true", json={"polygon_id": 1})
+    assert r.status_code == 409
+    assert r.json()["detail"]["busy_elsewhere"] is True
+
+
+def test_analyze_allows_own_polygon_when_it_is_the_one_running(client, monkeypatch):
+    # Kalau yang "sedang jalan" di memori itu poligon YANG SAMA (mis. restart
+    # via tombol Mulai ulang), lock global tidak boleh ikut memblokir --
+    # pemeriksaan status running/done per-poligon di bawah yang menentukan.
+    monkeypatch.setattr(
+        lc_mod, "land_cover_any_running", lambda: {"polygon_id": 1, "step": "x"}
+    )
+    r = client.post("/api/land-cover/analyze", json={"polygon_id": 1})
+    assert r.status_code == 202
+
+
 def test_analyze_409_when_running(client):
     client._store._status = {"status": "running", "error_message": None, "computed_at": None}
     r = client.post("/api/land-cover/analyze", json={"polygon_id": 1})
@@ -118,6 +153,23 @@ def test_status_idle_when_no_row(client):
     r = client.get("/api/land-cover/status", params={"polygon_id": 1})
     assert r.status_code == 200
     assert r.json()["state"] == "idle"
+    assert r.json()["busy_elsewhere"] is False
+
+
+def test_status_busy_elsewhere_true_for_other_polygon(client, monkeypatch):
+    monkeypatch.setattr(
+        lc_mod, "land_cover_any_running", lambda: {"polygon_id": 999, "step": "x"}
+    )
+    r = client.get("/api/land-cover/status", params={"polygon_id": 1})
+    assert r.json()["busy_elsewhere"] is True
+
+
+def test_status_busy_elsewhere_false_for_the_running_polygon_itself(client, monkeypatch):
+    monkeypatch.setattr(
+        lc_mod, "land_cover_any_running", lambda: {"polygon_id": 1, "step": "x"}
+    )
+    r = client.get("/api/land-cover/status", params={"polygon_id": 1})
+    assert r.json()["busy_elsewhere"] is False
 
 
 def test_result_404_before_done(client):

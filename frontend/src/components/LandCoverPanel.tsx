@@ -24,6 +24,9 @@ type StatusResponse = {
   step: string | null;
   error: string | null;
   computed_at: string | null;
+  // true kalau poligon LAIN sedang dianalisis di server sekarang -- lock
+  // global biar kuota GEE & CPU tidak diperebutkan banyak user sekaligus.
+  busy_elsewhere: boolean;
 };
 
 type ResultResponse = {
@@ -43,6 +46,10 @@ type OverlayFeature = {
 type OverlayFC = { type: "FeatureCollection"; features: OverlayFeature[] };
 
 const POLL_MS = 5000;
+// Dipakai cuma buat menyegarkan busy_elsewhere saat idle/error (bukan
+// progres analisis sendiri) -- lebih longgar dari POLL_MS biar tidak
+// membebani server dengan polling ekstra dari tiap tab yang lagi dibuka.
+const POLL_IDLE_MS = 10000;
 const FIRST_YEAR = LAND_COVER_YEARS[0];
 const LAST_YEAR = LAND_COVER_YEARS[LAND_COVER_YEARS.length - 1];
 
@@ -125,6 +132,7 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
   const [state, setState] = useState<State>("idle");
   const [step, setStep] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [busyElsewhere, setBusyElsewhere] = useState(false);
   const [result, setResult] = useState<ResultResponse | null>(null);
   const [year, setYear] = useState<number>(LAST_YEAR);
   const [overlay, setOverlay] = useState<OverlayFC | null>(null);
@@ -138,6 +146,7 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
     setState(body.state);
     setStep(body.step);
     setErrorMsg(body.error);
+    setBusyElsewhere(Boolean(body.busy_elsewhere));
     return body.state;
   }, [polygonId]);
 
@@ -166,6 +175,15 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
       if (pollTimer.current) clearTimeout(pollTimer.current);
     };
   }, [state, step, fetchStatus]);
+
+  // Idle/error tidak butuh progres, tapi busy_elsewhere bisa berubah kapan
+  // saja (user lain mulai/selesai analisis) -- polling longgar di sini
+  // biar tombol "Jalankan Analisis" ke-update tanpa user reload halaman.
+  useEffect(() => {
+    if (state !== "idle" && state !== "error") return;
+    const timer = setTimeout(() => void fetchStatus(), POLL_IDLE_MS);
+    return () => clearTimeout(timer);
+  }, [state, busyElsewhere, fetchStatus]);
 
   useEffect(() => {
     if (state !== "done") return;
@@ -211,6 +229,14 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
         setErrorMsg("Analisis satelit belum aktif di server.");
       } else {
         const body = await res.json().catch(() => null);
+        if (res.status === 409 && body?.detail?.busy_elsewhere) {
+          // Bukan error sungguhan -- cuma race condition tombol belum
+          // sempat ke-disable (mis. klik "Analisis ulang" dari state "done").
+          // JANGAN pindah state ke idle/error -- itu akan membuang hasil yang
+          // sudah tampil padahal datanya masih utuh, cukup tandai busy saja.
+          setBusyElsewhere(true);
+          return;
+        }
         setState("error");
         setErrorMsg(
           typeof body?.detail === "string" ? body.detail : "Gagal memulai analisis.",
@@ -232,7 +258,18 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
           Klasifikasi Sentinel-2 + Random Forest, 5 kelas. Sekali hitung per KPS,
           hasilnya tersimpan permanen.
         </p>
-        <button type="button" className="lc-cta" onClick={() => void runAnalyze(false)}>
+        {busyElsewhere && (
+          <p className="lc-busy" role="status">
+            Ada analisis KPS/Hutan Adat lain sedang berjalan — harap tunggu sebentar,
+            biar kuota GEE &amp; server tidak dipakai bersamaan.
+          </p>
+        )}
+        <button
+          type="button"
+          className="lc-cta"
+          disabled={busyElsewhere}
+          onClick={() => void runAnalyze(false)}
+        >
           Jalankan Analisis
         </button>
       </section>
@@ -273,7 +310,18 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
         <p className="lc-error" role="alert">
           {errorMsg ?? "Terjadi kesalahan saat analisis."}
         </p>
-        <button type="button" className="lc-cta" onClick={() => void runAnalyze(false)}>
+        {busyElsewhere && (
+          <p className="lc-busy" role="status">
+            Ada analisis KPS/Hutan Adat lain sedang berjalan — harap tunggu sebentar,
+            biar kuota GEE &amp; server tidak dipakai bersamaan.
+          </p>
+        )}
+        <button
+          type="button"
+          className="lc-cta"
+          disabled={busyElsewhere}
+          onClick={() => void runAnalyze(false)}
+        >
           Coba lagi
         </button>
       </section>
@@ -287,6 +335,8 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
         <button
           type="button"
           className="lc-rerun"
+          disabled={busyElsewhere}
+          title={busyElsewhere ? "Ada analisis lain sedang berjalan, coba lagi nanti" : undefined}
           onClick={() => {
             if (window.confirm("Analisis ulang poligon ini? Hasil lama akan ditimpa.")) {
               void runAnalyze(true);
@@ -296,6 +346,13 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
           Analisis ulang
         </button>
       </header>
+
+      {busyElsewhere && (
+        <p className="lc-busy" role="status">
+          Ada analisis KPS/Hutan Adat lain sedang berjalan — harap tunggu sebentar sebelum
+          menjalankan ulang.
+        </p>
+      )}
 
       <div className="lc-yearbar">
         <button
@@ -329,56 +386,68 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
         <strong className="lc-year">{year}</strong>
       </div>
 
-      <div className="lc-map">
-        <MapContainer
-          {...SMOOTH_ZOOM_MAP_PROPS}
-          center={[-2, 118]}
-          zoom={5}
-          attributionControl={false}
-        >
-          <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
-          {outline && (
-            <GeoJSON
-              key={`outline-${polygonId}`}
-              data={{ type: "Feature", geometry: outline } as never}
-              style={() => ({
-                color: "#f5efe6",
-                weight: 1.5,
-                dashArray: "4 4",
-                fill: false,
-              })}
-            />
+      <div className="lc-visual">
+        <div className="lc-map">
+          <MapContainer
+            {...SMOOTH_ZOOM_MAP_PROPS}
+            center={[-2, 118]}
+            zoom={5}
+            attributionControl={false}
+          >
+            <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
+            {outline && (
+              <GeoJSON
+                key={`outline-${polygonId}`}
+                data={{ type: "Feature", geometry: outline } as never}
+                style={() => ({
+                  color: "#f5efe6",
+                  weight: 1.5,
+                  dashArray: "4 4",
+                  fill: false,
+                })}
+              />
+            )}
+            {overlay && overlay.features.length > 0 && (
+              <GeoJSON
+                key={`lc-${year}`}
+                data={overlay as never}
+                style={(feature) => {
+                  const c = landCoverColor(
+                    (feature?.properties as { class_key?: string })?.class_key ?? "",
+                  );
+                  return { color: c, weight: 0.75, fillColor: c, fillOpacity: 0.8 };
+                }}
+              />
+            )}
+            <FitLandCover overlay={overlay} outline={outline} />
+          </MapContainer>
+          {overlayEmpty && (
+            <p className="lc-map__empty">
+              Rona kelas untuk {year} tidak tersedia — tutupan terlalu seragam atau
+              petak di bawah ambang luas minimum.
+            </p>
           )}
-          {overlay && overlay.features.length > 0 && (
-            <GeoJSON
-              key={`lc-${year}`}
-              data={overlay as never}
-              style={(feature) => {
-                const c = landCoverColor(
-                  (feature?.properties as { class_key?: string })?.class_key ?? "",
-                );
-                return { color: c, weight: 0.75, fillColor: c, fillOpacity: 0.8 };
-              }}
-            />
-          )}
-          <FitLandCover overlay={overlay} outline={outline} />
-        </MapContainer>
-        {overlayEmpty && (
-          <p className="lc-map__empty">
-            Rona kelas untuk {year} tidak tersedia — tutupan terlalu seragam atau
-            petak di bawah ambang luas minimum.
-          </p>
-        )}
-      </div>
+        </div>
 
-      <ul className="lc-legend" aria-label="Legenda kelas tutupan lahan">
-        {LAND_COVER_CLASSES.map((c) => (
-          <li key={c.key}>
-            <span className="lc-swatch" style={{ background: c.color }} aria-hidden />
-            {c.label}
-          </li>
-        ))}
-      </ul>
+        {/* Luas per kelas TAHUN TERPILIH, langsung kebaca tanpa hover grafik
+            atau geser tabel horizontal -- ini yang paling sering dicari
+            orang pertama kali ("berapa hektar hutannya sekarang?"). */}
+        <ul className="lc-classgrid" aria-label={`Luas per kelas tahun ${year}`}>
+          {LAND_COVER_CLASSES.map((c) => {
+            const cell = result?.table[String(year)]?.[c.key];
+            return (
+              <li key={c.key} className="lc-classgrid__item">
+                <span className="lc-swatch" style={{ background: c.color }} aria-hidden />
+                <span className="lc-classgrid__label">{c.label}</span>
+                <span className="lc-classgrid__value">
+                  {cell ? `${Math.round(cell.area_ha).toLocaleString("id-ID")} ha` : "–"}
+                </span>
+                <span className="lc-classgrid__pct">{cell ? `${cell.pct.toFixed(1)}%` : ""}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
 
       <div className="lc-chart">
         <ResponsiveContainer width="100%" height={200}>

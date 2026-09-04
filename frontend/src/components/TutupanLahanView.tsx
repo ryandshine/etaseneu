@@ -14,10 +14,30 @@ type LandCoverPolygonRow = {
   nama_kab: string | null;
   nama_kec: string | null;
   skema: string | null;
+  wilker_bps: string | null;
   luas_final: number | null;
   land_cover_status: LandCoverStatus;
   land_cover_computed_at: string | null;
 };
+
+// Bucket status buat filter -- "idle" menampung null & "pending" sekaligus
+// (keduanya artinya "belum ada hasil"), jadi user tidak perlu tahu bedanya.
+type StatusFilterValue = "" | "idle" | "running" | "done" | "error";
+
+const STATUS_FILTER_OPTIONS: ReadonlyArray<{ value: StatusFilterValue; label: string }> = [
+  { value: "", label: "Semua" },
+  { value: "idle", label: "Belum dianalisis" },
+  { value: "running", label: "Sedang diproses" },
+  { value: "done", label: "Sudah dianalisis" },
+  { value: "error", label: "Gagal" },
+];
+
+function statusBucket(status: LandCoverStatus): Exclude<StatusFilterValue, ""> {
+  if (status === "done") return "done";
+  if (status === "running") return "running";
+  if (status === "error") return "error";
+  return "idle";
+}
 
 type TutupanLahanViewProps = {
   /** Preseleksi dari tautan `?view=landcover&polygon=<id>` (baris ringkas di
@@ -65,6 +85,8 @@ export function TutupanLahanView({
   const [searchQuery, setSearchQuery] = useState("");
   const [provinceFilter, setProvinceFilter] = useState("");
   const [kabupatenFilter, setKabupatenFilter] = useState("");
+  const [wilkerFilter, setWilkerFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("");
   const [selectedId, setSelectedId] = useState<number | null>(initialPolygonId);
   const isMobile = useIsMobile();
 
@@ -113,18 +135,38 @@ export function TutupanLahanView({
     }
   }, [kabupatenOptions, kabupatenFilter]);
 
+  const wilkerOptions = useMemo(() => {
+    const scoped = rows.filter(
+      (r) =>
+        (!provinceFilter || r.nama_prov === provinceFilter) &&
+        (!kabupatenFilter || r.nama_kab === kabupatenFilter),
+    );
+    const set = new Set(
+      scoped.map((r) => r.wilker_bps).filter((v): v is string => Boolean(v && v.trim())),
+    );
+    return Array.from(set).sort();
+  }, [rows, provinceFilter, kabupatenFilter]);
+
+  useEffect(() => {
+    if (wilkerFilter && !wilkerOptions.includes(wilkerFilter)) {
+      setWilkerFilter("");
+    }
+  }, [wilkerOptions, wilkerFilter]);
+
   const filteredRows = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return rows.filter((r) => {
       if (provinceFilter && r.nama_prov !== provinceFilter) return false;
       if (kabupatenFilter && r.nama_kab !== kabupatenFilter) return false;
+      if (wilkerFilter && r.wilker_bps !== wilkerFilter) return false;
+      if (statusFilter && statusBucket(r.land_cover_status) !== statusFilter) return false;
       if (query) {
         const haystack = `${r.lembaga ?? ""} ${r.nama_prov ?? ""} ${r.nama_kab ?? ""}`.toLowerCase();
         if (!haystack.includes(query)) return false;
       }
       return true;
     });
-  }, [rows, provinceFilter, kabupatenFilter, searchQuery]);
+  }, [rows, provinceFilter, kabupatenFilter, wilkerFilter, statusFilter, searchQuery]);
 
   const analyzedCount = useMemo(
     () => rows.filter((r) => r.land_cover_status === "done").length,
@@ -257,7 +299,39 @@ export function TutupanLahanView({
                     ))}
                   </select>
                 </label>
+                <label className="matrix-field">
+                  <span>Wilker BPS</span>
+                  <select
+                    value={wilkerFilter}
+                    onChange={(e) => setWilkerFilter(e.currentTarget.value)}
+                  >
+                    <option value="">Semua</option>
+                    {wilkerOptions.map((w) => (
+                      <option key={w} value={w}>
+                        {w}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="matrix-field">
+                  <span>Status</span>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.currentTarget.value as StatusFilterValue)}
+                  >
+                    {STATUS_FILTER_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
+              {filteredRows.length !== rows.length && (
+                <p className="tl-filter-count">
+                  Menampilkan {filteredRows.length} dari {rows.length} poligon
+                </p>
+              )}
             </div>
 
             <div className="tl-list-scroll">

@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import type { ReactNode } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // LandCoverPanel (dirender di panel detail) pakai react-leaflet + recharts --
@@ -94,8 +94,9 @@ describe("TutupanLahanView", () => {
 
     expect(await screen.findByText("GAPOKTAN MEKAR JAYA")).toBeInTheDocument();
     expect(screen.getByText("MHA BATU BATU")).toBeInTheDocument();
-    expect(screen.getByText(/Sudah dianalisis/)).toBeInTheDocument();
-    expect(screen.getByText("Belum dianalisis")).toBeInTheDocument();
+    const list = within(document.querySelector(".tl-list-scroll") as HTMLElement);
+    expect(list.getByText(/Sudah dianalisis/)).toBeInTheDocument();
+    expect(list.getByText("Belum dianalisis")).toBeInTheDocument();
     const summary = await waitFor(() => {
       const el = document.querySelector(".tl-summary");
       if (!el || el.textContent === "Memuat…") throw new Error("not ready");

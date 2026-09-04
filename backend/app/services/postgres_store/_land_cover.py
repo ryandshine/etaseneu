@@ -259,7 +259,7 @@ class _LandCoverMixin:
                 cur.execute(
                     """
                     SELECT p.id, p.layer_key, p.lembaga, p.nama_prov, p.nama_kab,
-                           p.nama_kec, p.skema, p.luas_final,
+                           p.nama_kec, p.skema, p.luas_final, p.wilker_bps,
                            lc.status AS land_cover_status,
                            lc.computed_at AS land_cover_computed_at
                     FROM polygon_metadata p
@@ -279,6 +279,7 @@ class _LandCoverMixin:
                 "nama_kab": r.get("nama_kab"),
                 "nama_kec": r.get("nama_kec"),
                 "skema": r.get("skema"),
+                "wilker_bps": r.get("wilker_bps"),
                 "luas_final": float(r["luas_final"]) if r.get("luas_final") is not None else None,
                 "land_cover_status": r.get("land_cover_status"),
                 "land_cover_computed_at": (

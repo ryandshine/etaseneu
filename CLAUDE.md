@@ -127,12 +127,30 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   `postgres_store/_land_cover.py`, `_ensure_land_cover_tables` bikin tabel sendiri — tanpa migrasi
   manual) — di-cache permanen, tiap poligon dianalisis sekali. Baca hasil:
   `GET /api/land-cover/{status,result,overlay}` (TIDAK butuh env GEE). Guard: `not service.enabled`
-  → 503; status `running` → 409; status `done` tanpa `force` → 409. "Hutan" = tutupan berpohon
-  (kebun berpohon seperti sawit/karet belum tentu terpisah). Tampil di `KpsDetailView.tsx` →
-  `LandCoverPanel.tsx` (peta rona per tahun + grafik batang bertumpuk + tabel Δ + ringkasan).
-  Konstanta warna kelas dipakai bersama di `frontend/src/constants/landCover.ts`. Tidak ada
-  scheduler, tidak ada analisis massal. nginx: `POST /api/land-cover/analyze` di grup rate-limit
-  `eta_heavy` (10r/m).
+  → 503; status `running` (poligon sendiri) → 409; status `done` tanpa `force` → 409. **Lock GLOBAL**
+  (beda dari guard per-poligon di atas): `land_cover_any_running()` baca `_LAND_COVER_RUN_STATE`
+  (dict proses, BUKAN kolom DB) — kalau poligon LAIN sedang beneran jalan di proses ini, `/analyze`
+  balas 409 `{"busy_elsewhere": true}` dan `/status` ikut membawa `busy_elsewhere` — **`force` TIDAK
+  melewati lock ini** (force cuma untuk override state basi poligon itu sendiri). Tujuannya satu
+  analisis GEE/RF-training saja yang boleh jalan bersamaan di seluruh sistem, supaya user lain tidak
+  rebutan kuota GEE/CPU. **Asumsi satu proses `api` (tanpa multi-worker)** — kalau nanti di-scale
+  horizontal, lock ini perlu pindah ke DB/Redis. "Hutan" = tutupan berpohon (kebun berpohon seperti
+  sawit/karet belum tentu terpisah).
+  - **Menu tersendiri "Tutupan Lahan"** (`TutupanLahanView.tsx`, self-contained fetch sendiri lewat
+    `authFetch` — pola sama seperti `KompleksKebakaranView.tsx`, TIDAK lewat `useDashboardData`):
+    daftar SEMUA poligon KPS+Hutan Adat sekaligus status analisisnya (`GET /api/land-cover/polygons`
+    — bulk `LEFT JOIN polygon_metadata ↔ land_cover_analysis`, method
+    `list_polygons_with_land_cover_status` di `postgres_store/_land_cover.py`), cari + filter
+    Provinsi/Kabupaten/Wilker BPS/Status (client-side, konsisten pola Matriks Data), klik satu baris
+    → detail me-reuse `LandCoverPanel.tsx` apa adanya (peta rona per tahun + peta&grafik dua-kolom di
+    layar lebar + grid ringkasan luas per kelas untuk tahun terpilih + tabel Δ + ringkasan + tombol
+    "Jalankan Analisis" manual — TIDAK ada tombol massal). `LandCoverPanel` sekarang **cuma** dirender
+    di sini (panel penuhnya dicabut dari `KpsDetailView.tsx`, diganti satu baris ringkas
+    `.lc-summary-link` yang fetch `GET /api/land-cover/status` lalu buka menu ini via callback
+    `onOpenTutupanLahan` dari `App.tsx`, pola sama seperti `onOpenKpsDetail`). URL
+    `?view=landcover&polygon=<id>` bisa dibagikan (`App.tsx`). Konstanta warna kelas dipakai bersama
+    di `frontend/src/constants/landCover.ts`. Tidak ada scheduler, tidak ada analisis massal. nginx:
+    `POST /api/land-cover/analyze` di grup rate-limit `eta_heavy` (10r/m).
 - `hotspot_cluster_service.py` — menu "Kompleks Kebakaran": mengelompokkan titik hotspot yang
   berdekatan ruang (~2km) DAN waktu (~48 jam) sekaligus jadi satu "kompleks" (ST-DBSCAN), dipanggil
   dari `GET /api/hotspots/clusters` (preset `sensitivity` ketat/sedang/longgar, bukan eps/min_samples

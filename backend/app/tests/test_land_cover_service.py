@@ -15,6 +15,7 @@ from app.services.land_cover_service import (
     _build_summary_text,
     _dw_label_to_class,
     _net_change,
+    land_cover_any_running,
 )
 
 
@@ -24,6 +25,20 @@ def _svc() -> LandCoverService:
 
 def test_years_constant() -> None:
     assert YEARS == (2021, 2022, 2023, 2024, 2025)
+
+
+def test_land_cover_any_running_none_when_empty() -> None:
+    assert not _LAND_COVER_RUN_STATE
+    assert land_cover_any_running() is None
+
+
+def test_land_cover_any_running_returns_the_running_polygon() -> None:
+    _LAND_COVER_RUN_STATE[42] = {"state": "running", "step": "2021 (1/5) — sampel"}
+    try:
+        result = land_cover_any_running()
+        assert result == {"polygon_id": 42, "step": "2021 (1/5) — sampel"}
+    finally:
+        _LAND_COVER_RUN_STATE.pop(42, None)
 
 
 @pytest.mark.parametrize(

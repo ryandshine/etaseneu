@@ -66,6 +66,19 @@ def _dw_label_to_class(label: int) -> str | None:
     return _DW_MAP.get(int(label))
 
 
+def land_cover_any_running() -> dict[str, object] | None:
+    """Poligon mana pun yang analisisnya BENERAN sedang jalan di proses ini
+    sekarang (bukan status 'running' basi di DB -- dict ini otomatis kosong
+    lagi kalau proses restart, lihat catatan di atas). Dipakai buat lock
+    GLOBAL: cuma 1 analisis boleh jalan bersamaan di seluruh sistem, supaya
+    kuota GEE & CPU training Random Forest tidak diperebutkan banyak user
+    sekaligus. Asumsi: satu proses `api` (tidak ada multi-worker) -- kalau
+    nanti di-scale ke >1 worker/container, lock ini perlu pindah ke DB/Redis."""
+    for pid, info in _LAND_COVER_RUN_STATE.items():
+        return {"polygon_id": pid, "step": info.get("step")}
+    return None
+
+
 def land_cover_run_state(polygon_id: int) -> dict | None:
     return _LAND_COVER_RUN_STATE.get(int(polygon_id))
 

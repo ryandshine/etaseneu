@@ -828,6 +828,12 @@ body {
 .lc-cta:active {
   transform: translateY(1px);
 }
+.lc-cta:disabled,
+.lc-rerun:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
 
 .lc-rerun {
   flex-shrink: 0;
@@ -898,6 +904,20 @@ body {
   border: 1px solid rgba(220, 38, 38, 0.32);
   color: #fca5a5;
   font-size: 0.76rem;
+}
+
+/* Lock global antar-user (bukan error) -- ada analisis KPS lain sedang
+   jalan, biar kuota GEE & CPU tidak diperebutkan. Warna kuning (bukan
+   merah) supaya tidak terbaca sebagai kegagalan. */
+.lc-busy {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.4rem;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fcd34d;
+  font-size: 0.72rem;
+  line-height: 1.4;
 }
 
 .lc-yearbar {
@@ -980,6 +1000,21 @@ body {
   color: #f5efe6;
 }
 
+/* LandCoverPanel sekarang cuma dirender di panel detail TutupanLahanView
+   (lebar, lihat .tl-detail) -- BUKAN lagi di sidebar sempit Detail KPS
+   (panelnya sudah dicabut dari sana, diganti .lc-summary-link). Jadi aman
+   dibuat lebar & tinggi tanpa mikirin konteks sempit yang lain. */
+.lc-visual {
+  display: grid;
+  gap: 0.85rem;
+}
+@media (min-width: 860px) {
+  .lc-visual {
+    grid-template-columns: minmax(0, 1.5fr) minmax(15rem, 1fr);
+    align-items: start;
+  }
+}
+
 .lc-map {
   position: relative;
   border-radius: 0.5rem;
@@ -988,12 +1023,17 @@ body {
 }
 .lc-map .leaflet-container {
   width: 100%;
-  height: 220px;
+  height: 320px;
   background: #0c0907;
 }
-@media (min-width: 900px) {
+@media (min-width: 640px) {
   .lc-map .leaflet-container {
-    height: 260px;
+    height: 420px;
+  }
+}
+@media (min-width: 1400px) {
+  .lc-map .leaflet-container {
+    height: 520px;
   }
 }
 .lc-map__empty {
@@ -1008,20 +1048,49 @@ body {
   backdrop-filter: blur(2px);
 }
 
-.lc-legend {
+/* Ringkasan luas per kelas UNTUK TAHUN TERPILIH -- pengganti legenda polos
+   lama (cuma warna+nama). Sengaja berupa grid kartu, bukan daftar inline,
+   biar angkanya jadi hal pertama yang kebaca, bukan cuma warna. */
+.lc-classgrid {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem 0.85rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.5rem;
+  align-content: start;
 }
-.lc-legend li {
-  display: inline-flex;
+.lc-classgrid__item {
+  display: grid;
+  grid-template-columns: auto 1fr;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.7rem;
+  column-gap: 0.4rem;
+  row-gap: 0.05rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: 0.4rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.lc-classgrid__label {
+  font-size: 0.66rem;
+  font-weight: 600;
   color: rgba(245, 239, 230, 0.72);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lc-classgrid__value {
+  grid-column: 2;
+  font-size: 1rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #f5efe6;
+}
+.lc-classgrid__pct {
+  grid-column: 2;
+  font-size: 0.68rem;
+  color: rgba(245, 239, 230, 0.5);
+  font-variant-numeric: tabular-nums;
 }
 .lc-swatch {
   width: 11px;
@@ -8822,13 +8891,19 @@ a + a {
 }
 
 .tl-filters {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
 }
 
 .tl-filters .matrix-field {
-  flex: 1;
   min-width: 0;
+}
+
+.tl-filter-count {
+  margin: 0;
+  font-size: 0.66rem;
+  color: rgba(244, 245, 247, 0.5);
 }
 
 .tl-list-scroll {
