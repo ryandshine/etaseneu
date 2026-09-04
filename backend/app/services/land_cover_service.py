@@ -41,8 +41,13 @@ FEATURE_NAMES = [
     "B2", "B3", "B4", "B8", "B11", "B12",
     "ndvi", "nbr", "mndwi", "ndbi", "elevation", "slope",
 ]
-SIMPLIFY_TOL = 0.0003
-MIN_MMU_PX = 5          # buang patch < 5 px (~0.05 ha @ 10 m)
+# Toleransi simplify HARUS jauh di bawah ukuran piksel (10 m). Dulu 0.0003°
+# (~33 m): patch kecil diremas jadi segitiga & tepi antar kelas bergeser tak
+# seragam -> celah/"bolong" di peta rona. Sekarang ~4 m: cuma menghaluskan
+# tangga piksel, bentuk patch tetap.
+SIMPLIFY_TOL = 0.00004
+MIN_MMU_PX = 10         # buang patch < 10 px (~0.1 ha @ 10 m) dari peta rona
+                        # (luas per kelas TIDAK terpengaruh -- dihitung piksel)
 # Scene dengan awan > 60% dibuang sebelum masking SCL: median jadi lebih bersih
 # (lebih sedikit sisa haze/bayangan) DAN koleksi yang diproses lebih kecil.
 _MAX_CLOUD = 60
