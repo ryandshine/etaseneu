@@ -319,7 +319,15 @@ class LandCoverService:
         """Ekspresi vektor per kelas untuk lapisan peta — SATU `reduceToVectors`
         per tahun (label per fitur = `class_idx`), bukan satu per kelas.
         `connectedPixelCount` menghitung komponen per NILAI piksel, jadi MMU
-        tetap berlaku per kelas."""
+        tetap berlaku per kelas.
+
+        WAJIB `setDefaultProjection` dulu: hasil `.classify()` atas komposit
+        median tidak punya proyeksi (GEE: WGS84 1 derajat, transform
+        [1,0,0,0,1,0]) sehingga `connectedPixelCount` dihitung di skala 1° ->
+        seluruh poligon cuma 1 "piksel" < MMU -> semua ter-mask -> 0 vektor
+        (luas tetap benar karena reduceRegion pakai scale eksplisit). Citra
+        Dynamic World tidak kena karena sudah 10 m."""
+        classified = classified.setDefaultProjection("EPSG:3857", None, 10)
         cpc = classified.connectedPixelCount(MIN_MMU_PX + 1, True)
         mask = classified.updateMask(cpc.gte(MIN_MMU_PX))
         return mask.reduceToVectors(

@@ -522,3 +522,18 @@ def test_year_evaluate_retries_vectors_at_coarser_scale_on_gee_memory_limit() ->
 
     with pytest.raises(RuntimeError, match="timed out"):
         svc._year_evaluate(ee, _FakeImg(), _Other())
+
+
+def test_year_vectors_expr_sets_default_projection_before_mmu() -> None:
+    """Citra hasil classify() tak berproyeksi (WGS84 1 derajat) -> tanpa
+    setDefaultProjection, connectedPixelCount dihitung di skala 1° dan
+    semua piksel ter-mask (0 vektor di produksi, 2026-09-05)."""
+    calls: list[tuple] = []
+
+    class _Img(_FakeImg):
+        def setDefaultProjection(self, *a, **k):
+            calls.append(a)
+            return self
+
+    _svc()._year_vectors_expr(_FakeEE(), _FakeImg(), _Img())
+    assert calls and calls[0][0] == "EPSG:3857" and calls[0][2] == 10
