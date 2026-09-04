@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     # Analisis tutupan lahan: ikutkan fitur Sentinel-1 SAR (VV/VH/rasio) ke
     # Random Forest. false = optik S2 saja (rollback cepat tanpa ubah kode).
     land_cover_use_sar: bool = True
+    # Konsensus label latih DW x ESA WorldCover 2021 (lihat
+    # services/land_cover/labels.py). false = DW + Hansen saja.
+    land_cover_use_consensus_labels: bool = True
     # Auto-refresh burned area lewat Google Earth Engine (MODIS/VIIRS).
     # Default MATI sejak sumber data dipindah ke rekap resmi KLHK (Areal
     # Kebakaran Hutan dan Lahan, klasifikasi akurasi H/M/L) -- lihat

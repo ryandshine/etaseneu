@@ -184,12 +184,32 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
     **Konsensus Hansen** (`_hansen_intact_forest`, `UMD/hansen/global_forest_change_2024_v1_12`):
     sampel latih DW=trees dibuang kecuali `treecover2000 ≥ 50` DAN (`lossyear == 0` ATAU
     `lossyear > tahun analisis`) — hutan yang sudah hilang sebelum/pada tahun itu tidak boleh jadi
-    guru "hutan"; kelas lain tidak disentuh. `FORMULA_VERSION` masih 2 — dinaikkan ke 3 di langkah
-    akhir (bersama `labels.py`/`temporal.py`) supaya badge "Metode lama" tidak muncul dua kali.
+    guru "hutan"; kelas lain tidak disentuh. `FORMULA_VERSION` dinaikkan ke 3 bersama `labels.py`/`temporal.py` (bullet berikutnya).
     Test: `test_land_cover_service.py` fake `_FakeColl.size_value` (class attr) mengatur jumlah
     scene S1 → jalur fallback diuji tanpa GEE.
+  - **Konsensus WorldCover + aturan transisi temporal = FORMULA v3 (2026-09-05)**. Keputusan
+    user: **akurasi > cepat/hemat kuota GEE**, skema tetap 6 kelas (kebun/sawit dipertahankan).
+    `land_cover/labels.py`: `consensus_mask()` — sampel latih (SEMUA kelas) yang oleh DW dianggap
+    STABIL sejak 2021 (`DW(t) == DW(2021)`) harus disetujui `ESA/WorldCover/v200/2021`
+    (`WORLDCOVER_MAP` 10/95→hutan, 20/30/90→semak, 40→pertanian, 60→terbuka, 80→air; 50 built-up
+    dkk. tanpa padanan → dibuang); piksel yang DW anggap BERUBAH sejak 2021 lolos tanpa dicek
+    (WorldCover cuma 2021, tidak bisa menilai perubahan nyata — kalau dibuang, kelas yang cuma
+    muncul di area terbakar kehilangan semua sampel). `kebun` dianggap setuju kalau WC = pohon.
+    Untuk tahun ≠ 2021 butuh `_dw_class_raw(2021)` tambahan (ekspresi GEE, TANPA `getInfo()`
+    ekstra). Toggle `USE_CONSENSUS_LABELS` / `Settings.land_cover_use_consensus_labels`
+    (`LAND_COVER_USE_CONSENSUS_LABELS`, default true). `SAMPLES_PER_CLASS_PER_YEAR` 100 → **200**
+    (konsensus membuang sebagian); `MIN_SAMPLES_PER_CLASS` (30) → kelas di bawahnya dicatat
+    `meta.labels.sparse_classes` + warning log (bukan error). `land_cover/temporal.py`:
+    `apply_transition_rules()` menggantikan `_despike_years` — urutan `despike_symmetric` →
+    `forest_gain_must_persist` (hutan di t, t−1 bukan hutan/kebun, t+1 bukan hutan → t := t−1) →
+    `kebun_to_forest_must_persist` (kebun→hutan satu tahun → kebun). Hanya tahun TENGAH yang bisa
+    diubah, selalu ke kelas tetangga — tahun 2021 & 2025 tidak disentuh. `meta.temporal.rules`
+    menyimpan daftar aturan yang dipakai. `FORMULA_VERSION = 3` (+ frontend
+    `LAND_COVER_FORMULA_VERSION = 3`) → SEMUA hasil lama (v1/v2) tampil badge "Metode lama";
+    tidak dihitung ulang otomatis. Test logika aturan pakai piksel skalar palsu yang
+    benar-benar menghitung: `test_land_cover_rules.py`.
   - **Versi formula & metadata (2026-09-05)**: `FORMULA_VERSION` / `FORMULA_LABEL` di
-    `land_cover_service.py` (v1 = sebelum audit 2026-09-05, v2 = formula audit di atas). Kolom
+    `land_cover_service.py` (v1 = sebelum audit 2026-09-05, v2 = formula audit di atas, v3 = SAR + konsensus + temporal). Kolom
     `land_cover_analysis.formula_version INTEGER`, `meta JSONB` (`method`, `feature_names`,
     `labels.sources`, `labels.samples_per_class`, `temporal.rules`, `coverage_pct` per tahun = Σ luas
     kelas ÷ luas geodesik poligon), `started_at` — ditambah `ALTER TABLE … ADD COLUMN IF NOT EXISTS`
