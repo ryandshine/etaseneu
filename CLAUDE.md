@@ -352,6 +352,18 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               Murni client-side atas `hotspots` termuat; tak ada endpoint/persist.
               `openKpsDetail` di `App.tsx` di-`useCallback` demi memo ini. Mock
               `CircleMarker`/`Marker` di HotspotMap.test.tsx WAJIB `forwardRef`.
+              **Tata letak kontrol melayang (desktop)**: kolom kiri = Lokasi+
+              Basemap (top 1rem) → `.burned-control` (top 6.5rem, gulir) →
+              `.map-legend` (bottom 6.5rem) → zoom. `max-height` burned-control
+              WAJIB menyisakan ruang legenda (`calc(100% - 6.5rem - 16rem)`),
+              bukan cuma zoom — dulu 5.5rem dan di laptop 1366×768 kolom itu
+              menimpa legenda. `@media (min-width:640px) and (max-height:820px)`
+              legenda jadi mendatar. `.timeline-control` TIDAK dipusatkan pakai
+              translate: dijepit `left:17rem; right:20rem; max-width:680px;
+              margin:auto` (lolos legenda kiri & panel statistik kanan) dan
+              `bottom:4.75rem` di atas tombol "Sembunyikan UI" (`.ui-toggle-btn`,
+              juga bawah-tengah). Tablet 640–1023px: pemutar melebar penuh dan
+              legenda disembunyikan via `.map-frame:has(.timeline-control)`.
 hooks/        useDashboardData.ts (hook utama, ~800 baris — lihat di bawah),
               useBurnedAreaOverlay.ts, useIsMobile.ts
 lib/          api.ts (client fetch bertipe; `authFetch`/`downloadWithAuth` untuk panggilan

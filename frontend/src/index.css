@@ -1582,9 +1582,11 @@ body {
   width: max-content;
   max-width: 15rem;
   /* Semua overlay + ringkasannya bisa lebih tinggi dari layar -- dibatasi ke
-     ruang antara baris kontrol atas dan kontrol zoom/legenda di kiri bawah,
-     lalu digulir di dalam. */
-  max-height: calc(100% - 6.5rem - 5.5rem);
+     ruang antara baris kontrol atas dan LEGENDA di kiri bawah (legenda
+     sendiri sudah di atas kontrol zoom: bottom 6.5rem + tinggi ~9rem saat
+     5 baris), lalu digulir di dalam. Dulu cuma menyisakan 5.5rem (tinggi
+     zoom) sehingga di laptop pendek (768px) kolom ini menimpa legenda. */
+  max-height: calc(100% - 6.5rem - 16rem);
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
@@ -9949,14 +9951,21 @@ a + a {
    bottom-sheet (MapSheet) & kolom FAB supaya tidak saling tumpang tindih. */
 .timeline-control {
   position: absolute;
-  left: 50%;
-  bottom: 1.25rem;
-  transform: translateX(-50%);
+  /* Desktop: TIDAK dipusatkan dengan translate(-50%) -- di laptop 1366px
+     pil 680px yang dipusatkan menabrak legenda (kiri) dan panel statistik
+     (kanan). Dijepit lewat left/right (legenda ~16rem, panel statistik 18rem
+     + margin) lalu max-width + margin auto memusatkannya di ruang yang
+     tersisa. bottom 4.75rem = di atas tombol "Sembunyikan UI" (bottom 30px
+     + tinggi ~38px) yang sama-sama di bawah-tengah. */
+  left: 17rem;
+  right: 20rem;
+  bottom: 4.75rem;
+  margin: 0 auto;
   z-index: 1000;
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  width: min(680px, calc(100% - 2rem));
+  max-width: 680px;
   padding: 0.5rem 0.7rem;
   border-radius: 0.6rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -10058,9 +10067,12 @@ a + a {
 }
 @media (max-width: 639px) {
   .timeline-control {
-    /* di atas peek MapSheet (~5rem) */
+    /* di atas peek MapSheet (~5rem); di mobile tidak ada legenda/panel
+       statistik, jadi jepitan kiri/kanan desktop dilepas. */
+    left: 0.5rem;
+    right: 0.5rem;
     bottom: 6.25rem;
-    width: calc(100% - 1rem);
+    max-width: none;
     gap: 0.4rem;
     padding: 0.4rem 0.5rem;
     flex-wrap: wrap;
@@ -10072,5 +10084,44 @@ a + a {
     justify-content: center;
     gap: 0.5rem;
     min-width: 0;
+  }
+}
+
+/* ---- Laptop kecil / tablet lanskap: kontrol kiri peta berebut tinggi ----
+   Di Acer TravelMate 1366x768 (peta ~600px tinggi) kolom kiri berisi
+   Lokasi+Basemap, .burned-control (4 chip + legenda kawasan), legenda, dan
+   zoom sekaligus. Legenda dibuat mendatar (2-3 baris) supaya .burned-control
+   dapat ruang gulir yang masuk akal. */
+@media (min-width: 640px) and (max-height: 820px) {
+  .map-legend {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 0.7rem;
+    row-gap: 0.3rem;
+    max-width: 17rem;
+    bottom: 6rem;
+  }
+  .map-legend-title {
+    width: 100%;
+  }
+  .map-legend-divider {
+    display: none;
+  }
+  .burned-control {
+    max-height: calc(100% - 6.5rem - 11.5rem);
+  }
+}
+
+/* Tablet lanskap (sidebar 200px): tidak cukup ruang untuk menjepit pemutar
+   waktu di antara legenda & panel statistik -- pemutar melebar penuh dan
+   legenda mengalah selama pemutar terbuka. */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .timeline-control {
+    left: 1rem;
+    right: 1rem;
+  }
+  .map-frame:has(.timeline-control) .map-legend {
+    display: none;
   }
 }
