@@ -184,7 +184,8 @@ def test_hotspots_endpoint_returns_map_view_payload(monkeypatch) -> None:
         assert body["count"] == 1
         assert body["hotspots"][0]["agency_name"] == "Agency"
         assert body["hotspots"][0]["province_name"] == "Aceh"
-        assert "confidence" not in body["hotspots"][0]
+        # confidence dipakai baris "Keyakinan" di popup peta -> ikut dikirim
+        assert body["hotspots"][0]["confidence"] == "high"
         assert "daynight" not in body["hotspots"][0]
         assert "polygon_metadata" not in body["hotspots"][0]
     finally:

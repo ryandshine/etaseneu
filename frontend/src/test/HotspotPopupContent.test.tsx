@@ -89,4 +89,10 @@ describe("HotspotPopupContent", () => {
     const dt = screen.getByText("Keyakinan");
     expect(dt.parentElement).toHaveTextContent("Tidak tersedia");
   });
+
+  it("treats the literal string 'Unknown' as unavailable", () => {
+    render(<HotspotPopupContent hotspot={{ ...mockHotspot, confidence: "Unknown" }} />);
+    const dt = screen.getByText("Keyakinan");
+    expect(dt.parentElement).toHaveTextContent("Tidak tersedia");
+  });
 });

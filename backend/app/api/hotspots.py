@@ -94,6 +94,7 @@ def _to_map_hotspot(hotspot: dict[str, object]) -> dict[str, object]:
         "longitude": hotspot.get("longitude"),
         "brightness": hotspot.get("brightness"),
         "frp": hotspot.get("frp"),
+        "confidence": hotspot.get("confidence"),
         "detected_at": hotspot.get("detected_at"),
         "agency_name": hotspot.get("agency_name"),
         "province_name": hotspot.get("province_name"),

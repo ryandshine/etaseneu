@@ -108,6 +108,7 @@ function formatConfidence(value?: string | null): string {
   }
   const raw = String(value).trim();
   const key = raw.toLowerCase();
+  if (key === "unknown" || key === "n/a" || key === "na" || key === "-") return "Tidak tersedia";
   if (key === "l" || key === "low") return "Rendah";
   if (key === "n" || key === "nominal") return "Nominal";
   if (key === "h" || key === "high") return "Tinggi";

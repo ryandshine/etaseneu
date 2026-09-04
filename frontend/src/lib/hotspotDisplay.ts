@@ -59,7 +59,7 @@ export function mapHotspotRecordToDashboardHotspot(
     brightness:
       hotspot.brightness === null || hotspot.brightness === undefined ? null : Number(hotspot.brightness),
     frp: hotspot.frp === null || hotspot.frp === undefined ? null : Number(hotspot.frp),
-    confidence: String(hotspot.confidence ?? "Unknown"),
+    confidence: String(hotspot.confidence ?? ""),
     daynight: String(hotspot.daynight ?? ""),
     detectedAt: String(hotspot.detected_at ?? ""),
     // view=map memberi field datar (fungsi_kawasan/kelompok); view=full memberi
