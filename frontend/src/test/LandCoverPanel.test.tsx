@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import type { ReactNode } from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Peta Leaflet + chart recharts tidak jalan mulus di jsdom (Canvas /
@@ -255,5 +255,40 @@ describe("LandCoverPanel", () => {
     const slider = screen.getByRole("slider");
     fireEvent.change(slider, { target: { value: "2024" } });
     await waitFor(() => expect(overlayYears).toContain("2024"));
+  });
+});
+
+describe("LandCoverPanel polling", () => {
+  it("keeps polling while running even when the step text does not change", async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      mockFetch((url) => {
+        if (url.includes("/land-cover/status")) {
+          calls += 1;
+          return jsonResponse({
+            state: "running",
+            step: "mengunduh sampel latih",
+            error: null,
+            computed_at: null,
+          });
+        }
+        return jsonResponse({}, 404);
+      });
+      render(<LandCoverPanel polygonId={1} />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const first = calls;
+      expect(first).toBeGreaterThanOrEqual(1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000 * 3 + 50);
+      });
+      // Dulu: setTimeout dijadwal ulang lewat dep [state, step] -> berhenti
+      // setelah 1 poll kalau step tidak berubah.
+      expect(calls).toBeGreaterThanOrEqual(first + 3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

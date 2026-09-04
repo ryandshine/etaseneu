@@ -139,7 +139,7 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
   const [overlay, setOverlay] = useState<OverlayFC | null>(null);
   const [outline, setOutline] = useState<Record<string, unknown> | null>(null);
   const overlayCache = useRef<Map<number, OverlayFC>>(new Map());
-  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchStatus = useCallback(async (): Promise<State> => {
     const res = await authFetch(`/api/land-cover/status?polygon_id=${polygonId}`);
@@ -166,26 +166,32 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
       })
       .catch(() => undefined);
     return () => {
-      if (pollTimer.current) clearTimeout(pollTimer.current);
+      if (pollTimer.current) clearInterval(pollTimer.current);
     };
   }, [fetchStatus, polygonId]);
 
+  // setInterval, BUKAN setTimeout yang dijadwal ulang lewat dep [state, step]:
+  // kalau langkah yang sama bertahan > POLL_MS (mis. "mengunduh sampel latih"
+  // ~30 dtk) effect itu tidak pernah jalan lagi -> polling mati diam-diam dan
+  // UI tampak "tidak ada progres" padahal analisis sudah selesai di server.
   useEffect(() => {
     if (state !== "running") return;
-    pollTimer.current = setTimeout(() => void fetchStatus(), POLL_MS);
+    const timer = setInterval(() => void fetchStatus(), POLL_MS);
+    pollTimer.current = timer;
     return () => {
-      if (pollTimer.current) clearTimeout(pollTimer.current);
+      clearInterval(timer);
+      pollTimer.current = null;
     };
-  }, [state, step, fetchStatus]);
+  }, [state, fetchStatus]);
 
   // Idle/error tidak butuh progres, tapi busy_elsewhere bisa berubah kapan
   // saja (user lain mulai/selesai analisis) -- polling longgar di sini
   // biar tombol "Jalankan Analisis" ke-update tanpa user reload halaman.
   useEffect(() => {
     if (state !== "idle" && state !== "error") return;
-    const timer = setTimeout(() => void fetchStatus(), POLL_IDLE_MS);
-    return () => clearTimeout(timer);
-  }, [state, busyElsewhere, fetchStatus]);
+    const timer = setInterval(() => void fetchStatus(), POLL_IDLE_MS);
+    return () => clearInterval(timer);
+  }, [state, fetchStatus]);
 
   useEffect(() => {
     if (state !== "done") return;
