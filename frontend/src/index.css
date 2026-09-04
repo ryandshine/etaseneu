@@ -8889,15 +8889,32 @@ a + a {
     max-width: 44vw;
   }
 
+  /* Tata letak BLOK (bukan kolom flex) dengan sengaja: kolom flex + area
+     gulir memampat anak-anaknya (flex-shrink default 1) begitu kontennya
+     mendekati tinggi sheet, sehingga baris "Estimasi Sentinel-2" / "Fungsi
+     Kawasan Hutan" kehilangan tinggi dan teks + toggle-nya saling tindih.
+     Blok + margin = tiap seksi selalu setinggi kontennya, body yang menggulir. */
   .map-sheet__body {
     flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     padding: 0.25rem 1rem 1.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
+  }
+
+  .map-sheet__body > * + * {
+    margin-top: 0.35rem;
+  }
+
+  /* Jarak lebih lega sebelum tiap judul seksi (menang atas aturan generik
+     di atas karena lebih spesifik). */
+  .map-sheet__body > .map-sheet__title {
+    margin-top: 0.9rem;
+  }
+
+  .map-sheet__body > .map-sheet__title:first-child {
+    margin-top: 0.2rem;
   }
 
   .map-sheet__title {
