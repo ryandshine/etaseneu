@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { geoJSON as buildLeafletGeoJSON } from "leaflet";
 import { GeoJSON, MapContainer, TileLayer, useMap } from "react-leaflet";
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import {
   LAND_COVER_CLASSES,
@@ -134,6 +134,7 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [busyElsewhere, setBusyElsewhere] = useState(false);
   const [result, setResult] = useState<ResultResponse | null>(null);
+  const [tab, setTab] = useState<"peta" | "tren">("peta");
   const [year, setYear] = useState<number>(LAST_YEAR);
   const [overlay, setOverlay] = useState<OverlayFC | null>(null);
   const [outline, setOutline] = useState<Record<string, unknown> | null>(null);
@@ -156,6 +157,7 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
     setOverlay(null);
     setOutline(null);
     setYear(LAST_YEAR);
+    setTab("peta");
     void fetchStatus();
     void authFetch(`/api/polygons/${polygonId}`)
       .then((r) => (r.ok ? r.json() : null))
@@ -249,6 +251,18 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
   const chartData = useMemo(() => (result ? buildChartData(result.table) : []), [result]);
   const overlayEmpty = state === "done" && overlay !== null && overlay.features.length === 0;
   const usedRandomForest = result != null && Number(result.meta.model_trees ?? 0) > 0;
+
+  // Kelas yang tidak pernah punya luas berarti (>= 0,5 ha) di poligon ini --
+  // disembunyikan dari tabel/grafik/kartu supaya baris "0 ha" tidak merebut
+  // atensi dari kelas yang beneran berdampak (ambang sama dengan backend
+  // _MEANINGFUL_HA di land_cover_service.py::_build_summary_text).
+  const visibleClasses = useMemo(() => {
+    if (!result) return LAND_COVER_CLASSES;
+    return LAND_COVER_CLASSES.filter((c) =>
+      LAND_COVER_YEARS.some((y) => (result.table[String(y)]?.[c.key]?.area_ha ?? 0) >= 0.5),
+    );
+  }, [result]);
+  const hiddenClassCount = LAND_COVER_CLASSES.length - visibleClasses.length;
 
   if (state === "idle") {
     return (
@@ -354,40 +368,61 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
         </p>
       )}
 
-      <div className="lc-yearbar">
+      <div className="lc-tabs" role="tablist" aria-label="Tampilan tutupan lahan">
         <button
           type="button"
-          className="lc-step"
-          aria-label="Tahun sebelumnya"
-          disabled={year <= FIRST_YEAR}
-          onClick={() => setYear((y) => Math.max(FIRST_YEAR, y - 1))}
+          role="tab"
+          aria-selected={tab === "peta"}
+          className={`lc-tab${tab === "peta" ? " lc-tab--active" : ""}`}
+          onClick={() => setTab("peta")}
         >
-          <Chevron dir="left" />
+          Peta Spasial
         </button>
-        <input
-          type="range"
-          className="lc-range"
-          min={FIRST_YEAR}
-          max={LAST_YEAR}
-          step={1}
-          value={year}
-          aria-label="Tahun tutupan lahan"
-          onChange={(e) => setYear(Number(e.target.value))}
-        />
         <button
           type="button"
-          className="lc-step"
-          aria-label="Tahun berikutnya"
-          disabled={year >= LAST_YEAR}
-          onClick={() => setYear((y) => Math.min(LAST_YEAR, y + 1))}
+          role="tab"
+          aria-selected={tab === "tren"}
+          className={`lc-tab${tab === "tren" ? " lc-tab--active" : ""}`}
+          onClick={() => setTab("tren")}
         >
-          <Chevron dir="right" />
+          Tren Historis
         </button>
-        <strong className="lc-year">{year}</strong>
       </div>
 
-      <div className="lc-visual">
-        <div className="lc-map">
+      {tab === "peta" ? (
+        <div className="lc-mapstage">
+          <div className="lc-mapstage__toolbar">
+            <button
+              type="button"
+              className="lc-step"
+              aria-label="Tahun sebelumnya"
+              disabled={year <= FIRST_YEAR}
+              onClick={() => setYear((y) => Math.max(FIRST_YEAR, y - 1))}
+            >
+              <Chevron dir="left" />
+            </button>
+            <input
+              type="range"
+              className="lc-range"
+              min={FIRST_YEAR}
+              max={LAST_YEAR}
+              step={1}
+              value={year}
+              aria-label="Tahun tutupan lahan"
+              onChange={(e) => setYear(Number(e.target.value))}
+            />
+            <button
+              type="button"
+              className="lc-step"
+              aria-label="Tahun berikutnya"
+              disabled={year >= LAST_YEAR}
+              onClick={() => setYear((y) => Math.min(LAST_YEAR, y + 1))}
+            >
+              <Chevron dir="right" />
+            </button>
+            <strong className="lc-year">{year}</strong>
+          </div>
+
           <MapContainer
             {...SMOOTH_ZOOM_MAP_PROPS}
             center={[-2, 118]}
@@ -427,143 +462,161 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
               petak di bawah ambang luas minimum.
             </p>
           )}
-        </div>
 
-        {/* Luas per kelas TAHUN TERPILIH, langsung kebaca tanpa hover grafik
-            atau geser tabel horizontal -- ini yang paling sering dicari
-            orang pertama kali ("berapa hektar hutannya sekarang?"). */}
-        <ul className="lc-classgrid" aria-label={`Luas per kelas tahun ${year}`}>
-          {LAND_COVER_CLASSES.map((c) => {
-            const cell = result?.table[String(year)]?.[c.key];
-            return (
-              <li key={c.key} className="lc-classgrid__item">
-                <span className="lc-swatch" style={{ background: c.color }} aria-hidden />
-                <span className="lc-classgrid__label">{c.label}</span>
-                <span className="lc-classgrid__value">
-                  {cell ? `${Math.round(cell.area_ha).toLocaleString("id-ID")} ha` : "–"}
-                </span>
-                <span className="lc-classgrid__pct">{cell ? `${cell.pct.toFixed(1)}%` : ""}</span>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-
-      <div className="lc-chart">
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={chartData} margin={{ top: 8, right: 6, bottom: 0, left: -18 }} barCategoryGap="22%">
-            <XAxis
-              dataKey="year"
-              tick={{ fontSize: 11, fill: "rgba(245,239,230,0.6)" }}
-              tickLine={false}
-              axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
-            />
-            <YAxis
-              width={40}
-              domain={[0, 100]}
-              ticks={[0, 25, 50, 75, 100]}
-              tickFormatter={(v) => `${v}%`}
-              tick={{ fontSize: 11, fill: "rgba(245,239,230,0.6)" }}
-              tickLine={false}
-              axisLine={false}
-            />
-            <Tooltip
-              cursor={{ fill: "rgba(255,255,255,0.06)" }}
-              content={<LandCoverTooltip />}
-              wrapperStyle={{ outline: "none" }}
-            />
-            {LAND_COVER_CLASSES.map((c) => (
-              <Bar
-                key={c.key}
-                dataKey={c.key}
-                stackId="lc"
-                fill={c.color}
-                isAnimationActive={false}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      {result && (
-        <div className="lc-table-wrap">
-          <table className="lc-table">
-            <thead>
-              <tr>
-                <th scope="col">Kelas</th>
-                {LAND_COVER_YEARS.map((y) => (
-                  <th key={y} scope="col">
-                    {y}
-                  </th>
-                ))}
-                <th scope="col">
-                  Δ {FIRST_YEAR}→{LAST_YEAR}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {LAND_COVER_CLASSES.map((c) => {
-                const delta = result.net_change[c.key] ?? 0;
+          {/* Luas per kelas TAHUN TERPILIH, langsung kebaca tanpa hover
+              grafik atau pindah tab -- ini yang paling sering dicari orang
+              pertama kali ("berapa hektar hutannya sekarang?"). */}
+          <div className="lc-floatcard">
+            <ul className="lc-classgrid" aria-label={`Luas per kelas tahun ${year}`}>
+              {visibleClasses.map((c) => {
+                const cell = result?.table[String(year)]?.[c.key];
+                const negligible = !cell || cell.area_ha < 0.5;
                 return (
-                  <tr key={c.key}>
-                    <th scope="row">
-                      <span className="lc-swatch" style={{ background: c.color }} aria-hidden />
-                      {c.label}
-                    </th>
-                    {LAND_COVER_YEARS.map((y) => {
-                      const cell = result.table[String(y)]?.[c.key];
-                      return (
-                        <td key={y}>
-                          {cell ? (
-                            <>
-                              {Math.round(cell.area_ha)}
-                              <span className="lc-pct"> {cell.pct.toFixed(1)}%</span>
-                            </>
-                          ) : (
-                            "–"
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td
-                      className={
-                        delta > 0.5 ? "lc-delta lc-delta--up" : delta < -0.5 ? "lc-delta lc-delta--down" : "lc-delta"
-                      }
-                    >
-                      {formatDelta(delta)}
-                    </td>
-                  </tr>
+                  <li
+                    key={c.key}
+                    className={`lc-classgrid__item${negligible ? " lc-classgrid__item--zero" : ""}`}
+                  >
+                    <span className="lc-swatch" style={{ background: c.color }} aria-hidden />
+                    <span className="lc-classgrid__label">{c.label}</span>
+                    <span className="lc-classgrid__value">
+                      {negligible ? "–" : `${Math.round(cell!.area_ha).toLocaleString("id-ID")} ha`}
+                    </span>
+                    <span className="lc-classgrid__pct">
+                      {negligible ? "" : `${cell!.pct.toFixed(1)}%`}
+                    </span>
+                  </li>
                 );
               })}
-            </tbody>
-          </table>
+            </ul>
+          </div>
         </div>
-      )}
+      ) : (
+        <div className="lc-trend">
+          <div className="lc-chart">
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={chartData} margin={{ top: 8, right: 10, bottom: 0, left: -18 }}>
+                <XAxis
+                  dataKey="year"
+                  tick={{ fontSize: 11, fill: "rgba(245,239,230,0.6)" }}
+                  tickLine={false}
+                  axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                />
+                <YAxis
+                  width={40}
+                  domain={[0, 100]}
+                  ticks={[0, 25, 50, 75, 100]}
+                  tickFormatter={(v) => `${v}%`}
+                  tick={{ fontSize: 11, fill: "rgba(245,239,230,0.6)" }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip
+                  cursor={{ stroke: "rgba(255,255,255,0.15)" }}
+                  content={<LandCoverTooltip />}
+                  wrapperStyle={{ outline: "none" }}
+                />
+                {visibleClasses.map((c) => (
+                  <Line
+                    key={c.key}
+                    type="monotone"
+                    dataKey={c.key}
+                    stroke={c.color}
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
 
-      {result && <p className="lc-summary">{result.summary_text}</p>}
+          {result && (
+            <div className="lc-table-wrap">
+              <table className="lc-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Kelas</th>
+                    {LAND_COVER_YEARS.map((y) => (
+                      <th key={y} scope="col">
+                        {y}
+                      </th>
+                    ))}
+                    <th scope="col">
+                      Δ {FIRST_YEAR}→{LAST_YEAR}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleClasses.map((c) => {
+                    const delta = result.net_change[c.key] ?? 0;
+                    return (
+                      <tr key={c.key}>
+                        <th scope="row">
+                          <span className="lc-swatch" style={{ background: c.color }} aria-hidden />
+                          {c.label}
+                        </th>
+                        {LAND_COVER_YEARS.map((y) => {
+                          const cell = result.table[String(y)]?.[c.key];
+                          const negligible = !cell || cell.area_ha < 0.5;
+                          return (
+                            <td key={y}>
+                              {negligible ? (
+                                "–"
+                              ) : (
+                                <div className="lc-cell">
+                                  <span className="lc-cell__ha">{Math.round(cell!.area_ha)} ha</span>
+                                  <span className="lc-cell__pct">{cell!.pct.toFixed(1)}%</span>
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td
+                          className={
+                            delta > 0.5 ? "lc-delta lc-delta--up" : delta < -0.5 ? "lc-delta lc-delta--down" : "lc-delta"
+                          }
+                        >
+                          {formatDelta(delta)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {hiddenClassCount > 0 && (
+                <p className="lc-hidden-note">
+                  {hiddenClassCount} kelas lain tidak ditemukan di poligon ini.
+                </p>
+              )}
+            </div>
+          )}
 
-      <p className="lc-note">
-        &quot;Hutan&quot; = tutupan berpohon; kebun berpohon (sawit/karet) belum
-        tentu terpisah. Estimasi satelit, bukan angka resmi.
-      </p>
+          {result && <p className="lc-summary">{result.summary_text}</p>}
 
-      {result && (
-        <p className="lc-foot">
-          {usedRandomForest
-            ? `Random Forest ${result.meta.model_trees} pohon · ${result.meta.n_training} titik latih · OOB ${
-                result.meta.oob_accuracy != null
-                  ? Number(result.meta.oob_accuracy).toFixed(2)
-                  : "–"
-              }`
-            : "Dynamic World langsung — area terlalu seragam untuk melatih Random Forest"}
-          {result.meta.computed_at
-            ? ` · ${new Date(String(result.meta.computed_at)).toLocaleDateString("id-ID", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              })}`
-            : ""}
-        </p>
+          <p className="lc-note">
+            &quot;Hutan&quot; = tutupan berpohon; kebun berpohon (sawit/karet) belum
+            tentu terpisah. Estimasi satelit, bukan angka resmi.
+          </p>
+
+          {result && (
+            <p className="lc-foot">
+              {usedRandomForest
+                ? `Random Forest ${result.meta.model_trees} pohon · ${result.meta.n_training} titik latih · OOB ${
+                    result.meta.oob_accuracy != null
+                      ? Number(result.meta.oob_accuracy).toFixed(2)
+                      : "–"
+                  }`
+                : "Dynamic World langsung — area terlalu seragam untuk melatih Random Forest"}
+              {result.meta.computed_at
+                ? ` · ${new Date(String(result.meta.computed_at)).toLocaleDateString("id-ID", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}`
+                : ""}
+            </p>
+          )}
+        </div>
       )}
     </section>
   );

@@ -14,8 +14,8 @@ vi.mock("react-leaflet", () => ({
 }));
 
 vi.mock("recharts", () => ({
-  Bar: () => <div />,
-  BarChart: ({ children }: { children?: ReactNode }) => <div data-testid="lc-chart">{children}</div>,
+  Line: () => <div />,
+  LineChart: ({ children }: { children?: ReactNode }) => <div data-testid="lc-chart">{children}</div>,
   ResponsiveContainer: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Tooltip: () => <div />,
   XAxis: () => <div />,
@@ -33,6 +33,7 @@ const ROWS = [
     nama_kab: "Kampar",
     nama_kec: null,
     skema: "HD",
+    wilker_bps: "Balai PS Kampar",
     luas_final: 120.5,
     land_cover_status: "done",
     land_cover_computed_at: "2026-08-30T00:00:00",
@@ -45,6 +46,7 @@ const ROWS = [
     nama_kab: "OKI",
     nama_kec: null,
     skema: null,
+    wilker_bps: "Balai PS Palembang",
     luas_final: 50.0,
     land_cover_status: null,
     land_cover_computed_at: null,
@@ -126,6 +128,24 @@ describe("TutupanLahanView", () => {
     expect(
       await screen.findByRole("button", { name: /jalankan analisis/i }),
     ).toBeInTheDocument();
+  });
+
+  it("filters via the Filter popover, shows a removable pill, and clearing it restores the list", async () => {
+    render(<TutupanLahanView />);
+    await screen.findByText("GAPOKTAN MEKAR JAYA");
+
+    fireEvent.click(screen.getByRole("button", { name: /^filter$/i }));
+    const provinceSelect = screen.getByLabelText("Provinsi") as HTMLSelectElement;
+    fireEvent.change(provinceSelect, { target: { value: "Sumatera Selatan" } });
+
+    expect(screen.queryByText("GAPOKTAN MEKAR JAYA")).not.toBeInTheDocument();
+    expect(screen.getByText("MHA BATU BATU")).toBeInTheDocument();
+
+    const pill = screen.getByRole("button", { name: /hapus filter sumatera selatan/i });
+    expect(pill).toBeInTheDocument();
+
+    fireEvent.click(pill);
+    expect(await screen.findByText("GAPOKTAN MEKAR JAYA")).toBeInTheDocument();
   });
 
   it("preselects a polygon from initialPolygonId", async () => {

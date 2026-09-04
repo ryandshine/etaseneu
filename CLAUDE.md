@@ -141,10 +141,21 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
     daftar SEMUA poligon KPS+Hutan Adat sekaligus status analisisnya (`GET /api/land-cover/polygons`
     — bulk `LEFT JOIN polygon_metadata ↔ land_cover_analysis`, method
     `list_polygons_with_land_cover_status` di `postgres_store/_land_cover.py`), cari + filter
-    Provinsi/Kabupaten/Wilker BPS/Status (client-side, konsisten pola Matriks Data), klik satu baris
-    → detail me-reuse `LandCoverPanel.tsx` apa adanya (peta rona per tahun + peta&grafik dua-kolom di
-    layar lebar + grid ringkasan luas per kelas untuk tahun terpilih + tabel Δ + ringkasan + tombol
-    "Jalankan Analisis" manual — TIDAK ada tombol massal). `LandCoverPanel` sekarang **cuma** dirender
+    Provinsi/Kabupaten/Wilker BPS/Status (ringkas jadi tombol "Filter" + popover + pill yang bisa
+    dilepas satu-satu, bukan 4 `<select>` berbaris — client-side, dasarnya masih pola Matriks Data),
+    klik satu baris → detail me-reuse `LandCoverPanel.tsx` apa adanya. Detailnya dua tab
+    ("Peta Spasial" default / "Tren Historis", state lokal `tab`, berbagi state `year` yang sama):
+    tab Peta = peta jadi elemen dominan tunggal (`.lc-mapstage`, tinggi `70vh`) dengan toolbar tahun
+    & grid ringkasan luas-per-kelas mengambang di atasnya (glassmorphism, `.lc-mapstage__toolbar` /
+    `.lc-floatcard` — static/tanpa blur di layar <640px biar tidak menutupi peta); tab Tren = grafik
+    garis multi-kelas (bukan stacked bar lagi — recharts `LineChart`), tabel Δ (sel ha tebal/persen
+    redup bertingkat vertikal), ringkasan teks, tombol "Jalankan Analisis" manual — TIDAK ada tombol
+    massal. Kelas yang tidak pernah punya luas ≥0,5 ha di poligon itu (`_MEANINGFUL_HA` — konstanta
+    sama persis di frontend `LandCoverPanel.tsx` dan backend `land_cover_service.py`) disembunyikan
+    total dari tabel/grafik/kartu (bukan ditampilkan "0 ha" yang merebut atensi); `_build_summary_text`
+    juga pakai ambang yang sama supaya kalimat ringkasan tidak bilang "beralih ke X (+0 ha)" yang
+    kontradiktif atau "naik 0 ha" saat perubahan hutan sebenarnya dianggap "relatif stabil".
+    `LandCoverPanel` sekarang **cuma** dirender
     di sini (panel penuhnya dicabut dari `KpsDetailView.tsx`, diganti satu baris ringkas
     `.lc-summary-link` yang fetch `GET /api/land-cover/status` lalu buka menu ini via callback
     `onOpenTutupanLahan` dari `App.tsx`, pola sama seperti `onOpenKpsDetail`). URL

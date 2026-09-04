@@ -99,6 +99,12 @@ _CLASS_LABEL = {
     "terbuka": "Lahan Terbuka", "air": "Badan Air",
 }
 
+# Ambang "berarti" dalam hektar -- dipakai supaya kalimat ringkasan tidak
+# menyebut perubahan yang dibulatkan jadi "+0 ha" (kontradiktif: bilang
+# "beralih ke X" tapi angkanya nol). Sama dengan ambang di frontend (lihat
+# threshold .lc-delta / hasData() di LandCoverPanel.tsx).
+_MEANINGFUL_HA = 0.5
+
 
 def _build_summary_text(table: dict[int, dict[str, dict]]) -> str:
     a, b = table.get(YEARS[0]), table.get(YEARS[-1])
@@ -106,16 +112,21 @@ def _build_summary_text(table: dict[int, dict[str, dict]]) -> str:
         return "Data tidak lengkap untuk membuat ringkasan."
     delta = b["hutan"]["area_ha"] - a["hutan"]["area_ha"]
     pct = (delta / a["hutan"]["area_ha"] * 100) if a["hutan"]["area_ha"] else 0.0
-    arah = "turun" if delta < 0 else "naik"
     nc = _net_change(table)
     gainers = sorted(
-        ((k, v) for k, v in nc.items() if k != "hutan" and v > 0),
+        ((k, v) for k, v in nc.items() if k != "hutan" and v > _MEANINGFUL_HA),
         key=lambda kv: kv[1], reverse=True,
     )[:2]
     ke = (
         " Beralih terutama ke " + " dan ".join(f"{_CLASS_LABEL[k]} (+{v:,.0f} ha)" for k, v in gainers) + "."
         if gainers else ""
     )
+    if abs(delta) <= _MEANINGFUL_HA:
+        return (
+            f"Tutupan Hutan relatif stabil ({pct:+.1f}%) "
+            f"dari {YEARS[0]} ke {YEARS[-1]}.{ke}"
+        )
+    arah = "turun" if delta < 0 else "naik"
     return (
         f"Tutupan Hutan {arah} {abs(delta):,.0f} ha ({pct:+.1f}%) "
         f"dari {YEARS[0]} ke {YEARS[-1]}.{ke}"

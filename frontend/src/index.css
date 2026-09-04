@@ -920,11 +920,122 @@ body {
   line-height: 1.4;
 }
 
-.lc-yearbar {
+/* Segmented control "Peta Spasial" / "Tren Historis" -- pill sederhana,
+   bukan tab bergaris ala browser. Menggantikan tumpukan panjang lama
+   (peta -> legenda -> grafik -> tabel -> ringkasan dalam satu scroll). */
+.lc-tabs {
+  display: inline-flex;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  align-self: flex-start;
+}
+.lc-tab {
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: rgba(245, 239, 230, 0.55);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+.lc-tab:hover {
+  color: rgba(245, 239, 230, 0.85);
+}
+.lc-tab--active {
+  background: rgba(255, 142, 66, 0.18);
+  color: #ffd9bf;
+}
+
+/* Peta jadi elemen dominan tunggal di tab "Peta Spasial" -- toolbar tahun &
+   ringkasan kelas mengambang DI ATAS peta (glassmorphism), bukan block
+   statis yang mendorong peta jadi kecil. */
+.lc-mapstage {
+  position: relative;
+  border-radius: 0.6rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.lc-mapstage .leaflet-container {
+  width: 100%;
+  height: 70vh;
+  min-height: 420px;
+  max-height: 760px;
+  background: #0c0907;
+}
+
+.lc-mapstage__toolbar {
+  position: absolute;
+  z-index: 500;
+  top: 0.85rem;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(20, 15, 11, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  width: min(20rem, calc(100% - 2rem));
 }
+
+/* Ringkasan luas per kelas TAHUN TERPILIH -- kartu mengambang di sudut peta.
+   Di layar sempit (sama ambang useIsMobile, <=639px) glass mengambang
+   menutupi peta alih-alih membantu, jadi diturunkan jadi block biasa di
+   bawah peta. */
+.lc-floatcard {
+  position: absolute;
+  z-index: 500;
+  bottom: 0.85rem;
+  left: 0.85rem;
+  max-width: 20rem;
+  padding: 0.6rem;
+  border-radius: 0.6rem;
+  background: rgba(20, 15, 11, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+@media (max-width: 639px) {
+  .lc-floatcard {
+    position: static;
+    max-width: none;
+    margin-top: 0.6rem;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+.lc-map__empty {
+  position: absolute;
+  z-index: 500;
+  inset: auto 0 0 0;
+  margin: 0;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: rgba(245, 239, 230, 0.7);
+  background: rgba(12, 9, 7, 0.82);
+  backdrop-filter: blur(2px);
+}
+
+.lc-trend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
 .lc-step {
   display: inline-flex;
   align-items: center;
@@ -1003,62 +1114,25 @@ body {
 /* LandCoverPanel sekarang cuma dirender di panel detail TutupanLahanView
    (lebar, lihat .tl-detail) -- BUKAN lagi di sidebar sempit Detail KPS
    (panelnya sudah dicabut dari sana, diganti .lc-summary-link). Jadi aman
-   dibuat lebar & tinggi tanpa mikirin konteks sempit yang lain. */
-.lc-visual {
-  display: grid;
-  gap: 0.85rem;
-}
-@media (min-width: 860px) {
-  .lc-visual {
-    grid-template-columns: minmax(0, 1.5fr) minmax(15rem, 1fr);
-    align-items: start;
-  }
-}
+   dibuat lebar & tinggi tanpa mikirin konteks sempit yang lain. Tata letak
+   dua-kolom lama (.lc-visual/.lc-map) sudah diganti .lc-mapstage + kartu
+   mengambang (lihat dekat .lc-tabs di atas) -- peta jadi satu-satunya
+   elemen dominan di tab "Peta Spasial". */
 
-.lc-map {
-  position: relative;
-  border-radius: 0.5rem;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-.lc-map .leaflet-container {
-  width: 100%;
-  height: 320px;
-  background: #0c0907;
-}
-@media (min-width: 640px) {
-  .lc-map .leaflet-container {
-    height: 420px;
-  }
-}
-@media (min-width: 1400px) {
-  .lc-map .leaflet-container {
-    height: 520px;
-  }
-}
-.lc-map__empty {
-  position: absolute;
-  inset: auto 0 0 0;
-  margin: 0;
-  padding: 0.45rem 0.6rem;
-  font-size: 0.68rem;
-  line-height: 1.35;
-  color: rgba(245, 239, 230, 0.7);
-  background: rgba(12, 9, 7, 0.82);
-  backdrop-filter: blur(2px);
-}
-
-/* Ringkasan luas per kelas UNTUK TAHUN TERPILIH -- pengganti legenda polos
-   lama (cuma warna+nama). Sengaja berupa grid kartu, bukan daftar inline,
-   biar angkanya jadi hal pertama yang kebaca, bukan cuma warna. */
+/* Ringkasan luas per kelas UNTUK TAHUN TERPILIH -- sekarang isi kartu
+   mengambang (.lc-floatcard), jadi 2 kolom tetap (bukan auto-fill lebar)
+   biar muat di kartu sempit ~20rem. */
 .lc-classgrid {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
   align-content: start;
+}
+.lc-classgrid__item--zero {
+  opacity: 0.4;
 }
 .lc-classgrid__item {
   display: grid;
@@ -1184,8 +1258,27 @@ body {
   left: 0;
   background: #1a120d;
 }
-.lc-pct {
+/* Sel tabel: hektar tebal-terang di atas, persen kecil-redup di bawah --
+   sebelumnya inline sebaris ("100 60.0%") yang saling berhimpit. */
+.lc-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+}
+.lc-cell__ha {
+  font-weight: 700;
+  color: #f5efe6;
+}
+.lc-cell__pct {
+  font-size: 0.64rem;
   color: rgba(245, 239, 230, 0.45);
+}
+.lc-hidden-note {
+  margin: 0.4rem 0 0;
+  padding: 0 0.55rem;
+  font-size: 0.62rem;
+  color: rgba(245, 239, 230, 0.4);
 }
 .lc-delta {
   font-weight: 600;
@@ -8890,13 +8983,103 @@ a + a {
   gap: 0.5rem;
 }
 
-.tl-filters {
+/* Filter jadi popover+pills (bukan 4 select berbaris) -- ringkas sesuai
+   permintaan desain "compact filter pills/popover". */
+.tl-filterbar {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tl-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f4f5f7;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tl-filter-toggle:hover {
+  border-color: rgba(255, 142, 66, 0.4);
+}
+.tl-filter-toggle[aria-expanded="true"] {
+  border-color: rgba(255, 142, 66, 0.55);
+  background: rgba(255, 142, 66, 0.1);
+}
+
+.tl-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: #ff8c42;
+  color: #1a120d;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.tl-filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.tl-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 142, 66, 0.3);
+  background: rgba(255, 142, 66, 0.08);
+  color: #ffd9bf;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  max-width: 11rem;
+}
+.tl-filter-pill span {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+.tl-filter-pill:hover {
+  background: rgba(255, 142, 66, 0.16);
+}
+
+.tl-filter-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: transparent;
+}
+.tl-filter-popover {
+  position: absolute;
+  z-index: 41;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  width: 19rem;
+  max-width: calc(100vw - 2rem);
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: 0.6rem;
+  background: #1a120d;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
-
-.tl-filters .matrix-field {
+.tl-filter-popover .matrix-field {
   min-width: 0;
 }
 
@@ -8925,13 +9108,15 @@ a + a {
   font-size: 0.85rem;
 }
 
+/* Kolom vertikal (bukan lagi nama-vs-badge berebut satu baris) -- nama
+   dapat ruang penuh untuk 2 baris tanpa elipsis, badge status jadi baris
+   sendiri yang tenang. */
 .tl-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.3rem;
   width: 100%;
-  padding: 0.6rem 0.55rem;
+  padding: 0.65rem 0.6rem;
   border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
@@ -8950,26 +9135,22 @@ a + a {
   border-color: rgba(255, 78, 0, 0.35);
 }
 
-.tl-row-body {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+.tl-row-name {
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.tl-row-top {
+.tl-row-meta {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-}
-
-.tl-row-name {
-  font-size: 0.78rem;
-  font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  gap: 0.45rem;
+  font-size: 0.68rem;
+  color: #9ca3af;
 }
 
 .tl-row-layer {
@@ -8978,43 +9159,42 @@ a + a {
   font-weight: 800;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #9ca3af;
+  color: #ffb173;
 }
 
-.tl-row-meta {
-  font-size: 0.68rem;
-  color: #9ca3af;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
+/* Titik warna + teks redup, bukan chip warna solid -- "tenang &
+   proporsional" alih-alih mencolok merebut atensi dari nama poligon. */
 .tl-badge {
-  flex-shrink: 0;
-  font-size: 0.6rem;
-  font-weight: 700;
-  padding: 0.18rem 0.5rem;
-  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  align-self: flex-start;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #9ca3af;
   white-space: nowrap;
+}
+.tl-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
 }
 
 .tl-badge--idle {
-  background: rgba(107, 114, 128, 0.2);
-  color: #d1d5db;
+  color: #9ca3af;
 }
 
 .tl-badge--running {
-  background: rgba(245, 158, 11, 0.16);
   color: #fcd34d;
 }
 
 .tl-badge--done {
-  background: rgba(16, 185, 129, 0.16);
   color: #6ee7b7;
 }
 
 .tl-badge--error {
-  background: rgba(239, 68, 68, 0.16);
   color: #fca5a5;
 }
 

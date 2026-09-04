@@ -96,6 +96,33 @@ def test_net_change_and_summary() -> None:
     assert "Hutan" in text and "930" in text
 
 
+def test_summary_says_stabil_when_hutan_change_is_negligible() -> None:
+    # Delta hutan 0,3 ha -- di bawah ambang _MEANINGFUL_HA (0,5), tidak boleh
+    # dibilang "naik 0 ha" (kontradiktif: 0 tapi disebut "naik").
+    table = {
+        2021: {"hutan": {"area_ha": 5400.0, "pct": 74.9}},
+        2025: {"hutan": {"area_ha": 5400.3, "pct": 74.9}},
+    }
+    text = _build_summary_text(table)
+    assert "relatif stabil" in text
+    assert "naik" not in text and "turun" not in text
+
+
+def test_summary_omits_gainers_below_meaningful_threshold() -> None:
+    # net_change semak = 0,2 ha -- lolos filter lama (> 0) tapi dibulatkan
+    # jadi "+0 ha" kalau ditampilkan; sekarang harus disaring habis, bukan
+    # muncul sebagai "Beralih terutama ke Semak/Belukar (+0 ha)".
+    table = {
+        2021: {"hutan": {"area_ha": 5400.0, "pct": 90.0}, "semak": {"area_ha": 100.0, "pct": 10.0}},
+        2025: {"hutan": {"area_ha": 4470.0, "pct": 74.5}, "semak": {"area_ha": 100.2, "pct": 10.0}},
+    }
+    text = _build_summary_text(table)
+    assert "+0 ha" not in text
+    assert "Beralih terutama ke" not in text
+    text = _build_summary_text(table)
+    assert "Hutan" in text and "930" in text
+
+
 def test_summary_incomplete_data() -> None:
     assert "tidak lengkap" in _build_summary_text({2021: {}}).lower()
 

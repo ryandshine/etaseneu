@@ -17,8 +17,8 @@ vi.mock("react-leaflet", () => ({
 }));
 
 vi.mock("recharts", () => ({
-  Bar: () => <div />,
-  BarChart: ({ children }: { children?: ReactNode }) => <div data-testid="lc-chart">{children}</div>,
+  Line: () => <div />,
+  LineChart: ({ children }: { children?: ReactNode }) => <div data-testid="lc-chart">{children}</div>,
   ResponsiveContainer: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Tooltip: () => <div />,
   XAxis: () => <div />,
@@ -131,7 +131,7 @@ describe("LandCoverPanel", () => {
     expect(await screen.findByText(/Menghitung/i)).toBeInTheDocument();
   });
 
-  it("done: renders the per-class area grid (for the selected year) and the summary", async () => {
+  it("done: defaults to the Peta Spasial tab, showing the floating per-class area grid", async () => {
     mockFetch((url) => {
       if (url.includes("/land-cover/status")) {
         return jsonResponse({
@@ -157,7 +157,79 @@ describe("LandCoverPanel", () => {
     expect(within(classGrid).getByText("Badan Air")).toBeInTheDocument();
     // Data RESULT.table punya hutan area_ha:100 pct:60 di tiap tahun.
     expect(within(classGrid).getByText("100 ha")).toBeInTheDocument();
+    // Grafik/tabel/ringkasan ada di tab lain, belum tampil di tab default.
+    expect(screen.queryByText(/Tutupan Hutan turun 50 ha/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /peta spasial/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("done: switching to the Tren Historis tab reveals the chart, table, and summary", async () => {
+    mockFetch((url) => {
+      if (url.includes("/land-cover/status")) {
+        return jsonResponse({
+          state: "done",
+          step: null,
+          error: null,
+          computed_at: RESULT.meta.computed_at,
+        });
+      }
+      if (url.includes("/land-cover/result")) return jsonResponse(RESULT);
+      if (url.includes("/land-cover/overlay")) {
+        return jsonResponse({ type: "FeatureCollection", features: [] });
+      }
+      return jsonResponse({}, 404);
+    });
+    render(<LandCoverPanel polygonId={1} />);
+    await screen.findByRole("list", { name: /luas per kelas tahun 2025/i });
+    fireEvent.click(screen.getByRole("tab", { name: /tren historis/i }));
+    expect(await screen.findByTestId("lc-chart")).toBeInTheDocument();
     expect(await screen.findByText(/Tutupan Hutan turun 50 ha/i)).toBeInTheDocument();
+    // Tabel bertingkat: ha & persen sebagai elemen terpisah, bukan satu baris
+    // inline (RESULT punya hutan 100ha/60% identik tiap tahun -> muncul >1x).
+    expect(screen.getAllByText("100 ha").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("60.0%").length).toBeGreaterThan(0);
+  });
+
+  it("done: hides a class row entirely when it has no meaningful area in any year", async () => {
+    const zeroClassResult = {
+      ...RESULT,
+      table: Object.fromEntries(
+        YEARS().map((y) => [
+          String(y),
+          {
+            hutan: { area_ha: 100, pct: 76.9 },
+            semak: { area_ha: 30, pct: 23.1 },
+            // pertanian/terbuka/air tidak pernah ada di poligon ini.
+          },
+        ]),
+      ),
+      net_change: { hutan: -10, semak: 10, pertanian: 0, terbuka: 0, air: 0 },
+    };
+    mockFetch((url) => {
+      if (url.includes("/land-cover/status")) {
+        return jsonResponse({
+          state: "done",
+          step: null,
+          error: null,
+          computed_at: RESULT.meta.computed_at,
+        });
+      }
+      if (url.includes("/land-cover/result")) return jsonResponse(zeroClassResult);
+      if (url.includes("/land-cover/overlay")) {
+        return jsonResponse({ type: "FeatureCollection", features: [] });
+      }
+      return jsonResponse({}, 404);
+    });
+    render(<LandCoverPanel polygonId={1} />);
+    await screen.findByRole("list", { name: /luas per kelas tahun 2025/i });
+    fireEvent.click(screen.getByRole("tab", { name: /tren historis/i }));
+    await screen.findByText(/Tutupan Hutan/i);
+    expect(screen.queryByText("Pertanian/Kebun")).not.toBeInTheDocument();
+    expect(screen.queryByText("Lahan Terbuka")).not.toBeInTheDocument();
+    expect(screen.queryByText("Badan Air")).not.toBeInTheDocument();
+    expect(screen.getByText(/3 kelas lain tidak ditemukan di poligon ini/i)).toBeInTheDocument();
   });
 
   it("done: changing the year slider refetches overlay with the new year", async () => {
