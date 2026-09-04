@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     gee_service_account_email: str = ""
     gee_service_account_key_path: str = ""
     gee_project_id: str = ""
+    # Analisis tutupan lahan: ikutkan fitur Sentinel-1 SAR (VV/VH/rasio) ke
+    # Random Forest. false = optik S2 saja (rollback cepat tanpa ubah kode).
+    land_cover_use_sar: bool = True
     # Auto-refresh burned area lewat Google Earth Engine (MODIS/VIIRS).
     # Default MATI sejak sumber data dipindah ke rekap resmi KLHK (Areal
     # Kebakaran Hutan dan Lahan, klasifikasi akurasi H/M/L) -- lihat

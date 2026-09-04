@@ -30,6 +30,13 @@ from shapely.geometry import mapping, shape as shapely_shape
 from shapely.ops import unary_union
 
 from app.core.config import get_settings
+from app.services.land_cover.sar import (
+    S1_MIN_SCENES,
+    SAR_FEATURE_NAMES,
+    get_dominant_pass,
+    get_s1_composite,
+    s1_scene_counts,
+)
 from app.services.postgres_store import PostgresStore
 
 logger = logging.getLogger("land_cover")
@@ -64,10 +71,21 @@ DW_CONF_MIN = 0.6
 OILPALM_COLLECTION = "BIOPAMA/GlobalOilPalm/v1"
 # Musim kemarau Indonesia (Sumatra/Kalimantan/Jawa/Bali) -- komposit utama.
 DRY_SEASON = ("05-01", "10-31")
-FEATURE_NAMES = [
+OPTICAL_FEATURE_NAMES = [
     "B2", "B3", "B4", "B8", "B11", "B12",
     "ndvi", "nbr", "mndwi", "ndbi", "elevation", "slope",
 ]
+# Sentinel-1 SAR (lihat land_cover/sar.py). Default nyala; bisa dimatikan
+# lewat env LAND_COVER_USE_SAR=false tanpa ubah kode. Per poligon tetap bisa
+# jatuh ke optik saja (guard scene S1 di analyze_polygon) -- daftar fitur
+# yang benar-benar dipakai tersimpan di meta.feature_names, bukan konstanta ini.
+USE_SAR = True
+FEATURE_NAMES = OPTICAL_FEATURE_NAMES + (list(SAR_FEATURE_NAMES) if USE_SAR else [])
+# Hansen Global Forest Change: validator silang label "hutan" dari DW.
+# treecover2000 >= 50 % DAN belum pernah loss s/d tahun target. lossyear:
+# 0 = tidak ada loss, 1..24 = tahun 2001..2024.
+HANSEN_IMAGE = "UMD/hansen/global_forest_change_2024_v1_12"
+HANSEN_TREECOVER_MIN = 50
 # Toleransi simplify HARUS jauh di bawah ukuran piksel (10 m). Dulu 0.0003°
 # (~33 m): patch kecil diremas jadi segitiga & tepi antar kelas bergeser tak
 # seragam -> celah/"bolong" di peta rona. Sekarang ~4 m: cuma menghaluskan
@@ -256,7 +274,10 @@ class LandCoverService:
             .median()
         )
 
-    def _year_feature_image(self, ee, roi, year: int, region=None):
+    def _year_feature_image(self, ee, roi, year: int, region=None, sar_img=None):
+        """Tumpukan fitur satu tahun: optik S2 + indeks + DEM, plus band SAR
+        (`sar_img` dari land_cover/sar.py) kalau diberikan. Urutan band =
+        OPTICAL_FEATURE_NAMES (+ SAR_FEATURE_NAMES)."""
         clip_to = region if region is not None else roi
         # Prioritas musim kemarau: lebih sedikit awan/haze dan fenologi lebih
         # seragam antar-tahun. Piksel yang tetap kosong (kemarau berawan
@@ -279,8 +300,56 @@ class LandCoverService:
             s2.select(["B2", "B3", "B4", "B8", "B11", "B12"]),
             ndvi, nbr, mndwi, ndbi,
             dem.rename("elevation"), slope.rename("slope"),
-        ).rename(FEATURE_NAMES)
+        ).rename(OPTICAL_FEATURE_NAMES)
+        if sar_img is not None:
+            # Piksel S1 yang ter-mask (tepi swath) ikut membuat sampel latih
+            # di titik itu None -> dibuang di _materialize_samples; saat
+            # klasifikasi, piksel tanpa SAR jatuh ke gap-fill DW seperti
+            # lubang awan (lihat _postprocess_classified).
+            feat = feat.addBands(sar_img.select(list(SAR_FEATURE_NAMES)))
         return feat
+
+    def _sar_enabled(self) -> bool:
+        settings = getattr(self, "settings", None)
+        return bool(getattr(settings, "land_cover_use_sar", USE_SAR))
+
+    def _prepare_sar(self, ee, roi, train_region) -> tuple[dict[int, object], dict]:
+        """Komposit S1 per tahun untuk poligon ini, atau `{}` kalau SAR tidak
+        layak dipakai (toggle mati / koleksi kosong / scene kurang / GEE
+        gagal). Selalu graceful: kegagalan apa pun di sini -> optik saja,
+        BUKAN exception. `info` disimpan ke meta.sar untuk audit.
+
+        2 request GEE tambahan per poligon (orbit dominan + hitung scene per
+        tahun), komposit sendiri tidak dievaluasi terpisah -- ikut ke sampling
+        & klasifikasi yang memang sudah ada."""
+        if not self._sar_enabled():
+            return {}, {"enabled": False, "reason": "toggle_off"}
+        windows = {y: self._year_window(y) for y in YEARS}
+        start, end = windows[YEARS[0]][0], windows[YEARS[-1]][1]
+        try:
+            dominant_pass = get_dominant_pass(ee, train_region, start, end)
+            counts = s1_scene_counts(ee, train_region, YEARS, dominant_pass, windows)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("LAND_COVER: SAR dilewati, gagal memeriksa S1 (%s)", exc)
+            return {}, {"enabled": False, "reason": f"error: {exc}"[:200]}
+        if not counts:
+            logger.warning("LAND_COVER: SAR dilewati, koleksi S1 tidak bisa dihitung")
+            return {}, {"enabled": False, "reason": "no_count"}
+        short = {y: n for y, n in counts.items() if n < S1_MIN_SCENES}
+        info = {"orbit_pass": dominant_pass, "scenes_per_year": {str(y): n for y, n in counts.items()},
+                "min_scenes": S1_MIN_SCENES}
+        if short:
+            logger.warning(
+                "LAND_COVER: SAR dilewati, scene S1 (%s) kurang dari %d di tahun %s",
+                dominant_pass, S1_MIN_SCENES, sorted(short),
+            )
+            return {}, {**info, "enabled": False, "reason": "insufficient_scenes"}
+        by_year = {}
+        for y in YEARS:
+            s, e = windows[y]
+            img, _ = get_s1_composite(ee, train_region, y, dominant_pass, start=s, end=e)
+            by_year[y] = img
+        return by_year, {**info, "enabled": True}
 
     def _dw_class_image(self, ee, roi, year: int, *, confidence_masked: bool):
         """Citra `class_idx` (0..4) dari Dynamic World untuk satu tahun.
@@ -318,7 +387,26 @@ class LandCoverService:
         if confidence_masked:
             prob = mean_prob.reduce(ee.Reducer.max())
             class_idx = class_idx.updateMask(prob.gte(DW_CONF_MIN))
+            # Konsensus Hansen untuk label "hutan" (sampel latih SAJA -- pada
+            # klasifikasi fallback DW tidak dimask supaya luas tetap penuh):
+            # DW "trees" yang oleh Hansen tercatat tutupan pohon 2000 < 50 %
+            # atau sudah loss pada/sebelum tahun target = kebun muda, belukar
+            # tinggi, atau bekas tebangan yang masih "hijau" -> label noise
+            # yang mengajari RF bahwa itu hutan. Piksel begitu dibuang dari
+            # sampel (bukan dilabel ulang: kelas sebenarnya tidak diketahui).
+            class_idx = class_idx.updateMask(
+                class_idx.neq(_CLASS_IDX["hutan"]).Or(self._hansen_intact_forest(ee, year))
+            )
         return class_idx
+
+    def _hansen_intact_forest(self, ee, year: int):
+        """Mask 1 = tutupan pohon Hansen 2000 >= HANSEN_TREECOVER_MIN dan
+        tidak ada loss sampai `year` (lossyear 0 atau > year-2000)."""
+        hansen = ee.Image(HANSEN_IMAGE)
+        treecover = hansen.select("treecover2000")
+        lossyear = hansen.select("lossyear")
+        no_loss = lossyear.eq(0).Or(lossyear.gt(year - 2000))
+        return treecover.gte(HANSEN_TREECOVER_MIN).And(no_loss)
 
     def _year_training_points(self, ee, roi, feat_img, year: int, region=None):
         sample_region = region if region is not None else roi
@@ -333,7 +421,9 @@ class LandCoverService:
             geometries=False,
         )
 
-    def _materialize_samples(self, ee, samples) -> tuple[list[dict], object]:
+    def _materialize_samples(
+        self, ee, samples, feature_names: list[str] | None = None
+    ) -> tuple[list[dict], object]:
         """Tarik sampel latih ke klien SEKALI, lalu kirim balik sebagai
         FeatureCollection literal.
 
@@ -343,14 +433,15 @@ class LandCoverService:
         karena GEE tidak menyimpan hasil antar-request. Payload-nya kecil
         (~500 titik x 12 fitur), jauh lebih murah daripada mengulang sampling.
         """
+        names = list(feature_names) if feature_names is not None else list(FEATURE_NAMES)
         info = samples.getInfo() or {}
         rows: list[dict] = []
-        keep = set(FEATURE_NAMES) | {"class_idx"}
+        keep = set(names) | {"class_idx"}
         for f in info.get("features", []):
             props = f.get("properties") or {}
             if props.get("class_idx") is None:
                 continue
-            if any(props.get(k) is None for k in FEATURE_NAMES):
+            if any(props.get(k) is None for k in names):
                 continue  # piksel tertutup mask di salah satu band -> buang
             rows.append({k: props[k] for k in keep})
         fc = ee.FeatureCollection([ee.Feature(None, r) for r in rows])
@@ -522,6 +613,20 @@ class LandCoverService:
         try:
             self.postgres_store.mark_land_cover_running(pid, target["layer_key"])
 
+            # -- Sentinel-1: satu orbit dominan untuk seluruh rentang, lalu
+            # guard jumlah scene per tahun. Kalau ada tahun yang kurang scene
+            # (atau S1 kosong sama sekali -- pulau terluar), SAR dimatikan
+            # untuk poligon INI dan analisis lanjut optik saja: satu model RF
+            # butuh daftar fitur yang sama di semua tahun.
+            _LAND_COVER_RUN_STATE[pid] = {
+                "state": "running",
+                "step": "memeriksa cakupan Sentinel-1",
+                "started_at": date.today().isoformat(),
+            }
+            sar_by_year, sar_info = self._prepare_sar(ee, roi, train_region)
+            use_sar = bool(sar_by_year)
+            feature_names = list(OPTICAL_FEATURE_NAMES) + (list(SAR_FEATURE_NAMES) if use_sar else [])
+
             feat_by_year = {}
             samples = None
             for i, year in enumerate(YEARS):
@@ -530,7 +635,10 @@ class LandCoverService:
                     "step": f"{year} ({i + 1}/{len(YEARS)}) — sampel",
                     "started_at": date.today().isoformat(),
                 }
-                feat = self._year_feature_image(ee, roi, year, region=train_region)
+                feat = self._year_feature_image(
+                    ee, roi, year, region=train_region,
+                    sar_img=sar_by_year.get(year) if use_sar else None,
+                )
                 feat_by_year[year] = feat
                 pts = self._year_training_points(ee, roi, feat, year, region=train_region)
                 samples = pts if samples is None else samples.merge(pts)
@@ -540,12 +648,12 @@ class LandCoverService:
                 "step": "mengunduh sampel latih",
                 "started_at": date.today().isoformat(),
             }
-            sample_rows, samples_fc = self._materialize_samples(ee, samples)
+            sample_rows, samples_fc = self._materialize_samples(ee, samples, feature_names)
             use_rf = self._distinct_class_count(sample_rows) >= 2
             if use_rf:
                 _LAND_COVER_RUN_STATE[pid]["step"] = "melatih Random Forest"
                 rf = ee.Classifier.smileRandomForest(RF_TREES, seed=42).train(
-                    features=samples_fc, classProperty="class_idx", inputProperties=FEATURE_NAMES
+                    features=samples_fc, classProperty="class_idx", inputProperties=feature_names
                 )
                 try:
                     oob_err = rf.explain().getInfo().get("outOfBagErrorEstimate")
@@ -622,8 +730,9 @@ class LandCoverService:
                     coverage_pct[str(year)] = round(total_ha / float(poly_ha) * 100.0, 1)
             meta = {
                 "method": "random_forest" if use_rf else "dynamic_world",
-                "feature_names": list(FEATURE_NAMES),
-                "labels": {"sources": ["Dynamic World v1", "Descals 2019"],
+                "feature_names": feature_names,
+                "sar": sar_info,
+                "labels": {"sources": ["Dynamic World v1", "Descals 2019", "Hansen GFC 2024 v1.12"],
                            "samples_per_class": samples_per_class},
                 "temporal": {"rules": ["despike_symmetric"]},
                 "coverage_pct": coverage_pct,

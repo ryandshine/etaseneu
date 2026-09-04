@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import pytest
 
+from app.services.land_cover.sar import SAR_FEATURE_NAMES
 from app.services.land_cover_service import (
     CLASS_KEYS,
     FEATURE_NAMES,
     FORMULA_VERSION,
+    OPTICAL_FEATURE_NAMES,
     SAMPLES_PER_CLASS_PER_YEAR,
     TRAIN_BUFFER_M,
     YEARS,
@@ -209,8 +211,14 @@ class _FakeImageClass(_FakeImg):
 
 
 class _FakeColl:
+    # jumlah scene S1 per koleksi -- test SAR menimpa lewat class attr
+    size_value = 12
+
     def __getattr__(self, _name):
         return lambda *a, **k: self
+
+    def size(self):
+        return _FakeGetInfo(self.size_value)
 
     def median(self):
         return _FakeImg()
@@ -263,7 +271,11 @@ class _FakeEE:
     Dictionary = staticmethod(
         lambda d: _FakeGetInfo({k: v.getInfo() for k, v in d.items()})
     )
-    Filter = type("F", (), {"lt": staticmethod(lambda *a, **k: "flt")})
+    Filter = type("F", (), {
+        "lt": staticmethod(lambda *a, **k: "flt"),
+        "eq": staticmethod(lambda *a, **k: "feq"),
+        "listContains": staticmethod(lambda *a, **k: "flc"),
+    })
     Reducer = _FakeReducer()
     Classifier = type(
         "C", (), {"smileRandomForest": staticmethod(lambda *a, **k: _FakeClassifier())}
@@ -348,7 +360,11 @@ def test_analyze_polygon_happy_path_saves_all_years_classes(monkeypatch) -> None
     assert store.saved["formula_version"] == FORMULA_VERSION
     meta = store.saved["meta"]
     assert meta["method"] == "random_forest"
-    assert meta["feature_names"] == list(FEATURE_NAMES)
+    # fake S1: 12 scene/tahun >= S1_MIN_SCENES -> SAR ikut
+    assert meta["feature_names"] == list(OPTICAL_FEATURE_NAMES) + list(SAR_FEATURE_NAMES)
+    assert meta["sar"]["enabled"] is True
+    assert meta["sar"]["orbit_pass"] in ("ASCENDING", "DESCENDING")
+    assert "Hansen GFC 2024 v1.12" in meta["labels"]["sources"]
     assert sum(meta["labels"]["samples_per_class"].values()) == store.saved["n_training"]
     assert store.saved["n_training"] == SAMPLES_PER_CLASS_PER_YEAR * len(CLASS_KEYS) * len(YEARS)
     for year in YEARS:
@@ -430,7 +446,7 @@ def test_analyze_polygon_samples_training_from_buffered_region(monkeypatch) -> N
     real_feat = svc._year_feature_image
     real_pts = svc._year_training_points
 
-    def spy_feat(ee, roi, year, region=None):
+    def spy_feat(ee, roi, year, region=None, sar_img=None):
         seen["feat"].append(region)
         return real_feat(ee, roi, year, region=region)
 
@@ -536,3 +552,107 @@ def test_year_vectors_expr_sets_default_projection_before_mmu() -> None:
 
     _svc()._year_vectors_expr(_FakeEE(), _FakeImg(), _Img())
     assert calls and calls[0][0] == "EPSG:3857" and calls[0][2] == 10
+
+
+# ---------------------------------------------------------------------------
+# Sentinel-1 SAR: guard & fallback (land_cover/sar.py + _prepare_sar)
+# ---------------------------------------------------------------------------
+
+
+def test_sar_falls_back_to_optical_when_s1_scenes_insufficient(monkeypatch) -> None:
+    """Pulau terluar/tahun revisit jarang: scene < S1_MIN_SCENES -> analisis
+    tetap jalan dengan fitur optik saja, TANPA exception."""
+    monkeypatch.setattr(_FakeColl, "size_value", 2)
+    svc = _svc()
+    store = _FakeStore(_TARGET)
+    svc.postgres_store = store
+    monkeypatch.setattr(svc, "_ensure_ee", lambda: _FakeEE())
+    result = svc.analyze_polygon(287785)
+    assert result["years"] == list(YEARS)
+    meta = store.saved["meta"]
+    assert meta["feature_names"] == list(OPTICAL_FEATURE_NAMES)
+    assert meta["sar"]["enabled"] is False
+    assert meta["sar"]["reason"] == "insufficient_scenes"
+
+
+def test_sar_falls_back_when_s1_collection_empty(monkeypatch) -> None:
+    monkeypatch.setattr(_FakeColl, "size_value", 0)
+    svc = _svc()
+    store = _FakeStore(_TARGET)
+    svc.postgres_store = store
+    monkeypatch.setattr(svc, "_ensure_ee", lambda: _FakeEE())
+    svc.analyze_polygon(287785)
+    assert store.saved["meta"]["sar"]["enabled"] is False
+    assert "VV" not in store.saved["meta"]["feature_names"]
+
+
+def test_sar_toggle_off_via_settings(monkeypatch) -> None:
+    svc = _svc()
+    svc.settings = type("S", (), {"land_cover_use_sar": False})()
+    store = _FakeStore(_TARGET)
+    svc.postgres_store = store
+    monkeypatch.setattr(svc, "_ensure_ee", lambda: _FakeEE())
+    svc.analyze_polygon(287785)
+    assert store.saved["meta"]["sar"] == {"enabled": False, "reason": "toggle_off"}
+    assert store.saved["meta"]["feature_names"] == list(OPTICAL_FEATURE_NAMES)
+
+
+def test_sar_gee_failure_is_graceful(monkeypatch) -> None:
+    """getInfo() gagal (throttling GEE) saat memeriksa S1 -> optik saja."""
+    import app.services.land_cover_service as mod
+
+    def _boom(*a, **k):
+        raise RuntimeError("Earth Engine memory limit")
+
+    monkeypatch.setattr(mod, "s1_scene_counts", _boom)
+    svc = _svc()
+    store = _FakeStore(_TARGET)
+    svc.postgres_store = store
+    monkeypatch.setattr(svc, "_ensure_ee", lambda: _FakeEE())
+    svc.analyze_polygon(287785)
+    assert store.saved is not None
+    assert store.saved["meta"]["sar"]["enabled"] is False
+    assert store.saved["meta"]["sar"]["reason"].startswith("error:")
+
+
+def test_get_dominant_pass_single_getinfo_and_tie_breaks_to_descending() -> None:
+    from app.services.land_cover import sar
+
+    calls = {"n": 0}
+
+    class _Counting(_FakeGetInfo):
+        def getInfo(self):
+            calls["n"] += 1
+            return self._payload
+
+    class _EE(_FakeEE):
+        Dictionary = staticmethod(lambda d: _Counting({"asc": 7, "desc": 3}))
+
+    assert sar.get_dominant_pass(_EE(), _FakeGeom(), "2021-01-01", "2025-12-31") == "ASCENDING"
+    assert calls["n"] == 1
+
+    class _EETie(_FakeEE):
+        Dictionary = staticmethod(lambda d: _Counting({"asc": 5, "desc": 5}))
+
+    assert sar.get_dominant_pass(_EETie(), _FakeGeom(), "2021-01-01", "2025-12-31") == "DESCENDING"
+
+    class _EEFail(_FakeEE):
+        Dictionary = staticmethod(lambda d: type("X", (), {"getInfo": lambda s: (_ for _ in ()).throw(RuntimeError("x"))})())
+
+    assert sar.get_dominant_pass(_EEFail(), _FakeGeom(), "2021-01-01", "2025-12-31") == "DESCENDING"
+
+
+def test_get_s1_composite_returns_three_bands_and_size() -> None:
+    from app.services.land_cover import sar
+
+    img, size = sar.get_s1_composite(_FakeEE(), _FakeGeom(), 2023, "DESCENDING")
+    assert isinstance(img, _FakeImg)
+    assert size.getInfo() == _FakeColl.size_value
+    assert sar.SAR_FEATURE_NAMES == ("VV", "VH", "VH_VV_ratio")
+
+
+def test_feature_names_constant_includes_sar_when_toggle_on() -> None:
+    from app.services.land_cover_service import USE_SAR
+
+    expected = list(OPTICAL_FEATURE_NAMES) + (list(SAR_FEATURE_NAMES) if USE_SAR else [])
+    assert list(FEATURE_NAMES) == expected

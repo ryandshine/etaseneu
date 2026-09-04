@@ -164,6 +164,30 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   rebutan kuota GEE/CPU. **Asumsi satu proses `api` (tanpa multi-worker)** — kalau nanti di-scale
   horizontal, lock ini perlu pindah ke DB/Redis. "Hutan" = tutupan berpohon (kebun berpohon seperti
   sawit/karet belum tentu terpisah).
+  - **Fitur Sentinel-1 SAR + konsensus Hansen (2026-09-05, Langkah 2 menuju v3)**: paket
+    `services/land_cover/` (sub-modul menerima `ee` sebagai argumen — TIDAK `import ee` di level
+    modul). `sar.py`: `get_dominant_pass()` hitung scene ASC vs DESC `COPERNICUS/S1_GRD` (IW, VV+VH)
+    untuk SELURUH rentang tahun dalam SATU `getInfo()` → satu orbit dipakai semua tahun (campur orbit
+    = fitur berubah karena geometri pandang, bukan tutupan); seri/kosong/gagal → `DESCENDING`.
+    `get_s1_composite()` = median tahunan VV/VH setelah `focal_median(15 m)` per scene, band
+    `VH_VV_ratio = VH − VV` (band S1 sudah dB → rasio = selisih, BUKAN pembagian); mengembalikan
+    `(image, size)` belum dievaluasi. `s1_scene_counts()` = jumlah scene per tahun, SATU `getInfo()`.
+    Di service: `OPTICAL_FEATURE_NAMES` (12) + `SAR_FEATURE_NAMES` (3) = `FEATURE_NAMES` saat
+    `USE_SAR`; per run `feature_names` ditentukan `_prepare_sar()` → SAR dipakai hanya kalau toggle
+    nyala (`Settings.land_cover_use_sar`, env `LAND_COVER_USE_SAR`, default true) DAN tiap tahun punya
+    ≥ `S1_MIN_SCENES` (4) scene; kalau tidak (S1B mati Des 2021 → 2022–2024 jarang di Indonesia
+    timur), atau GEE gagal → **log warning, lanjut optik saja, tanpa exception**. SAR di-`addBands`
+    ke komposit S2 SEBELUM `stratifiedSample` dan `classify()`; RF `inputProperties=feature_names`.
+    `meta.feature_names` = fitur yang BENAR-BENAR dipakai; `meta.sar = {enabled, orbit_pass,
+    scenes_per_year, min_scenes}` atau `{enabled:false, reason: toggle_off|no_count|
+    insufficient_scenes|error: …}`. Biaya: +2 `getInfo()` per poligon (orbit + hitung scene).
+    **Konsensus Hansen** (`_hansen_intact_forest`, `UMD/hansen/global_forest_change_2024_v1_12`):
+    sampel latih DW=trees dibuang kecuali `treecover2000 ≥ 50` DAN (`lossyear == 0` ATAU
+    `lossyear > tahun analisis`) — hutan yang sudah hilang sebelum/pada tahun itu tidak boleh jadi
+    guru "hutan"; kelas lain tidak disentuh. `FORMULA_VERSION` masih 2 — dinaikkan ke 3 di langkah
+    akhir (bersama `labels.py`/`temporal.py`) supaya badge "Metode lama" tidak muncul dua kali.
+    Test: `test_land_cover_service.py` fake `_FakeColl.size_value` (class attr) mengatur jumlah
+    scene S1 → jalur fallback diuji tanpa GEE.
   - **Versi formula & metadata (2026-09-05)**: `FORMULA_VERSION` / `FORMULA_LABEL` di
     `land_cover_service.py` (v1 = sebelum audit 2026-09-05, v2 = formula audit di atas). Kolom
     `land_cover_analysis.formula_version INTEGER`, `meta JSONB` (`method`, `feature_names`,
