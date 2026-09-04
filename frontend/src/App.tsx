@@ -1038,6 +1038,7 @@ export default function App() {
               <TutupanLahanView
                 initialPolygonId={landCoverPolygonId}
                 onOpenKpsDetail={openKpsDetail}
+                isAdmin={session?.role === "admin"}
               />
             </Suspense>
           </section>

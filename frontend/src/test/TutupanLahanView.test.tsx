@@ -121,7 +121,7 @@ describe("TutupanLahanView", () => {
   });
 
   it("opens the reused LandCoverPanel detail when a row is clicked", async () => {
-    render(<TutupanLahanView />);
+    render(<TutupanLahanView isAdmin />);
     const row = await screen.findByText("GAPOKTAN MEKAR JAYA");
     fireEvent.click(row.closest('[role="button"]') as HTMLElement);
 
@@ -149,7 +149,7 @@ describe("TutupanLahanView", () => {
   });
 
   it("preselects a polygon from initialPolygonId", async () => {
-    render(<TutupanLahanView initialPolygonId={2} />);
+    render(<TutupanLahanView initialPolygonId={2} isAdmin />);
 
     expect(
       await screen.findByRole("button", { name: /jalankan analisis/i }),

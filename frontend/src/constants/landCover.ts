@@ -14,3 +14,9 @@ export const LAND_COVER_CLASSES: ReadonlyArray<{
 ] as const;
 
 export const LAND_COVER_YEARS: readonly number[] = [2021, 2022, 2023, 2024, 2025];
+
+// Versi formula analisis yang dipakai server SEKARANG -- WAJIB sama dengan
+// `FORMULA_VERSION` di backend/app/services/land_cover_service.py. Cuma
+// dipakai daftar Tutupan Lahan (endpoint /polygons tidak membawa versi
+// terkini); LandCoverPanel memakai `current_formula_version` dari /status.
+export const LAND_COVER_FORMULA_VERSION = 2;

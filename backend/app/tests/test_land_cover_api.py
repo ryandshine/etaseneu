@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.api.land_cover as lc_mod
+from app.core.auth import TokenClaims, require_admin_role
 from app.main import create_app
 
 YEARS = (2021, 2022, 2023, 2024, 2025)
@@ -54,14 +55,41 @@ class _FakeStore:
                 "lembaga": "X", "nama_prov": "Y", "geometry_json": {}}
 
 
+_ADMIN = TokenClaims(user_id=1, username="admin", role="admin")
+
+
 @pytest.fixture
 def client(monkeypatch):
     store = _FakeStore()
     monkeypatch.setattr(lc_mod, "PostgresStore", lambda *_a, **_k: store)
     monkeypatch.setattr(lc_mod, "LandCoverService", _FakeService)
-    c = TestClient(create_app())
+    app = create_app()
+    # analyze & delete khusus admin -- default fixture: sudah login admin.
+    # Test gate-nya sendiri melepas override ini.
+    app.dependency_overrides[require_admin_role] = lambda: _ADMIN
+    c = TestClient(app)
     c._store = store  # akses di test
+    c._app = app
     return c
+
+
+def test_analyze_and_delete_require_admin(client):
+    """Tanpa sesi admin: 401 (tak ada token). Mencegah role `user`/anonim
+    membakar kuota GEE atau menghapus hasil orang lain."""
+    client._app.dependency_overrides.pop(require_admin_role, None)
+    assert client.post("/api/land-cover/analyze", json={"polygon_id": 1}).status_code == 401
+    assert client.delete("/api/land-cover/result?polygon_id=1").status_code == 401
+
+
+def test_analyze_and_delete_forbidden_for_user_role(client):
+    from app.core.auth import require_authenticated_user
+
+    client._app.dependency_overrides.pop(require_admin_role, None)
+    client._app.dependency_overrides[require_authenticated_user] = lambda: TokenClaims(
+        user_id=2, username="u", role="user"
+    )
+    assert client.post("/api/land-cover/analyze", json={"polygon_id": 1}).status_code == 403
+    assert client.delete("/api/land-cover/result?polygon_id=1").status_code == 403
 
 
 def test_analyze_503_when_gee_disabled(client, monkeypatch):
@@ -173,6 +201,16 @@ def test_status_idle_when_no_row(client):
     assert r.status_code == 200
     assert r.json()["state"] == "idle"
     assert r.json()["busy_elsewhere"] is False
+    assert r.json()["formula_version"] is None
+    assert r.json()["current_formula_version"] == lc_mod.FORMULA_VERSION
+
+
+def test_status_reports_stored_formula_version(client):
+    client._store._status = {"status": "done", "error_message": None,
+                             "computed_at": "2026-09-01T00:00:00", "formula_version": 1}
+    r = client.get("/api/land-cover/status", params={"polygon_id": 1})
+    assert r.json()["formula_version"] == 1
+    assert r.json()["current_formula_version"] >= 2
 
 
 def test_status_busy_elsewhere_true_for_other_polygon(client, monkeypatch):

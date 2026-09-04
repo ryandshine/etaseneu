@@ -164,6 +164,30 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   rebutan kuota GEE/CPU. **Asumsi satu proses `api` (tanpa multi-worker)** — kalau nanti di-scale
   horizontal, lock ini perlu pindah ke DB/Redis. "Hutan" = tutupan berpohon (kebun berpohon seperti
   sawit/karet belum tentu terpisah).
+  - **Versi formula & metadata (2026-09-05)**: `FORMULA_VERSION` / `FORMULA_LABEL` di
+    `land_cover_service.py` (v1 = sebelum audit 2026-09-05, v2 = formula audit di atas). Kolom
+    `land_cover_analysis.formula_version INTEGER`, `meta JSONB` (`method`, `feature_names`,
+    `labels.sources`, `labels.samples_per_class`, `temporal.rules`, `coverage_pct` per tahun = Σ luas
+    kelas ÷ luas geodesik poligon), `started_at` — ditambah `ALTER TABLE … ADD COLUMN IF NOT EXISTS`
+    di `_ensure_land_cover_tables` (backfill: `computed_at < '2026-09-05'` → 1, sisanya 2).
+    `_ensure_*` cuma jalan SEKALI per proses (flag kelas `_land_cover_tables_ready`).
+    `save_land_cover_result` & `delete_land_cover_result` dibungkus `conn.transaction()` (koneksi
+    autocommit → tanpa ini crash di tengah menyisakan baris `done` tanpa geometri). **Reset
+    `running` basi berbasis UMUR** (`reset_stale_land_cover_running`, `LAND_COVER_STALE_RUNNING_MIN`
+    = 30 mnt): dipanggil di `lifespan` startup + lazy di `read_land_cover_status` — SENGAJA bukan
+    "semua running saat boot" karena `uvicorn` dev lokal memakai DB produksi yang sama (bahaya #1)
+    dan bisa mematikan job yang beneran jalan di container produksi. `/status` membawa
+    `formula_version` (tersimpan) + `current_formula_version`; `/polygons` membawa
+    `land_cover_formula_version`; `/result.meta` ikut `current_formula_version`. Frontend:
+    badge "Metode lama (vN)" di `LandCoverPanel` (dari `/status`) & di daftar `TutupanLahanView`
+    (bandingkan dengan konstanta `LAND_COVER_FORMULA_VERSION` di `constants/landCover.ts` — **WAJIB
+    dinaikkan bersamaan dengan `FORMULA_VERSION` backend**). Menaikkan versi TIDAK otomatis
+    menghitung ulang: hasil lama tetap tampil dengan badge, admin hapus lalu jalankan lagi.
+    **`POST /analyze` & `DELETE /result` = `Depends(require_admin_role)`** (role `user`/`bps` → 403);
+    `LandCoverPanel`/`TutupanLahanView` terima prop `isAdmin` dari `App.tsx` (default false → tombol
+    Jalankan/Hapus/Mulai ulang tidak dirender, diganti hint). Test API override
+    `app.dependency_overrides[require_admin_role]`. nginx: `DELETE /api/land-cover/result` di zona
+    `eta_delete` (10r/m, `map $request_method` → cuma DELETE yang dihitung).
   - **Menu tersendiri "Tutupan Lahan"** (`TutupanLahanView.tsx`, self-contained fetch sendiri lewat
     `authFetch` — pola sama seperti `KompleksKebakaranView.tsx`, TIDAK lewat `useDashboardData`):
     daftar SEMUA poligon KPS+Hutan Adat sekaligus status analisisnya (`GET /api/land-cover/polygons`

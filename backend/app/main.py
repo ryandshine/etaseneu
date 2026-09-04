@@ -65,6 +65,21 @@ def _defer_burned_area_scheduler_start(
 async def lifespan(app: FastAPI):
     settings = get_settings()
 
+    # Job tutupan lahan berjalan di BackgroundTasks proses ini; baris
+    # 'running' yang tertinggal dari proses sebelumnya tidak akan pernah
+    # selesai -> tandai error supaya UI tidak terkunci. Dibungkus try:
+    # kegagalan DB saat boot tidak boleh menjatuhkan seluruh API.
+    try:
+        from app.services.postgres_store import PostgresStore
+
+        store = PostgresStore(settings.database_url)
+        if store.enabled:
+            n = store.reset_stale_land_cover_running()
+            if n:
+                logger.warning("LAND_COVER: %s analisis 'running' basi ditandai error saat startup", n)
+    except Exception:  # noqa: BLE001
+        logger.exception("LAND_COVER: gagal mereset status running basi saat startup")
+
     scheduler_task = None
     scheduler_start_handle = None
     scheduler_task_holder: dict[str, asyncio.Task | None] | None = None

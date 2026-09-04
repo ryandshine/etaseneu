@@ -83,7 +83,7 @@ describe("LandCoverPanel", () => {
       }
       return jsonResponse({}, 404);
     });
-    render(<LandCoverPanel polygonId={1} />);
+    render(<LandCoverPanel polygonId={1} isAdmin />);
     expect(
       await screen.findByRole("button", { name: /jalankan analisis/i }),
     ).toBeInTheDocument();
@@ -102,7 +102,7 @@ describe("LandCoverPanel", () => {
       }
       return jsonResponse({}, 404);
     });
-    render(<LandCoverPanel polygonId={1} />);
+    render(<LandCoverPanel polygonId={1} isAdmin />);
     const button = await screen.findByRole("button", { name: /jalankan analisis/i });
     expect(button).toBeDisabled();
     expect(screen.getByText(/analisis .* lain sedang berjalan/i)).toBeInTheDocument();
@@ -125,7 +125,7 @@ describe("LandCoverPanel", () => {
       }
       return jsonResponse({}, 404);
     });
-    render(<LandCoverPanel polygonId={1} />);
+    render(<LandCoverPanel polygonId={1} isAdmin />);
     fireEvent.click(await screen.findByRole("button", { name: /jalankan analisis/i }));
     await waitFor(() => expect(calls.some((c) => c.includes("/land-cover/analyze"))).toBe(true));
     expect(await screen.findByText(/Menghitung/i)).toBeInTheDocument();
@@ -147,7 +147,7 @@ describe("LandCoverPanel", () => {
       }
       return jsonResponse({}, 404);
     });
-    render(<LandCoverPanel polygonId={1} />);
+    render(<LandCoverPanel polygonId={1} isAdmin />);
     // year mulai dari LAST_YEAR (2025) saat panel baru masuk state "done".
     const classGrid = await screen.findByRole("list", { name: /luas per kelas tahun 2025/i });
     expect(within(classGrid).getByText("Hutan")).toBeInTheDocument();
@@ -181,7 +181,7 @@ describe("LandCoverPanel", () => {
       }
       return jsonResponse({}, 404);
     });
-    render(<LandCoverPanel polygonId={1} />);
+    render(<LandCoverPanel polygonId={1} isAdmin />);
     await screen.findByRole("list", { name: /luas per kelas tahun 2025/i });
     fireEvent.click(screen.getByRole("tab", { name: /tren historis/i }));
     expect(await screen.findByTestId("lc-chart")).toBeInTheDocument();
@@ -222,7 +222,7 @@ describe("LandCoverPanel", () => {
       }
       return jsonResponse({}, 404);
     });
-    render(<LandCoverPanel polygonId={1} />);
+    render(<LandCoverPanel polygonId={1} isAdmin />);
     await screen.findByRole("list", { name: /luas per kelas tahun 2025/i });
     fireEvent.click(screen.getByRole("tab", { name: /tren historis/i }));
     await screen.findByText(/Tutupan Hutan/i);
@@ -254,7 +254,7 @@ describe("LandCoverPanel", () => {
       }
       return jsonResponse({}, 404);
     });
-    render(<LandCoverPanel polygonId={1} />);
+    render(<LandCoverPanel polygonId={1} isAdmin />);
     fireEvent.click(await screen.findByRole("button", { name: /hapus hasil/i }));
     await waitFor(() => expect(deleted).toBe(true));
     expect(
@@ -281,11 +281,63 @@ describe("LandCoverPanel", () => {
       }
       return jsonResponse({}, 404);
     });
-    render(<LandCoverPanel polygonId={1} />);
+    render(<LandCoverPanel polygonId={1} isAdmin />);
     await screen.findByText("Hutan");
     const slider = screen.getByRole("slider");
     fireEvent.change(slider, { target: { value: "2024" } });
     await waitFor(() => expect(overlayYears).toContain("2024"));
+  });
+});
+
+describe("LandCoverPanel role & formula version", () => {
+  it("non-admin: no run button in idle, only a hint", async () => {
+    mockFetch((url) => {
+      if (url.includes("/land-cover/status")) {
+        return jsonResponse({ state: "idle", step: null, error: null, computed_at: null });
+      }
+      return jsonResponse({}, 404);
+    });
+    render(<LandCoverPanel polygonId={1} />);
+    expect(await screen.findByText(/hanya bisa dilakukan admin/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /jalankan analisis/i })).not.toBeInTheDocument();
+  });
+
+  it("non-admin: no 'Hapus hasil' button when done", async () => {
+    mockFetch((url) => {
+      if (url.includes("/land-cover/status")) {
+        return jsonResponse({
+          state: "done", step: null, error: null, computed_at: RESULT.meta.computed_at,
+          formula_version: 2, current_formula_version: 2,
+        });
+      }
+      if (url.includes("/land-cover/result")) return jsonResponse(RESULT);
+      if (url.includes("/land-cover/overlay")) {
+        return jsonResponse({ type: "FeatureCollection", features: [] });
+      }
+      return jsonResponse({}, 404);
+    });
+    render(<LandCoverPanel polygonId={1} />);
+    await screen.findByRole("list", { name: /luas per kelas tahun 2025/i });
+    expect(screen.queryByRole("button", { name: /hapus hasil/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/metode lama/i)).not.toBeInTheDocument();
+  });
+
+  it("done: shows 'Metode lama' badge when stored formula_version < current", async () => {
+    mockFetch((url) => {
+      if (url.includes("/land-cover/status")) {
+        return jsonResponse({
+          state: "done", step: null, error: null, computed_at: RESULT.meta.computed_at,
+          formula_version: 1, current_formula_version: 2,
+        });
+      }
+      if (url.includes("/land-cover/result")) return jsonResponse(RESULT);
+      if (url.includes("/land-cover/overlay")) {
+        return jsonResponse({ type: "FeatureCollection", features: [] });
+      }
+      return jsonResponse({}, 404);
+    });
+    render(<LandCoverPanel polygonId={1} isAdmin />);
+    expect(await screen.findByText(/metode lama \(v1\)/i)).toBeInTheDocument();
   });
 });
 
@@ -306,7 +358,7 @@ describe("LandCoverPanel polling", () => {
         }
         return jsonResponse({}, 404);
       });
-      render(<LandCoverPanel polygonId={1} />);
+      render(<LandCoverPanel polygonId={1} isAdmin />);
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });

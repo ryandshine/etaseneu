@@ -27,6 +27,10 @@ type StatusResponse = {
   // true kalau poligon LAIN sedang dianalisis di server sekarang -- lock
   // global biar kuota GEE & CPU tidak diperebutkan banyak user sekaligus.
   busy_elsewhere: boolean;
+  // versi formula hasil tersimpan (null kalau belum ada hasil / hasil lama
+  // sebelum kolom ini ada) vs versi yang dipakai server sekarang
+  formula_version?: number | null;
+  current_formula_version?: number;
 };
 
 type ResultResponse = {
@@ -128,11 +132,22 @@ function LandCoverTooltip({ active, payload, label }: TipProps): JSX.Element | n
   );
 }
 
-export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Element {
+type LandCoverPanelProps = {
+  polygonId: number;
+  /** Jalankan/Hapus/Mulai ulang analisis = khusus admin (backend
+   *  `require_admin_role`); role lain cuma melihat hasil. Default false
+   *  supaya lupa meneruskan prop tidak pernah memunculkan tombol yang
+   *  bakal ditolak 403. */
+  isAdmin?: boolean;
+};
+
+export function LandCoverPanel({ polygonId, isAdmin = false }: LandCoverPanelProps): JSX.Element {
   const [state, setState] = useState<State>("idle");
   const [step, setStep] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [busyElsewhere, setBusyElsewhere] = useState(false);
+  const [formulaVersion, setFormulaVersion] = useState<number | null>(null);
+  const [currentFormulaVersion, setCurrentFormulaVersion] = useState<number | null>(null);
   const [result, setResult] = useState<ResultResponse | null>(null);
   const [tab, setTab] = useState<"peta" | "tren">("peta");
   const [year, setYear] = useState<number>(LAST_YEAR);
@@ -148,6 +163,8 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
     setStep(body.step);
     setErrorMsg(body.error);
     setBusyElsewhere(Boolean(body.busy_elsewhere));
+    setFormulaVersion(body.formula_version ?? null);
+    setCurrentFormulaVersion(body.current_formula_version ?? null);
     return body.state;
   }, [polygonId]);
 
@@ -290,6 +307,20 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
   }, [result]);
   const hiddenClassCount = LAND_COVER_CLASSES.length - visibleClasses.length;
 
+  // Hasil dihitung dengan formula versi lama (server sudah pindah versi):
+  // angkanya tetap sah dipakai, tapi tidak apple-to-apple dengan poligon yang
+  // dianalisis pakai formula baru -- admin bisa hapus lalu jalankan lagi.
+  const outdatedFormula =
+    state === "done" &&
+    currentFormulaVersion !== null &&
+    (formulaVersion === null || formulaVersion < currentFormulaVersion);
+
+  const nonAdminHint = (
+    <p className="lc-busy" role="status">
+      Menjalankan analisis hanya bisa dilakukan admin.
+    </p>
+  );
+
   if (state === "idle") {
     return (
       <section className="land-cover-panel">
@@ -298,20 +329,26 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
           Klasifikasi Sentinel-2 + Random Forest, 5 kelas. Sekali hitung per KPS,
           hasilnya tersimpan permanen.
         </p>
-        {busyElsewhere && (
-          <p className="lc-busy" role="status">
-            Ada analisis KPS/Hutan Adat lain sedang berjalan — harap tunggu sebentar,
-            biar kuota GEE &amp; server tidak dipakai bersamaan.
-          </p>
+        {!isAdmin ? (
+          nonAdminHint
+        ) : (
+          <>
+            {busyElsewhere && (
+              <p className="lc-busy" role="status">
+                Ada analisis KPS/Hutan Adat lain sedang berjalan — harap tunggu sebentar,
+                biar kuota GEE &amp; server tidak dipakai bersamaan.
+              </p>
+            )}
+            <button
+              type="button"
+              className="lc-cta"
+              disabled={busyElsewhere}
+              onClick={() => void runAnalyze(false)}
+            >
+              Jalankan Analisis
+            </button>
+          </>
         )}
-        <button
-          type="button"
-          className="lc-cta"
-          disabled={busyElsewhere}
-          onClick={() => void runAnalyze(false)}
-        >
-          Jalankan Analisis
-        </button>
       </section>
     );
   }
@@ -328,17 +365,19 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
             hasilnya tetap tersimpan.
           </span>
         </div>
-        <button
-          type="button"
-          className="lc-rerun"
-          onClick={() => {
-            if (window.confirm("Mulai ulang analisis? Proses yang sedang berjalan diabaikan.")) {
-              void runAnalyze(true);
-            }
-          }}
-        >
-          Mulai ulang
-        </button>
+        {isAdmin && (
+          <button
+            type="button"
+            className="lc-rerun"
+            onClick={() => {
+              if (window.confirm("Mulai ulang analisis? Proses yang sedang berjalan diabaikan.")) {
+                void runAnalyze(true);
+              }
+            }}
+          >
+            Mulai ulang
+          </button>
+        )}
       </section>
     );
   }
@@ -350,20 +389,26 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
         <p className="lc-error" role="alert">
           {errorMsg ?? "Terjadi kesalahan saat analisis."}
         </p>
-        {busyElsewhere && (
-          <p className="lc-busy" role="status">
-            Ada analisis KPS/Hutan Adat lain sedang berjalan — harap tunggu sebentar,
-            biar kuota GEE &amp; server tidak dipakai bersamaan.
-          </p>
+        {!isAdmin ? (
+          nonAdminHint
+        ) : (
+          <>
+            {busyElsewhere && (
+              <p className="lc-busy" role="status">
+                Ada analisis KPS/Hutan Adat lain sedang berjalan — harap tunggu sebentar,
+                biar kuota GEE &amp; server tidak dipakai bersamaan.
+              </p>
+            )}
+            <button
+              type="button"
+              className="lc-cta"
+              disabled={busyElsewhere}
+              onClick={() => void runAnalyze(false)}
+            >
+              Coba lagi
+            </button>
+          </>
         )}
-        <button
-          type="button"
-          className="lc-cta"
-          disabled={busyElsewhere}
-          onClick={() => void runAnalyze(false)}
-        >
-          Coba lagi
-        </button>
       </section>
     );
   }
@@ -372,21 +417,31 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
     <section className="land-cover-panel">
       <header className="lc-head">
         <h3 className="lc-title">Tutupan Lahan 2021–2025</h3>
-        <button
-          type="button"
-          className="lc-rerun lc-rerun--danger"
-          onClick={() => {
-            if (
-              window.confirm(
-                "Hapus hasil analisis poligon ini? Setelah dihapus, analisis bisa dijalankan lagi dari awal.",
-              )
-            ) {
-              void deleteResult();
-            }
-          }}
-        >
-          Hapus hasil
-        </button>
+        {outdatedFormula && (
+          <span
+            className="lc-formula-old"
+            title={`Dihitung dengan formula v${formulaVersion ?? 1}; server sekarang memakai v${currentFormulaVersion}. Hapus hasil lalu jalankan lagi untuk memperbarui.`}
+          >
+            Metode lama (v{formulaVersion ?? 1})
+          </span>
+        )}
+        {isAdmin && (
+          <button
+            type="button"
+            className="lc-rerun lc-rerun--danger"
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Hapus hasil analisis poligon ini? Setelah dihapus, analisis bisa dijalankan lagi dari awal.",
+                )
+              ) {
+                void deleteResult();
+              }
+            }}
+          >
+            Hapus hasil
+          </button>
+        )}
       </header>
 
       <div className="lc-tabs" role="tablist" aria-label="Tampilan tutupan lahan">

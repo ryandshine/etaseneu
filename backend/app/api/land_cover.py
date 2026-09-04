@@ -5,11 +5,13 @@ tidak.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query
 
+from app.core.auth import TokenClaims, require_admin_role
 from app.core.config import get_settings
 from app.services.land_cover_service import (
     CLASS_KEYS,
+    FORMULA_VERSION,
     YEARS,
     LandCoverService,
     _build_summary_text,
@@ -31,7 +33,10 @@ async def land_cover_analyze(
     background_tasks: BackgroundTasks,
     polygon_id: int = Body(..., embed=True),
     force: bool = Query(default=False),
+    _claims: TokenClaims = Depends(require_admin_role),
 ) -> dict[str, object]:
+    # Khusus admin: satu job = 1-5 menit kuota GEE + CPU; membaca hasil
+    # tetap untuk semua role (gate baca di router.py).
     service = LandCoverService()
     if not service.enabled:
         raise HTTPException(status_code=503, detail="GEE belum dikonfigurasi di server")
@@ -53,8 +58,9 @@ async def land_cover_analyze(
     store = _store()
     status = store.read_land_cover_status(polygon_id)
     if status and status["status"] == "running" and not force:
-        # force=true dipakai tombol "Analisis ulang" -- juga jadi jalan keluar
-        # kalau ada baris 'running' basi (mis. container restart saat job jalan).
+        # force=true = tombol "Mulai ulang" dari state running basi (baris
+        # 'running' < 30 menit yang jobnya sudah hilang; yang lebih tua
+        # otomatis jadi error oleh reset_stale_land_cover_running).
         raise HTTPException(status_code=409, detail="Analisis sedang berjalan")
     if status and status["status"] == "done" and not force:
         raise HTTPException(status_code=409, detail={"message": "sudah dianalisis", "done": True})
@@ -66,12 +72,15 @@ async def land_cover_analyze(
             detail="Poligon tidak ditemukan / tidak aktif / bukan KPS maupun Hutan Adat",
         )
     store.mark_land_cover_running(polygon_id, target["layer_key"])
-    background_tasks.add_task(LandCoverService().analyze_polygon, polygon_id)
+    background_tasks.add_task(service.analyze_polygon, polygon_id)
     return {"started": True, "polygon_id": polygon_id}
 
 
 @router.delete("/land-cover/result")
-async def land_cover_delete(polygon_id: int) -> dict[str, object]:
+async def land_cover_delete(
+    polygon_id: int,
+    _claims: TokenClaims = Depends(require_admin_role),
+) -> dict[str, object]:
     """Hapus hasil analisis supaya poligon kembali ke 'belum dianalisis'.
     Alur UI "hapus dulu, baru analisis lagi" (menggantikan tombol "Analisis
     ulang"/force dari state done). Ditolak kalau job poligon ini BENERAN
@@ -97,6 +106,10 @@ async def land_cover_status(polygon_id: int) -> dict[str, object]:
         "step": live["step"] if live else None,
         "error": row["error_message"] if row else None,
         "computed_at": row["computed_at"] if row else None,
+        # versi formula hasil tersimpan vs versi yang dipakai server sekarang;
+        # UI menandai "metode lama" kalau berbeda
+        "formula_version": row.get("formula_version") if row else None,
+        "current_formula_version": FORMULA_VERSION,
         # true kalau poligon LAIN (bukan ini) sedang dianalisis di proses ini
         # sekarang -- dipakai frontend buat nonaktifkan tombol "Jalankan
         # Analisis" sementara, biar tidak rebutan kuota GEE/CPU.
@@ -115,7 +128,7 @@ async def land_cover_result(polygon_id: int) -> dict[str, object]:
             "area_ha": r["area_ha"], "pct": r["pct"],
         }
     return {
-        "meta": res["meta"],
+        "meta": {**res["meta"], "current_formula_version": FORMULA_VERSION},
         "years": list(YEARS),
         "classes": list(CLASS_KEYS),
         "table": {str(y): table.get(y, {}) for y in YEARS},

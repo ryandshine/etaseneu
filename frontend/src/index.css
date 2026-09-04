@@ -1015,6 +1015,24 @@ body {
   background: rgba(239, 68, 68, 0.2);
 }
 
+/* Badge "Metode lama (vN)" di header hasil: hasil dihitung formula versi
+   sebelumnya, server sudah pindah versi. Diletakkan di antara judul dan
+   tombol Hapus (margin-right:auto mendorong tombol tetap ke kanan). */
+.lc-formula-old {
+  margin-right: auto;
+  align-self: center;
+  padding: 0.14rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  background: rgba(250, 204, 21, 0.1);
+  color: rgba(253, 224, 71, 0.95);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: help;
+}
+
 .lc-running {
   display: flex;
   flex-direction: column;
@@ -9360,6 +9378,13 @@ a + a {
 
 .tl-badge--error {
   color: #fca5a5;
+}
+
+/* Hasil "done" tapi formula versi lama (lihat LAND_COVER_FORMULA_VERSION) */
+.tl-badge--old {
+  color: #fde047;
+  opacity: 0.85;
+  cursor: help;
 }
 
 .tl-detail {

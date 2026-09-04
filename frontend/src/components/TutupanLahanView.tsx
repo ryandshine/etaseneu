@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { LAND_COVER_FORMULA_VERSION } from "../constants/landCover";
 import { authFetch } from "../lib/api";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { LandCoverPanel } from "./LandCoverPanel";
@@ -18,7 +19,18 @@ type LandCoverPolygonRow = {
   luas_final: number | null;
   land_cover_status: LandCoverStatus;
   land_cover_computed_at: string | null;
+  // null untuk hasil sebelum kolom ini ada (backfill server: computed_at
+  // < 2026-09-05 -> 1, sisanya 2) atau kalau belum ada hasil
+  land_cover_formula_version?: number | null;
 };
+
+// Hasil "done" yang dihitung formula versi lama -> ditandai di daftar supaya
+// admin tahu mana yang perlu dihapus & dijalankan ulang.
+function isOutdatedFormula(row: LandCoverPolygonRow): boolean {
+  if (row.land_cover_status !== "done") return false;
+  const v = row.land_cover_formula_version ?? null;
+  return v === null || v < LAND_COVER_FORMULA_VERSION;
+}
 
 // Bucket status buat filter -- "idle" menampung null & "pending" sekaligus
 // (keduanya artinya "belum ada hasil"), jadi user tidak perlu tahu bedanya.
@@ -46,6 +58,8 @@ type TutupanLahanViewProps = {
    *  sinkronisasi tambahan. */
   initialPolygonId?: number | null;
   onOpenKpsDetail?: (agency: string) => void;
+  /** Diteruskan ke LandCoverPanel: tombol Jalankan/Hapus analisis khusus admin. */
+  isAdmin?: boolean;
 };
 
 // Cuma 2 layer aktif saat ini (lihat CLAUDE.md, bagian "Model data poligon").
@@ -77,6 +91,7 @@ function formatComputedAt(iso: string | null): string {
 export function TutupanLahanView({
   initialPolygonId = null,
   onOpenKpsDetail,
+  isAdmin = false,
 }: TutupanLahanViewProps): JSX.Element {
   const [rows, setRows] = useState<LandCoverPolygonRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -419,6 +434,14 @@ export function TutupanLahanView({
                           ? ` · ${formatComputedAt(row.land_cover_computed_at)}`
                           : ""}
                       </span>
+                      {isOutdatedFormula(row) && (
+                        <span
+                          className="tl-badge tl-badge--old"
+                          title={`Dihitung dengan formula v${row.land_cover_formula_version ?? 1}; versi sekarang v${LAND_COVER_FORMULA_VERSION}`}
+                        >
+                          Metode lama
+                        </span>
+                      )}
                     </div>
                   );
                 })
@@ -470,7 +493,7 @@ export function TutupanLahanView({
                     </button>
                   ) : null}
                 </div>
-                <LandCoverPanel polygonId={selectedRow.polygon_metadata_id} />
+                <LandCoverPanel polygonId={selectedRow.polygon_metadata_id} isAdmin={isAdmin} />
               </>
             )}
           </div>

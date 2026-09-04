@@ -37,6 +37,17 @@ logger = logging.getLogger("land_cover")
 S2_COLLECTION = "COPERNICUS/S2_SR_HARMONIZED"
 DW_COLLECTION = "GOOGLE/DYNAMICWORLD/V1"
 
+# Versi formula yang tersimpan di land_cover_analysis.formula_version.
+# Naikkan tiap kali metode berubah sehingga hasil lama bisa dibedakan di UI.
+#   1 = S2 median setahun, 5 kelas, DW mode label, tanpa despike
+#   2 = 2026-09-05: median kemarau, DW argmax, kelas kebun (Descals),
+#       postprocess (proyeksi/gap-fill/focal_mode), despike simetris
+FORMULA_VERSION = 2
+FORMULA_LABEL = (
+    "Sentinel-2 L2A median kemarau + Random Forest; label Dynamic World "
+    "argmax + Descals sawit; despike temporal (ETA SENEU v2)"
+)
+
 YEARS: tuple[int, ...] = (2021, 2022, 2023, 2024, 2025)
 CLASS_KEYS: tuple[str, ...] = ("hutan", "kebun", "semak", "pertanian", "terbuka", "air")
 _CLASS_IDX = {k: i for i, k in enumerate(CLASS_KEYS)}
@@ -597,6 +608,26 @@ class LandCoverService:
                     year_geom_rows.append({"year": year, "class_key": key, "geometry_geojson": geom})
 
             duration_s = round(time.monotonic() - started, 1)
+            samples_per_class: dict[str, int] = {}
+            for r in sample_rows:
+                key = CLASS_KEYS[int(r["class_idx"])]
+                samples_per_class[key] = samples_per_class.get(key, 0) + 1
+            # coverage < ~95 % = ada piksel yang tetap kosong walau sudah
+            # gap-fill DW (awan permanen); UI bisa memperingatkan.
+            poly_ha = target.get("area_ha")
+            coverage_pct = {}
+            if poly_ha:
+                for year, row in table.items():
+                    total_ha = sum(v["area_ha"] for v in row.values())
+                    coverage_pct[str(year)] = round(total_ha / float(poly_ha) * 100.0, 1)
+            meta = {
+                "method": "random_forest" if use_rf else "dynamic_world",
+                "feature_names": list(FEATURE_NAMES),
+                "labels": {"sources": ["Dynamic World v1", "Descals 2019"],
+                           "samples_per_class": samples_per_class},
+                "temporal": {"rules": ["despike_symmetric"]},
+                "coverage_pct": coverage_pct,
+            }
             self.postgres_store.save_land_cover_result(
                 pid,
                 target["layer_key"],
@@ -606,6 +637,9 @@ class LandCoverService:
                 duration_s=duration_s,
                 year_class_rows=year_class_rows,
                 year_geom_rows=year_geom_rows,
+                formula_version=FORMULA_VERSION,
+                meta=meta,
+                source=FORMULA_LABEL,
             )
             return {
                 "polygon_id": pid,
