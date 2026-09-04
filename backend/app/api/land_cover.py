@@ -70,6 +70,18 @@ async def land_cover_analyze(
     return {"started": True, "polygon_id": polygon_id}
 
 
+@router.delete("/land-cover/result")
+async def land_cover_delete(polygon_id: int) -> dict[str, object]:
+    """Hapus hasil analisis supaya poligon kembali ke 'belum dianalisis'.
+    Alur UI "hapus dulu, baru analisis lagi" (menggantikan tombol "Analisis
+    ulang"/force dari state done). Ditolak kalau job poligon ini BENERAN
+    sedang jalan di proses ini -- hasilnya toh akan ditulis ulang saat selesai."""
+    if land_cover_run_state(polygon_id):
+        raise HTTPException(status_code=409, detail="Analisis sedang berjalan, tunggu selesai dulu")
+    deleted = _store().delete_land_cover_result(polygon_id)
+    return {"deleted": bool(deleted), "polygon_id": polygon_id}
+
+
 @router.get("/land-cover/polygons")
 async def land_cover_polygons() -> list[dict[str, object]]:
     return _store().list_polygons_with_land_cover_status()

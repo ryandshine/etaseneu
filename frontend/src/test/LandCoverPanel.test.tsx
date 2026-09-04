@@ -232,6 +232,37 @@ describe("LandCoverPanel", () => {
     expect(screen.getByText(/3 kelas lain tidak ditemukan di poligon ini/i)).toBeInTheDocument();
   });
 
+  it("done: 'Hapus hasil' sends DELETE and returns the panel to idle", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    let deleted = false;
+    mockFetch((url, init) => {
+      if (url.includes("/land-cover/result") && init?.method === "DELETE") {
+        deleted = true;
+        return jsonResponse({ deleted: true, polygon_id: 1 });
+      }
+      if (url.includes("/land-cover/status")) {
+        return jsonResponse({
+          state: deleted ? "idle" : "done",
+          step: null,
+          error: null,
+          computed_at: deleted ? null : RESULT.meta.computed_at,
+        });
+      }
+      if (url.includes("/land-cover/result")) return jsonResponse(RESULT);
+      if (url.includes("/land-cover/overlay")) {
+        return jsonResponse({ type: "FeatureCollection", features: [] });
+      }
+      return jsonResponse({}, 404);
+    });
+    render(<LandCoverPanel polygonId={1} />);
+    fireEvent.click(await screen.findByRole("button", { name: /hapus hasil/i }));
+    await waitFor(() => expect(deleted).toBe(true));
+    expect(
+      await screen.findByRole("button", { name: /jalankan analisis/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /analisis ulang/i })).not.toBeInTheDocument();
+  });
+
   it("done: changing the year slider refetches overlay with the new year", async () => {
     const overlayYears: string[] = [];
     mockFetch((url) => {

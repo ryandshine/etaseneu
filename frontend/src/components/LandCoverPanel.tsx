@@ -254,6 +254,26 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
     [polygonId, fetchStatus],
   );
 
+  // "Hapus hasil" menggantikan "Analisis ulang" (force) dari state done:
+  // alurnya sekarang hapus dulu -> kembali idle -> "Jalankan Analisis".
+  const deleteResult = useCallback(async () => {
+    const res = await authFetch(`/api/land-cover/result?polygon_id=${polygonId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      window.alert(
+        typeof body?.detail === "string" ? body.detail : "Gagal menghapus hasil analisis.",
+      );
+      return;
+    }
+    overlayCache.current.clear();
+    setResult(null);
+    setOverlay(null);
+    setErrorMsg(null);
+    setState("idle");
+  }, [polygonId]);
+
   const chartData = useMemo(() => (result ? buildChartData(result.table) : []), [result]);
   const overlayEmpty = state === "done" && overlay !== null && overlay.features.length === 0;
   const usedRandomForest = result != null && Number(result.meta.model_trees ?? 0) > 0;
@@ -354,25 +374,20 @@ export function LandCoverPanel({ polygonId }: { polygonId: number }): JSX.Elemen
         <h3 className="lc-title">Tutupan Lahan 2021–2025</h3>
         <button
           type="button"
-          className="lc-rerun"
-          disabled={busyElsewhere}
-          title={busyElsewhere ? "Ada analisis lain sedang berjalan, coba lagi nanti" : undefined}
+          className="lc-rerun lc-rerun--danger"
           onClick={() => {
-            if (window.confirm("Analisis ulang poligon ini? Hasil lama akan ditimpa.")) {
-              void runAnalyze(true);
+            if (
+              window.confirm(
+                "Hapus hasil analisis poligon ini? Setelah dihapus, analisis bisa dijalankan lagi dari awal.",
+              )
+            ) {
+              void deleteResult();
             }
           }}
         >
-          Analisis ulang
+          Hapus hasil
         </button>
       </header>
-
-      {busyElsewhere && (
-        <p className="lc-busy" role="status">
-          Ada analisis KPS/Hutan Adat lain sedang berjalan — harap tunggu sebentar sebelum
-          menjalankan ulang.
-        </p>
-      )}
 
       <div className="lc-tabs" role="tablist" aria-label="Tampilan tutupan lahan">
         <button

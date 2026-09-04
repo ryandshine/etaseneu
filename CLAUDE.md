@@ -132,7 +132,10 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   `setDefaultProjection("EPSG:3857", None, 10)` dulu. (2) `reduceToVectors` yang dievaluasi di
   DALAM `ee.Dictionary({...}).getInfo()` selalu mengembalikan 0 fitur (bahkan dengan `reproject`
   eksplisit) — `_year_evaluate` sengaja memakai DUA `getInfo()` terpisah (luas, lalu vektor),
-  jangan digabung lagi demi hemat 5 request. Semua `reduceRegion`/`reduceToVectors`
+  jangan digabung lagi demi hemat 5 request. **Pasca-klasifikasi** (`_postprocess_classified`, 2026-09-05): `setDefaultProjection` 10 m →
+  `unmask(label Dynamic World tahun itu)` (lubang awan/SCL tadinya dibuang diam-diam → total luas <
+  luas poligon; sekarang total per tahun = luas poligon) → `focal_mode` 3×3 (buang salt-and-pepper).
+  Semua `reduceRegion`/`reduceToVectors`
   pakai `tileScale=GEE_TILE_SCALE` (4): poligon besar pernah gagal "User memory limit exceeded"
   (batas memori per-request GEE, bukan server kita); kalau masih habis, `_year_evaluate` mengulang
   SEKALI dengan vektor `VECTOR_FALLBACK_SCALE` (20 m) — luas per kelas tetap 10 m. On-demand: `POST /api/land-cover/analyze` `{polygon_id}` (query
@@ -166,7 +169,9 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
     `.lc-floatcard` — static/tanpa blur di layar <640px biar tidak menutupi peta); tab Tren = grafik
     garis multi-kelas (bukan stacked bar lagi — recharts `LineChart`), tabel Δ (sel ha tebal/persen
     redup bertingkat vertikal), ringkasan teks, tombol "Jalankan Analisis" manual — TIDAK ada tombol
-    massal. Kelas yang tidak pernah punya luas ≥0,5 ha di poligon itu (`_MEANINGFUL_HA` — konstanta
+    massal. Dari state `done` tombolnya **"Hapus hasil"** (`DELETE /api/land-cover/result?polygon_id=`
+    → `delete_land_cover_result`, 409 kalau job poligon itu beneran sedang jalan) lalu kembali idle —
+    BUKAN "Analisis ulang"; `?force=true` tetap ada cuma untuk "Mulai ulang" dari state running basi. Kelas yang tidak pernah punya luas ≥0,5 ha di poligon itu (`_MEANINGFUL_HA` — konstanta
     sama persis di frontend `LandCoverPanel.tsx` dan backend `land_cover_service.py`) disembunyikan
     total dari tabel/grafik/kartu (bukan ditampilkan "0 ha" yang merebut atensi); `_build_summary_text`
     juga pakai ambang yang sama supaya kalimat ringkasan tidak bilang "beralih ke X (+0 ha)" yang

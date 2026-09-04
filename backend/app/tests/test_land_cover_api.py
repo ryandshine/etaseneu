@@ -45,6 +45,10 @@ class _FakeStore:
     def mark_land_cover_running(self, polygon_id, layer_key):
         self.running_marked = True
 
+    def delete_land_cover_result(self, polygon_id):
+        self.deleted = polygon_id
+        return self._status is not None
+
     def read_land_cover_target_polygon(self, polygon_id):
         return {"id": polygon_id, "layer_key": "psagustus2026",
                 "lembaga": "X", "nama_prov": "Y", "geometry_json": {}}
@@ -129,6 +133,21 @@ def test_analyze_202_starts_job(client):
     assert r.status_code == 202
     assert r.json() == {"started": True, "polygon_id": 42}
     assert client._store.running_marked is True
+
+
+def test_delete_result_removes_rows_and_reports(client):
+    client._store._status = {"status": "done", "error_message": None, "computed_at": "x"}
+    r = client.delete("/api/land-cover/result?polygon_id=7")
+    assert r.status_code == 200
+    assert r.json() == {"deleted": True, "polygon_id": 7}
+    assert client._store.deleted == 7
+
+
+def test_delete_result_409_while_polygon_actually_running(client, monkeypatch):
+    monkeypatch.setattr(lc_mod, "land_cover_run_state", lambda pid: {"step": "x"})
+    r = client.delete("/api/land-cover/result?polygon_id=7")
+    assert r.status_code == 409
+    assert not hasattr(client._store, "deleted")
 
 
 def test_polygons_list_returns_store_rows(client):

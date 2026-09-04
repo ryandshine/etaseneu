@@ -300,6 +300,27 @@ class LandCoverService:
 
     # -- ekstraksi hasil per tahun ----------------------------------------------
 
+    def _postprocess_classified(self, ee, roi, classified, gap_fill=None):
+        """Pasca-klasifikasi standar sebelum luas & vektor dihitung.
+
+        1. `setDefaultProjection` 10 m — WAJIB duluan: hasil `.classify()` atas
+           komposit median tidak berproyeksi (WGS84 1°), sehingga operasi
+           bertetangga (`focal_mode`, `connectedPixelCount`) jalan di skala 1°.
+        2. `unmask(gap_fill)` — piksel yang tertutup awan/bayangan sepanjang
+           tahun (mask SCL) tadinya DIBUANG diam-diam: total luas < luas
+           poligon dan persen dihitung dari piksel tersisa saja. Sekarang
+           lubang diisi label Dynamic World tahun itu (10 m juga) supaya
+           luas mengisi poligon penuh.
+        3. `focal_mode` 3x3 — filter mayoritas menghilangkan "salt & pepper"
+           piksel tunggal yang lazim pada RF per-piksel; luas per kelas berubah
+           kecil (<1-2 %), peta rona jauh lebih bersih.
+        """
+        img = classified.setDefaultProjection("EPSG:3857", None, 10)
+        if gap_fill is not None:
+            img = img.unmask(gap_fill).clip(roi)
+        img = img.focal_mode(1, "square", "pixels").rename("class_idx")
+        return img.setDefaultProjection("EPSG:3857", None, 10)
+
     def _year_area_expr(self, ee, roi, classified):
         """Ekspresi (belum di-evaluate) luas per kelas: ee.Dictionary {groups}."""
         return (
@@ -479,12 +500,14 @@ class LandCoverService:
                 # Klasifikasi & pengukuran cukup di dalam poligon: klip ke ROI
                 # supaya GEE tidak menghitung komposit/RF untuk seluruh bbox
                 # ber-buffer 3 km (yang cuma perlu saat sampling latih).
+                dw_img = self._dw_class_image(
+                    ee, roi, year, confidence_masked=False
+                ).rename("class_idx")
                 if use_rf:
                     classified = feat_by_year[year].clip(roi).classify(rf).rename("class_idx")
+                    classified = self._postprocess_classified(ee, roi, classified, gap_fill=dw_img)
                 else:
-                    classified = self._dw_class_image(
-                        ee, roi, year, confidence_masked=False
-                    ).rename("class_idx")
+                    classified = self._postprocess_classified(ee, roi, dw_img)
                 grouped, vectors = self._year_evaluate(ee, roi, classified)
                 areas = self._parse_area_by_class(grouped)
                 total = sum(areas.values()) or 1.0

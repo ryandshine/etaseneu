@@ -124,6 +124,18 @@ class _LandCoverMixin:
                     (str(message)[:2000], int(polygon_id)),
                 )
 
+    def delete_land_cover_result(self, polygon_id: int) -> bool:
+        """Hapus hasil analisis satu poligon (meta + luas + rona) -> kembali ke
+        keadaan 'belum pernah dianalisis'. True kalau memang ada yang dihapus."""
+        pid = int(polygon_id)
+        with self.connection() as conn:
+            self._ensure_land_cover_tables(conn)
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM land_cover_year_geom WHERE polygon_metadata_id = %s", (pid,))
+                cur.execute("DELETE FROM land_cover_year_class WHERE polygon_metadata_id = %s", (pid,))
+                cur.execute("DELETE FROM land_cover_analysis WHERE polygon_metadata_id = %s", (pid,))
+                return (cur.rowcount or 0) > 0
+
     def save_land_cover_result(
         self,
         polygon_id: int,
