@@ -1721,6 +1721,21 @@ body {
   margin: 0 0 1rem;
 }
 
+/* Di layar sempit, .toast-error polos (loadError) tadinya tetap top:1rem;
+   right:1rem; max-width:20rem -- pada layar <=430px itu terentang dari
+   dekat kiri sampai kanan dan menutupi tombol hamburger 48px di pojok
+   kiri-atas. Digeser ke bawah baris hamburger dan dilebarkan penuh dengan
+   margin, senada .locate-error-toast. */
+@media (max-width: 639px) {
+  .toast-error:not(.toast-error--bottom) {
+    top: calc(4.2rem + env(safe-area-inset-top));
+    left: 0.75rem;
+    right: 0.75rem;
+    max-width: none;
+    text-align: center;
+  }
+}
+
 @media (max-width: 1100px) {
 }
 

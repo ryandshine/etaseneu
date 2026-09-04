@@ -203,7 +203,8 @@ BUKAN lewat migrasi app:
   WMSServer & tanpa tile cache → `components/KawasanHutanLayer.tsx` = `L.TileLayer` di-extend, minta
   endpoint `export` per-tile (bbox-per-tile ala `L.TileLayer.WMS`). Simbol/warna dari server;
   `constants/kawasanHutan.ts` cuma URL + salinan legenda. Tombol "Fungsi Kawasan Hutan" di
-  `HotspotMap.tsx` **default mati**, pane `kawasan-hutan` z360. Saat menyala, isian poligon KPS
+  `HotspotMap.tsx` **default NYALA** (mobile & desktop, sejak 2026-09-04 — sebelumnya mati),
+  pane `kawasan-hutan` z360. Saat menyala, isian poligon KPS
   (`batas-kps`) dimatikan (garis batas saja) supaya warna kawasan tidak ketutup tint hijau KPS.
   BUKAN dari file geojson — file KWSHUTAN 1:250k JANGAN ditaruh di `SHP_DIR` (pernah bikin
   `list_preview_layers()` 135 dtk + payload 70 MB + `sync_all()` menulis 30k `polygon_metadata` +

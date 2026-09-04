@@ -18,6 +18,14 @@ const mapZoomMock = vi.fn(() => 5);
 const geoJsonPropsMock = vi.fn();
 const circleMarkerPropsMock = vi.fn();
 
+// Overlay Fungsi Kawasan Hutan (default nyala sejak 2026-09-04, lihat
+// HotspotMap.tsx) manipulasi L.Map asli (getPane/createPane/addLayer) lewat
+// useMap() -- di luar jangkauan mock react-leaflet ringan di bawah. Diganti
+// no-op supaya render map tetap bisa diuji tanpa mensimulasikan Leaflet penuh.
+vi.mock("../components/KawasanHutanLayer", () => ({
+  KawasanHutanLayer: () => null
+}));
+
 vi.mock("react-leaflet", () => ({
   CircleMarker: ({ children, ...props }: { children?: ReactNode }) => {
     circleMarkerPropsMock(props);

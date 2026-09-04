@@ -531,7 +531,7 @@ export function useDashboardData(
             by_source: {},
             by_layer: {}
           });
-          setLoadError("Hotspot data is unavailable.");
+          setLoadError("Data hotspot tidak tersedia. Coba ubah filter atau muat ulang halaman.");
         });
     });
 

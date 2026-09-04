@@ -434,9 +434,11 @@ export function HotspotMap({
   const s2Burned = useS2BurnedAreaOverlay(showS2Burned);
 
   // Overlay fungsi kawasan hutan (KWSHUTAN_AR_250K) diambil LIVE dari layanan
-  // ArcGIS resmi Ditjen Planologi Kehutanan (lihat KawasanHutanLayer). Mati
-  // secara default: cakupan nasional, menutupi peta kalau selalu nyala.
-  const [showKawasan, setShowKawasan] = useState(false);
+  // ArcGIS resmi Ditjen Planologi Kehutanan (lihat KawasanHutanLayer).
+  // Default NYALA (mobile & desktop) atas permintaan eksplisit -- sebelumnya
+  // mati karena cakupan nasional bisa menutupi peta; tombolnya tetap ada
+  // untuk yang mau menyembunyikannya.
+  const [showKawasan, setShowKawasan] = useState(true);
 
   // Mobile: kontrol mengambang (legenda, toggle lapisan, peralihan basemap)
   // digantikan satu bottom sheet + kolom FAB ringkas. Lihat MapSheet /
