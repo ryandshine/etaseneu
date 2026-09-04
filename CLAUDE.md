@@ -122,11 +122,17 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   terbuka|air` (pemukiman di-skip). **Hemat kuota GEE (2026-09-04)**: sampel latih 5 tahun
   di-`getInfo()` SEKALI lalu dikirim balik sebagai `FeatureCollection` literal
   (`_materialize_samples`) — tanpa ini tiap request berikutnya memaksa GEE mengulang
-  `stratifiedSample` + komposit region ber-buffer 3 km dari nol; luas + vektor per tahun digabung
-  dalam SATU `ee.Dictionary(...).getInfo()` (`_year_evaluate`, `reduceToVectors` pakai
-  `labelProperty="class_idx"`, bukan 1 panggilan per kelas); citra klasifikasi di-`clip(roi)`
-  (buffer cuma untuk sampling). Total ≈ 7 request GEE per poligon (dulu ≈ 32). Jangan tambah
-  `getInfo()` di dalam loop tahun/kelas tanpa alasan kuat. Semua `reduceRegion`/`reduceToVectors`
+  `stratifiedSample` + komposit region ber-buffer 3 km dari nol; vektor per tahun = SATU
+  `reduceToVectors` pakai `labelProperty="class_idx"` (bukan 1 panggilan per kelas); citra
+  klasifikasi di-`clip(roi)` (buffer cuma untuk sampling). Total ≈ 12 request GEE per poligon
+  (dulu ≈ 32). Jangan tambah `getInfo()` di dalam loop tahun/kelas tanpa alasan kuat. **Dua jebakan
+  GEE yang pernah bikin peta rona KOSONG di produksi (2026-09-05) walau luasnya benar**: (1) citra
+  hasil `.classify()` atas komposit median TIDAK berproyeksi (WGS84 1°) → `connectedPixelCount`
+  MMU dihitung di skala 1° dan me-mask seluruh poligon; `_year_vectors_expr` WAJIB
+  `setDefaultProjection("EPSG:3857", None, 10)` dulu. (2) `reduceToVectors` yang dievaluasi di
+  DALAM `ee.Dictionary({...}).getInfo()` selalu mengembalikan 0 fitur (bahkan dengan `reproject`
+  eksplisit) — `_year_evaluate` sengaja memakai DUA `getInfo()` terpisah (luas, lalu vektor),
+  jangan digabung lagi demi hemat 5 request. Semua `reduceRegion`/`reduceToVectors`
   pakai `tileScale=GEE_TILE_SCALE` (4): poligon besar pernah gagal "User memory limit exceeded"
   (batas memori per-request GEE, bukan server kita); kalau masih habis, `_year_evaluate` mengulang
   SEKALI dengan vektor `VECTOR_FALLBACK_SCALE` (20 m) — luas per kelas tetap 10 m. On-demand: `POST /api/land-cover/analyze` `{polygon_id}` (query

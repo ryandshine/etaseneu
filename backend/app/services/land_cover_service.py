@@ -337,15 +337,17 @@ class LandCoverService:
         )
 
     def _year_evaluate(self, ee, roi, classified) -> tuple[dict, dict]:
-        """Luas + vektor satu tahun dalam SATU `getInfo()`. Dalam satu
-        ekspresi GEE mendedup subgraf identik, jadi komposit median + RF
-        classify tahun itu dihitung sekali untuk keduanya (dulu: dua kali
-        untuk luas, lalu 5 kali lagi untuk vektor per kelas)."""
+        """Luas + vektor satu tahun = DUA `getInfo()` terpisah.
+
+        Sengaja TIDAK digabung dalam satu `ee.Dictionary({...}).getInfo()`:
+        diuji nyata 2026-09-05, `reduceToVectors` yang dievaluasi di dalam
+        Dictionary selalu mengembalikan 0 fitur (bahkan dengan `reproject`
+        eksplisit), sedangkan `getInfo()` langsung pada FeatureCollection-nya
+        memberi belasan fitur -- rona peta kosong di produksi. Biaya: +5
+        request per poligon (≈12 total), masih jauh di bawah ≈32 semula."""
+        areas = self._year_area_expr(ee, roi, classified).getInfo() or {}
         try:
-            payload = ee.Dictionary({
-                "areas": self._year_area_expr(ee, roi, classified),
-                "vectors": self._year_vectors_expr(ee, roi, classified),
-            }).getInfo() or {}
+            vectors = self._year_vectors_expr(ee, roi, classified).getInfo() or {}
         except Exception as exc:  # noqa: BLE001
             if "memory limit" not in str(exc).lower():
                 raise
@@ -356,13 +358,10 @@ class LandCoverService:
                 "LAND_COVER: memori GEE habis pada vektorisasi 10 m, ulang dengan %d m",
                 VECTOR_FALLBACK_SCALE,
             )
-            payload = ee.Dictionary({
-                "areas": self._year_area_expr(ee, roi, classified),
-                "vectors": self._year_vectors_expr(
-                    ee, roi, classified, scale=VECTOR_FALLBACK_SCALE
-                ),
-            }).getInfo() or {}
-        return payload.get("areas") or {}, payload.get("vectors") or {}
+            vectors = self._year_vectors_expr(
+                ee, roi, classified, scale=VECTOR_FALLBACK_SCALE
+            ).getInfo() or {}
+        return areas, vectors
 
     def _parse_area_by_class(self, grouped: dict) -> dict[str, float]:
         out = {k: 0.0 for k in CLASS_KEYS}

@@ -491,25 +491,17 @@ def test_year_evaluate_retries_vectors_at_coarser_scale_on_gee_memory_limit() ->
         def reduceToVectors(self, *a, **k):
             calls.append(k["scale"])
             if k["scale"] == 10:
-                return _FakeGetInfo(_Boom("User memory limit exceeded."))
+                return _Boom("User memory limit exceeded.")
             return _FakeGetInfo({"features": []})
 
-    class _Boom:
+    class _Boom(_FakeGetInfo):
         def __init__(self, msg):
             self.msg = msg
 
-
-    def _dict(d):
-        out = {}
-        for key, v in d.items():
-            val = v.getInfo()
-            if isinstance(val, _Boom):
-                raise RuntimeError(val.msg)
-            out[key] = val
-        return _FakeGetInfo(out)
+        def getInfo(self):
+            raise RuntimeError(self.msg)
 
     ee = _FakeEE()
-    ee.Dictionary = staticmethod(_dict)
     svc = _svc()
     areas, vectors = svc._year_evaluate(ee, _FakeImg(), _Img())
     assert calls == [10, VECTOR_FALLBACK_SCALE]
@@ -518,7 +510,7 @@ def test_year_evaluate_retries_vectors_at_coarser_scale_on_gee_memory_limit() ->
 
     class _Other(_FakeImg):
         def reduceToVectors(self, *a, **k):
-            return _FakeGetInfo(_Boom("Computation timed out."))
+            return _Boom("Computation timed out.")
 
     with pytest.raises(RuntimeError, match="timed out"):
         svc._year_evaluate(ee, _FakeImg(), _Other())
