@@ -291,7 +291,26 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               hotspot ST-DBSCAN, self-contained fetch sendiri lewat lib/api.ts, TIDAK
               lewat useDashboardData), FilterPanel.tsx, SidebarNav.tsx (satu area gulir
               di `.side-rail`; menu Pengaturan menampilkan info akun untuk semua role,
-              prop `isAdmin` → role user hanya tidak melihat tombol Sync/Prewarm),
+              prop `isAdmin` → role user hanya tidak melihat tombol Sync/Prewarm).
+              **Sidebar collapse (icon rail)** — HANYA aktif di desktop lebar
+              (`hooks/useIsDesktopWide.ts`, matchMedia `>=1024px`); preferensi user
+              (`localStorage` `etaseneu.sidebar.collapsed.v1`, default expanded) digabung
+              dengan cek viewport itu SEKALI di `App.tsx` (`sidebarCollapsed =
+              sidebarCollapsedPref && isDesktopWide`) lalu diteruskan ke `SidebarNav` sebagai
+              prop `collapsed` yang sudah final — `SidebarNav` sendiri TIDAK cek viewport
+              lagi. Sengaja dibatasi desktop-only: lebar sidebar tablet (640-1023px, fixed
+              200px hardcoded) & mobile (off-canvas drawer, <640px) diatur tiga aturan CSS
+              terpisah yang sudah pernah bikin bug (lihat komentar `.app-frame`/`.side-rail`
+              di index.css) — collapse cuma nambah SATU aturan aditif baru
+              (`.app-frame--collapsed` scoped `@media (min-width:1024px)`), tidak menyentuh
+              tiga itu. Saat collapsed: label teks nav disembunyikan tapi `aria-label` tetap
+              ada (nama aksesibel tidak berubah, query test berbasis `getByRole(...,{name})`
+              tetap valid); `filterSlot` (FilterPanel, cuma ada di Live Map) jadi tombol ikon
+              yang buka flyout `.side-filter-popover` ke kanan; blok status sinkronisasi
+              (grid last-sync/next-sync/scheduler/dst) diringkas SENGAJA jadi cuma titik
+              kesehatan + 2 tombol ikon admin (Sync/Prewarm langsung, tanpa detail) — bukan
+              dipadatkan jadi tooltip, karena grid itu tidak masuk akal diringkas tanpa
+              kehilangan makna; detail lengkap kembali begitu di-expand.
               BurnedAreaCard.tsx, WeatherOverlay.tsx, dll.
               PETA LIVE — MOBILE vs DESKTOP DIVERGEN: `HotspotMap.tsx` pakai
               `hooks/useIsMobile.ts` (matchMedia `<=639px`). Di desktop kontrol
