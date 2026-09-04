@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FilterPanel } from "./components/FilterPanel";
@@ -353,14 +353,17 @@ export default function App() {
   // Dipicu dari klik baris KPS di Buku Besar -- beda dari commitViewChange
   // karena butuh menulis nama KPS juga ke URL supaya tautan halaman detail
   // ini bisa dibagikan/di-bookmark.
-  const openKpsDetail = (agency: string) => {
+  // `useCallback` supaya `HotspotMarkersLayer` (React.memo di HotspotMap)
+  // tidak ikut re-render tiap state App lain berubah -- penting saat
+  // timeline animasi jalan.
+  const openKpsDetail = useCallback((agency: string) => {
     setKpsAgency(agency);
     setActiveView("kps");
     const params = new URLSearchParams(window.location.search);
     params.set("view", "kps");
     params.set("kps", agency);
     window.history.pushState({}, "", `?${params.toString()}`);
-  };
+  }, []);
 
   // Dipicu dari baris ringkas "Tutupan Lahan" di Detail KPS -- beda dari
   // commitViewChange karena butuh menulis polygon_metadata_id juga ke URL

@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { authFetch } from "../lib/api";
 import { formatHectares } from "../lib/hotspotDisplay";
 import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
-import { Flame, LocateFixed, Trees } from "lucide-react";
+import { Clock, Flame, LocateFixed, Trees } from "lucide-react";
+import { useHotspotTimeline } from "../hooks/useHotspotTimeline";
+import { opacityForBucket } from "../lib/hotspotTimeline";
+import { HotspotTimelineControl } from "./HotspotTimelineControl";
 import { WindLayer } from "./WindLayer";
 import { WeatherOverlay } from "./WeatherOverlay";
 import {
@@ -27,7 +30,12 @@ import {
   ZoomControl
 } from "react-leaflet";
 import { canvas, circleMarker as buildLeafletCircleMarker, latLngBounds, divIcon } from "leaflet";
-import type { LayerGroup as LLayerGroup, Map as LeafletMap } from "leaflet";
+import type {
+  CircleMarker as LCircleMarker,
+  LayerGroup as LLayerGroup,
+  Map as LeafletMap,
+  Marker as LMarker,
+} from "leaflet";
 
 import { useBurnedAreaOverlay } from "../hooks/useBurnedAreaOverlay";
 import type { BurnedAreaOverlayFeature } from "../hooks/useBurnedAreaOverlay";
@@ -405,6 +413,80 @@ const rainIcon = divIcon({
   iconAnchor: [16, 16]
 });
 
+type MarkerLayer = LCircleMarker | LMarker;
+
+type MarkersLayerProps = {
+  hotspots: HotspotRecord[];
+  renderer: ReturnType<typeof canvas>;
+  onOpenKpsDetail?: (agency: string) => void;
+  registerMarker: (id: string, layer: MarkerLayer | null) => void;
+};
+
+// Daftar marker diekstrak ke child `memo` supaya animasi timeline TIDAK
+// me-render ulang ribuan <CircleMarker> tiap tick -- playback menata style
+// marker secara imperatif lewat ref (lihat driver useEffect di HotspotMap).
+// JSX per-item TIDAK berubah dari sebelumnya (Popup pane="popupPane",
+// renderer canvas bersama, radius 7) -- cuma ditambah `ref`.
+const HotspotMarkersLayer = memo(function HotspotMarkersLayer({
+  hotspots,
+  renderer,
+  onOpenKpsDetail,
+  registerMarker,
+}: MarkersLayerProps) {
+  return (
+    <>
+      {hotspots.map((hotspot) =>
+        (hotspot.frp ?? 0) > HIGH_FRP_THRESHOLD ? (
+          <Marker
+            key={hotspot.id}
+            position={[hotspot.latitude, hotspot.longitude]}
+            icon={getHighIntensityIcon(sourceColor(hotspot.source))}
+            ref={(l) => registerMarker(hotspot.id, (l as unknown as LMarker | null) ?? null)}
+          >
+            <Popup pane="popupPane">
+              <HotspotPopupContent hotspot={hotspot} onOpenKpsDetail={onOpenKpsDetail} />
+            </Popup>
+          </Marker>
+        ) : (
+          <CircleMarker
+            key={hotspot.id}
+            center={[hotspot.latitude, hotspot.longitude]}
+            radius={7}
+            renderer={renderer}
+            ref={(l) => registerMarker(hotspot.id, (l as unknown as LCircleMarker | null) ?? null)}
+            pathOptions={{
+              color: "#1b120d",
+              weight: 2,
+              fillColor: sourceColor(hotspot.source),
+              fillOpacity: 0.98
+            }}
+          >
+            <Popup pane="popupPane">
+              <HotspotPopupContent hotspot={hotspot} onOpenKpsDetail={onOpenKpsDetail} />
+            </Popup>
+          </CircleMarker>
+        )
+      )}
+    </>
+  );
+});
+
+function applyMarkerOpacity(layer: MarkerLayer, o: number) {
+  const cm = layer as LCircleMarker;
+  if (typeof cm.setStyle === "function") {
+    cm.setStyle({ fillOpacity: o === 0 ? 0 : o * 0.98, opacity: o === 0 ? 0 : 1 });
+    // Titik "masa depan" tidak boleh menelan klik peta.
+    cm.options.interactive = o > 0;
+    return;
+  }
+  const mk = layer as LMarker;
+  if (typeof mk.setOpacity === "function") {
+    mk.setOpacity(o === 0 ? 0 : 1);
+    const el = mk.getElement?.();
+    if (el) el.style.pointerEvents = o > 0 ? "" : "none";
+  }
+}
+
 export function HotspotMap({
   hotspots,
   layers,
@@ -493,6 +575,33 @@ export function HotspotMap({
       }
     });
   }, [hotspots, burnedArea.data]);
+
+  // ---- Pemutar waktu (timeline animasi) ----
+  // Registry ref marker per id; diisi lewat callback-ref di HotspotMarkersLayer.
+  const markerRefs = useRef(new Map<string, MarkerLayer>());
+  const registerMarker = useCallback((id: string, layer: MarkerLayer | null) => {
+    if (layer) markerRefs.current.set(id, layer);
+    else markerRefs.current.delete(id);
+  }, []);
+
+  const [timelineOn, setTimelineOn] = useState(false);
+  const timelineEnabled = timelineOn && hotspots.length > 0;
+  const timeline = useHotspotTimeline(hotspots, { enabled: timelineEnabled });
+
+  // Driver: tata ulang style tiap marker secara imperatif tiap playhead maju
+  // (full sweep; <= beberapa ribu marker masih ringan). Saat timeline mati,
+  // kembalikan semua ke tampilan penuh.
+  useEffect(() => {
+    const refs = markerRefs.current;
+    if (!timelineEnabled) {
+      refs.forEach((layer) => applyMarkerOpacity(layer, 1));
+      return;
+    }
+    refs.forEach((layer, id) => {
+      const b = timeline.bucketIndexById.get(id) ?? 0;
+      applyMarkerOpacity(layer, opacityForBucket(timeline.playheadIndex, b));
+    });
+  }, [timelineEnabled, timeline.playheadIndex, timeline.bucketIndexById, hotspots]);
 
   useEffect(() => {
     const activeLayers = layers.filter(l => l.active);
@@ -689,6 +798,24 @@ export function HotspotMap({
               <p className="burned-summary-chip__source">Sumber: SIGAP Kehutanan · KWSHUTAN 1:250K</p>
             </div>
           ) : null}
+        </div>
+
+        <div className="overlay-group">
+          <button
+            type="button"
+            className={`burned-toggle burned-toggle--timeline${timelineOn ? " burned-toggle--active" : ""}`}
+            onClick={() => setTimelineOn((current) => !current)}
+            disabled={hotspots.length === 0}
+            title={
+              timelineOn
+                ? "Tutup pemutar waktu hotspot"
+                : "Putar sebaran titik panas dari awal ke akhir rentang waktu terpilih"
+            }
+            aria-pressed={timelineOn}
+          >
+            <Clock size={15} />
+            <span>Timeline</span>
+          </button>
         </div>
       </div>
       </>
@@ -937,39 +1064,29 @@ export function HotspotMap({
             />
           ) : null}
           <LayerGroup ref={hotspotLayerGroupRef}>
-            {hotspots.map((hotspot) =>
-              (hotspot.frp ?? 0) > HIGH_FRP_THRESHOLD ? (
-                <Marker
-                  key={hotspot.id}
-                  position={[hotspot.latitude, hotspot.longitude]}
-                  icon={getHighIntensityIcon(sourceColor(hotspot.source))}
-                >
-                  <Popup pane="popupPane">
-                    <HotspotPopupContent hotspot={hotspot} onOpenKpsDetail={onOpenKpsDetail} />
-                  </Popup>
-                </Marker>
-              ) : (
-                <CircleMarker
-                  key={hotspot.id}
-                  center={[hotspot.latitude, hotspot.longitude]}
-                  radius={7}
-                  renderer={fireCanvasRenderer}
-                  pathOptions={{
-                    color: "#1b120d",
-                    weight: 2,
-                    fillColor: sourceColor(hotspot.source),
-                    fillOpacity: 0.98
-                  }}
-                >
-                  <Popup pane="popupPane">
-                    <HotspotPopupContent hotspot={hotspot} onOpenKpsDetail={onOpenKpsDetail} />
-                  </Popup>
-                </CircleMarker>
-              )
-            )}
+            <HotspotMarkersLayer
+              hotspots={hotspots}
+              renderer={fireCanvasRenderer}
+              onOpenKpsDetail={onOpenKpsDetail}
+              registerMarker={registerMarker}
+            />
           </LayerGroup>
         </Pane>
       </MapContainer>
+
+      {timelineEnabled && timeline.buckets.length > 0 ? (
+        <HotspotTimelineControl
+          buckets={timeline.buckets}
+          playheadIndex={timeline.playheadIndex}
+          isPlaying={timeline.isPlaying}
+          speed={timeline.speed}
+          label={timeline.label}
+          toggle={timeline.toggle}
+          seek={timeline.seek}
+          cycleSpeed={timeline.cycleSpeed}
+          onClose={() => setTimelineOn(false)}
+        />
+      ) : null}
 
       {isMobile ? (
         <>
@@ -992,6 +1109,9 @@ export function HotspotMap({
             s2Burned={s2Burned}
             showKawasan={showKawasan}
             onToggleKawasan={() => setShowKawasan((current) => !current)}
+            timelineOn={timelineOn}
+            onToggleTimeline={() => setTimelineOn((current) => !current)}
+            timelineDisabled={hotspots.length === 0}
             onExpandedChange={setSheetExpanded}
           />
         </>

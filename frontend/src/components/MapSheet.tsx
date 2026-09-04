@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Flame, Map as MapIcon, Satellite, Trees } from "lucide-react";
+import { Clock, Flame, Map as MapIcon, Satellite, Trees } from "lucide-react";
 import { formatHectares } from "../lib/hotspotDisplay";
 import { KAWASAN_HUTAN_LEGEND } from "../constants/kawasanHutan";
 
@@ -32,6 +32,9 @@ type MapSheetProps = {
   s2Burned: OverlayLike<S2Summary>;
   showKawasan: boolean;
   onToggleKawasan: () => void;
+  timelineOn?: boolean;
+  onToggleTimeline?: () => void;
+  timelineDisabled?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
 };
 
@@ -135,6 +138,9 @@ export function MapSheet({
   s2Burned,
   showKawasan,
   onToggleKawasan,
+  timelineOn = false,
+  onToggleTimeline,
+  timelineDisabled = false,
   onExpandedChange
 }: MapSheetProps) {
   const [detent, setDetent] = useState<Detent>("peek");
@@ -256,6 +262,21 @@ export function MapSheet({
                 </ul>
               ) : null}
             </LayerRow>
+
+            {onToggleTimeline ? (
+              <LayerRow
+                icon={<Clock size={15} />}
+                label="Timeline"
+                hint={
+                  timelineDisabled
+                    ? "Tidak ada titik panas di rentang ini"
+                    : "Putar sebaran titik panas dari awal ke akhir rentang waktu"
+                }
+                active={timelineOn}
+                loading={false}
+                onToggle={timelineDisabled ? () => undefined : onToggleTimeline}
+              />
+            ) : null}
 
             <h3 className="map-sheet__title">Tampilan Dasar</h3>
             <div className="map-sheet__segmented" role="group" aria-label="Gaya peta">

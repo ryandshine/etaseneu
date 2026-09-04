@@ -119,7 +119,14 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   tahun, dipersempit dari 2020–2025 semula), dari
   Sentinel-2 L2A via GEE + Random Forest (`ee.Classifier.smileRandomForest`, guru label Google
   Dynamic World, filter keyakinan ≥0,6, komposit median tahunan). 5 kelas: `hutan|semak|pertanian|
-  terbuka|air` (pemukiman di-skip). On-demand: `POST /api/land-cover/analyze` `{polygon_id}` (query
+  terbuka|air` (pemukiman di-skip). **Hemat kuota GEE (2026-09-04)**: sampel latih 5 tahun
+  di-`getInfo()` SEKALI lalu dikirim balik sebagai `FeatureCollection` literal
+  (`_materialize_samples`) — tanpa ini tiap request berikutnya memaksa GEE mengulang
+  `stratifiedSample` + komposit region ber-buffer 3 km dari nol; luas + vektor per tahun digabung
+  dalam SATU `ee.Dictionary(...).getInfo()` (`_year_evaluate`, `reduceToVectors` pakai
+  `labelProperty="class_idx"`, bukan 1 panggilan per kelas); citra klasifikasi di-`clip(roi)`
+  (buffer cuma untuk sampling). Total ≈ 7 request GEE per poligon (dulu ≈ 32). Jangan tambah
+  `getInfo()` di dalam loop tahun/kelas tanpa alasan kuat. On-demand: `POST /api/land-cover/analyze` `{polygon_id}` (query
   `?force=true` untuk analisis ulang) → job `BackgroundTasks` (`LandCoverService.analyze_polygon`,
   ~1–3 mnt), progres langkah live di dict modul-global `_LAND_COVER_RUN_STATE` (boleh hilang saat
   restart), **sumber kebenaran status = kolom `land_cover_analysis.status`**. Hasil di tabel
@@ -329,6 +336,22 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               `<ScaleControl>` (react-leaflet, metrik) dirender di SEMUA lebar.
               Mock `react-leaflet` di test WAJIB ekspor `ScaleControl`
               (App.test.tsx, HotspotMap.test.tsx sudah).
+              **Pemutar waktu "Timeline"** (toggle default mati; desktop di deret
+              `burned-control`, mobile baris di `MapSheet` via prop
+              `onToggleTimeline`): `hooks/useHotspotTimeline.ts` + fungsi murni
+              `lib/hotspotTimeline.ts` (bucketing granularitas otomatis 1j/3j/1h
+              ≤120 frame, `opacityForBucket` kumulatif-berpudar, label WIB) —
+              loop `setInterval` `TICK_MS/speed`, kecepatan 1/2/4×. Daftar marker
+              diekstrak ke `HotspotMarkersLayer` (`React.memo`) — playback TIDAK
+              me-render ulang list: `useEffect` driver menata style tiap marker
+              imperatif lewat `markerRefs` (`Map<id, L.CircleMarker|L.Marker>`,
+              diisi callback-ref) → `applyMarkerOpacity` (setStyle/setOpacity +
+              `interactive=false` untuk titik "masa depan"). Bar kontrol
+              `HotspotTimelineControl.tsx` (histogram-scrubber + `<input
+              type=range>` a11y) dirender di `.map-frame` DI LUAR `<MapContainer>`.
+              Murni client-side atas `hotspots` termuat; tak ada endpoint/persist.
+              `openKpsDetail` di `App.tsx` di-`useCallback` demi memo ini. Mock
+              `CircleMarker`/`Marker` di HotspotMap.test.tsx WAJIB `forwardRef`.
 hooks/        useDashboardData.ts (hook utama, ~800 baris — lihat di bawah),
               useBurnedAreaOverlay.ts, useIsMobile.ts
 lib/          api.ts (client fetch bertipe; `authFetch`/`downloadWithAuth` untuk panggilan

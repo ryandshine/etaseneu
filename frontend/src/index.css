@@ -9943,3 +9943,134 @@ a + a {
     }
   }
 }
+
+/* ---- Pemutar waktu hotspot (timeline animasi) ----
+   Melayang di bawah-tengah peta utama. Di mobile diangkat di atas peek
+   bottom-sheet (MapSheet) & kolom FAB supaya tidak saling tumpang tindih. */
+.timeline-control {
+  position: absolute;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: min(680px, calc(100% - 2rem));
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(19, 21, 26, 0.96);
+  color: #f5efe6;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.timeline-control__play,
+.timeline-control__speed,
+.timeline-control__close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  min-width: 30px;
+  padding: 0 0.5rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(12, 13, 17, 0.9);
+  color: #f5efe6;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.timeline-control__play:hover,
+.timeline-control__speed:hover {
+  border-color: rgba(255, 140, 66, 0.6);
+}
+.timeline-control__close {
+  border: none;
+  background: transparent;
+  color: rgba(245, 239, 230, 0.6);
+}
+.timeline-control__close:hover {
+  color: #f5efe6;
+}
+.timeline-control__scrub {
+  position: relative;
+  flex: 1 1 auto;
+  height: 34px;
+}
+.timeline-control__hist {
+  position: absolute;
+  inset: 0 0 8px 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  pointer-events: none;
+}
+.timeline-control__bar {
+  flex: 1 1 0;
+  min-height: 2px;
+  background: rgba(245, 239, 230, 0.18);
+  border-radius: 1px 1px 0 0;
+  transition: background 120ms ease;
+}
+.timeline-control__bar--past {
+  background: rgba(255, 140, 66, 0.55);
+}
+.timeline-control__bar--now {
+  background: #ff8c42;
+}
+.timeline-control__range {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  accent-color: #ff8c42;
+  cursor: pointer;
+}
+.timeline-control__label {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 8.5rem;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.timeline-control__label-time {
+  font-size: 0.72rem;
+  color: rgba(245, 239, 230, 0.9);
+}
+.timeline-control__label-count {
+  font-size: 0.64rem;
+  color: rgba(245, 239, 230, 0.55);
+}
+@media (prefers-reduced-motion: reduce) {
+  .timeline-control__bar {
+    transition: none;
+  }
+}
+@media (max-width: 639px) {
+  .timeline-control {
+    /* di atas peek MapSheet (~5rem) */
+    bottom: 6.25rem;
+    width: calc(100% - 1rem);
+    gap: 0.4rem;
+    padding: 0.4rem 0.5rem;
+    flex-wrap: wrap;
+  }
+  .timeline-control__label {
+    order: 5;
+    width: 100%;
+    flex-direction: row;
+    justify-content: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+}
