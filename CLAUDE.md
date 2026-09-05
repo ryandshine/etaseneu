@@ -500,7 +500,19 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               September") — nama bulan di-derive dari tanggal sekarang (WIB)
               via `toLocaleString("id-ID", {month:"long"})`, otomatis ganti
               tiap ganti bulan; datanya `DATE_TRUNC('month', NOW())` (bulan
-              berjalan). Catatan konsolidasi lama (4 kartu+tab
+              berjalan). **Cap "Status per <tanggal> WIB" (`snapshotLabel`,
+              waktu klien) + kalimat "tiap KPS masuk tepat satu kategori"** di
+              atas deret 3 kartu — menegaskan angka kartu itu POTRET hari ini,
+              bukan akumulasi historis (189+498+1188 = 1875 = Total, partisi
+              tanpa tumpang tindih). **Kolom tabel "Status & Zona Perambatan" →
+              "Keterangan"**: kalau baris `hotspots_today > 0` tampil
+              `status_label` backend (info Zona Perambatan) seperti dulu; kalau
+              `= 0` (kartu "Hotspot Mereda" / "Tidak Ada Hotspot", atau baris
+              non-aktif di "Total") tampil `describeLastDetection(latest_hotspot_at)`
+              — "Mereda — titik panas terakhir N hari lalu" / "Tidak aktif —
+              terakhir N hari lalu" / "terakhir <bln thn>" untuk >45 hari — itu
+              yang menjelaskan kenapa KPS masuk kartu yang diklik. Catatan
+              konsolidasi lama (4 kartu+tab
               → 5 kartu berbasis `category`) sudah digantikan seluruhnya oleh
               paragraf ini. **Kolom "Kekuatan Sinyal" (2026-09-05)**: supaya
               user yakin datanya, `get_kps_analysis_list` (early_warning_service.py)

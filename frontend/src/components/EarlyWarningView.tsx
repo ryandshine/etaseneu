@@ -48,6 +48,22 @@ const BUCKET_FETCH: Record<TimeBucket, Array<{ burned: string; earlyWarning: str
   total: [{ burned: "all_burned", earlyWarning: "early_warning_all" }]
 };
 
+// Keterangan per baris untuk KPS yang TIDAK ada hotspot hari ini (kartu
+// "Hotspot Mereda" & "Tidak Ada Hotspot" -- dan baris non-aktif di "Total").
+// Menjelaskan KENAPA KPS itu masuk kartu tsb: berapa lama sejak titik panas
+// terakhir. Untuk baris yang ADA hotspot hari ini, kolom tetap pakai
+// status_label backend (info Zona Perambatan) -- lihat render tabel.
+function describeLastDetection(latestIso: string | null): { text: string; color: string } {
+  if (!latestIso) return { text: "Belum ada catatan titik panas", color: "#6b7280" };
+  const days = Math.floor((Date.now() - new Date(latestIso).getTime()) / 86_400_000);
+  if (days <= 0) return { text: "Titik panas terakhir hari ini", color: "#f97316" };
+  if (days === 1) return { text: "🟠 Mereda — titik panas terakhir kemarin", color: "#f97316" };
+  if (days <= 7) return { text: `🟠 Mereda — titik panas terakhir ${days} hari lalu`, color: "#eab308" };
+  if (days <= 45) return { text: `⚪ Tidak aktif — terakhir ${days} hari lalu`, color: "#9ca3af" };
+  const d = new Date(latestIso).toLocaleString("id-ID", { month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
+  return { text: `⚪ Tidak aktif — terakhir ${d}`, color: "#9ca3af" };
+}
+
 interface SummaryMetrics {
   burned_area_stats: {
     total_polygons: number;
@@ -141,6 +157,18 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
   // DATE_TRUNC('month', NOW()) di backend, otomatis ganti tiap ganti bulan.
   const namaBulanIni = useMemo(
     () => new Date().toLocaleString("id-ID", { month: "long", timeZone: "Asia/Jakarta" }),
+    []
+  );
+
+  // Cap "status per <kapan>" di atas 3 kartu -- menegaskan angka kartu itu
+  // POTRET hari ini, bukan akumulasi historis. Pakai waktu klien (WIB) =
+  // saat user melihat; data list di-refetch tiap ganti bucket/filter.
+  const snapshotLabel = useMemo(
+    () =>
+      new Date().toLocaleString("id-ID", {
+        weekday: "long", day: "numeric", month: "short", year: "numeric",
+        hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta"
+      }) + " WIB",
     []
   );
 
@@ -445,15 +473,18 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
         </span>
       </div>
 
-      {/* KPI Cards -- 2026-09-05 iterasi ke-2: 5 kartu waktu (Hari Ini /
-          Kemarin / 7 Hari / Padam / Total) terasa redundan & bikin user
-          bingung "mana yang harus reaksi cepat". Sekarang 3 TINGKAT AKSI:
-          REAKSI CEPAT (aktif hari ini) / PANTAU KETAT (baru mereda: kemarin
-          ATAU 2-7 hari, digabung -- rincian jadi sub-teks) / PEMANTAUAN PASIF
-          (0 hotspot 7 hari). "Total 2026" turun jadi tautan teks kecil.
-          Tiap kartu tetap GABUNGAN KPS ber-rekap & belum-rekap. */}
+      {/* KPI Cards -- 2026-09-05: 3 kartu berbasis STATUS HOTSPOT PER HARI INI
+          (Ada Hotspot Hari Ini / Hotspot Mereda / Tidak Ada Hotspot). Ketiganya
+          POTRET per tanggal sekarang -- tiap KPS masuk TEPAT SATU kartu
+          (189+498+1188 = 1875 Total), berdasarkan kapan titik panas terakhir
+          terdeteksi di dalamnya. "Total 2026" turun jadi tautan teks kecil. */}
       {summary && bucketCounts && (
         <>
+          <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.5rem", lineHeight: 1.5 }}>
+            📅 Status per <strong>{snapshotLabel}</strong>
+            <br />
+            Tiap KPS masuk <strong>tepat satu</strong> kategori di bawah, berdasarkan kapan titik panas terakhir terdeteksi.
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "0.75rem", marginBottom: "0.55rem" }}>
             {/* REAKSI CEPAT */}
             <div
@@ -700,7 +731,10 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
                 Kekuatan Sinyal
                 <div style={{ fontSize: "0.68rem", fontWeight: "normal", color: "#6b7280" }}>[FRP · hari/7 · satelit]</div>
               </th>
-              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>Status & Zona Perambatan</th>
+              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center", minWidth: "170px" }}>
+                Keterangan
+                <div style={{ fontSize: "0.68rem", fontWeight: "normal", color: "#6b7280" }}>[zona perambatan / kapan titik terakhir]</div>
+              </th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>Aksi</th>
             </tr>
           </thead>
@@ -848,31 +882,46 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
                         })()
                       )}
                     </td>
+                    {/* Kolom "Keterangan": kalau ada hotspot HARI INI -> tampil
+                        status_label backend (info Zona Perambatan). Kalau tidak
+                        (kartu "Hotspot Mereda" / "Tidak Ada Hotspot", atau baris
+                        non-aktif di "Total") -> tampil "kapan titik panas
+                        terakhir" -- itu yang menjelaskan kenapa KPS masuk kartu
+                        yang diklik. */}
                     <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
-                      <span
-                        style={{
-                          padding: "0.2rem 0.55rem",
-                          borderRadius: "4px",
-                          fontSize: "0.7rem",
-                          fontWeight: "600",
-                          backgroundColor: item.zone_code === "zone1" || item.zone_code === "strict" || item.zone_code === "combo"
-                            ? "rgba(239,68,68,0.15)"
-                            : item.zone_code === "zone2" || item.status_label.includes("⚠️") || item.status_label.includes("🟠")
-                            ? "rgba(249,115,22,0.15)"
-                            : item.zone_code === "zone3" || item.status_label.includes("🟡")
-                            ? "rgba(234,179,8,0.15)"
-                            : "rgba(34,197,94,0.15)",
-                          color: item.zone_code === "zone1" || item.zone_code === "strict" || item.zone_code === "combo"
-                            ? "#ef4444"
-                            : item.zone_code === "zone2" || item.status_label.includes("⚠️") || item.status_label.includes("🟠")
-                            ? "#f97316"
-                            : item.zone_code === "zone3" || item.status_label.includes("🟡")
-                            ? "#eab308"
-                            : "#22c55e"
-                        }}
-                      >
-                        {item.status_label}
-                      </span>
+                      {item.hotspots_today > 0 ? (
+                        <span
+                          style={{
+                            padding: "0.2rem 0.55rem",
+                            borderRadius: "4px",
+                            fontSize: "0.7rem",
+                            fontWeight: "600",
+                            backgroundColor: item.zone_code === "zone1" || item.zone_code === "strict" || item.zone_code === "combo"
+                              ? "rgba(239,68,68,0.15)"
+                              : item.zone_code === "zone2" || item.status_label.includes("⚠️") || item.status_label.includes("🟠")
+                              ? "rgba(249,115,22,0.15)"
+                              : item.zone_code === "zone3" || item.status_label.includes("🟡")
+                              ? "rgba(234,179,8,0.15)"
+                              : "rgba(34,197,94,0.15)",
+                            color: item.zone_code === "zone1" || item.zone_code === "strict" || item.zone_code === "combo"
+                              ? "#ef4444"
+                              : item.zone_code === "zone2" || item.status_label.includes("⚠️") || item.status_label.includes("🟠")
+                              ? "#f97316"
+                              : item.zone_code === "zone3" || item.status_label.includes("🟡")
+                              ? "#eab308"
+                              : "#22c55e"
+                          }}
+                        >
+                          {item.status_label}
+                        </span>
+                      ) : (
+                        (() => {
+                          const d = describeLastDetection(item.latest_hotspot_at);
+                          return (
+                            <span style={{ fontSize: "0.72rem", fontWeight: "600", color: d.color }}>{d.text}</span>
+                          );
+                        })()
+                      )}
                     </td>
                     <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
                       {onOpenKpsDetail ? (
