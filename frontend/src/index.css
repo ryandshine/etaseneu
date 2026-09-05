@@ -3869,6 +3869,7 @@ body {
 .matrix-header-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.55rem;
   flex-wrap: wrap;
 }

@@ -417,7 +417,18 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               HotspotMatrix.tsx ("Matriks Data"), KpsDetailView.tsx,
               KompleksKebakaranView.tsx ("Kompleks Kebakaran" — peta+daftar klaster
               hotspot ST-DBSCAN, self-contained fetch sendiri lewat lib/api.ts, TIDAK
-              lewat useDashboardData), FilterPanel.tsx, SidebarNav.tsx (satu area gulir
+              lewat useDashboardData), EarlyWarningView.tsx ("Peringatan Dini" —
+              rekap FTRI/re-burn/zona perambatan per KPS, fetch sendiri ke
+              `/api/early-warning/*`, TIDAK lewat useDashboardData; **satu-satunya
+              view yang 100% inline `style={{...}}`, bukan kelas index.css** seperti
+              view lain — kalau menambah section baru di sini pertimbangkan pindah ke
+              kelas CSS supaya tidak makin menyimpang. Kartu KPI dibuat
+              `display:flex; flexDirection:column; height:"100%"` + baris
+              detail/badge terakhir `marginTop:"auto"` supaya 4 kartu tetap sejajar
+              biar isi baris terakhirnya beda panjang [2026-09-05]. Tab kategori
+              `flexWrap:"wrap"` (BUKAN `overflowX:"auto"` satu baris) — dulu di
+              sidebar lebar/layar sempit label tab terpotong di belakang scrollbar
+              bawaan browser), FilterPanel.tsx, SidebarNav.tsx (satu area gulir
               di `.side-rail`; menu Pengaturan menampilkan info akun untuk semua role,
               prop `isAdmin` → role user hanya tidak melihat tombol Sync/Prewarm).
               **Sidebar collapse (icon rail)** — HANYA aktif di desktop lebar

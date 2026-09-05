@@ -227,9 +227,9 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
   };
 
   return (
-    <div style={{ padding: "1.5rem", color: "#f3f4f6", height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: "1.25rem", color: "#f3f4f6", height: "100%", overflowY: "auto" }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem", flexWrap: "wrap", gap: "1rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem", flexWrap: "wrap", gap: "1rem" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
             <h1 style={{ fontSize: "1.5rem", fontWeight: "700", display: "flex", alignItems: "center", gap: "0.6rem", margin: 0, color: "#ffffff" }}>
@@ -299,7 +299,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
       </div>
 
       {/* Scientific Guide Banner */}
-      <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", backgroundColor: "rgba(30, 41, 59, 0.6)", border: "1px solid rgba(255,255,255,0.08)", padding: "0.6rem 0.85rem", borderRadius: "6px", marginBottom: "1.2rem", fontSize: "0.75rem", color: "#cbd5e1", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", backgroundColor: "rgba(30, 41, 59, 0.6)", border: "1px solid rgba(255,255,255,0.08)", padding: "0.5rem 0.8rem", borderRadius: "6px", marginBottom: "0.9rem", fontSize: "0.75rem", color: "#cbd5e1", flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
           <Wind size={15} color="#38bdf8" />
           <strong>Pedoman Zona & Arah Perambatan:</strong>
@@ -309,9 +309,14 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
         </span>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards -- SEMUA kartu dibuat flex column + align-items:stretch dari
+          grid (default) supaya sama tinggi walau isi baris terakhirnya beda
+          (2 badge pendek vs 1 baris teks yang bisa wrap ke 2 baris); baris
+          terakhir tiap kartu didorong ke bawah lewat marginTop:"auto" pada
+          wrapper-nya sendiri (lihat tiap kartu) jadi angka besarnya tetap
+          sejajar di baris yang sama walau tinggi kartunya beda dikit. */}
       {summary && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.85rem", marginBottom: "1.5rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.75rem", marginBottom: "1.1rem" }}>
           {/* Card 1: Re-burn active today with strict breakdown */}
           <div
             onClick={() => setCategory("burned_active_today")}
@@ -319,9 +324,12 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               backgroundColor: category === "burned_active_today" ? "rgba(239, 68, 68, 0.18)" : "rgba(255,255,255,0.04)",
               border: `1px solid ${category === "burned_active_today" ? "#ef4444" : "rgba(255,255,255,0.08)"}`,
               borderRadius: "8px",
-              padding: "1rem",
+              padding: "0.85rem",
               cursor: "pointer",
-              transition: "all 0.2s ease"
+              transition: "all 0.2s ease",
+              display: "flex",
+              flexDirection: "column",
+              height: "100%"
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
@@ -330,10 +338,13 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               </span>
               <AlertTriangle size={16} color="#ef4444" />
             </div>
-            <div style={{ fontSize: "1.85rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
+            <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
               {summary.burned_area_stats.active_today} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
             </div>
-            <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.6rem", flexWrap: "wrap", fontSize: "0.7rem" }}>
+            {/* marginTop:auto -- baris terakhir tiap kartu dijepit ke bawah
+                supaya keempat kartu (badge 2 baris vs deskripsi 1 baris)
+                tetap terlihat sejajar bawahnya walau grid menyamakan tinggi. */}
+            <div style={{ display: "flex", gap: "0.4rem", marginTop: "auto", paddingTop: "0.6rem", flexWrap: "wrap", fontSize: "0.7rem" }}>
               <span style={{ backgroundColor: "rgba(239,68,68,0.25)", color: "#fca5a5", padding: "0.15rem 0.4rem", borderRadius: "4px" }}>
                 🔥 {summary.burned_area_stats.strict_reburn_hotspots_today} di Bekas Terbakar
               </span>
@@ -350,9 +361,12 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               backgroundColor: category === "burned_clear_today" ? "rgba(34, 197, 94, 0.18)" : "rgba(255,255,255,0.04)",
               border: `1px solid ${category === "burned_clear_today" ? "#22c55e" : "rgba(255,255,255,0.08)"}`,
               borderRadius: "8px",
-              padding: "1rem",
+              padding: "0.85rem",
               cursor: "pointer",
-              transition: "all 0.2s ease"
+              transition: "all 0.2s ease",
+              display: "flex",
+              flexDirection: "column",
+              height: "100%"
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
@@ -361,10 +375,10 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               </span>
               <ShieldCheck size={16} color="#22c55e" />
             </div>
-            <div style={{ fontSize: "1.85rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
+            <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
               {summary.burned_area_stats.clear_today} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
             </div>
-            <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "0.5rem" }}>
+            <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.5rem" }}>
               KPS ber-luas terbakar dengan 0 titik api hari ini
             </div>
           </div>
@@ -376,9 +390,12 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               backgroundColor: category === "early_warning_today" ? "rgba(249, 115, 22, 0.18)" : "rgba(255,255,255,0.04)",
               border: `1px solid ${category === "early_warning_today" ? "#f97316" : "rgba(255,255,255,0.08)"}`,
               borderRadius: "8px",
-              padding: "1rem",
+              padding: "0.85rem",
               cursor: "pointer",
-              transition: "all 0.2s ease"
+              transition: "all 0.2s ease",
+              display: "flex",
+              flexDirection: "column",
+              height: "100%"
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
@@ -387,10 +404,10 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               </span>
               <TrendingUp size={16} color="#f97316" />
             </div>
-            <div style={{ fontSize: "1.85rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
+            <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
               {summary.early_warning_stats.active_today} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
             </div>
-            <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "0.5rem" }}>
+            <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.5rem" }}>
               KPS titik api baru (belum masuk rekap luas terbakar)
             </div>
           </div>
@@ -402,9 +419,12 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               backgroundColor: category === "early_warning_all" ? "rgba(59, 130, 246, 0.18)" : "rgba(255,255,255,0.04)",
               border: `1px solid ${category === "early_warning_all" ? "#3b82f6" : "rgba(255,255,255,0.08)"}`,
               borderRadius: "8px",
-              padding: "1rem",
+              padding: "0.85rem",
               cursor: "pointer",
-              transition: "all 0.2s ease"
+              transition: "all 0.2s ease",
+              display: "flex",
+              flexDirection: "column",
+              height: "100%"
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
@@ -413,18 +433,23 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               </span>
               <FileSpreadsheet size={16} color="#60a5fa" />
             </div>
-            <div style={{ fontSize: "1.85rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
+            <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
               {summary.early_warning_stats.total_kps} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
             </div>
-            <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "0.5rem" }}>
+            <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.5rem" }}>
               Total KPS terdeteksi hotspot di 2026 tanpa rekap luasan
             </div>
           </div>
         </div>
       )}
 
-      {/* Tabs Navigation */}
-      <div style={{ display: "flex", gap: "0.4rem", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "0.6rem", marginBottom: "1rem", overflowX: "auto" }}>
+      {/* Tabs Navigation -- flexWrap (bukan overflowX-only): di sidebar
+          expanded/layar sempit lima tab tidak muat satu baris; sebelumnya
+          dipaksa satu baris + overflow-x, hasilnya label terpotong ("Seluruh
+          KPS Terbakar (26...)") di belakang scrollbar bawaan browser yang
+          tidak konsisten dengan gaya panel lain. Wrap ke baris berikutnya
+          jauh lebih rapi untuk lima label pendek begini. */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "0.5rem", marginBottom: "0.85rem" }}>
         {[
           { id: "burned_active_today", label: `🔴 Terbakar Hari Ini (${summary?.burned_area_stats.active_today ?? 0})` },
           { id: "burned_clear_today", label: `🟢 Padam Hari Ini (${summary?.burned_area_stats.clear_today ?? 0})` },
@@ -437,10 +462,10 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             type="button"
             onClick={() => setCategory(t.id as CategoryType)}
             style={{
-              padding: "0.55rem 0.95rem",
+              padding: "0.5rem 0.85rem",
               borderRadius: "6px",
               border: "none",
-              fontSize: "0.82rem",
+              fontSize: "0.8rem",
               fontWeight: category === t.id ? "700" : "500",
               backgroundColor: category === t.id ? "#2563eb" : "rgba(255,255,255,0.05)",
               color: category === t.id ? "#ffffff" : "#9ca3af",
@@ -455,7 +480,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
       </div>
 
       {/* Search & Filter Bar */}
-      <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: "0.6rem", marginBottom: "0.85rem", flexWrap: "wrap", alignItems: "center" }}>
         {/* Search */}
         <div style={{ position: "relative", flex: "1 1 220px" }}>
           <Search size={15} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "#6b7280" }} />
