@@ -469,19 +469,24 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               2-7 hari"), `inactive`="Tidak Ada Hotspot" (0 hotspot 7 hari),
               `total`=seluruh
               KPS 2026 (turun jadi **tautan teks kecil di bawah 3 kartu**,
-              bukan kartu — sengaja tidak menonjol). `BUCKET_FETCH` memetakan
-              tiap bucket ke SATU atau LEBIH pasang kategori backend
-              (`burned_*` + `early_warning_*`); `receding` = 2 pasang (kemarin
-              + 7 hari) → `loadItems()` fetch semua via `Promise.all`, flatten,
-              dedup by id. `receding` tidak menghidupkan lagi kartu terpisah —
-              rincian "N reda kemarin · N reda 2-7 hari" cuma sub-teks di
-              kartu. Bucket "inactive": kelompok belum-rekap tidak punya
-              kategori `early_warning_padam` di backend → ambil
-              `early_warning_all` lalu saring di klien jadi
-              `hotspots_today/yesterday/7d` semua 0. `bucketCounts` dihitung
-              dari `summary` yang sudah ada (`burned_area_stats.X +
-              early_warning_stats.X`); "inactive" belum-rekap = sisa
-              (`total_kps - active_today - active_yesterday - active_7d`).
+              bukan kartu — sengaja tidak menonjol). **PARTISI PERSIS**
+              (`today + receding + inactive = total`):
+              `today`=`h_today>0`; `inactive`=`h_today=0 DAN h_7d=0 DAN
+              h_bulan=0` ("Tidak Ada Hotspot" harus benar-benar bersih —
+              hari ini, 7 hari, DAN bulan berjalan); `receding`=sisanya
+              (`h_today=0` tapi ada di 7 hari ATAU bulan berjalan).
+              `BUCKET_FETCH`: `receding` fetch `burned_clear_today` +
+              `early_warning_all`, `inactive` fetch `burned_padam_total` +
+              `early_warning_all` → `loadItems()` saring di klien ke partisi
+              persis di atas (pakai `hotspots_today/7d/month`), flatten, dedup
+              by id. Backend `burned_padam_total` (LIST **dan** SUMMARY)
+              sekarang `h_today=0 DAN h_7d=0 DAN h_bulan=0` (dulu list-nya cuma
+              `h_today=0 DAN h_bulan=0` → KPS aktif akhir bulan lalu bocor
+              masuk). `get_summary_metrics` query EW dapat kolom baru
+              `ew_truly_inactive` (`h_today=0 AND h_7d=0 AND h_month=0`) →
+              `early_warning_stats.truly_inactive`. `bucketCounts`:
+              `inactive = burned.padam_total + ew.truly_inactive`,
+              `receding = total - today - inactive`.
               Pembeda ber-rekap/belum-rekap TIDAK lagi jadi kolom badge
               terpisah (sempat ada "Bekas Terbakar Kemenhut" Ada/Belum Ada —
               redundan dengan kolom luas yang sudah ada, dua-duanya dari

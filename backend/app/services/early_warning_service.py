@@ -126,11 +126,15 @@ class EarlyWarningService:
                           AND h.detected_at >= DATE_TRUNC('year', NOW() AT TIME ZONE 'Asia/Jakarta')
                         GROUP BY p.id
                     )
-                    SELECT 
+                    SELECT
                         COUNT(*) as ew_total_kps,
                         COUNT(*) FILTER (WHERE h_today > 0) as ew_today_kps,
                         COUNT(*) FILTER (WHERE h_today = 0 AND h_yesterday > 0) as ew_yesterday_kps,
                         COUNT(*) FILTER (WHERE h_today = 0 AND h_yesterday = 0 AND h_7d > 0) as ew_7d_kps,
+                        -- Benar-benar tidak ada hotspot: bukan hari ini, bukan
+                        -- 7 hari terakhir, DAN bukan bulan berjalan (sejajar
+                        -- dengan burned_padam_total di query burned di atas).
+                        COUNT(*) FILTER (WHERE h_today = 0 AND h_7d = 0 AND h_month = 0) as ew_truly_inactive,
                         COALESCE(SUM(h_today), 0) as ew_today_hotspots,
                         COALESCE(SUM(h_month), 0) as ew_month_hotspots,
                         COALESCE(SUM(h_total), 0) as ew_year_hotspots
@@ -158,6 +162,7 @@ class EarlyWarningService:
                 "active_today": int(ew_stats.get("ew_today_kps") or 0),
                 "active_yesterday": int(ew_stats.get("ew_yesterday_kps") or 0),
                 "active_7d": int(ew_stats.get("ew_7d_kps") or 0),
+                "truly_inactive": int(ew_stats.get("ew_truly_inactive") or 0),
                 "today_hotspots": int(ew_stats.get("ew_today_hotspots") or 0),
                 "month_hotspots": int(ew_stats.get("ew_month_hotspots") or 0),
                 "year_hotspots": int(ew_stats.get("ew_year_hotspots") or 0),
@@ -341,7 +346,13 @@ class EarlyWarningService:
                     elif category == "burned_active_7d":
                         clauses.append("COALESCE(h.h_today, 0) = 0 AND COALESCE(h.h_yesterday, 0) = 0 AND COALESCE(h.h_7d, 0) > 0")
                     elif category == "burned_padam_total":
-                        clauses.append("COALESCE(h.h_today, 0) = 0 AND COALESCE(h.h_month, 0) = 0")
+                        # Benar-benar tidak ada hotspot: bukan hari ini, bukan
+                        # 7 hari terakhir, DAN bukan bulan berjalan. Dulu cuma
+                        # cek h_today & h_month -- KPS yang aktif akhir bulan
+                        # lalu (masuk jendela "7 hari" tapi bukan "bulan ini")
+                        # keliru ikut masuk. Sekarang konsisten dengan hitungan
+                        # burned_padam_total di get_summary_metrics.
+                        clauses.append("COALESCE(h.h_today, 0) = 0 AND COALESCE(h.h_7d, 0) = 0 AND COALESCE(h.h_month, 0) = 0")
                 elif category.startswith("early_warning"):
                     clauses.append("(b.total_burned_ha IS NULL OR b.total_burned_ha = 0)")
                     clauses.append("COALESCE(h.h_year, 0) > 0")

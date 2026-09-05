@@ -19,13 +19,13 @@ import type { AppSession } from "../types/api";
 //  v1: 4 kartu + 5 tab -> v2: 5 kartu berbasis RENTANG WAKTU, tiap kartu
 //      gabungan KPS ber-rekap & belum-rekap (buang sumbu "status rekap"
 //      yang dulu jadi 3 dari 5 kartu -> pindah jadi badge kolom tabel).
-//  v3 (sekarang): 5 kartu waktu terasa redundan ("Mereda Kemarin" 91 &
-//      "Aktif 7 Hari" 407 -- user bingung mana yang harus reaksi cepat).
-//      -> 3 kartu berdasar STATUS HOTSPOT (bukan "api" -- 1 titik panas
-//      belum tentu kebakaran): today="Ada Hotspot Hari Ini",
-//      receding="Hotspot Mereda" (kemarin + 2-7 hari digabung, rincian jadi
-//      sub-teks), inactive="Tidak Ada Hotspot". "Total 2026" turun jadi
-//      tautan teks kecil.
+//  v3 (sekarang): 5 kartu waktu terasa redundan -> 3 kartu berdasar STATUS
+//      HOTSPOT PER HARI INI (bukan "api" -- 1 titik panas belum tentu
+//      kebakaran), PARTISI PERSIS (today + receding + inactive = total):
+//        today    = "Ada Hotspot Hari Ini"  (h_today > 0)
+//        receding = "Hotspot Mereda"        (h_today=0 DAN (h_7d>0 ATAU h_bulan>0))
+//        inactive = "Tidak Ada Hotspot"     (h_today=0 DAN h_7d=0 DAN h_bulan=0)
+//      "Total 2026" turun jadi tautan teks kecil.
 //  Pembeda "punya catatan luas terbakar resmi Kemenhut atau belum" TIDAK
 //  lagi jadi kolom badge terpisah (redundan dengan kolom "Luas Terbakar
 //  Tercatat" yang sudah ada -- dua-duanya dari total_burned_ha); kolom luas
@@ -33,17 +33,17 @@ import type { AppSession } from "../types/api";
 //  "Ada Hotspot Hari Ini" tetap ada rincian "N luasnya tercatat / N belum".
 type TimeBucket = "today" | "receding" | "inactive" | "total";
 
-// Tiap bucket = daftar PASANGAN kategori backend (ber-rekap + belum-rekap)
-// yang di-fetch lalu digabung. "receding" butuh 2 pasang (kemarin + 7 hari).
+// Tiap bucket = pasangan kategori backend (ber-rekap + belum-rekap) yang
+// di-fetch lalu digabung + disaring di klien (lihat loadItems) supaya
+// partisinya PERSIS: today (h_today>0) | receding (h_today=0 DAN (h_7d>0
+// ATAU h_bulan>0)) | inactive (h_today=0 DAN h_7d=0 DAN h_bulan=0).
+// `burned_clear_today` = semua KPS ber-rekap yang h_today=0 (superset untuk
+// receding & inactive); `early_warning_all` = semua KPS belum-rekap dg
+// hotspot tahun ini. Backend `burned_padam_total` sudah = h_today=0 DAN
+// h_7d=0 DAN h_bulan=0 (sejajar hitungan summary).
 const BUCKET_FETCH: Record<TimeBucket, Array<{ burned: string; earlyWarning: string }>> = {
   today: [{ burned: "burned_active_today", earlyWarning: "early_warning_today" }],
-  receding: [
-    { burned: "burned_active_yesterday", earlyWarning: "early_warning_yesterday" },
-    { burned: "burned_active_7d", earlyWarning: "early_warning_7d" }
-  ],
-  // Backend tidak punya kategori "early_warning_padam" tersendiri -- kita
-  // ambil early_warning_all lalu saring di klien (lihat loadItems) jadi yang
-  // BENAR-BENAR 0 hotspot 7 hari, supaya tidak perlu ubah backend.
+  receding: [{ burned: "burned_clear_today", earlyWarning: "early_warning_all" }],
   inactive: [{ burned: "burned_padam_total", earlyWarning: "early_warning_all" }],
   total: [{ burned: "all_burned", earlyWarning: "early_warning_all" }]
 };
@@ -54,14 +54,14 @@ const BUCKET_FETCH: Record<TimeBucket, Array<{ burned: string; earlyWarning: str
 // terakhir. Untuk baris yang ADA hotspot hari ini, kolom tetap pakai
 // status_label backend (info Zona Perambatan) -- lihat render tabel.
 function describeLastDetection(latestIso: string | null): { text: string; color: string } {
-  if (!latestIso) return { text: "Belum ada catatan titik panas", color: "#6b7280" };
+  if (!latestIso) return { text: "Belum ada catatan hotspot 2026", color: "#6b7280" };
   const days = Math.floor((Date.now() - new Date(latestIso).getTime()) / 86_400_000);
-  if (days <= 0) return { text: "Titik panas terakhir hari ini", color: "#f97316" };
-  if (days === 1) return { text: "🟠 Mereda — titik panas terakhir kemarin", color: "#f97316" };
-  if (days <= 7) return { text: `🟠 Mereda — titik panas terakhir ${days} hari lalu`, color: "#eab308" };
-  if (days <= 45) return { text: `⚪ Tidak aktif — terakhir ${days} hari lalu`, color: "#9ca3af" };
+  if (days <= 0) return { text: "Hotspot terakhir: hari ini", color: "#f97316" };
+  if (days === 1) return { text: "🟠 Mereda — hotspot terakhir kemarin", color: "#f97316" };
+  if (days <= 7) return { text: `🟠 Mereda — hotspot terakhir ${days} hari lalu`, color: "#eab308" };
+  if (days <= 45) return { text: `⚪ Tidak aktif — hotspot terakhir ${days} hari lalu`, color: "#9ca3af" };
   const d = new Date(latestIso).toLocaleString("id-ID", { month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
-  return { text: `⚪ Tidak aktif — terakhir ${d}`, color: "#9ca3af" };
+  return { text: `⚪ Tidak aktif — hotspot terakhir ${d}`, color: "#9ca3af" };
 }
 
 interface SummaryMetrics {
@@ -82,6 +82,7 @@ interface SummaryMetrics {
     active_today: number;
     active_yesterday: number;
     active_7d: number;
+    truly_inactive: number;
     today_hotspots: number;
     month_hotspots: number;
     year_hotspots: number;
@@ -244,12 +245,16 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
       const results = await Promise.all(currentCategories.map(fetchCategory));
       let merged = results.flat();
 
-      // Bucket "inactive": early_warning_all tidak punya sub-kategori
-      // "tidak aktif" di backend -- saring di sini jadi yang BENAR-BENAR
-      // 0 hotspot hari ini/kemarin/7 hari (lihat komentar BUCKET_FETCH).
+      // Saring ke partisi PERSIS (lihat komentar BUCKET_FETCH). `burned_*`
+      // sudah tersaring server-side; `early_warning_all` datang penuh jadi
+      // filter ini yang mempersempit. Aman diterapkan ke semua baris.
       if (bucket === "inactive") {
         merged = merged.filter(
-          (i) => i.total_burned_ha > 0 || (i.hotspots_today === 0 && i.hotspots_yesterday === 0 && i.hotspots_7d === 0)
+          (i) => i.hotspots_today === 0 && i.hotspots_7d === 0 && i.hotspots_month === 0
+        );
+      } else if (bucket === "receding") {
+        merged = merged.filter(
+          (i) => i.hotspots_today === 0 && (i.hotspots_7d > 0 || i.hotspots_month > 0)
         );
       }
 
@@ -272,26 +277,28 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
     loadItems();
   }, [bucket, activeWilkerBps, selectedProvince, selectedSkema]);
 
-  // Jumlah gabungan (ber-rekap + belum-rekap) per bucket waktu, dihitung
-  // dari `summary` yang sudah ada -- TIDAK perlu endpoint baru. Untuk bucket
-  // "inactive", early_warning_stats tidak punya hitungan "tidak aktif"
-  // langsung (backend cuma expose active_today/yesterday/7d), jadi dihitung
-  // sebagai sisa: total_kps dikurangi ketiga bucket aktif itu (saling lepas
-  // di backend -- lihat get_kps_analysis_list di early_warning_service.py).
+  // Jumlah gabungan (ber-rekap + belum-rekap) per bucket, dihitung dari
+  // `summary` -- PARTISI PERSIS: today + receding + inactive = total.
+  //  today    = h_today>0
+  //  inactive = h_today=0 DAN h_7d=0 DAN h_bulan=0
+  //             = burned.padam_total (sudah kondisi lengkap) + ew.truly_inactive
+  //  receding = sisanya (h_today=0, tapi ada di 7 hari ATAU bulan berjalan)
+  //             = (burned.clear_today - burned.padam_total)
+  //               + (ew.total_kps - ew.active_today - ew.truly_inactive)
   const bucketCounts = useMemo(() => {
     if (!summary) return null;
     const ew = summary.early_warning_stats;
     const burned = summary.burned_area_stats;
-    const ewInactive = Math.max(0, ew.total_kps - ew.active_today - ew.active_yesterday - ew.active_7d);
-    const yesterday = burned.active_yesterday + ew.active_yesterday;
-    const d7 = burned.active_7d + ew.active_7d;
+    const today = burned.active_today + ew.active_today;
+    const inactive = burned.padam_total + ew.truly_inactive;
+    const total = burned.total_polygons + ew.total_kps;
+    const yesterday = burned.active_yesterday + ew.active_yesterday; // "baru reda kemarin" -- sub-teks
     return {
-      today: burned.active_today + ew.active_today,
-      yesterday, // rincian sub-teks kartu "Pantau Ketat"
-      d7,        // rincian sub-teks kartu "Pantau Ketat"
-      receding: yesterday + d7,
-      inactive: burned.padam_total + ewInactive,
-      total: burned.total_polygons + ew.total_kps
+      today,
+      yesterday,
+      receding: Math.max(0, total - today - inactive),
+      inactive,
+      total
     };
   }, [summary]);
 
@@ -532,12 +539,12 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
                 </span>
                 <TrendingUp size={16} color="#eab308" />
               </div>
-              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>Tidak ada titik hari ini, tapi ada dalam 7 hari terakhir — bisa muncul lagi</div>
+              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>Tidak ada titik hari ini, tapi ada dalam 7 hari terakhir atau bulan {namaBulanIni} — bisa muncul lagi</div>
               <div style={{ fontSize: "1.7rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
                 {bucketCounts.receding} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
               </div>
               <div style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.6rem" }}>
-                {bucketCounts.yesterday} reda kemarin · {bucketCounts.d7} reda 2–7 hari
+                {bucketCounts.yesterday} baru reda kemarin · {Math.max(0, bucketCounts.receding - bucketCounts.yesterday)} lebih lama (≤7 hari / bulan ini)
               </div>
             </div>
 
@@ -557,7 +564,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
                 </span>
                 <ShieldCheck size={16} color="#22c55e" />
               </div>
-              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>Tidak ada titik panas sepekan terakhir</div>
+              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>0 titik panas: hari ini, 7 hari terakhir, DAN sepanjang bulan {namaBulanIni}</div>
               <div style={{ fontSize: "1.7rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
                 {bucketCounts.inactive} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
               </div>
