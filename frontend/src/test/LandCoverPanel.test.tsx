@@ -44,7 +44,7 @@ const RESULT = {
     label_source: "Google Dynamic World v1",
   },
   years: YEARS(),
-  classes: ["hutan", "semak", "pertanian", "terbuka", "air"],
+  classes: ["hutan", "semak", "pertanian", "terbuka", "basah"],
   table: Object.fromEntries(
     YEARS().map((y) => [
       String(y),
@@ -53,11 +53,11 @@ const RESULT = {
         semak: { area_ha: 30, pct: 18 },
         pertanian: { area_ha: 20, pct: 12 },
         terbuka: { area_ha: 10, pct: 6 },
-        air: { area_ha: 6, pct: 4 },
+        basah: { area_ha: 6, pct: 4 },
       },
     ]),
   ),
-  net_change: { hutan: -50, semak: 20, pertanian: 20, terbuka: 8, air: 2 },
+  net_change: { hutan: -50, semak: 20, pertanian: 20, terbuka: 8, basah: 2 },
   summary_text: "Tutupan Hutan turun 50 ha (-9.1%) dari 2021 ke 2025.",
 };
 
@@ -152,9 +152,9 @@ describe("LandCoverPanel", () => {
     const classGrid = await screen.findByRole("list", { name: /luas per kelas tahun 2025/i });
     expect(within(classGrid).getByText("Hutan")).toBeInTheDocument();
     expect(within(classGrid).getByText("Semak/Belukar")).toBeInTheDocument();
-    expect(within(classGrid).getByText("Pertanian/Kebun")).toBeInTheDocument();
+    expect(within(classGrid).getByText("Pertanian/Perkebunan")).toBeInTheDocument();
     expect(within(classGrid).getByText("Lahan Terbuka")).toBeInTheDocument();
-    expect(within(classGrid).getByText("Badan Air")).toBeInTheDocument();
+    expect(within(classGrid).getByText("Lahan Basah/Perairan")).toBeInTheDocument();
     // Data RESULT.table punya hutan area_ha:100 pct:60 di tiap tahun.
     expect(within(classGrid).getByText("100 ha")).toBeInTheDocument();
     // Grafik/tabel/ringkasan ada di tab lain, belum tampil di tab default.
@@ -201,11 +201,11 @@ describe("LandCoverPanel", () => {
           {
             hutan: { area_ha: 100, pct: 76.9 },
             semak: { area_ha: 30, pct: 23.1 },
-            // pertanian/terbuka/air tidak pernah ada di poligon ini.
+            // pertanian/basah/permukiman/terbuka tidak pernah ada di poligon ini.
           },
         ]),
       ),
-      net_change: { hutan: -10, semak: 10, pertanian: 0, terbuka: 0, air: 0 },
+      net_change: { hutan: -10, semak: 10, pertanian: 0, basah: 0, permukiman: 0, terbuka: 0 },
     };
     mockFetch((url) => {
       if (url.includes("/land-cover/status")) {
@@ -226,9 +226,9 @@ describe("LandCoverPanel", () => {
     await screen.findByRole("list", { name: /luas per kelas tahun 2025/i });
     fireEvent.click(screen.getByRole("tab", { name: /tren historis/i }));
     await screen.findByText(/Tutupan Hutan/i);
-    expect(screen.queryByText("Pertanian/Kebun")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pertanian/Perkebunan")).not.toBeInTheDocument();
     expect(screen.queryByText("Lahan Terbuka")).not.toBeInTheDocument();
-    expect(screen.queryByText("Badan Air")).not.toBeInTheDocument();
+    expect(screen.queryByText("Lahan Basah/Perairan")).not.toBeInTheDocument();
     expect(screen.getByText(/4 kelas lain tidak ditemukan di poligon ini/i)).toBeInTheDocument();
   });
 

@@ -241,7 +241,7 @@ def test_result_shape_when_done(client):
                  "source": "s", "label_source": "l"},
         "year_class": [
             {"year": y, "class_key": k, "area_ha": 100.0, "pct": 20.0}
-            for y in YEARS for k in ("hutan", "semak", "pertanian", "terbuka", "air")
+            for y in YEARS for k in ("hutan", "semak", "pertanian", "basah", "permukiman", "terbuka")
         ],
     }
     r = client.get("/api/land-cover/result", params={"polygon_id": 1})
@@ -249,7 +249,7 @@ def test_result_shape_when_done(client):
     body = r.json()
     assert body["years"] == list(YEARS)
     assert body["table"]["2021"]["hutan"]["pct"] == 20.0
-    assert set(body["net_change"].keys()) == {"hutan", "kebun", "semak", "pertanian", "terbuka", "air"}
+    assert set(body["net_change"].keys()) == {"hutan", "pertanian", "semak", "basah", "permukiman", "terbuka"}
 
 
 def test_overlay_404_for_year_out_of_range(client):

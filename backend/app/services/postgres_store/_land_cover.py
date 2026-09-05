@@ -3,7 +3,10 @@ Forest). Tiga tabel terisolasi — tidak menyentuh `burned_area_summary`
 maupun `s2_burned_area`. Hasil di-cache permanen: satu poligon dianalisis
 sekali, lalu dibaca berkali-kali.
 
-Kunci kelas: hutan|kebun|semak|pertanian|terbuka|air (pemukiman di-skip).
+Kunci kelas (taksonomi IPCC Forest/Cropland/Grassland/Wetland/Settlement/
+Other Land sejak formula v4, 2026-09-05): hutan|pertanian|semak|basah|
+permukiman|terbuka. HARUS sinkron dengan CLASS_KEYS di land_cover_service.py
+(lihat catatan di sana kalau menambah/mengubah kelas).
 """
 
 from __future__ import annotations
@@ -12,7 +15,7 @@ import json
 from collections.abc import Sequence
 
 _TARGET_LAYERS = ("psagustus2026", "HUTAN_ADAT_APR26")
-CLASS_KEYS = ("hutan", "kebun", "semak", "pertanian", "terbuka", "air")
+CLASS_KEYS = ("hutan", "pertanian", "semak", "basah", "permukiman", "terbuka")
 _CLASS_ORDER = {k: i for i, k in enumerate(CLASS_KEYS)}
 # 'running' lebih tua dari ini (menit) dianggap yatim -> error.
 LAND_COVER_STALE_RUNNING_MIN = 30

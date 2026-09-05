@@ -3,9 +3,23 @@ Sentinel-2 L2A via Google Earth Engine, Random Forest dengan guru label
 Google Dynamic World. On-demand per poligon; hasil di-cache permanen di
 tabel `land_cover_*` (lihat postgres_store/_land_cover.py).
 
-Estimasi, bukan angka resmi. "Hutan" = tutupan berpohon selain sawit;
-kelas "kebun" = perkebunan sawit (guru label peta sawit global Descals
-2019 -- karet/kebun campur berpohon masih ikut "hutan").
+Estimasi, bukan angka resmi. 6 kelas mengikuti taksonomi PENGGUNAAN LAHAN
+IPCC (Forest/Cropland/Grassland/Wetland/Settlement/Other Land), bukan
+skema penutupan lahan yang lebih rinci:
+  hutan       Forest      tutupan berpohon (hutan alam + mangrove)
+  pertanian   Cropland    sawah, ladang, DAN kebun -- termasuk sawit
+  semak       Grassland   semak/belukar/rumput
+  basah       Wetland     rawa bervegetasi + badan air (sungai/danau)
+  permukiman  Settlement  area terbangun
+  terbuka     Other Land  lahan terbuka/tandus, tanpa vegetasi berarti
+
+Sawit TIDAK dipisah jadi kelas sendiri (menyamai standar IPCC: kebun apa
+pun masuk Cropland) TAPI tetap dijaga eksplisit tidak jatuh ke "hutan":
+piksel DW=trees yang ada di peta sawit global Descals (2019) dipaksa ke
+"pertanian" sebelum label lain diproses -- inilah "aturan pemisah
+eksplisit" yang memperbaiki bug lama (271 ha sawit dewasa di Muaro Jambi
+pernah terhitung "hutan" karena spektralnya mirip). Karet/kebun campur
+berpohon rapat yang TIDAK ada di peta Descals masih bisa lolos ke "hutan".
 
 Formula (2026-09-05, revisi setelah audit vs Dynamic World/Hansen/Descals):
 1. Komposit tahunan = median MUSIM KEMARAU (Mei-Okt); celah diisi median
@@ -24,10 +38,21 @@ Formula v3 (2026-09-05, "akurat > cepat/hemat" -- keputusan user):
    tanpa loss s/d tahun target) x ESA WorldCover 2021 (piksel yang DW anggap
    stabil sejak 2021 harus disetujui WorldCover) -- land_cover/labels.py.
 7. Aturan transisi antar-tahun selain despike: hutan yang muncul satu tahun
-   lalu hilang lagi, dan sawit -> hutan satu tahun -> dikembalikan ke kelas
-   sebelumnya (land_cover/temporal.py).
+   lalu hilang lagi, dan pertanian/kebun -> hutan satu tahun -> dikembalikan
+   ke kelas sebelumnya (land_cover/temporal.py).
 8. Sampel latih 200/kelas/tahun (dari 100): konsensus membuang sebagian,
    sisanya harus tetap cukup.
+
+Formula v4 (2026-09-05, keputusan user: taksonomi standar IPCC):
+9. 6 kelas dirombak ke taksonomi IPCC di atas (bukan lagi skema ad-hoc
+   hutan/kebun/semak/pertanian/terbuka/air). Kelas "kebun" (sawit) DILEBUR
+   ke "pertanian" (Cropland) -- pemisahannya dari hutan tetap dijaga lewat
+   guru Descals, cuma target labelnya berubah. Kelas "permukiman"
+   (Settlement, DW label 6 "built") diaktifkan -- sebelumnya di-skip.
+   "air" (badan air) digabung "basah" bersama rawa bervegetasi (DW
+   flooded_vegetation), sesuai kategori Wetland IPCC. Konsensus WorldCover
+   untuk piksel sawit memberi toleransi tambahan (WC menyebut sawit sebagai
+   "tree cover", bukan cropland) supaya sampel sawit tidak habis dibuang.
 """
 
 from __future__ import annotations
@@ -72,15 +97,18 @@ DW_COLLECTION = "GOOGLE/DYNAMICWORLD/V1"
 #       postprocess (proyeksi/gap-fill/focal_mode), despike simetris
 #   3 = 2026-09-05: + Sentinel-1 SAR, konsensus label Hansen + WorldCover,
 #       aturan transisi temporal, sampel 200/kelas/tahun
-FORMULA_VERSION = 3
+#   4 = 2026-09-05: taksonomi 6 kelas standar IPCC (kebun/sawit dilebur ke
+#       pertanian/Cropland, kelas permukiman/Settlement diaktifkan, air+rawa
+#       digabung jadi basah/Wetland); toleransi konsensus khusus sawit
+FORMULA_VERSION = 4
 FORMULA_LABEL = (
-    "Sentinel-2 L2A median kemarau + Sentinel-1 SAR + Random Forest; label "
-    "Dynamic World argmax x Hansen x WorldCover + Descals sawit; aturan "
-    "transisi temporal (ETA SENEU v3)"
+    "Sentinel-2 L2A median kemarau + Sentinel-1 SAR + Random Forest; taksonomi "
+    "IPCC 6 kelas; label Dynamic World argmax x Hansen x WorldCover + Descals "
+    "sawit; aturan transisi temporal (ETA SENEU v4)"
 )
 
 YEARS: tuple[int, ...] = (2021, 2022, 2023, 2024, 2025)
-CLASS_KEYS: tuple[str, ...] = ("hutan", "kebun", "semak", "pertanian", "terbuka", "air")
+CLASS_KEYS: tuple[str, ...] = ("hutan", "pertanian", "semak", "basah", "permukiman", "terbuka")
 _CLASS_IDX = {k: i for i, k in enumerate(CLASS_KEYS)}
 
 RF_TREES = 150
@@ -98,7 +126,9 @@ MIN_SAMPLES_PER_CLASS = 30
 USE_CONSENSUS_LABELS = True
 DW_CONF_MIN = 0.6
 # Peta sawit global Descals dkk. 2021 (referensi 2019, 10 m):
-# 1 = perkebunan industri, 2 = sawit rakyat, 3 = bukan sawit.
+# 1 = perkebunan industri, 2 = sawit rakyat, 3 = bukan sawit. Guru untuk
+# aturan pemisah eksplisit hutan/sawit -- target labelnya kelas "pertanian"
+# (Cropland, taksonomi IPCC), BUKAN kelas sawit tersendiri.
 OILPALM_COLLECTION = "BIOPAMA/GlobalOilPalm/v1"
 # Musim kemarau Indonesia (Sumatra/Kalimantan/Jawa/Bali) -- komposit utama.
 DRY_SEASON = ("05-01", "10-31")
@@ -143,8 +173,14 @@ _S2_BANDS = ["B2", "B3", "B4", "B8", "B11", "B12"]
 # Klasifikasi & pengukuran luas tetap dibatasi ke poligon asli.
 TRAIN_BUFFER_M = 3000
 
-# {0..8} Dynamic World label -> kunci kelas (6=built, 8=snow dibuang)
-_DW_MAP = {0: "air", 1: "hutan", 2: "semak", 3: "semak", 4: "pertanian", 5: "semak", 7: "terbuka"}
+# {0..8} Dynamic World label -> kunci kelas IPCC (8=snow dibuang, Indonesia
+# dataran rendah/menengah tidak punya salju permanen). 6=built diaktifkan
+# jadi "permukiman" (v4, sebelumnya di-skip). 0=water & 3=flooded_vegetation
+# sama-sama "basah" (Wetland IPCC mencakup rawa bervegetasi + badan air).
+_DW_MAP = {
+    0: "basah", 1: "hutan", 2: "semak", 3: "basah",
+    4: "pertanian", 5: "semak", 6: "permukiman", 7: "terbuka",
+}
 _DW_PROBS = [
     "water", "trees", "grass", "flooded_vegetation", "crops",
     "shrub_and_scrub", "built", "bare", "snow_and_ice",
@@ -191,8 +227,8 @@ def _net_change(table: dict[int, dict[str, dict]]) -> dict[str, float]:
 
 
 _CLASS_LABEL = {
-    "hutan": "Hutan", "kebun": "Kebun Sawit", "semak": "Semak/Belukar",
-    "pertanian": "Pertanian/Kebun", "terbuka": "Lahan Terbuka", "air": "Badan Air",
+    "hutan": "Hutan", "pertanian": "Pertanian/Perkebunan", "semak": "Semak/Belukar",
+    "basah": "Lahan Basah/Perairan", "permukiman": "Permukiman", "terbuka": "Lahan Terbuka",
 }
 
 # Ambang "berarti" dalam hektar -- dipakai supaya kalimat ringkasan tidak
@@ -393,16 +429,16 @@ class LandCoverService:
         konsensus Hansen + WorldCover); `False` untuk klasifikasi fallback /
         gap-fill (biar luas mengisi poligon penuh).
         """
-        class_idx, mean_prob = self._dw_class_raw(ee, roi, year)
+        class_idx, mean_prob, is_palm = self._dw_class_raw(ee, roi, year)
         if confidence_masked:
             prob = mean_prob.reduce(ee.Reducer.max())
             class_idx = class_idx.updateMask(prob.gte(DW_CONF_MIN))
             # Konsensus Hansen untuk label "hutan" (sampel latih SAJA -- pada
             # klasifikasi fallback DW tidak dimask supaya luas tetap penuh):
             # DW "trees" yang oleh Hansen tercatat tutupan pohon 2000 < 50 %
-            # atau sudah loss pada/sebelum tahun target = kebun muda, belukar
-            # tinggi, atau bekas tebangan yang masih "hijau" -> label noise
-            # yang mengajari RF bahwa itu hutan. Piksel begitu dibuang dari
+            # atau sudah loss pada/sebelum tahun target = semak tinggi atau
+            # bekas tebangan yang masih "hijau" -> label noise yang
+            # mengajari RF bahwa itu hutan. Piksel begitu dibuang dari
             # sampel (bukan dilabel ulang: kelas sebenarnya tidak diketahui).
             class_idx = class_idx.updateMask(
                 class_idx.neq(_CLASS_IDX["hutan"]).Or(self._hansen_intact_forest(ee, year))
@@ -410,22 +446,32 @@ class LandCoverService:
             if self._consensus_enabled():
                 # Konsensus WorldCover 2021 untuk SEMUA kelas -- lihat
                 # land_cover/labels.py soal kenapa piksel yang DW anggap
-                # berubah sejak 2021 dilewatkan tanpa dicek.
+                # berubah sejak 2021 dilewatkan tanpa dicek. Piksel sawit
+                # (is_palm) dapat toleransi tambahan: WorldCover tidak
+                # membedakan sawit dari tutupan pohon lain (menyebutnya
+                # "tree cover"), jadi kalau dicek apa adanya sampel sawit
+                # yang sudah dipaksa "pertanian" akan SELALU dianggap tidak
+                # setuju dengan WC -> habis dibuang, bukan salah label,
+                # tapi kehilangan seluruh sinyal pemisah hutan/sawit yang
+                # justru ingin dijaga (aturan pemisah eksplisit, lihat
+                # docstring modul).
                 if year == WORLDCOVER_YEAR:
                     ref_idx = class_idx
                 else:
-                    ref_idx, _ = self._dw_class_raw(ee, roi, WORLDCOVER_YEAR)
+                    ref_idx, _, _ = self._dw_class_raw(ee, roi, WORLDCOVER_YEAR)
+                tolerated = is_palm.And(worldcover_is_tree(ee))
                 ok = consensus_mask(
                     ee, class_idx, ref_idx,
-                    worldcover_class_image(ee, _CLASS_IDX), worldcover_is_tree(ee),
-                    _CLASS_IDX["kebun"],
+                    worldcover_class_image(ee, _CLASS_IDX), tolerated,
                 )
                 class_idx = class_idx.updateMask(ok)
         return class_idx
 
     def _dw_class_raw(self, ee, roi, year: int):
-        """`(class_idx, mean_prob)` DW satu tahun TANPA mask keyakinan --
-        sudah termasuk relabel sawit (Descals)."""
+        """`(class_idx, mean_prob, is_palm)` DW satu tahun TANPA mask
+        keyakinan -- `class_idx` sudah termasuk relabel sawit (Descals) ke
+        kelas "pertanian"; `is_palm` dikembalikan terpisah supaya pemanggil
+        bisa memberi toleransi konsensus WorldCover khusus sawit."""
         start, end = self._year_window(year)
         dw = (
             ee.ImageCollection(DW_COLLECTION)
@@ -442,18 +488,18 @@ class LandCoverService:
         to_list = [_CLASS_IDX[_DW_MAP[k]] for k in from_list]
         class_idx = label.remap(from_list, to_list).rename("class_idx")
         # Sawit: DW menyebutnya "trees". Piksel berpohon yang ada di peta
-        # sawit Descals dilabel "kebun" -- RF lalu belajar ciri spektral sawit
-        # lokal dan menerapkannya per tahun (peta Descals cuma guru, bukan
-        # hasil akhir, jadi sawit yang ditebang/ditanam setelah 2019 tetap
-        # terdeteksi dari citra).
+        # sawit Descals dipaksa ke "pertanian" (Cropland, taksonomi IPCC) --
+        # RF lalu belajar ciri spektral sawit lokal dan menerapkannya per
+        # tahun (peta Descals cuma guru, bukan hasil akhir, jadi sawit yang
+        # ditebang/ditanam setelah 2019 tetap terdeteksi dari citra).
         oilpalm = (
             ee.ImageCollection(OILPALM_COLLECTION).select("classification").mosaic()
         )
         is_palm = oilpalm.eq(1).Or(oilpalm.eq(2))
         class_idx = class_idx.where(
-            class_idx.eq(_CLASS_IDX["hutan"]).And(is_palm), _CLASS_IDX["kebun"]
+            class_idx.eq(_CLASS_IDX["hutan"]).And(is_palm), _CLASS_IDX["pertanian"]
         )
-        return class_idx, mean_prob
+        return class_idx, mean_prob, is_palm
 
     def _hansen_intact_forest(self, ee, year: int):
         """Mask 1 = tutupan pohon Hansen 2000 >= HANSEN_TREECOVER_MIN dan

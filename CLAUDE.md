@@ -118,19 +118,26 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
 - `land_cover_service.py` — **analisis tutupan lahan per poligon** KPS/Hutan Adat, 2021–2025 (5
   tahun, dipersempit dari 2020–2025 semula), dari
   Sentinel-2 L2A via GEE + Random Forest (`ee.Classifier.smileRandomForest`, guru label Google
-  Dynamic World, filter keyakinan ≥0,6). **6 kelas**: `hutan|kebun|semak|pertanian|terbuka|air`
-  (pemukiman di-skip; `kebun` = sawit, ditambahkan 2026-09-05). **Formula hasil audit 2026-09-05**
+  Dynamic World, filter keyakinan ≥0,6). **6 kelas** (taksonomi kategori penggunaan lahan IPCC
+  sejak formula v4, 2026-09-05 — keputusan user, bukan skema ad-hoc): `hutan`(Forest, hutan alam +
+  mangrove) `pertanian`(Cropland, sawah/ladang/kebun **termasuk sawit**) `semak`(Grassland)
+  `basah`(Wetland, badan air + rawa bervegetasi) `permukiman`(Settlement) `terbuka`(Other Land).
+  Skema sebelumnya (`hutan|kebun|semak|pertanian|terbuka|air`, pemukiman di-skip) dipakai formula
+  v2–v3; sawit TIDAK jadi kelas sendiri lagi tapi tetap dijaga eksplisit tidak jatuh ke "hutan" via
+  guru Descals (lihat di bawah) — cuma target labelnya berubah jadi `pertanian`. **Formula hasil audit 2026-09-05**
   (dibandingkan vs DW mentah/Hansen/Descals di 5 poligon; versi lama: luas berosilasi ratusan ha
   antar-tahun & sawit 271 ha di Muaro Jambi terhitung "hutan"): (1) komposit = median **musim
   kemarau Mei–Okt** (`DRY_SEASON`), celah di-`unmask` median setahun penuh; (2) label latih =
   **argmax rata-rata probabilitas DW** setahun (bukan `mode()` label — bisa beda kelas dari yang
   dipakai ambang keyakinan); (3) piksel DW=trees yang ada di peta sawit Descals
-  (`BIOPAMA/GlobalOilPalm/v1`, ref 2019, kelas 1/2) dilabel `kebun` — peta itu cuma GURU, RF
-  tetap mengklasifikasi tiap tahun dari citra; (4) `_postprocess_classified`: `setDefaultProjection`
+  (`BIOPAMA/GlobalOilPalm/v1`, ref 2019, kelas 1/2) dipaksa ke `pertanian` (bukan kelas sawit
+  tersendiri sejak v4 — lihat bullet taksonomi IPCC di atas) — peta itu cuma GURU, RF tetap
+  mengklasifikasi tiap tahun dari citra; (4) `_postprocess_classified`: `setDefaultProjection`
   10 m → `unmask(DW tahun itu)` (lubang awan tadinya dibuang diam-diam, total < luas poligon) →
-  `focal_mode` 3×3; (5) `_despike_years`: kelas t ≠ t−1 dan t−1 = t+1 → pakai t−1 (tahun ujung
-  tidak diubah). OOB turun ke ~0,84 di area sawit — itu lebih jujur, bukan regresi. Karet/kebun
-  campur berpohon masih "hutan". Kalau menambah kelas lagi: `CLASS_KEYS` ada di DUA tempat
+  `focal_mode` 3×3; (5) despike (sekarang `land_cover/temporal.py`, lihat bullet v3/v4): kelas
+  t ≠ t−1 dan t−1 = t+1 → pakai t−1 (tahun ujung tidak diubah). OOB turun ke ~0,84 di area sawit —
+  itu lebih jujur, bukan regresi. Karet/kebun campur berpohon rapat yang TIDAK ada di peta Descals
+  masih bisa lolos ke "hutan". Kalau menambah kelas lagi: `CLASS_KEYS` ada di DUA tempat
   (`land_cover_service.py` + `postgres_store/_land_cover.py`) + `frontend/src/constants/landCover.ts`. **Hemat kuota GEE (2026-09-04)**: sampel latih 5 tahun
   di-`getInfo()` SEKALI lalu dikirim balik sebagai `FeatureCollection` literal
   (`_materialize_samples`) — tanpa ini tiap request berikutnya memaksa GEE mengulang
@@ -162,8 +169,9 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   melewati lock ini** (force cuma untuk override state basi poligon itu sendiri). Tujuannya satu
   analisis GEE/RF-training saja yang boleh jalan bersamaan di seluruh sistem, supaya user lain tidak
   rebutan kuota GEE/CPU. **Asumsi satu proses `api` (tanpa multi-worker)** — kalau nanti di-scale
-  horizontal, lock ini perlu pindah ke DB/Redis. "Hutan" = tutupan berpohon (kebun berpohon seperti
-  sawit/karet belum tentu terpisah).
+  horizontal, lock ini perlu pindah ke DB/Redis. "Hutan" = tutupan berpohon; sawit dipaksa ke
+  kelas `pertanian` lewat guru Descals (lihat bullet taksonomi IPCC v4), tapi karet/kebun campur
+  berpohon rapat yang tidak ada di peta itu belum tentu terpisah dari "hutan".
   - **Fitur Sentinel-1 SAR + konsensus Hansen (2026-09-05, Langkah 2 menuju v3)**: paket
     `services/land_cover/` (sub-modul menerima `ee` sebagai argumen — TIDAK `import ee` di level
     modul). `sar.py`: `get_dominant_pass()` hitung scene ASC vs DESC `COPERNICUS/S1_GRD` (IW, VV+VH)
@@ -184,32 +192,54 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
     **Konsensus Hansen** (`_hansen_intact_forest`, `UMD/hansen/global_forest_change_2024_v1_12`):
     sampel latih DW=trees dibuang kecuali `treecover2000 ≥ 50` DAN (`lossyear == 0` ATAU
     `lossyear > tahun analisis`) — hutan yang sudah hilang sebelum/pada tahun itu tidak boleh jadi
-    guru "hutan"; kelas lain tidak disentuh. `FORMULA_VERSION` dinaikkan ke 3 bersama `labels.py`/`temporal.py` (bullet berikutnya).
+    guru "hutan"; kelas lain tidak disentuh.
     Test: `test_land_cover_service.py` fake `_FakeColl.size_value` (class attr) mengatur jumlah
     scene S1 → jalur fallback diuji tanpa GEE.
-  - **Konsensus WorldCover + aturan transisi temporal = FORMULA v3 (2026-09-05)**. Keputusan
-    user: **akurasi > cepat/hemat kuota GEE**, skema tetap 6 kelas (kebun/sawit dipertahankan).
-    `land_cover/labels.py`: `consensus_mask()` — sampel latih (SEMUA kelas) yang oleh DW dianggap
-    STABIL sejak 2021 (`DW(t) == DW(2021)`) harus disetujui `ESA/WorldCover/v200/2021`
-    (`WORLDCOVER_MAP` 10/95→hutan, 20/30/90→semak, 40→pertanian, 60→terbuka, 80→air; 50 built-up
-    dkk. tanpa padanan → dibuang); piksel yang DW anggap BERUBAH sejak 2021 lolos tanpa dicek
-    (WorldCover cuma 2021, tidak bisa menilai perubahan nyata — kalau dibuang, kelas yang cuma
-    muncul di area terbakar kehilangan semua sampel). `kebun` dianggap setuju kalau WC = pohon.
-    Untuk tahun ≠ 2021 butuh `_dw_class_raw(2021)` tambahan (ekspresi GEE, TANPA `getInfo()`
-    ekstra). Toggle `USE_CONSENSUS_LABELS` / `Settings.land_cover_use_consensus_labels`
+  - **Konsensus WorldCover + aturan transisi temporal (2026-09-05)**. Keputusan user: **akurasi >
+    cepat/hemat kuota GEE**. `land_cover/labels.py`: `consensus_mask()` — sampel latih (SEMUA
+    kelas) yang oleh DW dianggap STABIL sejak 2021 (`DW(t) == DW(2021)`) harus disetujui
+    `ESA/WorldCover/v200/2021` (`WORLDCOVER_MAP` — lihat mapping terkini di bullet taksonomi IPCC
+    v4 di bawah); piksel yang DW anggap BERUBAH sejak 2021 lolos tanpa dicek (WorldCover cuma
+    2021, tidak bisa menilai perubahan nyata — kalau dibuang, kelas yang cuma muncul di area
+    terbakar kehilangan semua sampel). Piksel sawit (`is_palm`, dipaksa ke kelas `pertanian`)
+    dapat toleransi tambahan lewat parameter generik `tolerated` di `consensus_mask()`: WorldCover
+    menyebut sawit "tree cover" (sama kodenya dengan hutan alam), jadi tanpa toleransi ini sampel
+    sawit akan SELALU "tidak setuju" dan habis dibuang — bukan salah label, tapi kehilangan
+    seluruh sinyal pemisah hutan/sawit yang justru mau dijaga. Untuk tahun ≠ 2021 butuh
+    `_dw_class_raw(2021)` tambahan (ekspresi GEE, TANPA `getInfo()` ekstra). Toggle
+    `USE_CONSENSUS_LABELS` / `Settings.land_cover_use_consensus_labels`
     (`LAND_COVER_USE_CONSENSUS_LABELS`, default true). `SAMPLES_PER_CLASS_PER_YEAR` 100 → **200**
     (konsensus membuang sebagian); `MIN_SAMPLES_PER_CLASS` (30) → kelas di bawahnya dicatat
     `meta.labels.sparse_classes` + warning log (bukan error). `land_cover/temporal.py`:
-    `apply_transition_rules()` menggantikan `_despike_years` — urutan `despike_symmetric` →
-    `forest_gain_must_persist` (hutan di t, t−1 bukan hutan/kebun, t+1 bukan hutan → t := t−1) →
-    `kebun_to_forest_must_persist` (kebun→hutan satu tahun → kebun). Hanya tahun TENGAH yang bisa
-    diubah, selalu ke kelas tetangga — tahun 2021 & 2025 tidak disentuh. `meta.temporal.rules`
-    menyimpan daftar aturan yang dipakai. `FORMULA_VERSION = 3` (+ frontend
-    `LAND_COVER_FORMULA_VERSION = 3`) → SEMUA hasil lama (v1/v2) tampil badge "Metode lama";
-    tidak dihitung ulang otomatis. Test logika aturan pakai piksel skalar palsu yang
-    benar-benar menghitung: `test_land_cover_rules.py`.
+    `apply_transition_rules()` — urutan `despike_symmetric` → `forest_gain_must_persist` (hutan di
+    t, t−1 bukan hutan/pertanian, t+1 bukan hutan → t := t−1) → `cropland_to_forest_must_persist`
+    (pertanian→hutan satu tahun → kembali pertanian, menangkap flicker sawit/hutan). Hanya tahun
+    TENGAH yang bisa diubah, selalu ke kelas tetangga — tahun 2021 & 2025 tidak disentuh.
+    `meta.temporal.rules` menyimpan daftar aturan yang dipakai. Test logika aturan pakai piksel
+    skalar palsu yang benar-benar menghitung: `test_land_cover_rules.py`.
+  - **Taksonomi 6 kelas standar IPCC = FORMULA v4 (2026-09-05, keputusan user)**. Skema ad-hoc
+    sebelumnya (`hutan|kebun|semak|pertanian|terbuka|air`) diganti kategori penggunaan lahan IPCC:
+    `hutan`(Forest) `pertanian`(Cropland — sawit DILEBUR ke sini, bukan kelas sendiri lagi)
+    `semak`(Grassland) `basah`(Wetland — gabungan `air` lama + rawa bervegetasi DW
+    `flooded_vegetation`) `permukiman`(Settlement, DW label 6 `built` **diaktifkan**, sebelumnya
+    di-skip) `terbuka`(Other Land). `_DW_MAP` terkini: `0/3→basah, 1→hutan, 2/5→semak,
+    4→pertanian, 6→permukiman, 7→terbuka` (8 salju tetap dibuang). `WORLDCOVER_MAP` terkini:
+    `10/95→hutan, 20/30→semak, 40→pertanian, 50→permukiman, 60→terbuka, 80/90→basah` (70 salju,
+    100 lumut tanpa padanan → dibuang). Pemisahan sawit/hutan TETAP
+    dijaga eksplisit (guru Descals `BIOPAMA/GlobalOilPalm/v1`, `_dw_class_raw` mengembalikan
+    `is_palm` terpisah) — cuma target labelnya `pertanian`, bukan kelas sawit tersendiri; lihat
+    toleransi `tolerated` di bullet konsensus WorldCover di atas. `CLASS_KEYS` diubah di DUA
+    tempat backend (`land_cover_service.py` + `postgres_store/_land_cover.py`, HARUS sinkron) +
+    `frontend/src/constants/landCover.ts` (`LAND_COVER_FORMULA_VERSION = 4`). Kolom `class_key` DB
+    adalah TEXT bebas (tanpa CHECK constraint) jadi rename kelas aman terhadap data lama — baris
+    lama dengan kunci lama (`kebun`/`air`) tetap ada tapi otomatis "basi" lewat mekanisme
+    `formula_version` di bawah (bukan tabrakan/duplikat kelas).
   - **Versi formula & metadata (2026-09-05)**: `FORMULA_VERSION` / `FORMULA_LABEL` di
-    `land_cover_service.py` (v1 = sebelum audit 2026-09-05, v2 = formula audit di atas, v3 = SAR + konsensus + temporal). Kolom
+    `land_cover_service.py` (v1 = sebelum audit 2026-09-05, v2 = formula audit tanggal itu, v3 =
+    + SAR + konsensus Hansen/WorldCover + aturan transisi temporal, v4 = taksonomi IPCC). Naikkan
+    `FORMULA_VERSION` (+ `LAND_COVER_FORMULA_VERSION` frontend, WAJIB sama) tiap kali metode ATAU
+    skema kelas berubah — SEMUA hasil versi lebih lama otomatis tampil badge "Metode lama" dan
+    TIDAK dihitung ulang otomatis (admin hapus lalu jalankan lagi per poligon). Kolom
     `land_cover_analysis.formula_version INTEGER`, `meta JSONB` (`method`, `feature_names`,
     `labels.sources`, `labels.samples_per_class`, `temporal.rules`, `coverage_pct` per tahun = Σ luas
     kelas ÷ luas geodesik poligon), `started_at` — ditambah `ALTER TABLE … ADD COLUMN IF NOT EXISTS`

@@ -47,8 +47,8 @@ def test_land_cover_any_running_returns_the_running_polygon() -> None:
 
 @pytest.mark.parametrize(
     "label,expected",
-    [(0, "air"), (1, "hutan"), (2, "semak"), (3, "semak"), (4, "pertanian"),
-     (5, "semak"), (7, "terbuka"), (6, None), (8, None), (99, None)],
+    [(0, "basah"), (1, "hutan"), (2, "semak"), (3, "basah"), (4, "pertanian"),
+     (5, "semak"), (6, "permukiman"), (7, "terbuka"), (8, None), (99, None)],
 )
 def test_dw_label_to_class(label, expected) -> None:
     assert _dw_label_to_class(label) == expected
@@ -88,10 +88,10 @@ def test_net_change_and_summary() -> None:
     table = {
         2021: {"hutan": {"area_ha": 5400.0, "pct": 74.9}, "semak": {"area_ha": 1150.0, "pct": 15.9},
                "pertanian": {"area_ha": 380.0, "pct": 5.3}, "terbuka": {"area_ha": 180.0, "pct": 2.5},
-               "air": {"area_ha": 101.0, "pct": 1.4}},
+               "basah": {"area_ha": 101.0, "pct": 1.4}},
         2025: {"hutan": {"area_ha": 4470.0, "pct": 62.0}, "semak": {"area_ha": 1560.0, "pct": 21.6},
                "pertanian": {"area_ha": 810.0, "pct": 11.2}, "terbuka": {"area_ha": 270.0, "pct": 3.7},
-               "air": {"area_ha": 101.0, "pct": 1.4}},
+               "basah": {"area_ha": 101.0, "pct": 1.4}},
     }
     nc = _net_change(table)
     assert nc["hutan"] == pytest.approx(-930.0)

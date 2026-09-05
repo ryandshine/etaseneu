@@ -38,16 +38,17 @@ WORLDCOVER_IMAGE = "ESA/WorldCover/v200/2021"
 WORLDCOVER_YEAR = 2021
 WORLDCOVER_LABEL = "ESA WorldCover v200 (2021)"
 
-# Kode WorldCover -> kunci kelas ETA SENEU. Kode tanpa padanan (50 built-up,
-# 70 salju, 100 lumut) di-mask: sampel di sana dibuang apa pun kata DW,
-# konsisten dengan DW built/snow yang juga dibuang.
-#   10 tree cover -> hutan     20 shrubland -> semak    30 grassland -> semak
-#   40 cropland -> pertanian   60 bare/sparse -> terbuka
-#   80 permanent water -> air  90 herbaceous wetland -> semak (padanan DW
-#   flooded_vegetation -> semak)   95 mangroves -> hutan
+# Kode WorldCover -> kunci kelas IPCC (sama taksonomi 6 kelas dengan
+# service). Kode tanpa padanan (70 salju, 100 lumut) di-mask: sampel di
+# sana dibuang apa pun kata DW.
+#   10 tree cover -> hutan        20 shrubland -> semak
+#   30 grassland -> semak         40 cropland -> pertanian
+#   50 built-up -> permukiman     60 bare/sparse -> terbuka
+#   80 permanent water -> basah   90 herbaceous wetland -> basah
+#   95 mangroves -> hutan (forested wetland, disamakan Forest IPCC seperti DW)
 WORLDCOVER_MAP: dict[int, str] = {
     10: "hutan", 20: "semak", 30: "semak", 40: "pertanian",
-    60: "terbuka", 80: "air", 90: "semak", 95: "hutan",
+    50: "permukiman", 60: "terbuka", 80: "basah", 90: "basah", 95: "hutan",
 }
 _WC_TREE_CODES = (10, 95)
 
@@ -63,9 +64,10 @@ def worldcover_class_image(ee, class_idx_of: dict[str, int]):
 
 
 def worldcover_is_tree(ee):
-    """Mask 1 = WorldCover tree cover / mangrove. Dipakai untuk kelas `kebun`:
-    WC tidak punya kelas sawit (sawit = tree cover), jadi sampel DW-trees x
-    Descals dianggap "setuju" kalau WC juga menyebutnya pohon."""
+    """Mask 1 = WorldCover tree cover / mangrove. Dipakai untuk sawit: WC
+    tidak membedakan kebun sawit dari tutupan pohon lain (menyebut keduanya
+    "tree cover"), jadi piksel sawit yang dipaksa ke kelas "pertanian" oleh
+    service perlu jalur toleransi tersendiri (lihat `consensus_mask`)."""
     wc = ee.Image(WORLDCOVER_IMAGE).select("Map")
     mask = wc.eq(_WC_TREE_CODES[0])
     for code in _WC_TREE_CODES[1:]:
@@ -73,24 +75,26 @@ def worldcover_is_tree(ee):
     return mask
 
 
-def consensus_mask(ee, dw_class, dw_class_ref, wc_class, wc_is_tree, kebun_idx: int):
+def consensus_mask(ee, dw_class, dw_class_ref, wc_class, tolerated=None):
     """Mask 1 = sampel boleh dipakai.
 
-    dw_class     : class_idx DW tahun target (sudah termasuk relabel kebun)
+    dw_class     : class_idx DW tahun target (sudah termasuk relabel sawit)
     dw_class_ref : class_idx DW tahun referensi WorldCover (2021)
     wc_class     : hasil `worldcover_class_image`
-    wc_is_tree   : hasil `worldcover_is_tree`
-    kebun_idx    : indeks kelas kebun (sawit)
+    tolerated    : mask opsional -- piksel yang dianggap "setuju" apa pun
+                   kata WC (mis. sawit x `worldcover_is_tree`, lihat
+                   pemanggil di service). `None` = tidak ada toleransi
+                   tambahan.
 
     Piksel yang DW anggap berubah sejak 2021 lolos tanpa dicek (lihat
-    docstring modul). Untuk yang stabil: WC harus sama, kecuali kebun yang
-    cukup "WC = pohon". Piksel di kode WC tanpa padanan (built-up dsb.)
-    ter-mask di `wc_class` -> `eq` menghasilkan mask kosong -> dibuang.
+    docstring modul). Untuk yang stabil: WC harus sama, kecuali yang masuk
+    `tolerated`. Piksel di kode WC tanpa padanan (salju dsb.) ter-mask di
+    `wc_class` -> `eq` menghasilkan mask kosong -> dibuang.
     """
     stable = dw_class.eq(dw_class_ref)
     agree = wc_class.eq(dw_class)
-    agree_kebun = dw_class.eq(kebun_idx).And(wc_is_tree)
-    agree = agree.Or(agree_kebun)
+    if tolerated is not None:
+        agree = agree.Or(tolerated)
     # unmask(0): piksel WC tanpa padanan -> agree=0 (bukan mask kosong yang
     # oleh Or() dianggap "tidak ada data" dan bisa lolos lewat cabang lain).
     agree = agree.unmask(0)

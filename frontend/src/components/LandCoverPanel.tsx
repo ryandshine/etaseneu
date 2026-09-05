@@ -670,8 +670,10 @@ export function LandCoverPanel({ polygonId, isAdmin = false }: LandCoverPanelPro
           {result && <p className="lc-summary">{result.summary_text}</p>}
 
           <p className="lc-note">
-            &quot;Hutan&quot; = tutupan berpohon; kebun berpohon (sawit/karet) belum
-            tentu terpisah. Estimasi satelit, bukan angka resmi.
+            6 kelas mengikuti kategori penggunaan lahan IPCC. &quot;Hutan&quot; =
+            tutupan berpohon; kebun (termasuk sawit) masuk &quot;Pertanian/Perkebunan&quot;,
+            bukan hutan -- karet/kebun campur berpohon rapat belum tentu terpisah.
+            Estimasi satelit, bukan angka resmi.
           </p>
 
           {result && (
