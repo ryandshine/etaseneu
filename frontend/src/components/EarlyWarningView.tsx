@@ -22,9 +22,10 @@ import type { AppSession } from "../types/api";
 // Titik Baru Hari Ini" cuma KPS belum-rekap, padahal keduanya sama-sama
 // "aktif hari ini"). Sekarang SATU sumbu (rentang waktu) yang jadi kartu;
 // tiap bucket menggabungkan KPS ber-rekap & belum-rekap via 2 kategori
-// backend (lihat BUCKET_CATEGORIES) -- status rekap jadi badge per-baris
-// di tabel (lihat kolom "Status Rekap"), bukan kartu terpisah lagi
-// (2026-09-05, redesain atas masukan user).
+// backend (lihat BUCKET_CATEGORIES) -- status "bekas terbakar sudah
+// dipetakan Kemenhut atau belum" jadi badge per-baris di tabel (kolom
+// "Bekas Terbakar Kemenhut", isi "Ada"/"Belum Ada"), bukan kartu terpisah
+// lagi (2026-09-05, redesain atas masukan user).
 type TimeBucket = "today" | "yesterday" | "7d" | "inactive" | "total";
 
 const BUCKET_CATEGORIES: Record<TimeBucket, { burned: string; earlyWarning: string }> = {
@@ -466,10 +467,10 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
                 tetap terlihat sejajar bawahnya walau grid menyamakan tinggi. */}
             <div style={{ display: "flex", gap: "0.4rem", marginTop: "auto", paddingTop: "0.6rem", flexWrap: "wrap", fontSize: "0.7rem" }}>
               <span style={{ backgroundColor: "rgba(239,68,68,0.25)", color: "#fca5a5", padding: "0.15rem 0.4rem", borderRadius: "4px" }}>
-                🟢 {summary.burned_area_stats.active_today} Ber-Rekap
+                🟢 {summary.burned_area_stats.active_today} bekas terbakar terpetakan
               </span>
               <span style={{ backgroundColor: "rgba(249,115,22,0.2)", color: "#fdba74", padding: "0.15rem 0.4rem", borderRadius: "4px" }}>
-                🟠 {summary.early_warning_stats.active_today} Belum-Rekap
+                🟠 {summary.early_warning_stats.active_today} belum terpetakan
               </span>
             </div>
           </div>
@@ -499,7 +500,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               {bucketCounts.yesterday} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
             </div>
             <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.5rem" }}>
-              Aktif kemarin, hari ini belum ada titik baru (ber-rekap & belum-rekap)
+              Aktif kemarin, hari ini belum ada titik baru (bekas terbakar terpetakan & belum)
             </div>
           </div>
 
@@ -557,7 +558,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               {bucketCounts.inactive} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
             </div>
             <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.5rem" }}>
-              0 hotspot 7 hari terakhir (ber-rekap & belum-rekap)
+              0 hotspot 7 hari terakhir (bekas terbakar terpetakan & belum)
             </div>
           </div>
 
@@ -719,7 +720,10 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             <tr style={{ backgroundColor: "rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.12)", color: "#9ca3af" }}>
               <th style={{ padding: "0.75rem 0.8rem", width: "45px", textAlign: "center" }}>No</th>
               <th style={{ padding: "0.75rem 0.8rem" }}>Nama KPS / Lembaga</th>
-              <th style={{ padding: "0.75rem 0.8rem", width: "110px", textAlign: "center" }}>Status Rekap</th>
+              <th style={{ padding: "0.75rem 0.8rem", width: "120px", textAlign: "center" }}>
+                Bekas Terbakar Kemenhut
+                <div style={{ fontSize: "0.68rem", fontWeight: "normal", color: "#6b7280" }}>[sudah dipetakan resmi?]</div>
+              </th>
               <th style={{ padding: "0.75rem 0.8rem", width: "70px", textAlign: "center" }}>Skema</th>
               <th style={{ padding: "0.75rem 0.8rem" }}>Wilayah (Kab, Prov)</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "right" }}>Luas Terbakar (Kemenhut)</th>
@@ -798,7 +802,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
                           color: item.total_burned_ha > 0 ? "#4ade80" : "#fdba74"
                         }}
                       >
-                        {item.total_burned_ha > 0 ? "🟢 Ada Rekap" : "🟠 Belum Rekap"}
+                        {item.total_burned_ha > 0 ? "🟢 Ada" : "🟠 Belum Ada"}
                       </span>
                     </td>
                     <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>

@@ -480,9 +480,11 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               "inactive" dihitung sisa (`total_kps - active_today -
               active_yesterday - active_7d`) karena `early_warning_stats`
               tidak expose hitungan tidak-aktif langsung. Pembeda ber-rekap/
-              belum-rekap pindah jadi kolom badge **"Status Rekap"** di tabel
-              (🟢 Ada Rekap / 🟠 Belum Rekap, dari `total_burned_ha > 0`) —
-              bukan lagi sumbu kartu. Tombol ekspor sekarang mengunduh **2
+              belum-rekap pindah jadi kolom badge **"Bekas Terbakar Kemenhut"**
+              di tabel (isi 🟢 "Ada" / 🟠 "Belum Ada", dari `total_burned_ha >
+              0` — artinya areal bekas terbakar sudah dipetakan resmi Kemenhut
+              atau belum; "Belum Ada" BUKAN berarti KPS-nya tidak terbakar,
+              cuma belum masuk peta resmi) — bukan lagi sumbu kartu. Tombol ekspor sekarang mengunduh **2
               file** berurutan (kategori ber-rekap & belum-rekap terpisah,
               endpoint backend cuma terima satu kategori per panggilan).
               Filter Zona Perambatan cuma tampil saat `bucket==="today"`
