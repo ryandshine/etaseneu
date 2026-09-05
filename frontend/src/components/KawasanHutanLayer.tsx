@@ -1,12 +1,20 @@
 import { useEffect } from "react";
 import { useMap } from "react-leaflet";
 import L from "leaflet";
-import { KAWASAN_HUTAN_MAPSERVER } from "../constants/kawasanHutan";
 
 // Layanan ArcGIS KWSHUTAN_AR_250K TIDAK punya cache tile (singleFusedMapCache
 // false) dan tanpa WMSServer -- jadi tiap tile diminta lewat endpoint `export`
 // dinamis. Pola bbox-per-tile ini persis yang dipakai L.TileLayer.WMS di dalam
 // Leaflet: hitung bbox tiap tile di EPSG:3857 lalu minta gambar seukuran tile.
+//
+// URL-nya diarahkan ke PROXY BACKEND KITA (`/api/kawasan-hutan/tile`), BUKAN
+// langsung ke server ArcGIS pemerintah lagi (2026-09-05) -- backend menyimpan
+// hasilnya per kombinasi parameter selama 7 hari (lihat
+// app/api/kawasan_hutan.py), jadi semua pengguna ETASENEU yang melihat ubin
+// yang sama berbagi satu hasil cache alih-alih tiap browser menembak server
+// pemerintah sendiri-sendiri. Endpoint ini sengaja TIDAK digerbang JWT
+// (lihat komentar di app/api/router.py) karena dimuat lewat <img src=...>
+// biasa oleh Leaflet, tidak bisa membawa header Authorization.
 const ArcgisExportTileLayer = L.TileLayer.extend({
   getTileUrl(coords: L.Coords): string {
     const map = (this as unknown as { _map: L.Map })._map;
@@ -28,7 +36,7 @@ const ArcgisExportTileLayer = L.TileLayer.extend({
       transparent: "true",
       f: "image",
     });
-    return `${KAWASAN_HUTAN_MAPSERVER}/export?${params.toString()}`;
+    return `/api/kawasan-hutan/tile?${params.toString()}`;
   },
 });
 

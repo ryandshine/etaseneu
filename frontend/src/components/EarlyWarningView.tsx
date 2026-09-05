@@ -16,12 +16,28 @@ import {
 import { authFetch, downloadWithAuth } from "../lib/api";
 import type { AppSession } from "../types/api";
 
-type CategoryType =
-  | "burned_active_today"
-  | "burned_clear_today"
-  | "early_warning_today"
-  | "early_warning_all"
-  | "all_burned";
+// Kartu KPI dulu campur dua sumbu (status rekap Kemenhut vs rentang waktu)
+// dalam satu daftar kategori backend -- bikin user bingung karena judul
+// kartu tidak paralel (mis. "Terbakar Hari Ini" cuma KPS ber-rekap, "EW:
+// Titik Baru Hari Ini" cuma KPS belum-rekap, padahal keduanya sama-sama
+// "aktif hari ini"). Sekarang SATU sumbu (rentang waktu) yang jadi kartu;
+// tiap bucket menggabungkan KPS ber-rekap & belum-rekap via 2 kategori
+// backend (lihat BUCKET_CATEGORIES) -- status rekap jadi badge per-baris
+// di tabel (lihat kolom "Status Rekap"), bukan kartu terpisah lagi
+// (2026-09-05, redesain atas masukan user).
+type TimeBucket = "today" | "yesterday" | "7d" | "inactive" | "total";
+
+const BUCKET_CATEGORIES: Record<TimeBucket, { burned: string; earlyWarning: string }> = {
+  today: { burned: "burned_active_today", earlyWarning: "early_warning_today" },
+  yesterday: { burned: "burned_active_yesterday", earlyWarning: "early_warning_yesterday" },
+  "7d": { burned: "burned_active_7d", earlyWarning: "early_warning_7d" },
+  // Backend tidak punya kategori "early_warning_padam" tersendiri -- kita
+  // ambil early_warning_all (semua KPS belum-rekap yang pernah aktif tahun
+  // ini) lalu saring di klien (lihat loadItems) jadi yang BENAR-BENAR tidak
+  // aktif 7 hari terakhir, supaya tidak perlu ubah backend untuk ini.
+  inactive: { burned: "burned_padam_total", earlyWarning: "early_warning_all" },
+  total: { burned: "all_burned", earlyWarning: "early_warning_all" },
+};
 
 interface SummaryMetrics {
   burned_area_stats: {
@@ -91,7 +107,7 @@ interface EarlyWarningViewProps {
 }
 
 export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: EarlyWarningViewProps) {
-  const [category, setCategory] = useState<CategoryType>("burned_active_today");
+  const [bucket, setBucket] = useState<TimeBucket>("today");
   const [summary, setSummary] = useState<SummaryMetrics | null>(null);
   const [items, setItems] = useState<KpsItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,23 +147,45 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
     }
   };
 
-  // Fetch list items
+  // Fetch list items -- SATU bucket waktu = SELALU 2 panggilan (kategori
+  // ber-rekap + belum-rekap) digabung jadi satu daftar, supaya kartu waktu
+  // manapun yang diklik menampilkan KEDUA kelompok KPS bersama, bukan cuma
+  // salah satu (itu keluhan awal soal "peringatan dini melulu yang pernah
+  // punya luas kebakaran").
+  const buildListQuery = (cat: string) => {
+    const query = new URLSearchParams({ category: cat, limit: "1500" });
+    if (activeWilkerBps) query.append("wilker_bps", activeWilkerBps);
+    if (selectedProvince) query.append("province", selectedProvince);
+    if (selectedSkema) query.append("skema", selectedSkema);
+    if (search) query.append("search", search);
+    return query.toString();
+  };
+
+  const fetchCategory = async (cat: string): Promise<KpsItem[]> => {
+    const res = await authFetch(`/api/early-warning/list?${buildListQuery(cat)}`);
+    if (!res.ok) throw new Error("Gagal memuat daftar KPS");
+    const data = await res.json();
+    return data.items || [];
+  };
+
   const loadItems = async () => {
     try {
       setLoadingItems(true);
-      const query = new URLSearchParams({
-        category,
-        limit: "1500"
-      });
-      if (activeWilkerBps) query.append("wilker_bps", activeWilkerBps);
-      if (selectedProvince) query.append("province", selectedProvince);
-      if (selectedSkema) query.append("skema", selectedSkema);
-      if (search) query.append("search", search);
+      const cats = BUCKET_CATEGORIES[bucket];
+      const [burnedItems, ewItemsRaw] = await Promise.all([
+        fetchCategory(cats.burned),
+        fetchCategory(cats.earlyWarning)
+      ]);
 
-      const res = await authFetch(`/api/early-warning/list?${query.toString()}`);
-      if (!res.ok) throw new Error("Gagal memuat daftar KPS");
-      const data = await res.json();
-      setItems(data.items || []);
+      // Untuk bucket "inactive": early_warning_all tidak punya sub-kategori
+      // "tidak aktif" di backend -- saring di sini jadi yang benar-benar
+      // 0 hotspot di hari ini/kemarin/7 hari (lihat komentar BUCKET_CATEGORIES).
+      const ewItems =
+        bucket === "inactive"
+          ? ewItemsRaw.filter((i) => i.hotspots_today === 0 && i.hotspots_yesterday === 0 && i.hotspots_7d === 0)
+          : ewItemsRaw;
+
+      setItems([...burnedItems, ...ewItems]);
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -161,7 +199,27 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
 
   useEffect(() => {
     loadItems();
-  }, [category, activeWilkerBps, selectedProvince, selectedSkema]);
+  }, [bucket, activeWilkerBps, selectedProvince, selectedSkema]);
+
+  // Jumlah gabungan (ber-rekap + belum-rekap) per bucket waktu, dihitung
+  // dari `summary` yang sudah ada -- TIDAK perlu endpoint baru. Untuk bucket
+  // "inactive", early_warning_stats tidak punya hitungan "tidak aktif"
+  // langsung (backend cuma expose active_today/yesterday/7d), jadi dihitung
+  // sebagai sisa: total_kps dikurangi ketiga bucket aktif itu (saling lepas
+  // di backend -- lihat get_kps_analysis_list di early_warning_service.py).
+  const bucketCounts = useMemo(() => {
+    if (!summary) return null;
+    const ew = summary.early_warning_stats;
+    const burned = summary.burned_area_stats;
+    const ewInactive = Math.max(0, ew.total_kps - ew.active_today - ew.active_yesterday - ew.active_7d);
+    return {
+      today: burned.active_today + ew.active_today,
+      yesterday: burned.active_yesterday + ew.active_yesterday,
+      "7d": burned.active_7d + ew.active_7d,
+      inactive: burned.padam_total + ewInactive,
+      total: burned.total_polygons + ew.total_kps
+    };
+  }, [summary]);
 
   // Unique options for filters
   const provinces = useMemo(() => {
@@ -211,13 +269,26 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
     return result;
   }, [items, search, selectedZone, sortBy]);
 
+  // Endpoint ekspor backend cuma terima SATU kategori sekaligus -- bucket
+  // waktu sekarang menggabungkan 2 kategori (ber-rekap + belum-rekap), jadi
+  // unduh dua file terpisah berurutan supaya kedua kelompok tetap lengkap
+  // di file yang diunduh (bukan cuma kelompok "ber-rekap" seperti dulu).
   const handleDownloadExcel = async () => {
     try {
       setDownloading(true);
+      const cats = BUCKET_CATEGORIES[bucket];
       const wilkerQuery = activeWilkerBps ? `&wilker_bps=${encodeURIComponent(activeWilkerBps)}` : "";
       const wilkerFile = activeWilkerBps ? `-${activeWilkerBps.replace(/\s+/g, "_")}` : "";
-      const filename = `rekap-analisis-kps-${category}${wilkerFile}-${new Date().toISOString().slice(0, 10)}.xlsx`;
-      await downloadWithAuth(`/api/early-warning/export.xlsx?category=${category}${wilkerQuery}`, filename);
+      const dateSuffix = new Date().toISOString().slice(0, 10);
+
+      await downloadWithAuth(
+        `/api/early-warning/export.xlsx?category=${cats.burned}${wilkerQuery}`,
+        `rekap-analisis-kps-${cats.burned}${wilkerFile}-${dateSuffix}.xlsx`
+      );
+      await downloadWithAuth(
+        `/api/early-warning/export.xlsx?category=${cats.earlyWarning}${wilkerQuery}`,
+        `rekap-analisis-kps-${cats.earlyWarning}${wilkerFile}-${dateSuffix}.xlsx`
+      );
     } catch (err: any) {
       alert("Gagal mengunduh Excel: " + err.message);
     } finally {
@@ -269,7 +340,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             }}
           >
             <Download size={15} />
-            {downloading ? "Mengunduh..." : "Download Excel"}
+            {downloading ? "Mengunduh..." : "Download Excel (2 file)"}
           </button>
 
           <button
@@ -308,20 +379,24 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
         </span>
       </div>
 
-      {/* KPI Cards -- SEMUA kartu dibuat flex column + align-items:stretch dari
-          grid (default) supaya sama tinggi walau isi baris terakhirnya beda
-          (2 badge pendek vs 1 baris teks yang bisa wrap ke 2 baris); baris
-          terakhir tiap kartu didorong ke bawah lewat marginTop:"auto" pada
-          wrapper-nya sendiri (lihat tiap kartu) jadi angka besarnya tetap
-          sejajar di baris yang sama walau tinggi kartunya beda dikit. */}
-      {summary && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.75rem", marginBottom: "1.1rem" }}>
-          {/* Card 1: Re-burn active today with strict breakdown */}
+      {/* KPI Cards -- redesain 2026-09-05: dulu 5 kartu mencampur 2 sumbu
+          (status rekap Kemenhut vs rentang waktu) tanpa pola konsisten (3
+          dari 5 kartu cuma KPS ber-rekap) -- bikin user bingung karena kartu
+          yang judulnya sekilas mirip ("Terbakar Hari Ini" vs "EW: Titik Baru
+          Hari Ini") sebenarnya dua populasi terpisah. Sekarang SATU sumbu
+          (rentang waktu) yang jadi kartu, tiap kartu = GABUNGAN KPS ber-rekap
+          & belum-rekap (lihat bucketCounts & BUCKET_CATEGORIES) -- status
+          rekap per-KPS dipindah jadi badge di kolom tabel "Status Rekap".
+          Style flex-column + marginTop:"auto" pada baris terakhir dipertahankan
+          dari versi sebelumnya supaya kartu tetap sejajar tingginya. */}
+      {summary && bucketCounts && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem", marginBottom: "1.1rem" }}>
+          {/* Card 1: Aktif hari ini (gabungan) */}
           <div
-            onClick={() => setCategory("burned_active_today")}
+            onClick={() => setBucket("today")}
             style={{
-              backgroundColor: category === "burned_active_today" ? "rgba(239, 68, 68, 0.18)" : "rgba(255,255,255,0.04)",
-              border: `1px solid ${category === "burned_active_today" ? "#ef4444" : "rgba(255,255,255,0.08)"}`,
+              backgroundColor: bucket === "today" ? "rgba(239, 68, 68, 0.18)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${bucket === "today" ? "#ef4444" : "rgba(255,255,255,0.08)"}`,
               borderRadius: "8px",
               padding: "0.85rem",
               cursor: "pointer",
@@ -333,61 +408,32 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
               <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "#ef4444", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                🔴 Terbakar Hari Ini
+                🔴 Aktif Hari Ini
               </span>
               <AlertTriangle size={16} color="#ef4444" />
             </div>
             <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
-              {summary.burned_area_stats.active_today} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
+              {bucketCounts.today} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
             </div>
             {/* marginTop:auto -- baris terakhir tiap kartu dijepit ke bawah
                 supaya kelima kartu (badge 2 baris vs deskripsi 1 baris)
                 tetap terlihat sejajar bawahnya walau grid menyamakan tinggi. */}
             <div style={{ display: "flex", gap: "0.4rem", marginTop: "auto", paddingTop: "0.6rem", flexWrap: "wrap", fontSize: "0.7rem" }}>
               <span style={{ backgroundColor: "rgba(239,68,68,0.25)", color: "#fca5a5", padding: "0.15rem 0.4rem", borderRadius: "4px" }}>
-                🔥 {summary.burned_area_stats.strict_reburn_hotspots_today} di Bekas Terbakar
+                🟢 {summary.burned_area_stats.active_today} Ber-Rekap
               </span>
               <span style={{ backgroundColor: "rgba(249,115,22,0.2)", color: "#fdba74", padding: "0.15rem 0.4rem", borderRadius: "4px" }}>
-                ⚡ {summary.burned_area_stats.expanding_hotspots_today} di Blok Baru
+                🟠 {summary.early_warning_stats.active_today} Belum-Rekap
               </span>
             </div>
           </div>
 
-          {/* Card 2: Burned clear today (padam) */}
+          {/* Card 2: Aktif kemarin / mereda (gabungan) */}
           <div
-            onClick={() => setCategory("burned_clear_today")}
+            onClick={() => setBucket("yesterday")}
             style={{
-              backgroundColor: category === "burned_clear_today" ? "rgba(34, 197, 94, 0.18)" : "rgba(255,255,255,0.04)",
-              border: `1px solid ${category === "burned_clear_today" ? "#22c55e" : "rgba(255,255,255,0.08)"}`,
-              borderRadius: "8px",
-              padding: "0.85rem",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-              display: "flex",
-              flexDirection: "column",
-              height: "100%"
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-              <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "#22c55e", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                🟢 Padam Hari Ini
-              </span>
-              <ShieldCheck size={16} color="#22c55e" />
-            </div>
-            <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
-              {summary.burned_area_stats.clear_today} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
-            </div>
-            <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.5rem" }}>
-              KPS ber-luas terbakar dengan 0 titik api hari ini
-            </div>
-          </div>
-
-          {/* Card 3: Early Warning today */}
-          <div
-            onClick={() => setCategory("early_warning_today")}
-            style={{
-              backgroundColor: category === "early_warning_today" ? "rgba(249, 115, 22, 0.18)" : "rgba(255,255,255,0.04)",
-              border: `1px solid ${category === "early_warning_today" ? "#f97316" : "rgba(255,255,255,0.08)"}`,
+              backgroundColor: bucket === "yesterday" ? "rgba(249, 115, 22, 0.18)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${bucket === "yesterday" ? "#f97316" : "rgba(255,255,255,0.08)"}`,
               borderRadius: "8px",
               padding: "0.85rem",
               cursor: "pointer",
@@ -399,24 +445,24 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
               <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "#f97316", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                ⚡ EW: Titik Baru Hari Ini
+                🟠 Mereda (Aktif Kemarin)
               </span>
               <TrendingUp size={16} color="#f97316" />
             </div>
             <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
-              {summary.early_warning_stats.active_today} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
+              {bucketCounts.yesterday} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
             </div>
             <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.5rem" }}>
-              KPS titik api baru (belum masuk rekap luas terbakar)
+              Aktif kemarin, hari ini belum ada titik baru (ber-rekap & belum-rekap)
             </div>
           </div>
 
-          {/* Card 4: Total Early Warning 2026 */}
+          {/* Card 3: Aktif 7 hari (gabungan) */}
           <div
-            onClick={() => setCategory("early_warning_all")}
+            onClick={() => setBucket("7d")}
             style={{
-              backgroundColor: category === "early_warning_all" ? "rgba(59, 130, 246, 0.18)" : "rgba(255,255,255,0.04)",
-              border: `1px solid ${category === "early_warning_all" ? "#3b82f6" : "rgba(255,255,255,0.08)"}`,
+              backgroundColor: bucket === "7d" ? "rgba(234, 179, 8, 0.18)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${bucket === "7d" ? "#eab308" : "rgba(255,255,255,0.08)"}`,
               borderRadius: "8px",
               padding: "0.85rem",
               cursor: "pointer",
@@ -427,29 +473,55 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-              <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "#60a5fa", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                📋 Total Early Warning 2026
+              <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "#eab308", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                🟡 Aktif 7 Hari
               </span>
-              <FileSpreadsheet size={16} color="#60a5fa" />
+              <FileSpreadsheet size={16} color="#eab308" />
             </div>
             <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
-              {summary.early_warning_stats.total_kps} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
+              {bucketCounts["7d"]} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
             </div>
             <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.5rem" }}>
-              Total KPS terdeteksi hotspot di 2026 tanpa rekap luasan
+              Sempat aktif 7 hari terakhir, tidak hari ini/kemarin (keduanya)
             </div>
           </div>
 
-          {/* Card 5: Seluruh KPS Terbakar -- dulu HANYA ada sebagai tab,
-              sekarang jadi kartu ke-5 di sini (2026-09-05, konsolidasi:
-              4 kartu + 5 tab dulu adalah SATU selector kategori yang sama
-              dirender dua kali dalam dua band terpisah -- boros ruang
-              vertikal & dua gaya "terpilih" berbeda untuk hal yang sama). */}
+          {/* Card 4: Tidak aktif / padam (gabungan) */}
           <div
-            onClick={() => setCategory("all_burned")}
+            onClick={() => setBucket("inactive")}
             style={{
-              backgroundColor: category === "all_burned" ? "rgba(167, 139, 250, 0.18)" : "rgba(255,255,255,0.04)",
-              border: `1px solid ${category === "all_burned" ? "#a78bfa" : "rgba(255,255,255,0.08)"}`,
+              backgroundColor: bucket === "inactive" ? "rgba(34, 197, 94, 0.18)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${bucket === "inactive" ? "#22c55e" : "rgba(255,255,255,0.08)"}`,
+              borderRadius: "8px",
+              padding: "0.85rem",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              display: "flex",
+              flexDirection: "column",
+              height: "100%"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+              <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "#22c55e", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                🟢 Tidak Aktif / Padam
+              </span>
+              <ShieldCheck size={16} color="#22c55e" />
+            </div>
+            <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
+              {bucketCounts.inactive} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
+            </div>
+            <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.5rem" }}>
+              0 hotspot 7 hari terakhir (ber-rekap & belum-rekap)
+            </div>
+          </div>
+
+          {/* Card 5: Total terpantau 2026 (gabungan) -- menggantikan "Total
+              Early Warning 2026" & "Seluruh KPS Terbakar" yang dulu terpisah. */}
+          <div
+            onClick={() => setBucket("total")}
+            style={{
+              backgroundColor: bucket === "total" ? "rgba(167, 139, 250, 0.18)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${bucket === "total" ? "#a78bfa" : "rgba(255,255,255,0.08)"}`,
               borderRadius: "8px",
               padding: "0.85rem",
               cursor: "pointer",
@@ -461,15 +533,15 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
               <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "#a78bfa", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                📊 Seluruh KPS Terbakar
+                📊 Total Terpantau 2026
               </span>
               <BarChart3 size={16} color="#a78bfa" />
             </div>
             <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
-              {summary.burned_area_stats.total_polygons} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
+              {bucketCounts.total} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
             </div>
             <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.5rem" }}>
-              Rekap seluruh KPS yang pernah tercatat luas bekas terbakar
+              Seluruh KPS pernah tercatat luas terbakar ATAU hotspot 2026
             </div>
           </div>
         </div>
@@ -541,8 +613,10 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
           ))}
         </select>
 
-        {/* Zona Perambatan Filter */}
-        {category === "burned_active_today" && (
+        {/* Zona Perambatan Filter -- cuma relevan buat KPS ber-rekap yang
+            aktif hari ini (zone_code KPS belum-rekap selalu "new_2026",
+            tidak match opsi manapun di bawah). */}
+        {bucket === "today" && (
           <select
             value={selectedZone}
             onChange={(e) => setSelectedZone(e.target.value)}
@@ -598,6 +672,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             <tr style={{ backgroundColor: "rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.12)", color: "#9ca3af" }}>
               <th style={{ padding: "0.75rem 0.8rem", width: "45px", textAlign: "center" }}>No</th>
               <th style={{ padding: "0.75rem 0.8rem" }}>Nama KPS / Lembaga</th>
+              <th style={{ padding: "0.75rem 0.8rem", width: "110px", textAlign: "center" }}>Status Rekap</th>
               <th style={{ padding: "0.75rem 0.8rem", width: "70px", textAlign: "center" }}>Skema</th>
               <th style={{ padding: "0.75rem 0.8rem" }}>Wilayah (Kab, Prov)</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "right" }}>Luas Terbakar (Kemenhut)</th>
@@ -607,7 +682,10 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               </th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS Kemarin</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS 7 Hari</th>
-              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS Agt</th>
+              {/* Label dulu hardcoded "HS Agt" padahal datanya
+                  DATE_TRUNC('month', NOW()) -- bulan BERJALAN, bukan selalu
+                  Agustus (sekarang sudah September). */}
+              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS Bulan Ini</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "right" }}>Skor FTRI</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>Status & Zona Perambatan</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>Aksi</th>
@@ -616,14 +694,14 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
           <tbody>
             {loadingItems ? (
               <tr>
-                <td colSpan={12} style={{ padding: "2.5rem", textAlign: "center", color: "#9ca3af" }}>
+                <td colSpan={13} style={{ padding: "2.5rem", textAlign: "center", color: "#9ca3af" }}>
                   <RefreshCw size={20} className="animate-spin" style={{ margin: "0 auto 0.5rem auto" }} />
                   Memuat data analisis...
                 </td>
               </tr>
             ) : displayItems.length === 0 ? (
               <tr>
-                <td colSpan={12} style={{ padding: "2.5rem", textAlign: "center", color: "#6b7280" }}>
+                <td colSpan={13} style={{ padding: "2.5rem", textAlign: "center", color: "#6b7280" }}>
                   Tidak ada data KPS yang sesuai dengan filter{activeWilkerBps ? ` untuk ${activeWilkerBps}` : ""}.
                 </td>
               </tr>
@@ -652,6 +730,25 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
                       <div style={{ fontSize: "0.7rem", color: "#6b7280" }}>
                         Desa: {item.nama_desa || "-"} | Kec: {item.nama_kec || "-"}
                       </div>
+                    </td>
+                    <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
+                      {/* Badge ini yang sekarang membawa pembeda ber-rekap/
+                          belum-rekap -- dulu itu sumbu yang membedakan KARTU
+                          KPI, sekarang jadi atribut per-baris supaya kedua
+                          kelompok kelihatan bersisian dalam satu tabel. */}
+                      <span
+                        style={{
+                          padding: "0.15rem 0.5rem",
+                          borderRadius: "999px",
+                          fontSize: "0.68rem",
+                          fontWeight: "600",
+                          whiteSpace: "nowrap",
+                          backgroundColor: item.total_burned_ha > 0 ? "rgba(34,197,94,0.18)" : "rgba(249,115,22,0.18)",
+                          color: item.total_burned_ha > 0 ? "#4ade80" : "#fdba74"
+                        }}
+                      >
+                        {item.total_burned_ha > 0 ? "🟢 Ada Rekap" : "🟠 Belum Rekap"}
+                      </span>
                     </td>
                     <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
                       <span style={{ padding: "0.15rem 0.45rem", borderRadius: "4px", backgroundColor: "rgba(255,255,255,0.08)", fontSize: "0.72rem", color: "#d1d5db" }}>

@@ -356,11 +356,23 @@ BUKAN lewat migrasi app:
   pecahan = total resmi 10.056 ha). `GET /api/burned-area/kawasan-summary?province=…` →
   `postgres_store/_burned_area.py::read_burned_area_by_kawasan()` (label live dari
   `ref_fungsi_kawasan_label`). Data resmi tersedia Jan–Jul 2026.
-- **Overlay peta**: raster LIVE dari layanan ArcGIS resmi Ditjen Planologi Kehutanan
+- **Overlay peta**: raster dari layanan ArcGIS resmi Ditjen Planologi Kehutanan
   (`geoportal.planologi.kehutanan.go.id/.../KWSHUTAN_AR_250K/MapServer`, readonly). Layanan tanpa
-  WMSServer & tanpa tile cache → `components/KawasanHutanLayer.tsx` = `L.TileLayer` di-extend, minta
-  endpoint `export` per-tile (bbox-per-tile ala `L.TileLayer.WMS`). Simbol/warna dari server;
-  `constants/kawasanHutan.ts` cuma URL + salinan legenda. Tombol "Fungsi Kawasan Hutan" di
+  WMSServer & tanpa tile cache → `components/KawasanHutanLayer.tsx` = `L.TileLayer` di-extend, hitung
+  bbox per-tile (ala `L.TileLayer.WMS`) lalu minta gambarnya. Simbol/warna dari server.
+  **Diproksi + di-cache lewat backend kita** (`GET /api/kawasan-hutan/tile`, `app/api/kawasan_hutan.py`,
+  2026-09-05) — sebelumnya browser TIAP PENGGUNA menembak `export` ArcGIS LANGSUNG, beban ke server
+  pemerintah naik linear dengan jumlah pengguna TANPA saling berbagi cache; sekarang hasil `export`
+  disimpan ke disk (`resolved_cache_dir/kawasan_hutan_tiles/`, key = SHA-256 dari parameter query)
+  selama 7 hari (`TILE_CACHE_TTL_HOURS`) — semua pengguna berbagi cache ubin yang sama, dan kalau
+  ArcGIS lagi lambat/down, cache basi tetap disajikan (header `X-Tile-Cache: stale`) daripada gagal
+  total. **Endpoint ini SENGAJA TIDAK digerbang `_read_gate`** (beda dari router baca lain) — Leaflet
+  memuatnya lewat `<img src=...>` biasa yang tidak bisa membawa header `Authorization`, jadi kalau
+  digerbang akan 401 terus saat `API_REQUIRE_AUTH=true`; aman karena sumbernya sendiri layanan publik
+  tanpa autentikasi (tidak ada data ETASENEU yang bocor lewat sini) — pola sama dengan `/api/health` &
+  `/api/metrics`. `constants/kawasanHutan.ts` sekarang cuma dipakai untuk salinan legenda (konstanta
+  `KAWASAN_HUTAN_MAPSERVER` sudah tidak dipakai frontend, URL aslinya sekarang di
+  `kawasan_hutan.py::ARCGIS_EXPORT_URL`). Tombol "Fungsi Kawasan Hutan" di
   `HotspotMap.tsx` **default NYALA** (mobile & desktop, sejak 2026-09-04 — sebelumnya mati),
   pane `kawasan-hutan` z360. Saat menyala, isian poligon KPS
   (`batas-kps`) dimatikan (garis batas saja) supaya warna kawasan tidak ketutup tint hijau KPS.
@@ -444,17 +456,42 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               `display:flex; flexDirection:column; height:"100%"` + baris
               detail/badge terakhir `marginTop:"auto"` supaya kartu tetap sejajar
               biar isi baris terakhirnya beda panjang [2026-09-05]. **5 kartu
-              KPI = SATU-SATUNYA selector kategori (2026-09-05, konsolidasi)**:
-              tadinya ada 4 kartu KPI DAN baris 5 tab kategori terpisah di
-              bawahnya yang mengubah `category` yang SAMA PERSIS (mis. kartu
-              "Terbakar Hari Ini" & tab "🔴 Terbakar Hari Ini (N)" sama-sama set
-              `category="burned_active_today"`) — dua band kontrol duplikat untuk
-              satu fungsi, dengan dua gaya "terpilih" berbeda pula (border+warna
-              kartu vs latar biru tab). Baris tab DIHAPUS, kartu ke-5 "Seluruh
-              KPS Terbakar" (`category="all_burned"`, dulu CUMA ada sebagai tab)
-              ditambahkan menyusul gaya 4 kartu lain — kalau menambah opsi
-              kategori baru, taruh sebagai kartu ke-6+ di grid ini, JANGAN
-              menghidupkan lagi pola tab terpisah. FilterPanel.tsx, SidebarNav.tsx (satu area gulir
+              KPI = SATU-SATUNYA selector, sumbu RENTANG WAKTU bukan status
+              rekap (2026-09-05, redesain kedua)**: versi sebelumnya (5 kartu
+              konsolidasi dari 4 kartu+5 tab, catatan lama di bawah) mencampur
+              DUA sumbu berbeda dalam satu baris kartu — status rekap Kemenhut
+              (`burned_*` vs `early_warning_*`) DAN rentang waktu — sehingga
+              3 dari 5 kartu ("Terbakar Hari Ini", "Padam Hari Ini", "Seluruh
+              KPS Terbakar") cuma menghitung KPS yang PERNAH tercatat resmi,
+              padahal menu "Peringatan Dini" harusnya menyorot KEDUANYA setara
+              (KPS belum-rekap justru yang paling butuh peringatan DINI).
+              State `category` diganti `bucket: TimeBucket` (`today|yesterday|
+              7d|inactive|total`); `BUCKET_CATEGORIES` memetakan tiap bucket ke
+              SEPASANG kategori backend (`burned_*` + `early_warning_*`),
+              `loadItems()` fetch KEDUANYA via `Promise.all` lalu digabung jadi
+              satu `items[]` — kartu KPI manapun yang diklik selalu menampilkan
+              gabungan kedua kelompok. Bucket "inactive" tidak match kategori
+              backend manapun untuk kelompok belum-rekap (tidak ada
+              `early_warning_padam`) — diambil `early_warning_all` lalu
+              disaring di klien jadi yang `hotspots_today/yesterday/7d` semua
+              0, supaya tidak perlu ubah backend. Angka kartu (`bucketCounts`)
+              dihitung dari `summary` yang sudah ada (jumlah field
+              `burned_area_stats.X + early_warning_stats.X`) — untuk
+              "inactive" dihitung sisa (`total_kps - active_today -
+              active_yesterday - active_7d`) karena `early_warning_stats`
+              tidak expose hitungan tidak-aktif langsung. Pembeda ber-rekap/
+              belum-rekap pindah jadi kolom badge **"Status Rekap"** di tabel
+              (🟢 Ada Rekap / 🟠 Belum Rekap, dari `total_burned_ha > 0`) —
+              bukan lagi sumbu kartu. Tombol ekspor sekarang mengunduh **2
+              file** berurutan (kategori ber-rekap & belum-rekap terpisah,
+              endpoint backend cuma terima satu kategori per panggilan).
+              Filter Zona Perambatan cuma tampil saat `bucket==="today"`
+              (zone_code KPS belum-rekap selalu `"new_2026"`, tidak match opsi
+              manapun). Kolom "HS Agt" diganti **"HS Bulan Ini"** (label lama
+              hardcode nama bulan padahal datanya `DATE_TRUNC('month', NOW())`
+              yang ikut bulan berjalan). Catatan konsolidasi lama (4 kartu+tab
+              → 5 kartu berbasis `category`) sudah digantikan seluruhnya oleh
+              paragraf ini. FilterPanel.tsx, SidebarNav.tsx (satu area gulir
               di `.side-rail`; menu Pengaturan menampilkan info akun untuk semua role,
               prop `isAdmin` → role user hanya tidak melihat tombol Sync/Prewarm),
               BurnedAreaCard.tsx, WeatherOverlay.tsx, dll.
