@@ -1366,15 +1366,59 @@ body {
   color: rgba(245, 239, 230, 0.35) !important;
 }
 
-.map-legend {
+/* Kolom kiri peta desktop (2026-09-05): SATU wadah flex bergap otomatis
+   membungkus Lokasi+Basemap, Bekas Terbakar, dan Legenda -- menggantikan 4
+   elemen `position:absolute` independen dengan koordinat rem yang harus
+   dijaga sinkron manual satu-satu (akar bug lama: legenda pernah menutupi
+   scale control Leaflet karena salah satu digeser tanpa yang lain ikut
+   menyesuaikan). `max-height` menyisakan ruang zoom+scale Leaflet di sudut
+   kiri-bawah (SATU angka di sini, bukan dihitung ulang per anak):
+     100% viewport - 1rem (jarak wadah dari atas) - 7.5rem (tinggi kontrol
+     Leaflet + jarak amannya, sama seperti nilai lama `.map-legend`).
+   Di layar sempit (mis. Acer TravelMate 1366x768) kelebihan tinggi scroll
+   DI DALAM wadah ini sendiri (satu scrollbar, bukan tabrakan/tumpang
+   tindih); di layar lega (mis. WUXGA 1920x1200) semua muat tanpa scroll
+   sama sekali -- tidak perlu tuning ulang per resolusi. */
+.map-left-stack {
   position: absolute;
+  top: 1rem;
   left: 1rem;
-  /* 7.5rem, bukan 6.5rem: kolom kiri-bawah Leaflet menumpuk DUA kontrol
-     (scale control DI ATAS zoom), bukan cuma zoom sendirian -- 6.5rem cukup
-     buat zoom saja tapi legenda lalu menutupi baris scale ("500 km" dkk) di
-     laptop yang viewport-nya pas-pasan (mis. Acer TravelMate 1366x768). */
-  bottom: 7.5rem;
   z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: max-content;
+  max-width: 17rem;
+  max-height: calc(100% - 1rem - 7.5rem);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(245, 239, 230, 0.28) transparent;
+}
+
+.map-left-stack::-webkit-scrollbar {
+  width: 6px;
+}
+
+.map-left-stack::-webkit-scrollbar-thumb {
+  background: rgba(245, 239, 230, 0.28);
+  border-radius: 999px;
+}
+
+.map-left-stack__row {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.map-legend {
+  /* Anak flex biasa di dalam .map-left-stack (2026-09-05) -- posisi &
+     jarak-ke-zoom/scale sudah jadi urusan wadahnya, bukan rem sendiri di
+     sini lagi. flex-shrink:0 supaya legenda tidak ikut diperas kalau
+     .burned-control di atasnya kebetulan lebih tinggi dari sisa ruang. */
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
@@ -1437,46 +1481,20 @@ body {
 }
 
 /* Kontrol "Bekas Terbakar": tombol on/off + (saat aktif) panel ringkasan
-   luas, sebagai SATU kolom melayang. Dibungkus satu wadah berposisi supaya
-   panel menempel di bawah tombol lewat aliran normal -- bukan lagi dua
-   elemen absolute yang posisinya disamakan dengan calc() dan angka px yang
-   harus diulang per breakpoint.
-   Baris sendiri di bawah "Lokasi Saya" + peralihan Peta/Satelit: top 6.5rem
-   memberi jarak dari .locate-error-toast (kondisional, di left:1rem, bisa
-   2-3 baris). */
+   luas, sebagai SATU kolom. Sejak 2026-09-05 ini anak flex biasa di dalam
+   .map-left-stack (bukan lagi elemen `position:absolute` sendiri dengan
+   `top`/`max-height: calc(...)` yang harus dihitung ulang manual tiap kali
+   ada elemen tetangga berubah tinggi -- itu akar bug "menimpa legenda").
+   Scroll-kalau-kepanjangan sekarang jadi tanggung jawab TUNGGAL
+   .map-left-stack, jadi tidak ada scrollbar dobel. */
 .burned-control {
-  position: absolute;
-  top: 6.5rem;
-  left: 1rem;
-  z-index: 1000;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 0.5rem;
   width: max-content;
   max-width: 15rem;
-  /* Semua overlay + ringkasannya bisa lebih tinggi dari layar -- dibatasi ke
-     ruang antara baris kontrol atas dan LEGENDA di kiri bawah (legenda
-     sendiri sudah di atas zoom+scale: bottom 7.5rem + tinggi ~9rem saat
-     5 baris), lalu digulir di dalam. Dulu cuma menyisakan 5.5rem (tinggi
-     zoom) sehingga di laptop pendek (768px) kolom ini menimpa legenda. */
-  max-height: calc(100% - 6.5rem - 17rem);
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  padding: 4px 6px 4px 4px;
-  margin: -4px -6px -4px -4px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(245, 239, 230, 0.28) transparent;
-}
-
-.burned-control::-webkit-scrollbar {
-  width: 6px;
-}
-
-.burned-control::-webkit-scrollbar-thumb {
-  background: rgba(245, 239, 230, 0.28);
-  border-radius: 999px;
 }
 
 .overlay-group {
@@ -1637,14 +1655,11 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* Tombol "Lokasi Saya" sengaja diletakkan di pojok kiri atas peta -- satu-
-   satunya sudut yang kosong di desktop (kanan atas dipakai panel statistik,
-   bawah sudah penuh kontrol zoom + legenda + tombol UI). */
+/* Baris pertama .map-left-stack (2026-09-05): Lokasi Saya + peralihan
+   Peta/Satelit berdampingan. Sengaja jadi anak flex row biasa (bukan
+   `position:absolute` masing-masing) -- lihat .map-left-stack. */
 .locate-btn {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  z-index: 1000;
+  flex-shrink: 0;
   width: 34px;
   height: 34px;
   display: flex;
@@ -1687,11 +1702,11 @@ body {
   }
 }
 
+/* Dulu `position:absolute` sendiri (top:3.4rem) di bawah .locate-btn; sejak
+   jadi anak flex .map-left-stack, mengikuti aliran normal tepat di bawah
+   baris Lokasi+Basemap -- tanpa menghitung ulang offset top secara manual. */
 .locate-error-toast {
-  position: absolute;
-  top: 3.4rem;
-  left: 1rem;
-  z-index: 1000;
+  flex-shrink: 0;
   max-width: 14rem;
   margin: 0;
   padding: 0.45rem 0.65rem;
@@ -1703,10 +1718,12 @@ body {
   line-height: 1.4;
 }
 
-/* Ganti gaya peta (line-style gelap vs citra satelit asli) -- posisinya di
-   sebelah .locate-btn karena baris atas peta kosong di desktop, dan supaya
-   tidak menumpuk dengan panel statistik di kanan atas atau kontrol
-   zoom/legenda yang sudah padat di kiri bawah. */
+/* Ganti gaya peta (line-style gelap vs citra satelit asli). Base class ini
+   TETAP `position:absolute` -- dipakai juga oleh KompleksKebakaranView.tsx
+   (`.kompleks-basemap-switcher`, tanpa override posisi sendiri, sepenuhnya
+   bergantung ke sini) sebagai elemen mengambang mandiri. Modifier
+   `--stacked` di bawah mematikan itu KHUSUS untuk pemakaian di
+   .map-left-stack (HotspotMap.tsx), supaya dia jadi anak flex row biasa. */
 .basemap-switcher {
   position: absolute;
   top: 1rem;
@@ -1717,6 +1734,13 @@ body {
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.basemap-switcher--stacked {
+  position: static;
+  top: auto;
+  left: auto;
+  flex-shrink: 0;
 }
 
 .basemap-switcher button {
@@ -9954,13 +9978,15 @@ a + a {
   }
 }
 
-/* ---- Laptop kecil / tablet lanskap: kontrol kiri peta berebut tinggi ----
+/* ---- Laptop kecil / tablet lanskap: kolom kiri .map-left-stack sesak ----
    Di Acer TravelMate 1366x768 (viewport peta seringnya <900px setelah chrome
-   browser/taskbar, bukan cuma yang benar-benar <=768) kolom kiri berisi
-   Lokasi+Basemap, .burned-control (4 chip + legenda kawasan), legenda, dan
-   zoom+scale sekaligus. Legenda dibuat mendatar (2-3 baris) supaya
-   .burned-control dapat ruang gulir yang masuk akal. Ambang dinaikkan dari
-   820 -> 900px: 820 nyaris tidak pernah kena di laptop 1080p dengan browser
+   browser/taskbar, bukan cuma yang benar-benar <=768) isi .map-left-stack
+   (Lokasi+Basemap, .burned-control 4 chip + legenda kawasan, legenda titik)
+   sudah lebih tinggi dari ruang yang tersisa di atas zoom+scale -- sejak
+   2026-09-05 wadahnya sendiri (.map-left-stack) yang men-scroll otomatis,
+   jadi di sini cuma perlu membuat LEGENDA lebih mendatar (2-3 baris, bukan
+   5 baris vertikal) supaya lebih sedikit yang perlu digulir. Ambang 900px
+   (dari 820): 820 nyaris tidak pernah kena di laptop 1080p dengan browser
    biasa (chrome/tab bar memotong ~150-200px), padahal kolom kiri sudah
    sesak di kisaran 800-900px juga. */
 @media (min-width: 640px) and (max-height: 900px) {
@@ -9970,21 +9996,12 @@ a + a {
     align-items: center;
     column-gap: 0.7rem;
     row-gap: 0.3rem;
-    max-width: 17rem;
-    /* TIDAK boleh lebih kecil dari default (7.5rem): legenda mendatar lebih
-       pendek totalnya, tapi jaraknya ke kontrol zoom+scale di sudut yang
-       sama tetap harus dijaga, bukan malah dikurangi (bug lama: 6rem <
-       default 6.5rem lama, jadi menutupi scale control "500 km" dkk). */
-    bottom: 7.5rem;
   }
   .map-legend-title {
     width: 100%;
   }
   .map-legend-divider {
     display: none;
-  }
-  .burned-control {
-    max-height: calc(100% - 6.5rem - 13rem);
   }
 }
 

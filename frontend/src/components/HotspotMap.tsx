@@ -670,39 +670,47 @@ export function HotspotMap({
   return (
     <div className="map-frame">
       {!isMobile && showChrome ? (
-      <>
-      <div className="map-legend">
-        <span className="map-legend-title">Legenda</span>
-        <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#ff8c42" }} />MODIS</div>
-        <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#facc15" }} />VIIRS</div>
-        <div className="map-legend-row"><span className="map-legend-dot map-legend-dot--pulse" />FRP tinggi (&gt;30MW)</div>
-        {showBurnedArea && burnedArea.data ? (
-          <>
-            <div className="map-legend-divider" />
-            <div className="map-legend-row">
-              <span className="map-legend-swatch" style={{ background: "rgba(220,38,38,0.5)", borderColor: "#dc2626" }} />
-              Bekas terbakar
-            </div>
-            {burnedArea.data.features.some((feature) => feature.properties.is_estimated) ? (
-              <div className="map-legend-row">
-                <span className="map-legend-swatch map-legend-swatch--estimated" />
-                Perkiraan lokasi
-              </div>
-            ) : null}
-          </>
-        ) : null}
+      /* SATU wadah flex (gap otomatis), bukan 4 elemen independen dengan
+         koordinat rem manual masing-masing seperti dulu -- itu akar bug
+         lama ("legenda menutupi scale control" karena satu digeser tanpa
+         yang lain ikut menyesuaikan). Urutan DOM = urutan tampil dari atas:
+         baris Lokasi+Basemap -> Bekas Terbakar -> Legenda. max-height
+         .map-left-stack menyisakan ruang zoom+scale Leaflet (SATU angka,
+         lihat index.css) -- kelebihan tinggi scroll di dalam wadah ini
+         sendiri (laptop kecil), bukan tumpang tindih; di layar lega
+         (mis. WUXGA 1920x1200) semua muat tanpa scroll sama sekali. */
+      <div className="map-left-stack">
+      <div className="map-left-stack__row">
+        <button
+          type="button"
+          className={`locate-btn${showUserLocation ? " locate-btn--active" : ""}${userLocation.loading ? " locate-btn--loading" : ""}`}
+          onClick={() => setShowUserLocation((current) => !current)}
+          title={showUserLocation ? "Sembunyikan lokasi saya" : "Tampilkan lokasi saya"}
+          aria-pressed={showUserLocation}
+          aria-label="Lokasi saya"
+        >
+          <LocateFixed size={16} />
+        </button>
+        <div className="basemap-switcher basemap-switcher--stacked" role="group" aria-label="Gaya peta">
+          <button
+            type="button"
+            className={mapStyle === "dark" ? "basemap-switcher-btn--active" : ""}
+            onClick={() => setMapStyle("dark")}
+            aria-pressed={mapStyle === "dark"}
+          >
+            Peta
+          </button>
+          <button
+            type="button"
+            className={mapStyle === "satellite" ? "basemap-switcher-btn--active" : ""}
+            onClick={() => setMapStyle("satellite")}
+            aria-pressed={mapStyle === "satellite"}
+          >
+            Satelit
+          </button>
+        </div>
       </div>
-
-      <button
-        type="button"
-        className={`locate-btn${showUserLocation ? " locate-btn--active" : ""}${userLocation.loading ? " locate-btn--loading" : ""}`}
-        onClick={() => setShowUserLocation((current) => !current)}
-        title={showUserLocation ? "Sembunyikan lokasi saya" : "Tampilkan lokasi saya"}
-        aria-pressed={showUserLocation}
-        aria-label="Lokasi saya"
-      >
-        <LocateFixed size={16} />
-      </button>
+      {userLocation.error ? <p className="locate-error-toast">{userLocation.error}</p> : null}
 
       <div className="burned-control">
         <div className="overlay-group">
@@ -826,28 +834,28 @@ export function HotspotMap({
           </button>
         </div>
       </div>
-      </>
-      ) : null}
-      {userLocation.error ? <p className="locate-error-toast">{userLocation.error}</p> : null}
 
-      {!isMobile && showChrome ? (
-      <div className="basemap-switcher" role="group" aria-label="Gaya peta">
-        <button
-          type="button"
-          className={mapStyle === "dark" ? "basemap-switcher-btn--active" : ""}
-          onClick={() => setMapStyle("dark")}
-          aria-pressed={mapStyle === "dark"}
-        >
-          Peta
-        </button>
-        <button
-          type="button"
-          className={mapStyle === "satellite" ? "basemap-switcher-btn--active" : ""}
-          onClick={() => setMapStyle("satellite")}
-          aria-pressed={mapStyle === "satellite"}
-        >
-          Satelit
-        </button>
+      <div className="map-legend">
+        <span className="map-legend-title">Legenda</span>
+        <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#ff8c42" }} />MODIS</div>
+        <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#facc15" }} />VIIRS</div>
+        <div className="map-legend-row"><span className="map-legend-dot map-legend-dot--pulse" />FRP tinggi (&gt;30MW)</div>
+        {showBurnedArea && burnedArea.data ? (
+          <>
+            <div className="map-legend-divider" />
+            <div className="map-legend-row">
+              <span className="map-legend-swatch" style={{ background: "rgba(220,38,38,0.5)", borderColor: "#dc2626" }} />
+              Bekas terbakar
+            </div>
+            {burnedArea.data.features.some((feature) => feature.properties.is_estimated) ? (
+              <div className="map-legend-row">
+                <span className="map-legend-swatch map-legend-swatch--estimated" />
+                Perkiraan lokasi
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </div>
       </div>
       ) : null}
 

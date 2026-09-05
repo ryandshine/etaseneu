@@ -422,6 +422,23 @@ describe("Hotspot map integration", () => {
     ).toBe(false);
   });
 
+  it("groups the left-side map controls into one flex stack (bukan 4 elemen posisi independen)", async () => {
+    // Regresi struktural: dulu locate-btn/basemap-switcher/burned-control/
+    // map-legend masing-masing `position:absolute` sendiri dengan koordinat
+    // rem yang harus dijaga sinkron manual -- itu akar bug "legenda menutupi
+    // scale control". Sejak direstruktur (2026-09-05) keempatnya WAJIB jadi
+    // anak .map-left-stack supaya jarak diatur otomatis oleh flexbox.
+    render(<App />);
+    await loginThroughUI();
+    await screen.findByTestId("leaflet-map", {}, { timeout: 5000 });
+
+    const stack = screen.getByLabelText("Lokasi saya").closest(".map-left-stack");
+    expect(stack).not.toBeNull();
+    expect(stack?.querySelector(".basemap-switcher")).not.toBeNull();
+    expect(stack?.querySelector(".burned-control")).not.toBeNull();
+    expect(stack?.querySelector(".map-legend")).not.toBeNull();
+  });
+
   it("does not load full geojson layers on initial map render", async () => {
     render(<App />);
     await loginThroughUI();

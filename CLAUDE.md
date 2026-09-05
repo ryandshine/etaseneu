@@ -484,27 +484,45 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               Murni client-side atas `hotspots` termuat; tak ada endpoint/persist.
               `openKpsDetail` di `App.tsx` di-`useCallback` demi memo ini. Mock
               `CircleMarker`/`Marker` di HotspotMap.test.tsx WAJIB `forwardRef`.
-              **Tata letak kontrol melayang (desktop)**: kolom kiri = Lokasi+
-              Basemap (top 1rem) → `.burned-control` (top 6.5rem, gulir) →
-              `.map-legend` (bottom 7.5rem) → zoom+scale Leaflet (sudut
-              kiri-bawah, DUA kontrol ditumpuk, bukan cuma zoom). `max-height`
-              burned-control WAJIB menyisakan ruang legenda
-              (`calc(100% - 6.5rem - 17rem)`) — dulu 5.5rem dan di laptop
-              1366×768 kolom itu menimpa legenda. **Bug 2026-09-05**: legenda
-              sempat `bottom:6.5rem` (lalu malah diturunkan ke `6rem` di mode
-              ringkas) — cukup buat kontrol zoom SENDIRIAN tapi tidak untuk
-              scale control yang nangkring di atasnya, jadi legenda menutupi
-              baris skala ("500 km" dkk) di laptop yang viewport-nya pas-pasan;
-              dinaikkan ke `7.5rem` di kedua mode (default & ringkas — mode
-              ringkas TIDAK BOLEH lebih kecil dari default, alasan bug ini).
-              `@media (min-width:640px) and (max-height:900px)` (naik dari 820
-              — 820 nyaris tidak pernah kena di laptop 1080p dengan browser
-              biasa) legenda jadi mendatar. `.timeline-control` TIDAK dipusatkan pakai
-              translate: dijepit `left:17rem; right:20rem; max-width:680px;
-              margin:auto` (lolos legenda kiri & panel statistik kanan) dan
-              `bottom:4.75rem` di atas tombol "Sembunyikan UI" (`.ui-toggle-btn`,
-              juga bawah-tengah). Tablet 640–1023px: pemutar melebar penuh dan
-              legenda disembunyikan via `.map-frame:has(.timeline-control)`.
+              **Tata letak kontrol melayang (desktop, dirombak 2026-09-05)**: kolom
+              kiri dulunya 4 elemen `position:absolute` INDEPENDEN (Lokasi,
+              Basemap, `.burned-control`, `.map-legend`) yang koordinat
+              rem-nya (`top`/`bottom`/`max-height: calc(...)`) harus dijaga
+              sinkron manual satu-satu — akar bug nyata: legenda pernah
+              `bottom:6.5rem` lalu diturunkan ke `6rem` di mode ringkas (niatnya
+              hemat ruang), padahal itu JUSTRU jarak ke zoom+scale Leaflet di
+              sudut kiri-bawah (dua kontrol ditumpuk, bukan cuma zoom) —
+              hasilnya legenda menutupi baris skala ("500 km" dkk) di laptop
+              pas-pasan (mis. Acer TravelMate 1366×768). **Sekarang**:
+              keempatnya jadi anak flex `.map-left-stack` (`top:1rem; left:1rem;
+              gap:0.65rem`, urutan DOM = urutan tampil: baris Lokasi+Basemap →
+              `.burned-control` → `.map-legend`) — jaraknya otomatis dari
+              `gap`, BUKAN dihitung manual per elemen lagi. `.map-left-stack`
+              sendiri yang men-scroll (`max-height: calc(100% - 1rem - 7.5rem)`,
+              SATU angka clearance zoom+scale, bukan diulang di tiap anak) —
+              di laptop kecil kelebihan tinggi scroll di dalam wadah ini
+              (satu scrollbar), di layar lega (mis. WUXGA 1920×1200) semua
+              muat tanpa scroll, tak perlu tuning ulang per resolusi. `.locate-btn`
+              & `.burned-control` & `.map-legend` HANYA dipakai di sini (aman
+              diubah ke non-`absolute`); `.basemap-switcher` DIPAKAI JUGA oleh
+              `KompleksKebakaranView.tsx` (`.kompleks-basemap-switcher`, tanpa
+              override posisi sendiri, sepenuhnya bergantung ke base class) —
+              base class TETAP `position:absolute` untuk itu, modifier
+              `.basemap-switcher--stacked` (HANYA dipakai di `.map-left-stack`)
+              yang mematikannya jadi anak flex row biasa. Test regresi struktur:
+              `HotspotMap.test.tsx` "groups the left-side map controls into
+              one flex stack". `@media (min-width:640px) and (max-height:900px)`
+              (naik dari 820 — 820 nyaris tidak pernah kena di laptop 1080p
+              dengan browser biasa) cuma membuat `.map-legend` mendatar (2-3
+              baris, bukan 5 vertikal) supaya lebih sedikit yang perlu digulir
+              — TIDAK lagi menyentuh posisi/max-height (itu urusan
+              `.map-left-stack` sekarang, bukan per-breakpoint). `.timeline-control`
+              TIDAK dipusatkan pakai translate: dijepit `left:17rem; right:20rem;
+              max-width:680px; margin:auto` (lolos legenda kiri & panel
+              statistik kanan) dan `bottom:4.75rem` di atas tombol "Sembunyikan
+              UI" (`.ui-toggle-btn`, juga bawah-tengah). Tablet 640–1023px:
+              pemutar melebar penuh dan legenda disembunyikan via
+              `.map-frame:has(.timeline-control)`.
 hooks/        useDashboardData.ts (hook utama, ~800 baris — lihat di bawah),
               useBurnedAreaOverlay.ts, useIsMobile.ts
 lib/          api.ts (client fetch bertipe; `authFetch`/`downloadWithAuth` untuk panggilan
