@@ -718,6 +718,58 @@ body {
   background: #111317;
 }
 
+/* Pemutar waktu (timeline animasi) di peta Detail KPS -- sama fitur & hook
+   (useHotspotTimeline) dengan peta utama HotspotMap.tsx, tapi kotak peta di
+   sini jauh lebih kecil (min-height 20rem, bukan viewport penuh) dan TIDAK
+   punya legenda/panel statistik yang perlu dijepit-hindari, jadi tombol &
+   bar-nya diposisikan mengambang sendiri di dalam `.kps-detail-map`
+   (`overflow:hidden`), bukan memakai ulang offset lebar `.timeline-control`
+   default (left:17rem/right:20rem) yang diset untuk peta utama. */
+.kps-detail-timeline-toggle {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 30px;
+  padding: 0 0.6rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(19, 21, 26, 0.92);
+  color: #f5efe6;
+  font-size: 0.72rem;
+  font-weight: 600;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.kps-detail-timeline-toggle:hover {
+  background: rgba(255, 78, 0, 0.18);
+}
+
+.kps-detail-timeline-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kps-detail-timeline-toggle--active {
+  border-color: rgba(220, 38, 38, 0.5);
+  background: rgba(52, 21, 23, 0.96);
+  color: #fca5a5;
+}
+
+.kps-detail-map .timeline-control {
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  max-width: none;
+  margin: 0;
+}
+
 @media (max-width: 900px) {
   .kps-detail-body {
     grid-template-columns: 1fr;

@@ -1,17 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Download } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Clock, Download } from "lucide-react";
 import { CircleMarker, GeoJSON, LayerGroup, MapContainer, Pane, Popup, TileLayer, useMap } from "react-leaflet";
 import { canvas as buildLeafletCanvas, circleMarker as buildLeafletCircleMarker, geoJSON as buildLeafletGeoJSON } from "leaflet";
-import type { LayerGroup as LLayerGroup } from "leaflet";
+import type { CircleMarker as LCircleMarker, LayerGroup as LLayerGroup } from "leaflet";
 
 import { SATELLITE_OPTIONS } from "../constants/satellites";
 import { TIME_PRESET_OPTIONS } from "../constants/time-windows";
 import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
 import type { DashboardHotspot } from "../hooks/useDashboardData";
+import { useHotspotTimeline } from "../hooks/useHotspotTimeline";
+import { opacityForBucket } from "../lib/hotspotTimeline";
+import { applyMarkerOpacity } from "../lib/leafletMarkerOpacity";
 import { authFetch, createApiClient } from "../lib/api";
 import { getTodayWIB } from "../lib/date";
 import type { PolygonDetail } from "../types/api";
 import { HotspotPopupContent } from "./HotspotPopupContent";
+import { HotspotTimelineControl } from "./HotspotTimelineControl";
 import { WeatherConditionCard } from "./WeatherConditionCard";
 import {
   buildComparison,
@@ -290,6 +294,49 @@ const INFO_FIELDS: Array<[label: string, key: keyof PolygonDetail]> = [
   ["Luas Final (Ha)", "luas_final"],
   ["Jumlah KK", "jml_kk"]
 ];
+
+type KpsMarkersLayerProps = {
+  hotspots: DashboardHotspot[];
+  renderer: ReturnType<typeof buildLeafletCanvas>;
+  onSelect: (id: string) => void;
+  registerMarker: (id: string, layer: LCircleMarker | null) => void;
+};
+
+// Sama pola dengan HotspotMarkersLayer di HotspotMap.tsx: diekstrak ke
+// child `memo` supaya animasi timeline TIDAK me-render ulang seluruh
+// `KpsDetailView` (tabel deteksi, grafik, dst. di bawah peta) tiap tick --
+// playback menata style tiap marker secara imperatif lewat ref.
+const KpsHotspotMarkersLayer = memo(function KpsHotspotMarkersLayer({
+  hotspots,
+  renderer,
+  onSelect,
+  registerMarker
+}: KpsMarkersLayerProps) {
+  return (
+    <>
+      {hotspots.map((hotspot) => (
+        <CircleMarker
+          key={hotspot.id}
+          center={[hotspot.latitude, hotspot.longitude]}
+          radius={6}
+          renderer={renderer}
+          ref={(l) => registerMarker(hotspot.id, (l as unknown as LCircleMarker | null) ?? null)}
+          pathOptions={{
+            color: "#1b120d",
+            weight: 2,
+            fillColor: sourceColor(hotspot.source),
+            fillOpacity: 0.95
+          }}
+          eventHandlers={{ click: () => onSelect(hotspot.id) }}
+        >
+          <Popup pane="popupPane">
+            <HotspotPopupContent hotspot={hotspot} />
+          </Popup>
+        </CircleMarker>
+      ))}
+    </>
+  );
+});
 
 export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExportingPdf, onOpenTutupanLahan }: KpsDetailViewProps) {
   // Filter waktu independen, khusus halaman ini -- kosong (default) berarti
@@ -711,6 +758,34 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
     });
   }, [kpsHotspots, effectiveBurnedGeometry, effectiveS2Geometry]);
 
+  // ---- Pemutar waktu (timeline animasi) -- sama seperti di HotspotMap.tsx
+  // (peta utama), atas `kpsHotspots` (sudah difilter rentang tanggal halaman
+  // ini). Cuma CircleMarker di sini (tidak ada varian ikon FRP tinggi seperti
+  // di peta utama), jadi registry-nya lebih sederhana. `applyMarkerOpacity`
+  // & `opacityForBucket` diimpor dari modul yang sama dengan HotspotMap.tsx
+  // supaya keduanya tidak diam-diam menyimpang.
+  const markerRefs = useRef(new Map<string, LCircleMarker>());
+  const registerMarker = useCallback((id: string, layer: LCircleMarker | null) => {
+    if (layer) markerRefs.current.set(id, layer);
+    else markerRefs.current.delete(id);
+  }, []);
+
+  const [timelineOn, setTimelineOn] = useState(false);
+  const timelineEnabled = timelineOn && kpsHotspots.length > 0;
+  const timeline = useHotspotTimeline(kpsHotspots, { enabled: timelineEnabled });
+
+  useEffect(() => {
+    const refs = markerRefs.current;
+    if (!timelineEnabled) {
+      refs.forEach((layer) => applyMarkerOpacity(layer, 1));
+      return;
+    }
+    refs.forEach((layer, id) => {
+      const b = timeline.bucketIndexById.get(id) ?? 0;
+      applyMarkerOpacity(layer, opacityForBucket(timeline.playheadIndex, b));
+    });
+  }, [timelineEnabled, timeline.playheadIndex, timeline.bucketIndexById, kpsHotspots]);
+
   return (
     <div className="kps-detail">
       <header className="kps-detail-header">
@@ -992,6 +1067,21 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
         </aside>
 
         <div className="kps-detail-map">
+          <button
+            type="button"
+            className={`kps-detail-timeline-toggle${timelineOn ? " kps-detail-timeline-toggle--active" : ""}`}
+            onClick={() => setTimelineOn((current) => !current)}
+            disabled={kpsHotspots.length === 0}
+            title={
+              timelineOn
+                ? "Tutup pemutar waktu hotspot"
+                : "Putar sebaran titik panas dari awal ke akhir rentang waktu terpilih"
+            }
+            aria-pressed={timelineOn}
+          >
+            <Clock size={14} />
+            <span>Timeline</span>
+          </button>
           <MapContainer
             center={[-2.5, 118]}
             zoom={5}
@@ -1196,28 +1286,29 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
                 />
               )}
               <LayerGroup ref={hotspotLayerGroupRef}>
-                {kpsHotspots.map((hotspot) => (
-                  <CircleMarker
-                    key={hotspot.id}
-                    center={[hotspot.latitude, hotspot.longitude]}
-                    radius={6}
-                    renderer={fireCanvasRenderer}
-                    pathOptions={{
-                      color: "#1b120d",
-                      weight: 2,
-                      fillColor: sourceColor(hotspot.source),
-                      fillOpacity: 0.95
-                    }}
-                    eventHandlers={{ click: () => setSelectedDetectionId(hotspot.id) }}
-                  >
-                    <Popup pane="popupPane">
-                      <HotspotPopupContent hotspot={hotspot} />
-                    </Popup>
-                  </CircleMarker>
-                ))}
+                <KpsHotspotMarkersLayer
+                  hotspots={kpsHotspots}
+                  renderer={fireCanvasRenderer}
+                  onSelect={setSelectedDetectionId}
+                  registerMarker={registerMarker}
+                />
               </LayerGroup>
             </Pane>
           </MapContainer>
+
+          {timelineEnabled && timeline.buckets.length > 0 ? (
+            <HotspotTimelineControl
+              buckets={timeline.buckets}
+              playheadIndex={timeline.playheadIndex}
+              isPlaying={timeline.isPlaying}
+              speed={timeline.speed}
+              label={timeline.label}
+              toggle={timeline.toggle}
+              seek={timeline.seek}
+              cycleSpeed={timeline.cycleSpeed}
+              onClose={() => setTimelineOn(false)}
+            />
+          ) : null}
         </div>
       </div>
 

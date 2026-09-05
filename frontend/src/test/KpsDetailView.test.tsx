@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom/vitest";
+import { forwardRef } from "react";
 import type { ReactNode } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -6,9 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // KpsDetailView me-render peta Leaflet (CircleMarker canvas-based) yang tidak
 // bisa jalan di jsdom (Canvas.getContext tidak diimplementasikan) -- dimock
 // persis pola yang sudah dipakai HotspotMap.test.tsx, bukan dites di sini
-// (peta sudah ditest lewat HotspotMap.test.tsx / App.test.tsx).
+// (peta sudah ditest lewat HotspotMap.test.tsx / App.test.tsx). CircleMarker
+// WAJIB forwardRef (2026-09-05, timeline animasi): KpsHotspotMarkersLayer
+// memasang `ref` callback per marker untuk registry opacity playback --
+// tanpa forwardRef, React memperingatkan "Function components cannot be
+// given refs" tiap render.
 vi.mock("react-leaflet", () => ({
-  CircleMarker: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  CircleMarker: forwardRef(({ children }: { children?: ReactNode }, _ref) => <div>{children}</div>),
   GeoJSON: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   LayerGroup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   MapContainer: ({ children }: { children?: ReactNode }) => <div data-testid="leaflet-map">{children}</div>,
@@ -215,6 +220,27 @@ describe("KpsDetailView", () => {
     expect(calledUrl).toContain(encodeURIComponent("2026-08-25T16:59:59.000Z"));
 
     vi.useRealTimers();
+  });
+
+  it("shows a Timeline toggle on the map that opens the playback bar (2026-09-05)", async () => {
+    render(
+      <KpsDetailView
+        agency="LD LINGAT"
+        hotspots={[buildHotspot(), buildHotspot({ id: "dashboard-2", detectedAt: "2026-05-29T00:10:59Z" })]}
+        onClose={() => undefined}
+        onExportPdf={() => undefined}
+        isExportingPdf={false}
+      />
+    );
+
+    await screen.findByText("2 titik");
+    const toggle = await screen.findByRole("button", { name: /timeline/i });
+    expect(toggle).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: /pemutar waktu hotspot/i })).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(await screen.findByRole("group", { name: /pemutar waktu hotspot/i })).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: /posisi waktu/i })).toBeInTheDocument();
   });
 
   it("shows the land-cover summary link and hands off polygon id on click", async () => {

@@ -5,6 +5,7 @@ import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
 import { Clock, Flame, LocateFixed, Trees } from "lucide-react";
 import { useHotspotTimeline } from "../hooks/useHotspotTimeline";
 import { opacityForBucket } from "../lib/hotspotTimeline";
+import { applyMarkerOpacity, type HotspotMarkerLayer } from "../lib/leafletMarkerOpacity";
 import { HotspotTimelineControl } from "./HotspotTimelineControl";
 import { WindLayer } from "./WindLayer";
 import { WeatherOverlay } from "./WeatherOverlay";
@@ -420,13 +421,11 @@ const rainIcon = divIcon({
   iconAnchor: [16, 16]
 });
 
-type MarkerLayer = LCircleMarker | LMarker;
-
 type MarkersLayerProps = {
   hotspots: HotspotRecord[];
   renderer: ReturnType<typeof canvas>;
   onOpenKpsDetail?: (agency: string) => void;
-  registerMarker: (id: string, layer: MarkerLayer | null) => void;
+  registerMarker: (id: string, layer: HotspotMarkerLayer | null) => void;
 };
 
 // Daftar marker diekstrak ke child `memo` supaya animasi timeline TIDAK
@@ -477,22 +476,6 @@ const HotspotMarkersLayer = memo(function HotspotMarkersLayer({
     </>
   );
 });
-
-function applyMarkerOpacity(layer: MarkerLayer, o: number) {
-  const cm = layer as LCircleMarker;
-  if (typeof cm.setStyle === "function") {
-    cm.setStyle({ fillOpacity: o === 0 ? 0 : o * 0.98, opacity: o === 0 ? 0 : 1 });
-    // Titik "masa depan" tidak boleh menelan klik peta.
-    cm.options.interactive = o > 0;
-    return;
-  }
-  const mk = layer as LMarker;
-  if (typeof mk.setOpacity === "function") {
-    mk.setOpacity(o === 0 ? 0 : 1);
-    const el = mk.getElement?.();
-    if (el) el.style.pointerEvents = o > 0 ? "" : "none";
-  }
-}
 
 export function HotspotMap({
   hotspots,
@@ -586,8 +569,8 @@ export function HotspotMap({
 
   // ---- Pemutar waktu (timeline animasi) ----
   // Registry ref marker per id; diisi lewat callback-ref di HotspotMarkersLayer.
-  const markerRefs = useRef(new Map<string, MarkerLayer>());
-  const registerMarker = useCallback((id: string, layer: MarkerLayer | null) => {
+  const markerRefs = useRef(new Map<string, HotspotMarkerLayer>());
+  const registerMarker = useCallback((id: string, layer: HotspotMarkerLayer | null) => {
     if (layer) markerRefs.current.set(id, layer);
     else markerRefs.current.delete(id);
   }, []);

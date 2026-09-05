@@ -503,13 +503,29 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               diekstrak ke `HotspotMarkersLayer` (`React.memo`) — playback TIDAK
               me-render ulang list: `useEffect` driver menata style tiap marker
               imperatif lewat `markerRefs` (`Map<id, L.CircleMarker|L.Marker>`,
-              diisi callback-ref) → `applyMarkerOpacity` (setStyle/setOpacity +
-              `interactive=false` untuk titik "masa depan"). Bar kontrol
-              `HotspotTimelineControl.tsx` (histogram-scrubber + `<input
-              type=range>` a11y) dirender di `.map-frame` DI LUAR `<MapContainer>`.
-              Murni client-side atas `hotspots` termuat; tak ada endpoint/persist.
+              diisi callback-ref) → `applyMarkerOpacity` (`lib/leafletMarkerOpacity.ts`,
+              setStyle/setOpacity + `interactive=false` untuk titik "masa depan").
+              Bar kontrol `HotspotTimelineControl.tsx` (histogram-scrubber +
+              `<input type=range>` a11y, props-only — tidak tahu soal Leaflet)
+              dirender di `.map-frame` DI LUAR `<MapContainer>`. Murni
+              client-side atas `hotspots` termuat; tak ada endpoint/persist.
               `openKpsDetail` di `App.tsx` di-`useCallback` demi memo ini. Mock
               `CircleMarker`/`Marker` di HotspotMap.test.tsx WAJIB `forwardRef`.
+              **Dipakai juga di `KpsDetailView.tsx` (2026-09-05)** — hook,
+              `applyMarkerOpacity`, dan `HotspotTimelineControl` yang SAMA PERSIS
+              diimpor ulang (bukan diduplikasi) atas `kpsHotspots` (hotspot milik
+              satu KPS, sudah difilter rentang tanggal halaman itu); daftar marker
+              diekstrak ke `KpsHotspotMarkersLayer` (pola sama `HotspotMarkersLayer`
+              — cuma `CircleMarker`, tidak ada varian ikon FRP tinggi). Beda dari
+              peta utama: kotak petanya kecil (`.kps-detail-map`, `min-height:20rem`,
+              `overflow:hidden`) tanpa legenda/panel statistik yang perlu dijepit,
+              jadi tombol toggle (`.kps-detail-timeline-toggle`, pojok kanan-atas
+              kotak peta) dan `.kps-detail-map .timeline-control` (override
+              `left/right/bottom/max-width` — BUKAN pakai `left:17rem;right:20rem`
+              punya peta utama yang mengasumsikan viewport lebar) diposisikan
+              mengambang sendiri di dalam kotak itu, bukan reuse tata letak
+              `.map-left-stack`. Mock `CircleMarker` di KpsDetailView.test.tsx
+              WAJIB `forwardRef` juga.
               **Tata letak kontrol melayang (desktop, dirombak 2026-09-05)**: kolom
               kiri dulunya 4 elemen `position:absolute` INDEPENDEN (Lokasi,
               Basemap, `.burned-control`, `.map-legend`) yang koordinat
