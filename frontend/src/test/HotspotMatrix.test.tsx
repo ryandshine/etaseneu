@@ -194,7 +194,9 @@ describe("HotspotMatrix", () => {
     expect(screen.getByText("1 skema · 1 provinsi · 1 titik")).toBeInTheDocument();
 
     // Filter yang aktif ikut terbawa ke ekspor supaya isi file sama dengan
-    // yang terlihat di layar.
+    // yang terlihat di layar. Tombol XLSX/PDF/GeoJSON kini di dalam dropdown
+    // "Ekspor" (2026-09-05) -- buka dulu sebelum mengklik pilihannya.
+    fireEvent.click(screen.getByRole("button", { name: /^Ekspor$/ }));
     fireEvent.click(screen.getByText("Ekspor XLSX"));
     expect(onExport).toHaveBeenCalledWith(expect.objectContaining({ skema: "PKK" }));
   });

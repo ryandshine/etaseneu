@@ -377,6 +377,9 @@ describe("Hotspot map integration", () => {
     expect(screen.getAllByText("Satelit").length).toBeGreaterThanOrEqual(3);
 
     fireEvent.click(screen.getByRole("button", { name: /matriks data/i }));
+    // Tombol XLSX/PDF/GeoJSON kini di dalam dropdown "Ekspor" (2026-09-05).
+    const exportMenuBtn = await screen.findByRole("button", { name: /^Ekspor$/ }, { timeout: 5000 });
+    fireEvent.click(exportMenuBtn);
     const exportBtn = await screen.findByRole("button", { name: /ekspor xlsx/i }, { timeout: 5000 });
     fireEvent.click(exportBtn);
 

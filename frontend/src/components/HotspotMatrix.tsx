@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer, AreaChart, Area, Cell, LabelList } from "recharts";
-import { Download } from "lucide-react";
+import { ChevronDown, Download } from "lucide-react";
 
 import { BurnedAreaCard } from "./BurnedAreaCard";
 import type {
@@ -989,6 +989,31 @@ export function HotspotMatrix({
   const [downloadingKpsKey, setDownloadingKpsKey] = useState<string | null>(null);
   const [kpsDownloadError, setKpsDownloadError] = useState<string | null>(null);
 
+  // Header dulu punya 3 tombol ekspor terpisah (XLSX/PDF/GeoJSON) yang makan
+  // banyak ruang horizontal berdampingan dengan "Sembunyikan Grafik" --
+  // digabung jadi satu dropdown (2026-09-05, keputusan user, hemat ruang
+  // header lebih penting daripada satu klik ekstra untuk aksi yang jarang
+  // dipakai dibanding filter).
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const closeOnOutside = (event: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExportMenuOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [exportMenuOpen]);
+
   // Frekuensi Kebakaran (data KLHK burned_area_summary) -- sumbernya beda
   // total dari `hotspots` (NASA FIRMS) yang dipakai groupedRows di bawah,
   // dan tidak terikat filter waktu/satelit dashboard, jadi di-fetch sendiri
@@ -1302,42 +1327,70 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
           >
             {showAnalytics ? "Sembunyikan Grafik" : "Tampilkan Grafik"}
           </button>
-          <button
-            type="button"
-            className="matrix-header-action matrix-header-action--ghost"
-            onClick={() => onExport({
-              province: provinceFilter || undefined,
-              wilker: wilkerFilter || undefined,
-              confidence: activeFrpCategory || undefined,
-              skema: skemaFilter || undefined
-            })}
-            disabled={isExporting || filteredHotspots.length === 0}
-          >
-            {isExporting ? "Mengekspor..." : "Ekspor XLSX"}
-          </button>
-          <button
-            type="button"
-            className="matrix-header-action matrix-header-action--ghost"
-            onClick={() => onExportPdf({
-              province: provinceFilter || undefined,
-              wilker: wilkerFilter || undefined,
-              confidence: activeFrpCategory || undefined,
-              skema: skemaFilter || undefined
-            })}
-            disabled={isExportingPdf || filteredHotspots.length === 0}
-          >
-            {isExportingPdf ? "Mengekspor..." : "Ekspor PDF"}
-          </button>
-          <button
-            type="button"
-            className="matrix-header-action matrix-header-action--ghost"
-            onClick={handleDownloadFilterGeojson}
-            disabled={filteredHotspots.length === 0}
-            title="Unduh seluruh titik yang cocok dengan filter waktu & toolbar saat ini"
-          >
-            <Download size={14} />
-            Unduh GeoJSON
-          </button>
+
+          {/* Dulu 3 tombol terpisah (Ekspor XLSX/PDF/Unduh GeoJSON) --
+              digabung satu dropdown supaya header tidak melebar percuma. */}
+          <div className="matrix-export-menu" ref={exportMenuRef}>
+            <button
+              type="button"
+              className="matrix-header-action matrix-header-action--ghost"
+              onClick={() => setExportMenuOpen((current) => !current)}
+              aria-haspopup="true"
+              aria-expanded={exportMenuOpen}
+              disabled={filteredHotspots.length === 0}
+            >
+              {isExporting || isExportingPdf ? "Mengekspor..." : "Ekspor"}
+              <ChevronDown size={14} />
+            </button>
+            {exportMenuOpen && (
+              <div className="matrix-export-menu__list">
+                <button
+                  type="button"
+                  className="matrix-export-menu__item"
+                  onClick={() => {
+                    setExportMenuOpen(false);
+                    onExport({
+                      province: provinceFilter || undefined,
+                      wilker: wilkerFilter || undefined,
+                      confidence: activeFrpCategory || undefined,
+                      skema: skemaFilter || undefined
+                    });
+                  }}
+                  disabled={isExporting}
+                >
+                  {isExporting ? "Mengekspor..." : "Ekspor XLSX"}
+                </button>
+                <button
+                  type="button"
+                  className="matrix-export-menu__item"
+                  onClick={() => {
+                    setExportMenuOpen(false);
+                    onExportPdf({
+                      province: provinceFilter || undefined,
+                      wilker: wilkerFilter || undefined,
+                      confidence: activeFrpCategory || undefined,
+                      skema: skemaFilter || undefined
+                    });
+                  }}
+                  disabled={isExportingPdf}
+                >
+                  {isExportingPdf ? "Mengekspor..." : "Ekspor PDF"}
+                </button>
+                <button
+                  type="button"
+                  className="matrix-export-menu__item"
+                  onClick={() => {
+                    setExportMenuOpen(false);
+                    handleDownloadFilterGeojson();
+                  }}
+                  title="Unduh seluruh titik yang cocok dengan filter waktu & toolbar saat ini"
+                >
+                  <Download size={13} />
+                  Unduh GeoJSON
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       {kpsDownloadError && <p className="matrix-download-error">{kpsDownloadError}</p>}

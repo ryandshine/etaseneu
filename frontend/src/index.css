@@ -3780,6 +3780,53 @@ body {
   background: rgba(255, 78, 0, 0.15);
 }
 
+/* Dropdown "Ekspor" (2026-09-05) -- menggantikan 3 tombol terpisah (XLSX/
+   PDF/Unduh GeoJSON) yang dulu berjajar penuh di header. */
+.matrix-export-menu {
+  position: relative;
+}
+
+.matrix-export-menu__list {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 11rem;
+  padding: 0.35rem;
+  border-radius: 0.375rem;
+  background: rgba(15, 17, 21, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.matrix-export-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.6rem;
+  border: none;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: #f3f4f6;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.matrix-export-menu__item:hover {
+  background: rgba(255, 78, 0, 0.12);
+  color: #ffb86b;
+}
+
+.matrix-export-menu__item:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
 .matrix-download-error {
   margin: 0.5rem 0 0;
   padding: 0.5rem 0.75rem;
@@ -3872,9 +3919,16 @@ body {
   margin: 0;
 }
 
+/* auto-fit (bukan `repeat(4, 1fr)` tetap), 2026-09-05: ada 6 field (Filter
+   Waktu, Dari, Ke, Wilker, Skema, Provinsi) tapi kolomnya dulu dipatok 4 di
+   LEBAR APA PUN -- baris kedua cuma terisi 2 dari 4 kolom, sisa 2 kolom
+   kosong di kanan, makin mencolok di layar lebar (mis. WUXGA) karena tidak
+   pernah menyesuaikan. auto-fit membiarkan browser menghitung berapa kolom
+   yang muat (sampai 6 kalau ruang cukup, semua field jadi satu baris) --
+   dibatasi minmax 160px supaya tetap tidak terlalu sempit di layar sedang. */
 .matrix-toolbar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 0.6rem;
   padding: 0.8rem 0.9rem;
   border-radius: 0.5rem;

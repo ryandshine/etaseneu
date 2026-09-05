@@ -414,7 +414,25 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               `KpsDetailView.tsx`. Kalau overlay Fungsi Kawasan Hutan nyala, fungsi kawasan di
               titik itu ikut (fetch `GET /api/burned-area/kawasan-at?lat=&lon=` ->
               `_burned_area.py::read_kawasan_at_point`, `ST_Contains` ke `ref_kawasan_hutan_sub`)),
-              HotspotMatrix.tsx ("Matriks Data"), KpsDetailView.tsx,
+              HotspotMatrix.tsx ("Matriks Data" — header `.matrix-header-actions`
+              flex-end supaya tombol yang wrap ke baris baru rata kanan bukan nempel
+              kiri sendirian; 3 tombol ekspor lama (XLSX/PDF/Unduh GeoJSON) digabung
+              satu dropdown `.matrix-export-menu` [2026-09-05, keputusan user: header
+              boros ruang] — item dropdown SENGAJA tetap `role="button"` bawaan
+              (BUKAN `role="menu"`/`role="menuitem"` ala ARIA APG) karena tidak
+              mengimplementasikan navigasi panah/roving-tabindex penuh, jadi
+              menyandang `role="menu"` setengah jalan lebih menyesatkan pembaca
+              teknologi bantu daripada popover polos; tutup via klik-luar/`Escape`
+              (`useRef` + listener `mousedown`/`keydown`). `.matrix-toolbar` diubah
+              dari `grid-template-columns: repeat(4, 1fr)` TETAP (6 field tapi kolom
+              dipatok 4 di lebar apa pun → baris kedua nyisa 2 kolom kosong, makin
+              mencolok di layar lebar) ke `repeat(auto-fit, minmax(160px, 1fr))` —
+              6 field muat satu baris kalau ruang cukup, tanpa breakpoint manual per
+              resolusi. Test `getByRole("button", {name:...})` di
+              HotspotMap.test.tsx & HotspotMatrix.test.tsx WAJIB buka dropdown
+              (`getByRole("button", {name: /^Ekspor$/})`) dulu sebelum mengklik
+              "Ekspor XLSX"/"Ekspor PDF" — sudah bukan tombol langsung di header),
+              KpsDetailView.tsx,
               KompleksKebakaranView.tsx ("Kompleks Kebakaran" — peta+daftar klaster
               hotspot ST-DBSCAN, self-contained fetch sendiri lewat lib/api.ts, TIDAK
               lewat useDashboardData), EarlyWarningView.tsx ("Peringatan Dini" —
