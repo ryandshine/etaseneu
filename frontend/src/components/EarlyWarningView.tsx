@@ -95,6 +95,9 @@ interface KpsItem {
   hotspots_7d_expanding: number;
   hotspots_month: number;
   hotspots_year: number;
+  frp_max_7d: number | null;
+  detected_days_7d: number;
+  satellites_7d: number;
   latest_hotspot_at: string | null;
   ftri_score: number;
   status_label: string;
@@ -113,6 +116,9 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
   const [loading, setLoading] = useState(true);
   const [loadingItems, setLoadingItems] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  // Info sinkronisasi NASA FIRMS untuk banner sumber data (menegaskan ini
+  // data resmi near-real-time, bukan tebakan model).
+  const [syncInfo, setSyncInfo] = useState<{ lastSuccessAt: string | null; hotspotCount: number } | null>(null);
 
   // Active wilker for BPS role
   const activeWilkerBps = useMemo(() => {
@@ -127,7 +133,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
   const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedSkema, setSelectedSkema] = useState("");
   const [selectedZone, setSelectedZone] = useState("");
-  const [sortBy, setSortBy] = useState<"ftri" | "hs_today" | "distance" | "hs_strict" | "burned_ha" | "hs_7d">("ftri");
+  const [sortBy, setSortBy] = useState<"ftri" | "hs_today" | "distance" | "hs_strict" | "burned_ha" | "hs_7d" | "frp">("ftri");
 
   // Fetch summary
   const loadSummary = async () => {
@@ -144,6 +150,22 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Status sinkronisasi NASA FIRMS -- best-effort, kegagalan tidak menghalangi
+  // apa pun (banner-nya sekadar menyembunyikan bagian "sinkron terakhir").
+  const loadSyncInfo = async () => {
+    try {
+      const res = await authFetch(`/api/scheduler/metrics`);
+      if (!res.ok) return;
+      const m = await res.json();
+      setSyncInfo({
+        lastSuccessAt: m.last_successful_sync_at ?? m.last_sync_at ?? null,
+        hotspotCount: m.last_sync_hotspot_count ?? 0
+      });
+    } catch {
+      /* diamkan -- banner sumber data tetap tampil tanpa timestamp */
     }
   };
 
@@ -195,6 +217,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
 
   useEffect(() => {
     loadSummary();
+    loadSyncInfo();
   }, [activeWilkerBps]);
 
   useEffect(() => {
@@ -262,6 +285,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
       if (sortBy === "distance") return (b.max_distance_km || 0) - (a.max_distance_km || 0);
       if (sortBy === "hs_strict") return b.hotspots_today_strict_reburn - a.hotspots_today_strict_reburn;
       if (sortBy === "hs_7d") return b.hotspots_7d - a.hotspots_7d;
+      if (sortBy === "frp") return (b.frp_max_7d || 0) - (a.frp_max_7d || 0);
       if (sortBy === "burned_ha") return b.total_burned_ha - a.total_burned_ha;
       return 0;
     });
@@ -348,6 +372,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             onClick={() => {
               loadSummary();
               loadItems();
+              loadSyncInfo();
             }}
             style={{
               display: "flex",
@@ -366,6 +391,27 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             Segarkan
           </button>
         </div>
+      </div>
+
+      {/* Banner sumber data -- menegaskan ini titik panas resmi NASA FIRMS
+          near-real-time (bukan tebakan model), + menjelaskan kolom
+          "Kekuatan Sinyal" yang baru. */}
+      <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", backgroundColor: "rgba(30, 41, 59, 0.6)", border: "1px solid rgba(56,189,248,0.25)", padding: "0.5rem 0.8rem", borderRadius: "6px", marginBottom: "0.6rem", fontSize: "0.75rem", color: "#cbd5e1", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+          <RefreshCw size={15} color="#38bdf8" />
+          <strong>Sumber data:</strong>
+        </div>
+        <span>
+          Titik panas <strong>NASA FIRMS</strong> (VIIRS S-NPP/NOAA-20 & MODIS Terra/Aqua) — near-real-time
+          {syncInfo?.lastSuccessAt ? (
+            <>
+              {" · sinkron terakhir "}
+              <strong>{new Date(syncInfo.lastSuccessAt).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })} WIB</strong>
+              {syncInfo.hotspotCount > 0 ? ` (${syncInfo.hotspotCount.toLocaleString("id-ID")} titik)` : ""}
+            </>
+          ) : null}
+          . Kolom <strong>Kekuatan Sinyal</strong> = intensitas (FRP), konsistensi (berapa hari dari 7 tertangkap), & jumlah satelit berbeda yang mengonfirmasi.
+        </span>
       </div>
 
       {/* Scientific Guide Banner */}
@@ -657,6 +703,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
           <option value="distance" style={{ backgroundColor: "#1e293b" }}>Urut: Jarak Perambatan Terjauh (KM)</option>
           <option value="hs_strict" style={{ backgroundColor: "#1e293b" }}>Urut: Strict Re-burn (Bekas Terbakar)</option>
           <option value="hs_7d" style={{ backgroundColor: "#1e293b" }}>Urut: Hotspot 7 Hari</option>
+          <option value="frp" style={{ backgroundColor: "#1e293b" }}>Urut: FRP Tertinggi (7 Hari)</option>
           <option value="burned_ha" style={{ backgroundColor: "#1e293b" }}>Urut: Luas Terbakar (ha)</option>
         </select>
 
@@ -687,6 +734,10 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
                   Agustus (sekarang sudah September). */}
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS Bulan Ini</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "right" }}>Skor FTRI</th>
+              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center", minWidth: "150px" }}>
+                Kekuatan Sinyal
+                <div style={{ fontSize: "0.68rem", fontWeight: "normal", color: "#6b7280" }}>[FRP · hari/7 · satelit]</div>
+              </th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>Status & Zona Perambatan</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>Aksi</th>
             </tr>
@@ -694,14 +745,14 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
           <tbody>
             {loadingItems ? (
               <tr>
-                <td colSpan={13} style={{ padding: "2.5rem", textAlign: "center", color: "#9ca3af" }}>
+                <td colSpan={14} style={{ padding: "2.5rem", textAlign: "center", color: "#9ca3af" }}>
                   <RefreshCw size={20} className="animate-spin" style={{ margin: "0 auto 0.5rem auto" }} />
                   Memuat data analisis...
                 </td>
               </tr>
             ) : displayItems.length === 0 ? (
               <tr>
-                <td colSpan={13} style={{ padding: "2.5rem", textAlign: "center", color: "#6b7280" }}>
+                <td colSpan={14} style={{ padding: "2.5rem", textAlign: "center", color: "#6b7280" }}>
                   Tidak ada data KPS yang sesuai dengan filter{activeWilkerBps ? ` untuk ${activeWilkerBps}` : ""}.
                 </td>
               </tr>
@@ -820,6 +871,32 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
                     </td>
                     <td style={{ padding: "0.65rem 0.8rem", textAlign: "right", fontWeight: "700", color: item.ftri_score >= 60 ? "#ef4444" : item.ftri_score >= 40 ? "#f97316" : "#22c55e" }}>
                       {item.ftri_score.toFixed(1)}
+                    </td>
+                    <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
+                      {/* Kekuatan Sinyal: intensitas + konsistensi + cross-sensor.
+                          Ambang FRP Tinggi/Sedang/Rendah (>30 / 10-30 / <10 MW)
+                          SAMA dengan kartu statistik FRP di peta utama. */}
+                      {item.frp_max_7d == null ? (
+                        <span style={{ color: "#6b7280", fontSize: "0.75rem" }}>—</span>
+                      ) : (
+                        (() => {
+                          const frp = item.frp_max_7d;
+                          const lvl = frp > 30 ? "Tinggi" : frp >= 10 ? "Sedang" : "Rendah";
+                          const col = frp > 30 ? "#ef4444" : frp >= 10 ? "#f97316" : "#eab308";
+                          const days = Math.min(item.detected_days_7d, 7);
+                          return (
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.15rem" }}>
+                              <span style={{ fontWeight: "700", color: col, fontSize: "0.78rem" }}>
+                                {frp.toLocaleString("id-ID", { maximumFractionDigits: 0 })} MW
+                                <span style={{ fontSize: "0.66rem", fontWeight: "600", marginLeft: "0.25rem" }}>{lvl}</span>
+                              </span>
+                              <span style={{ fontSize: "0.68rem", color: "#9ca3af" }}>
+                                {days}/7 hari · {item.satellites_7d} satelit
+                              </span>
+                            </div>
+                          );
+                        })()
+                      )}
                     </td>
                     <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
                       <span

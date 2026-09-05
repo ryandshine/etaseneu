@@ -273,6 +273,18 @@ class EarlyWarningService:
                             ) as h_7d_strict_reburn,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Jakarta')) as h_month,
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('year', NOW() AT TIME ZONE 'Asia/Jakarta')) as h_year,
+                            -- "Kekuatan sinyal" 7 hari: intensitas (FRP tertinggi, dari
+                            -- raw_payload -- bukan kolom tersendiri), konsistensi (berapa
+                            -- HARI berbeda tertangkap), dan cross-sensor (berapa SATELIT
+                            -- berbeda). Dipakai UI Peringatan Dini supaya user bisa menilai
+                            -- keandalan deteksi -- BUKAN untuk memfilter (FRP rendah tidak
+                            -- berarti palsu; kebakaran gambut membara sering FRP kecil).
+                            MAX((h.raw_payload->>'frp')::float) FILTER (WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta' - INTERVAL '7 days')) as frp_max_7d,
+                            -- INTERVAL '6 days' (bukan 7) = tepat 7 hari kalender
+                            -- (hari ini + 6 hari sebelumnya) supaya hitungannya
+                            -- maksimum 7, jujur untuk label "N/7 hari" di UI.
+                            COUNT(DISTINCT DATE_TRUNC('day', h.detected_at AT TIME ZONE 'Asia/Jakarta')) FILTER (WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta' - INTERVAL '6 days')) as n_hari_terdeteksi_7d,
+                            COUNT(DISTINCT NULLIF(h.satellite, '')) FILTER (WHERE h.detected_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Jakarta' - INTERVAL '7 days')) as n_satelit_7d,
                             MAX(h.detected_at) as latest_hotspot_at
                         FROM polygon_metadata p
                         LEFT JOIN polygon_burned b ON p.id = b.polygon_metadata_id
@@ -305,6 +317,9 @@ class EarlyWarningService:
                         COALESCE(h.h_7d_strict_reburn, 0) as h_7d_strict_reburn,
                         COALESCE(h.h_month, 0) as h_month,
                         COALESCE(h.h_year, 0) as h_year,
+                        h.frp_max_7d,
+                        COALESCE(h.n_hari_terdeteksi_7d, 0) as n_hari_terdeteksi_7d,
+                        COALESCE(h.n_satelit_7d, 0) as n_satelit_7d,
                         h.latest_hotspot_at
                     FROM polygon_metadata p
                     LEFT JOIN polygon_burned b ON p.id = b.polygon_metadata_id
@@ -501,6 +516,9 @@ class EarlyWarningService:
                 "hotspots_7d_expanding": h_7d_expand,
                 "hotspots_month": r["h_month"],
                 "hotspots_year": r["h_year"],
+                "frp_max_7d": round(float(r["frp_max_7d"]), 1) if r["frp_max_7d"] is not None else None,
+                "detected_days_7d": int(r["n_hari_terdeteksi_7d"] or 0),
+                "satellites_7d": int(r["n_satelit_7d"] or 0),
                 "latest_hotspot_at": r["latest_hotspot_at"].isoformat() if r["latest_hotspot_at"] else None,
                 "ftri_score": ftri,
                 "status_label": status_badge,

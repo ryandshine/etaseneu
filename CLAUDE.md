@@ -491,7 +491,22 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               hardcode nama bulan padahal datanya `DATE_TRUNC('month', NOW())`
               yang ikut bulan berjalan). Catatan konsolidasi lama (4 kartu+tab
               → 5 kartu berbasis `category`) sudah digantikan seluruhnya oleh
-              paragraf ini. FilterPanel.tsx, SidebarNav.tsx (satu area gulir
+              paragraf ini. **Kolom "Kekuatan Sinyal" (2026-09-05)**: supaya
+              user yakin datanya, `get_kps_analysis_list` (early_warning_service.py)
+              menambah 3 agregat 7 hari di CTE `polygon_hotspots` —
+              `frp_max_7d` (`MAX((raw_payload->>'frp')::float)` — FRP di
+              `raw_payload`, BUKAN kolom tersendiri), `detected_days_7d`
+              (`COUNT(DISTINCT DATE_TRUNC('day', ...))`, window `INTERVAL '6
+              days'` supaya maks 7), `satellites_7d` (`COUNT(DISTINCT
+              NULLIF(satellite,''))`). Ditampilkan sebagai satu sel
+              "FRP N MW (Tinggi/Sedang/Rendah) · N/7 hari · N satelit" —
+              ambang FRP >30/10-30/<10 MW SAMA dengan kartu statistik FRP peta
+              utama (`App.tsx`). Ini INFORMASI keandalan, TIDAK memfilter
+              (FRP rendah ≠ palsu; gambut membara sering FRP kecil). Ada juga
+              opsi sort "FRP Tertinggi". Banner "Sumber data: NASA FIRMS ...
+              sinkron terakhir ... WIB" di atas tabel — `loadSyncInfo()` fetch
+              `/api/scheduler/metrics` (best-effort, gagal → banner tetap
+              tampil tanpa timestamp). FilterPanel.tsx, SidebarNav.tsx (satu area gulir
               di `.side-rail`; menu Pengaturan menampilkan info akun untuk semua role,
               prop `isAdmin` → role user hanya tidak melihat tombol Sync/Prewarm),
               BurnedAreaCard.tsx, WeatherOverlay.tsx, dll.
