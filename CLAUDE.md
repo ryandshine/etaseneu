@@ -462,10 +462,12 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               **v3 (sekarang)**: 5 kartu waktu terasa redundan ("Mereda
               Kemarin" & "Aktif 7 Hari" bikin user bingung mana yang harus
               reaksi cepat). Sekarang `bucket: TimeBucket` =
-              `"today" | "receding" | "inactive" | "total"`:
-              `today`=REAKSI CEPAT (aktif hari ini), `receding`=PANTAU KETAT
-              (baru mereda — gabungan "aktif kemarin" + "aktif 2-7 hari"),
-              `inactive`=PEMANTAUAN PASIF (0 hotspot 7 hari), `total`=seluruh
+              `"today" | "receding" | "inactive" | "total"`, dinamai berdasar
+              STATUS API (bukan intensitas tindakan — "Pantau Ketat"/"Pasif"
+              dulu bikin bingung): `today`="Api Aktif Hari Ini",
+              `receding`="Baru Reda" (gabungan "aktif kemarin" + "aktif 2-7
+              hari"), `inactive`="Tidak Aktif" (0 hotspot 7 hari),
+              `total`=seluruh
               KPS 2026 (turun jadi **tautan teks kecil di bawah 3 kartu**,
               bukan kartu — sengaja tidak menonjol). `BUCKET_FETCH` memetakan
               tiap bucket ke SATU atau LEBIH pasang kategori backend

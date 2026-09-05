@@ -21,10 +21,11 @@ import type { AppSession } from "../types/api";
 //      yang dulu jadi 3 dari 5 kartu -> pindah jadi badge kolom tabel).
 //  v3 (sekarang): 5 kartu waktu terasa redundan ("Mereda Kemarin" 91 &
 //      "Aktif 7 Hari" 407 -- user bingung mana yang harus reaksi cepat).
-//      -> 3 TINGKAT AKSI: today=REAKSI CEPAT, receding=PANTAU KETAT (kemarin
-//      + 2-7 hari digabung), inactive=PEMANTAUAN PASIF. "Total 2026" turun
-//      jadi tautan teks kecil. Pembeda ber-rekap/belum-rekap tetap di kolom
-//      tabel "Bekas Terbakar Kemenhut" (isi "Ada"/"Belum Ada").
+//      -> 3 kartu berdasar STATUS API: today="Api Aktif Hari Ini",
+//      receding="Baru Reda" (kemarin + 2-7 hari digabung, rincian jadi
+//      sub-teks), inactive="Tidak Aktif". "Total 2026" turun jadi tautan
+//      teks kecil. Pembeda ber-rekap/belum-rekap tetap di kolom tabel
+//      "Bekas Terbakar Kemenhut" (isi "Ada"/"Belum Ada").
 // 3 tingkat AKSI (bukan 5 bucket waktu) -- 2026-09-05 iterasi ke-2 atas
 // masukan user: kartu "Mereda Kemarin" (91) & "Aktif 7 Hari" (407) terasa
 // redundan dan bikin bingung "mana yang harus reaksi cepat". Sekarang:
@@ -463,11 +464,11 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.15rem" }}>
                 <span style={{ fontSize: "0.8rem", fontWeight: "800", color: "#ef4444", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                  🔴 Reaksi Cepat
+                  🔴 Api Aktif Hari Ini
                 </span>
                 <AlertTriangle size={16} color="#ef4444" />
               </div>
-              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>Aktif hari ini — perlu verifikasi & regu siaga</div>
+              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>Perlu verifikasi lapangan & regu siaga</div>
               <div style={{ fontSize: "1.7rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
                 {bucketCounts.today} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
               </div>
@@ -493,11 +494,11 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.15rem" }}>
                 <span style={{ fontSize: "0.8rem", fontWeight: "800", color: "#eab308", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                  🟡 Pantau Ketat
+                  🟡 Baru Reda
                 </span>
                 <TrendingUp size={16} color="#eab308" />
               </div>
-              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>Baru mereda — belum tentu padam, bisa nyala lagi</div>
+              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>Tidak ada titik hari ini, tapi aktif dalam 7 hari terakhir — bisa nyala lagi</div>
               <div style={{ fontSize: "1.7rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
                 {bucketCounts.receding} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
               </div>
@@ -518,11 +519,11 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.15rem" }}>
                 <span style={{ fontSize: "0.8rem", fontWeight: "800", color: "#22c55e", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                  🟢 Pemantauan Pasif
+                  🟢 Tidak Aktif
                 </span>
                 <ShieldCheck size={16} color="#22c55e" />
               </div>
-              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>Tidak ada titik panas 7 hari terakhir</div>
+              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>Tidak ada titik panas sepekan terakhir</div>
               <div style={{ fontSize: "1.7rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
                 {bucketCounts.inactive} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
               </div>
