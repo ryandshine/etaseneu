@@ -25,7 +25,9 @@ import type { AppSession } from "../types/api";
 //        today    = "Ada Hotspot Hari Ini"  (h_today > 0)
 //        receding = "Hotspot Mereda"        (h_today=0 DAN (h_7d>0 ATAU h_bulan>0))
 //        inactive = "Tidak Ada Hotspot"     (h_today=0 DAN h_7d=0 DAN h_bulan=0)
-//      "Total 2026" turun jadi tautan teks kecil.
+//      Tidak ada kartu/tautan "Total" di UI (dihapus 2026-09-05 -- redundan
+//      dengan search+filter); `bucketCounts.total` tetap dihitung internal
+//      untuk `receding = total - today - inactive`.
 //  Pembeda "punya catatan luas terbakar resmi Kemenhut atau belum" TIDAK
 //  lagi jadi kolom badge terpisah (redundan dengan kolom "Luas Terbakar
 //  Tercatat" yang sudah ada -- dua-duanya dari total_burned_ha); kolom luas
@@ -49,7 +51,7 @@ const BUCKET_FETCH: Record<TimeBucket, Array<{ burned: string; earlyWarning: str
 };
 
 // Keterangan per baris untuk KPS yang TIDAK ada hotspot hari ini (kartu
-// "Hotspot Mereda" & "Tidak Ada Hotspot" -- dan baris non-aktif di "Total").
+// "Hotspot Mereda" & "Tidak Ada Hotspot").
 // Menjelaskan KENAPA KPS itu masuk kartu tsb: berapa lama sejak titik panas
 // terakhir. Untuk baris yang ADA hotspot hari ini, kolom tetap pakai
 // status_label backend (info Zona Perambatan) -- lihat render tabel.
@@ -177,6 +179,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
   const [search, setSearch] = useState("");
   const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedSkema, setSelectedSkema] = useState("");
+  const [selectedBps, setSelectedBps] = useState("");
   const [selectedZone, setSelectedZone] = useState("");
   const [sortBy, setSortBy] = useState<"ftri" | "hs_today" | "distance" | "hs_strict" | "burned_ha" | "hs_7d" | "frp">("ftri");
 
@@ -319,6 +322,14 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
     return Array.from(set).sort();
   }, [items]);
 
+  const wilkers = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((i) => {
+      if (i.wilker_bps) set.add(i.wilker_bps);
+    });
+    return Array.from(set).sort();
+  }, [items]);
+
   // Filtered & sorted items
   const displayItems = useMemo(() => {
     let result = [...items];
@@ -337,6 +348,10 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
       result = result.filter((i) => i.zone_code === selectedZone);
     }
 
+    if (selectedBps) {
+      result = result.filter((i) => i.wilker_bps === selectedBps);
+    }
+
     result.sort((a, b) => {
       if (sortBy === "ftri") return b.ftri_score - a.ftri_score;
       if (sortBy === "hs_today") return b.hotspots_today - a.hotspots_today;
@@ -349,7 +364,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
     });
 
     return result;
-  }, [items, search, selectedZone, sortBy]);
+  }, [items, search, selectedZone, selectedBps, sortBy]);
 
   // Endpoint ekspor backend cuma terima SATU kategori sekaligus -- bucket
   // aksi bisa memetakan ke 2 kategori (ber-rekap + belum-rekap) atau 4
@@ -448,27 +463,6 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
         </div>
       </div>
 
-      {/* Banner sumber data -- menegaskan ini titik panas resmi NASA FIRMS
-          near-real-time (bukan tebakan model), + menjelaskan kolom
-          "Kekuatan Sinyal" yang baru. */}
-      <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", backgroundColor: "rgba(30, 41, 59, 0.6)", border: "1px solid rgba(56,189,248,0.25)", padding: "0.5rem 0.8rem", borderRadius: "6px", marginBottom: "0.6rem", fontSize: "0.75rem", color: "#cbd5e1", flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-          <RefreshCw size={15} color="#38bdf8" />
-          <strong>Sumber data:</strong>
-        </div>
-        <span>
-          Titik panas <strong>NASA FIRMS</strong> (VIIRS S-NPP/NOAA-20 & MODIS Terra/Aqua) — near-real-time
-          {syncInfo?.lastSuccessAt ? (
-            <>
-              {" · sinkron terakhir "}
-              <strong>{new Date(syncInfo.lastSuccessAt).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })} WIB</strong>
-              {syncInfo.hotspotCount > 0 ? ` (${syncInfo.hotspotCount.toLocaleString("id-ID")} titik)` : ""}
-            </>
-          ) : null}
-          . Kolom <strong>Kekuatan Sinyal</strong> = intensitas (FRP), konsistensi (berapa hari dari 7 tertangkap), & jumlah satelit berbeda yang mengonfirmasi.
-        </span>
-      </div>
-
       {/* Scientific Guide Banner */}
       <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", backgroundColor: "rgba(30, 41, 59, 0.6)", border: "1px solid rgba(255,255,255,0.08)", padding: "0.5rem 0.8rem", borderRadius: "6px", marginBottom: "0.9rem", fontSize: "0.75rem", color: "#cbd5e1", flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
@@ -483,12 +477,20 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
       {/* KPI Cards -- 2026-09-05: 3 kartu berbasis STATUS HOTSPOT PER HARI INI
           (Ada Hotspot Hari Ini / Hotspot Mereda / Tidak Ada Hotspot). Ketiganya
           POTRET per tanggal sekarang -- tiap KPS masuk TEPAT SATU kartu
-          (189+498+1188 = 1875 Total), berdasarkan kapan titik panas terakhir
-          terdeteksi di dalamnya. "Total 2026" turun jadi tautan teks kecil. */}
+          (189+498+1188 = 1875 total), berdasarkan kapan titik panas terakhir
+          terdeteksi di dalamnya. */}
       {summary && bucketCounts && (
         <>
           <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.5rem", lineHeight: 1.5 }}>
             📅 Status per <strong>{snapshotLabel}</strong>
+            {syncInfo?.lastSuccessAt ? (
+              <>
+                {" · data NASA FIRMS sinkron terakhir "}
+                <strong>
+                  {new Date(syncInfo.lastSuccessAt).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })} WIB
+                </strong>
+              </>
+            ) : null}
             <br />
             Tiap KPS masuk <strong>tepat satu</strong> kategori di bawah, berdasarkan kapan titik panas terakhir terdeteksi.
           </div>
@@ -570,23 +572,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               </div>
             </div>
           </div>
-
-          {/* Total 2026 -- tautan teks kecil, bukan kartu (sengaja tidak
-              menonjol: bukan info yang butuh reaksi). */}
-          <div style={{ marginBottom: "1rem" }}>
-            <button
-              type="button"
-              onClick={() => setBucket("total")}
-              style={{
-                background: "none", border: "none", cursor: "pointer", padding: "0.15rem 0",
-                fontSize: "0.75rem", color: bucket === "total" ? "#a78bfa" : "#6b7280",
-                textDecoration: bucket === "total" ? "underline" : "none"
-              }}
-            >
-              📊 Total terpantau 2026: <strong>{bucketCounts.total.toLocaleString("id-ID")}</strong> KPS
-              {bucket === "total" ? " (ditampilkan)" : " — klik untuk lihat semua"}
-            </button>
-          </div>
+          <div style={{ marginBottom: "1rem" }} />
         </>
       )}
 
@@ -655,6 +641,31 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             </option>
           ))}
         </select>
+
+        {/* Balai PS Filter -- disembunyikan untuk role "bps" (tampilannya
+            sudah dikunci ke satu wilker via activeWilkerBps). */}
+        {session?.role !== "bps" && (
+          <select
+            value={selectedBps}
+            onChange={(e) => setSelectedBps(e.target.value)}
+            style={{
+              padding: "0.5rem 0.75rem",
+              backgroundColor: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: "6px",
+              color: "#ffffff",
+              fontSize: "0.82rem",
+              minWidth: "160px"
+            }}
+          >
+            <option value="">Semua Balai PS</option>
+            {wilkers.map((w) => (
+              <option key={w} value={w} style={{ backgroundColor: "#1e293b" }}>
+                {w}
+              </option>
+            ))}
+          </select>
+        )}
 
         {/* Zona Perambatan Filter -- cuma relevan buat KPS ber-rekap yang
             aktif hari ini (zone_code KPS belum-rekap selalu "new_2026",
@@ -897,10 +908,9 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
                     </td>
                     {/* Kolom "Keterangan": kalau ada hotspot HARI INI -> tampil
                         status_label backend (info Zona Perambatan). Kalau tidak
-                        (kartu "Hotspot Mereda" / "Tidak Ada Hotspot", atau baris
-                        non-aktif di "Total") -> tampil "kapan titik panas
-                        terakhir" -- itu yang menjelaskan kenapa KPS masuk kartu
-                        yang diklik. */}
+                        (kartu "Hotspot Mereda" / "Tidak Ada Hotspot") -> tampil
+                        "kapan titik panas terakhir" -- itu yang menjelaskan
+                        kenapa KPS masuk kartu yang diklik. */}
                     <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
                       {item.hotspots_today > 0 ? (
                         <span

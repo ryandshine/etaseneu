@@ -466,10 +466,11 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               STATUS HOTSPOT — SENGAJA hindari kata "api" (1 titik panas belum
               tentu kebakaran): `today`="Ada Hotspot Hari Ini",
               `receding`="Hotspot Mereda" (gabungan "aktif kemarin" + "aktif
-              2-7 hari"), `inactive`="Tidak Ada Hotspot" (0 hotspot 7 hari),
-              `total`=seluruh
-              KPS 2026 (turun jadi **tautan teks kecil di bawah 3 kartu**,
-              bukan kartu — sengaja tidak menonjol). **PARTISI PERSIS**
+              2-7 hari"), `inactive`="Tidak Ada Hotspot" (0 hotspot 7 hari).
+              `bucket === "total"` masih ada di tipe & `BUCKET_FETCH` tapi
+              TIDAK ada UI-nya (tautan "Total 2026" dihapus 2026-09-05 — cukup
+              search+filter); `bucketCounts.total` tetap dihitung untuk rumus
+              `receding`. **PARTISI PERSIS**
               (`today + receding + inactive = total`):
               `today`=`h_today>0`; `inactive`=`h_today=0 DAN h_7d=0 DAN
               h_bulan=0` ("Tidak Ada Hotspot" harus benar-benar bersih —
@@ -531,10 +532,15 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               ambang FRP >30/10-30/<10 MW SAMA dengan kartu statistik FRP peta
               utama (`App.tsx`). Ini INFORMASI keandalan, TIDAK memfilter
               (FRP rendah ≠ palsu; gambut membara sering FRP kecil). Ada juga
-              opsi sort "FRP Tertinggi". Banner "Sumber data: NASA FIRMS ...
-              sinkron terakhir ... WIB" di atas tabel — `loadSyncInfo()` fetch
-              `/api/scheduler/metrics` (best-effort, gagal → banner tetap
-              tampil tanpa timestamp). FilterPanel.tsx, SidebarNav.tsx (satu area gulir
+              opsi sort "FRP Tertinggi". "Sinkron terakhir NASA FIRMS" ikut
+              di baris "📅 Status per <tanggal> WIB" di atas 3 kartu (banner
+              "Sumber data" panjang dihapus 2026-09-05) — `loadSyncInfo()`
+              fetch `/api/scheduler/metrics` (best-effort, gagal → baris
+              tampil tanpa timestamp). **Filter Balai PS** (`selectedBps`,
+              client-side seperti `selectedZone`; opsi dari `wilker_bps` baris
+              termuat) disembunyikan untuk role `bps` (sudah dikunci ke satu
+              wilker). Kolom tabel "Wilayah (Kab, Prov)" → "Wilayah & Balai PS"
+              (baris ke-3 🏛️ `wilker_bps`). FilterPanel.tsx, SidebarNav.tsx (satu area gulir
               di `.side-rail`; menu Pengaturan menampilkan info akun untuk semua role,
               prop `isAdmin` → role user hanya tidak melihat tombol Sync/Prewarm),
               BurnedAreaCard.tsx, WeatherOverlay.tsx, dll.
