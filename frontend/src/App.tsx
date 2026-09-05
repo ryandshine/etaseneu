@@ -6,7 +6,6 @@ import { LoginPage } from "./components/LoginPage";
 import { PasswordGateModal } from "./components/PasswordGateModal";
 import { SidebarNav } from "./components/SidebarNav";
 import { useDashboardData } from "./hooks/useDashboardData";
-import { useIsDesktopWide } from "./hooks/useIsDesktopWide";
 import { setAuthToken, setUnauthorizedHandler } from "./lib/api";
 import { clearDashboardCache } from "./lib/dashboardPersistence";
 import { getTodayWIB, formatDateTimeWIB } from "./lib/date";
@@ -98,30 +97,6 @@ function persistSession(session: AppSession | null): void {
   window.localStorage.setItem(PERSISTED_SESSION_KEY, JSON.stringify(session));
 }
 
-// Preferensi sidebar ringkas (icon rail). Default expanded -- user lama tidak
-// dikagetkan; sekali di-collapse manual, pilihannya diingat. Semua akses
-// localStorage dibungkus try/catch (pola sama seperti lib/dashboardPersistence.ts:
-// Chrome Android / mode privat bisa melempar saat storage dimatikan).
-const SIDEBAR_COLLAPSED_KEY = "etaseneu.sidebar.collapsed.v1";
-
-function readSidebarCollapsedPref(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function persistSidebarCollapsedPref(collapsed: boolean): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
-  } catch {
-    /* storage dimatikan -- preferensi cuma berlaku untuk sesi ini */
-  }
-}
-
 /**
  * View aktif disimpan di query string supaya refresh dan tombol back tidak
  * selalu melempar pengguna kembali ke Live Map, dan tautan ke Matriks Data
@@ -206,21 +181,6 @@ export default function App() {
   const [kpsAgency, setKpsAgency] = useState<string | null>(readKpsAgencyFromUrl);
   const [landCoverPolygonId, setLandCoverPolygonId] = useState<number | null>(readLandCoverPolygonIdFromUrl);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  // Preferensi user (persisted) vs kondisi efektif: collapse SENGAJA cuma
-  // berlaku di desktop lebar (>=1024px). Di tablet/mobile lebar sidebar diatur
-  // aturan lain yang sudah rapuh (lihat index.css sekitar .app-frame), jadi
-  // preferensi ini diabaikan di sana -- bukan dipaksakan.
-  const [sidebarCollapsedPref, setSidebarCollapsedPref] = useState<boolean>(readSidebarCollapsedPref);
-  const isDesktopWide = useIsDesktopWide();
-  const sidebarCollapsed = sidebarCollapsedPref && isDesktopWide;
-
-  const toggleSidebarCollapsed = () => {
-    setSidebarCollapsedPref((prev) => {
-      const next = !prev;
-      persistSidebarCollapsedPref(next);
-      return next;
-    });
-  };
   const [passwordGateOpen, setPasswordGateOpen] = useState(false);
   const [passwordGateError, setPasswordGateError] = useState<string | null>(null);
   const [passwordGateVerifying, setPasswordGateVerifying] = useState(false);
@@ -740,7 +700,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-frame grid-lines${sidebarCollapsed ? " app-frame--collapsed" : ""}`}>
+    <div className="app-frame grid-lines">
       {/* Mobile Hamburger Button */}
       <button
         className="mobile-hamburger"
@@ -784,8 +744,6 @@ export default function App() {
         hasLatestHotspot={!!latestHotspot}
         isAdmin={session?.role === "admin"}
         mobileOpen={mobileMenuOpen}
-        collapsed={sidebarCollapsed}
-        onToggleCollapsed={toggleSidebarCollapsed}
         filterSlot={activeView === "map" ? (
           <FilterPanel
             selectedSatellites={selectedSatellites}
