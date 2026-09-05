@@ -717,7 +717,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               <th style={{ padding: "0.75rem 0.8rem", width: "45px", textAlign: "center" }}>No</th>
               <th style={{ padding: "0.75rem 0.8rem" }}>Nama KPS / Lembaga</th>
               <th style={{ padding: "0.75rem 0.8rem", width: "70px", textAlign: "center" }}>Skema</th>
-              <th style={{ padding: "0.75rem 0.8rem" }}>Wilayah (Kab, Prov)</th>
+              <th style={{ padding: "0.75rem 0.8rem" }}>Wilayah & Balai PS</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "right", minWidth: "130px" }}>
                 Luas Terbakar Tercatat
                 <div style={{ fontSize: "0.68rem", fontWeight: "normal", color: "#6b7280" }}>[dari catatan resmi Kemenhut]</div>
@@ -790,9 +790,15 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
                         {item.skema || "-"}
                       </span>
                     </td>
+                    {/* Balai PS (wilker_bps) disatukan di kolom wilayah --
+                        sama-sama info administratif/lokasi, biar tidak nambah
+                        kolom. */}
                     <td style={{ padding: "0.65rem 0.8rem" }}>
-                      <div style={{ color: "#e5e7eb" }}>{item.nama_kab}</div>
-                      <div style={{ fontSize: "0.7rem", color: "#9ca3af" }}>{item.nama_prov}</div>
+                      <div style={{ color: "#e5e7eb" }}>{item.nama_kab || "-"}</div>
+                      <div style={{ fontSize: "0.7rem", color: "#9ca3af" }}>{item.nama_prov || "-"}</div>
+                      <div style={{ fontSize: "0.68rem", color: "#60a5fa", marginTop: "0.15rem" }}>
+                        🏛️ {item.wilker_bps || "Balai PS tidak tercatat"}
+                      </div>
                     </td>
                     {/* Satu kolom ini menggantikan pasangan kolom lama
                         "Bekas Terbakar Kemenhut (Ada/Belum Ada)" + "Luas
