@@ -24,17 +24,12 @@ import type { AppSession } from "../types/api";
 //      -> 3 kartu berdasar STATUS API: today="Api Aktif Hari Ini",
 //      receding="Baru Reda" (kemarin + 2-7 hari digabung, rincian jadi
 //      sub-teks), inactive="Tidak Aktif". "Total 2026" turun jadi tautan
-//      teks kecil. Pembeda ber-rekap/belum-rekap tetap di kolom tabel
-//      "Bekas Terbakar Kemenhut" (isi "Ada"/"Belum Ada").
-// 3 tingkat AKSI (bukan 5 bucket waktu) -- 2026-09-05 iterasi ke-2 atas
-// masukan user: kartu "Mereda Kemarin" (91) & "Aktif 7 Hari" (407) terasa
-// redundan dan bikin bingung "mana yang harus reaksi cepat". Sekarang:
-//   today    = REAKSI CEPAT (aktif hari ini)
-//   receding = PANTAU KETAT (baru mereda: aktif kemarin ATAU 2-7 hari lalu,
-//              tidak hari ini) -- gabungan; rincian kemarin vs 2-7 hari
-//              cuma jadi sub-teks di kartu, bukan kartu sendiri
-//   inactive = PEMANTAUAN PASIF (0 hotspot 7 hari)
-//   total    = seluruh KPS terpantau 2026 (tautan teks kecil, bukan kartu)
+//      teks kecil.
+//  Pembeda "punya catatan luas terbakar resmi Kemenhut atau belum" TIDAK
+//  lagi jadi kolom badge terpisah (redundan dengan kolom "Luas Terbakar
+//  Tercatat" yang sudah ada -- dua-duanya dari total_burned_ha); kolom luas
+//  itu sekarang menampilkan "Belum tercatat" (bukan "-") kalau 0. Di kartu
+//  "Api Aktif Hari Ini" tetap ada rincian "N luasnya tercatat / N belum".
 type TimeBucket = "today" | "receding" | "inactive" | "total";
 
 // Tiap bucket = daftar PASANGAN kategori backend (ber-rekap + belum-rekap)
@@ -474,10 +469,10 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               </div>
               <div style={{ display: "flex", gap: "0.4rem", marginTop: "auto", paddingTop: "0.6rem", flexWrap: "wrap", fontSize: "0.7rem" }}>
                 <span style={{ backgroundColor: "rgba(34,197,94,0.2)", color: "#4ade80", padding: "0.15rem 0.4rem", borderRadius: "4px" }}>
-                  🟢 {summary.burned_area_stats.active_today} dipetakan
+                  🟢 {summary.burned_area_stats.active_today} luasnya sudah tercatat
                 </span>
                 <span style={{ backgroundColor: "rgba(249,115,22,0.2)", color: "#fdba74", padding: "0.15rem 0.4rem", borderRadius: "4px" }}>
-                  🟠 {summary.early_warning_stats.active_today} belum
+                  🟠 {summary.early_warning_stats.active_today} belum tercatat
                 </span>
               </div>
             </div>
@@ -675,13 +670,12 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             <tr style={{ backgroundColor: "rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.12)", color: "#9ca3af" }}>
               <th style={{ padding: "0.75rem 0.8rem", width: "45px", textAlign: "center" }}>No</th>
               <th style={{ padding: "0.75rem 0.8rem" }}>Nama KPS / Lembaga</th>
-              <th style={{ padding: "0.75rem 0.8rem", width: "120px", textAlign: "center" }}>
-                Bekas Terbakar Kemenhut
-                <div style={{ fontSize: "0.68rem", fontWeight: "normal", color: "#6b7280" }}>[sudah dipetakan resmi?]</div>
-              </th>
               <th style={{ padding: "0.75rem 0.8rem", width: "70px", textAlign: "center" }}>Skema</th>
               <th style={{ padding: "0.75rem 0.8rem" }}>Wilayah (Kab, Prov)</th>
-              <th style={{ padding: "0.75rem 0.8rem", textAlign: "right" }}>Luas Terbakar (Kemenhut)</th>
+              <th style={{ padding: "0.75rem 0.8rem", textAlign: "right", minWidth: "130px" }}>
+                Luas Terbakar Tercatat
+                <div style={{ fontSize: "0.68rem", fontWeight: "normal", color: "#6b7280" }}>[dari catatan resmi Kemenhut]</div>
+              </th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center", minWidth: "180px" }}>
                 Hotspot Hari Ini, Jarak & Arah
                 <div style={{ fontSize: "0.68rem", fontWeight: "normal", color: "#6b7280" }}>[Total / Bekas / Jarak (km) & Arah]</div>
@@ -704,14 +698,14 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
           <tbody>
             {loadingItems ? (
               <tr>
-                <td colSpan={14} style={{ padding: "2.5rem", textAlign: "center", color: "#9ca3af" }}>
+                <td colSpan={13} style={{ padding: "2.5rem", textAlign: "center", color: "#9ca3af" }}>
                   <RefreshCw size={20} className="animate-spin" style={{ margin: "0 auto 0.5rem auto" }} />
                   Memuat data analisis...
                 </td>
               </tr>
             ) : displayItems.length === 0 ? (
               <tr>
-                <td colSpan={14} style={{ padding: "2.5rem", textAlign: "center", color: "#6b7280" }}>
+                <td colSpan={13} style={{ padding: "2.5rem", textAlign: "center", color: "#6b7280" }}>
                   Tidak ada data KPS yang sesuai dengan filter{activeWilkerBps ? ` untuk ${activeWilkerBps}` : ""}.
                 </td>
               </tr>
@@ -742,25 +736,6 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
                       </div>
                     </td>
                     <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
-                      {/* Badge ini yang sekarang membawa pembeda ber-rekap/
-                          belum-rekap -- dulu itu sumbu yang membedakan KARTU
-                          KPI, sekarang jadi atribut per-baris supaya kedua
-                          kelompok kelihatan bersisian dalam satu tabel. */}
-                      <span
-                        style={{
-                          padding: "0.15rem 0.5rem",
-                          borderRadius: "999px",
-                          fontSize: "0.68rem",
-                          fontWeight: "600",
-                          whiteSpace: "nowrap",
-                          backgroundColor: item.total_burned_ha > 0 ? "rgba(34,197,94,0.18)" : "rgba(249,115,22,0.18)",
-                          color: item.total_burned_ha > 0 ? "#4ade80" : "#fdba74"
-                        }}
-                      >
-                        {item.total_burned_ha > 0 ? "🟢 Ada" : "🟠 Belum Ada"}
-                      </span>
-                    </td>
-                    <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
                       <span style={{ padding: "0.15rem 0.45rem", borderRadius: "4px", backgroundColor: "rgba(255,255,255,0.08)", fontSize: "0.72rem", color: "#d1d5db" }}>
                         {item.skema || "-"}
                       </span>
@@ -769,8 +744,15 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
                       <div style={{ color: "#e5e7eb" }}>{item.nama_kab}</div>
                       <div style={{ fontSize: "0.7rem", color: "#9ca3af" }}>{item.nama_prov}</div>
                     </td>
+                    {/* Satu kolom ini menggantikan pasangan kolom lama
+                        "Bekas Terbakar Kemenhut (Ada/Belum Ada)" + "Luas
+                        Terbakar" yang isinya redundan (dua-duanya dari
+                        total_burned_ha). "Belum tercatat" != belum terbakar --
+                        bisa kejadian baru / rekap Kemenhut belum terbit. */}
                     <td style={{ padding: "0.65rem 0.8rem", textAlign: "right", fontWeight: "600", color: item.total_burned_ha > 0 ? "#fca5a5" : "#9ca3af" }}>
-                      {item.total_burned_ha > 0 ? `${item.total_burned_ha.toLocaleString("id-ID", { minimumFractionDigits: 2 })} ha` : "-"}
+                      {item.total_burned_ha > 0
+                        ? `${item.total_burned_ha.toLocaleString("id-ID", { minimumFractionDigits: 2 })} ha`
+                        : <span style={{ fontWeight: "400", fontSize: "0.72rem", fontStyle: "italic" }}>Belum tercatat</span>}
                     </td>
                     <td style={{ padding: "0.65rem 0.8rem", textAlign: "center" }}>
                       {item.hotspots_today > 0 ? (

@@ -482,11 +482,15 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               dari `summary` yang sudah ada (`burned_area_stats.X +
               early_warning_stats.X`); "inactive" belum-rekap = sisa
               (`total_kps - active_today - active_yesterday - active_7d`).
-              Pembeda ber-rekap/belum-rekap ada di kolom badge **"Bekas
-              Terbakar Kemenhut"** (isi 🟢 "Ada" / 🟠 "Belum Ada", dari
-              `total_burned_ha > 0` — areal bekas terbakar sudah dipetakan
-              resmi Kemenhut atau belum; "Belum Ada" BUKAN berarti tidak
-              terbakar, cuma belum masuk peta resmi). Tombol ekspor mengunduh
+              Pembeda ber-rekap/belum-rekap TIDAK lagi jadi kolom badge
+              terpisah (sempat ada "Bekas Terbakar Kemenhut" Ada/Belum Ada —
+              redundan dengan kolom luas yang sudah ada, dua-duanya dari
+              `total_burned_ha`). Kolom **"Luas Terbakar Tercatat"** sekarang
+              menampilkan `N ha` kalau `>0`, atau teks redup *"Belum tercatat"*
+              kalau 0 (bukan "-" lagi) — "Belum tercatat" BUKAN berarti tidak
+              terbakar, cuma belum masuk catatan luas resmi Kemenhut. Kartu
+              "Api Aktif Hari Ini" tetap bawa rincian "N luasnya sudah tercatat
+              / N belum tercatat". Tombol ekspor mengunduh
               **1 file per kategori** dari `currentCategories` (2 file untuk
               kebanyakan bucket, 4 untuk `receding`) — endpoint backend cuma
               terima satu kategori per panggilan.
