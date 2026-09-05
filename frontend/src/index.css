@@ -1524,7 +1524,11 @@ body {
 .map-legend {
   position: absolute;
   left: 1rem;
-  bottom: 6.5rem;
+  /* 7.5rem, bukan 6.5rem: kolom kiri-bawah Leaflet menumpuk DUA kontrol
+     (scale control DI ATAS zoom), bukan cuma zoom sendirian -- 6.5rem cukup
+     buat zoom saja tapi legenda lalu menutupi baris scale ("500 km" dkk) di
+     laptop yang viewport-nya pas-pasan (mis. Acer TravelMate 1366x768). */
+  bottom: 7.5rem;
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -1608,10 +1612,10 @@ body {
   max-width: 15rem;
   /* Semua overlay + ringkasannya bisa lebih tinggi dari layar -- dibatasi ke
      ruang antara baris kontrol atas dan LEGENDA di kiri bawah (legenda
-     sendiri sudah di atas kontrol zoom: bottom 6.5rem + tinggi ~9rem saat
+     sendiri sudah di atas zoom+scale: bottom 7.5rem + tinggi ~9rem saat
      5 baris), lalu digulir di dalam. Dulu cuma menyisakan 5.5rem (tinggi
      zoom) sehingga di laptop pendek (768px) kolom ini menimpa legenda. */
-  max-height: calc(100% - 6.5rem - 16rem);
+  max-height: calc(100% - 6.5rem - 17rem);
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
@@ -2045,31 +2049,17 @@ body {
   color: #fff;
 }
 
-.stats-panel-reopen {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  z-index: 1000;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 0.9rem;
-  min-height: 38px;
-  border-radius: 9999px;
-  border: 1px solid rgba(249, 115, 22, 0.45);
-  background: rgba(15, 23, 42, 0.92);
-  backdrop-filter: blur(8px);
-  color: #f8b26a;
-  font-size: 0.72rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-/* Panel statistik hanya bisa ditutup lewat header × di layar lebar; di
+/* × di header cuma pemicu alternatif untuk "Sembunyikan UI" (satu state,
+   showPanels di App.tsx) -- dulu ini punya state sendiri (statsPanelClosed)
+   terpisah dari tombol global, jadi ada DUA cara berbeda menutup panel yang
+   sama dengan hasil sedikit berbeda (double action, membingungkan). Sekarang
+   keduanya sama-sama memanggil setShowPanels(false), jadi selalu konsisten
+   dengan tombol "Tampilkan UI" untuk membukanya kembali.
+   Panel statistik hanya bisa ditutup lewat header × di layar lebar; di
    mobile penutupannya tetap lewat tombol sheet ("Tutup") supaya tidak ada
    dua kontrol yang bertentangan untuk hal yang sama. */
 @media (max-width: 639px) {
-  .stats-panel-close,
-  .stats-panel-reopen {
+  .stats-panel-close {
     display: none;
   }
 }
@@ -9502,7 +9492,6 @@ a + a {
 @media (max-width: 639px) {
   .workspace-stage--map .control-overlay--top-right,
   .workspace-stage--map .stats-sheet-toggle,
-  .workspace-stage--map .stats-panel-reopen,
   .workspace-stage--map .ui-toggle-btn {
     display: none !important;
   }
@@ -10120,11 +10109,15 @@ a + a {
 }
 
 /* ---- Laptop kecil / tablet lanskap: kontrol kiri peta berebut tinggi ----
-   Di Acer TravelMate 1366x768 (peta ~600px tinggi) kolom kiri berisi
+   Di Acer TravelMate 1366x768 (viewport peta seringnya <900px setelah chrome
+   browser/taskbar, bukan cuma yang benar-benar <=768) kolom kiri berisi
    Lokasi+Basemap, .burned-control (4 chip + legenda kawasan), legenda, dan
-   zoom sekaligus. Legenda dibuat mendatar (2-3 baris) supaya .burned-control
-   dapat ruang gulir yang masuk akal. */
-@media (min-width: 640px) and (max-height: 820px) {
+   zoom+scale sekaligus. Legenda dibuat mendatar (2-3 baris) supaya
+   .burned-control dapat ruang gulir yang masuk akal. Ambang dinaikkan dari
+   820 -> 900px: 820 nyaris tidak pernah kena di laptop 1080p dengan browser
+   biasa (chrome/tab bar memotong ~150-200px), padahal kolom kiri sudah
+   sesak di kisaran 800-900px juga. */
+@media (min-width: 640px) and (max-height: 900px) {
   .map-legend {
     flex-direction: row;
     flex-wrap: wrap;
@@ -10132,7 +10125,11 @@ a + a {
     column-gap: 0.7rem;
     row-gap: 0.3rem;
     max-width: 17rem;
-    bottom: 6rem;
+    /* TIDAK boleh lebih kecil dari default (7.5rem): legenda mendatar lebih
+       pendek totalnya, tapi jaraknya ke kontrol zoom+scale di sudut yang
+       sama tetap harus dijaga, bukan malah dikurangi (bug lama: 6rem <
+       default 6.5rem lama, jadi menutupi scale control "500 km" dkk). */
+    bottom: 7.5rem;
   }
   .map-legend-title {
     width: 100%;
@@ -10141,7 +10138,7 @@ a + a {
     display: none;
   }
   .burned-control {
-    max-height: calc(100% - 6.5rem - 11.5rem);
+    max-height: calc(100% - 6.5rem - 13rem);
   }
 }
 

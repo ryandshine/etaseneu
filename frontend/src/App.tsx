@@ -424,9 +424,6 @@ export default function App() {
   // Di mobile panel statistik disajikan sebagai sheet yang dibuka lewat tombol
   // ringkas; di desktop state ini tidak berpengaruh (panelnya selalu tampil).
   const [statsOpen, setStatsOpen] = useState(false);
-  // Terpisah dari statsOpen (yang hanya berarti di mobile): ini mengontrol
-  // apakah panel statistik desktop ditutup lewat tombol × di headernya.
-  const [statsPanelClosed, setStatsPanelClosed] = useState(false);
   const {
     endDate,
     exportDashboard,
@@ -833,6 +830,7 @@ export default function App() {
                 showWind={showWind}
                 weatherOverlay={weatherOverlay}
                 onOpenKpsDetail={openKpsDetail}
+                showChrome={showPanels}
               />
             </Suspense>
 
@@ -851,7 +849,6 @@ export default function App() {
                   {statsOpen ? "Tutup" : `${(selectedWilker ? visibleHotspots.length : stats.hotspotCount).toLocaleString()} hotspot`}
                 </button>
 
-                {!statsPanelClosed && (
                 <aside
                   id="panel-statistik-hotspot"
                   className={`control-overlay control-overlay--top-right panel panel--stats${statsOpen ? " mobile-open" : ""}`}
@@ -866,8 +863,9 @@ export default function App() {
                       <button
                         type="button"
                         className="stats-panel-close"
-                        onClick={() => setStatsPanelClosed(true)}
-                        aria-label="Tutup panel statistik"
+                        onClick={() => setShowPanels(false)}
+                        aria-label="Sembunyikan panel statistik"
+                        title="Sembunyikan Panel"
                       >
                         ×
                       </button>
@@ -949,18 +947,6 @@ export default function App() {
                     )}
                   </article>
                 </aside>
-                )}
-
-                {statsPanelClosed && (
-                  <button
-                    type="button"
-                    className="stats-panel-reopen"
-                    onClick={() => setStatsPanelClosed(false)}
-                    aria-label="Tampilkan panel statistik"
-                  >
-                    {(selectedWilker ? visibleHotspots.length : stats.hotspotCount).toLocaleString()} hotspot
-                  </button>
-                )}
             </div>
 
             <button

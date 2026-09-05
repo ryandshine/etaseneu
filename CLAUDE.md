@@ -454,6 +454,25 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               Panel statistik + `.stats-sheet-toggle` + `.ui-toggle-btn` milik
               App.tsx disembunyikan via CSS di `@media (max-width:639px)`
               (`.workspace-stage--map ...`) supaya tidak ada dua sheet.
+              **"Sembunyikan UI" (`.ui-toggle-btn`, state `showPanels` di App.tsx,
+              2026-09-05)**: dulu cuma menyembunyikan kartu statistik App.tsx
+              sendiri (`panels-toggle-layer`) — kontrol milik `HotspotMap.tsx`
+              (legenda, lokasi-saya, bekas terbakar, basemap, zoom, timeline)
+              TIDAK ikut, jadi tombol "Sembunyikan UI" tidak benar-benar
+              menyembunyikan semua UI. Sekarang `App.tsx` meneruskan
+              `showChrome={showPanels}` ke `<HotspotMap>` (desktop/tablet saja,
+              default `true` supaya pemakai lama tanpa prop ini tidak berubah)
+              dan tiap kontrol itu di-AND dengan `showChrome` pada kondisi
+              `!isMobile` yang sudah ada — TIDAK unmount permanen, cuma ikut
+              gerbang yang sama, jadi state internalnya (mis. `mapStyle`,
+              `showBurnedArea`) tidak hilang saat disembunyikan lalu ditampilkan
+              lagi. Tombol × di header kartu statistik (`stats-panel-close`)
+              dulu punya state SENDIRI (`statsPanelClosed`, lepas dari
+              `showPanels`) — dua kontrol berbeda menutup panel yang sama
+              dengan kombinasi state yang bisa saling bertentangan ("double
+              action"). Sekarang × cuma memanggil `setShowPanels(false)`, sama
+              persis dengan tombol global; tombol "reopen" (`stats-panel-reopen`)
+              dihapus karena sudah berlebih dengan "Tampilkan UI".
               `<ScaleControl>` (react-leaflet, metrik) dirender di SEMUA lebar.
               Mock `react-leaflet` di test WAJIB ekspor `ScaleControl`
               (App.test.tsx, HotspotMap.test.tsx sudah).
@@ -475,11 +494,20 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               `CircleMarker`/`Marker` di HotspotMap.test.tsx WAJIB `forwardRef`.
               **Tata letak kontrol melayang (desktop)**: kolom kiri = Lokasi+
               Basemap (top 1rem) → `.burned-control` (top 6.5rem, gulir) →
-              `.map-legend` (bottom 6.5rem) → zoom. `max-height` burned-control
-              WAJIB menyisakan ruang legenda (`calc(100% - 6.5rem - 16rem)`),
-              bukan cuma zoom — dulu 5.5rem dan di laptop 1366×768 kolom itu
-              menimpa legenda. `@media (min-width:640px) and (max-height:820px)`
-              legenda jadi mendatar. `.timeline-control` TIDAK dipusatkan pakai
+              `.map-legend` (bottom 7.5rem) → zoom+scale Leaflet (sudut
+              kiri-bawah, DUA kontrol ditumpuk, bukan cuma zoom). `max-height`
+              burned-control WAJIB menyisakan ruang legenda
+              (`calc(100% - 6.5rem - 17rem)`) — dulu 5.5rem dan di laptop
+              1366×768 kolom itu menimpa legenda. **Bug 2026-09-05**: legenda
+              sempat `bottom:6.5rem` (lalu malah diturunkan ke `6rem` di mode
+              ringkas) — cukup buat kontrol zoom SENDIRIAN tapi tidak untuk
+              scale control yang nangkring di atasnya, jadi legenda menutupi
+              baris skala ("500 km" dkk) di laptop yang viewport-nya pas-pasan;
+              dinaikkan ke `7.5rem` di kedua mode (default & ringkas — mode
+              ringkas TIDAK BOLEH lebih kecil dari default, alasan bug ini).
+              `@media (min-width:640px) and (max-height:900px)` (naik dari 820
+              — 820 nyaris tidak pernah kena di laptop 1080p dengan browser
+              biasa) legenda jadi mendatar. `.timeline-control` TIDAK dipusatkan pakai
               translate: dijepit `left:17rem; right:20rem; max-width:680px;
               margin:auto` (lolos legenda kiri & panel statistik kanan) dan
               `bottom:4.75rem` di atas tombol "Sembunyikan UI" (`.ui-toggle-btn`,

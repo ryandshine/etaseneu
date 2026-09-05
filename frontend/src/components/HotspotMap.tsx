@@ -93,6 +93,13 @@ type HotspotMapProps = {
   showWind?: boolean;
   weatherOverlay?: "temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null;
   onOpenKpsDetail?: (agency: string) => void;
+  // Desktop/tablet saja: kontrol mengambang milik peta ini sendiri (legenda,
+  // lokasi-saya, bekas terbakar, basemap, zoom, timeline) -- BEDA dari state
+  // "Sembunyikan UI" milik App.tsx yang tadinya cuma menyembunyikan kartu
+  // statistik di App.tsx sendiri. Default true supaya pemakai lama (test,
+  // storybook) yang belum memberi prop ini tetap melihat kontrol seperti
+  // biasa. Mobile tidak terpengaruh -- sudah pakai MapSheet/MapControls sendiri.
+  showChrome?: boolean;
 };
 
 // <GeoJSON data={...}> Leaflet melempar "Invalid GeoJSON object" untuk objek
@@ -494,7 +501,8 @@ export function HotspotMap({
   selectedWilker,
   showWind,
   weatherOverlay,
-  onOpenKpsDetail
+  onOpenKpsDetail,
+  showChrome = true
 }: HotspotMapProps) {
   const [rainyCoords, setRainyCoords] = useState<{ lat: number; lon: number; precipitation: number; label: string }[]>([]);
   const [showUserLocation, setShowUserLocation] = useState(false);
@@ -661,7 +669,7 @@ export function HotspotMap({
 
   return (
     <div className="map-frame">
-      {!isMobile ? (
+      {!isMobile && showChrome ? (
       <>
       <div className="map-legend">
         <span className="map-legend-title">Legenda</span>
@@ -822,7 +830,7 @@ export function HotspotMap({
       ) : null}
       {userLocation.error ? <p className="locate-error-toast">{userLocation.error}</p> : null}
 
-      {!isMobile ? (
+      {!isMobile && showChrome ? (
       <div className="basemap-switcher" role="group" aria-label="Gaya peta">
         <button
           type="button"
@@ -883,7 +891,7 @@ export function HotspotMap({
             />
           </>
         )}
-        {!isMobile ? <ZoomControl position="bottomleft" /> : null}
+        {!isMobile && showChrome ? <ZoomControl position="bottomleft" /> : null}
         <ScaleControl position="bottomleft" imperial={false} />
         <MapViewport hotspots={hotspots} layers={layers} selectedProvince={selectedProvince} />
         <PolygonInfoLayer layers={layers} showKawasan={showKawasan} hotspots={hotspots} />
@@ -1074,7 +1082,7 @@ export function HotspotMap({
         </Pane>
       </MapContainer>
 
-      {timelineEnabled && timeline.buckets.length > 0 ? (
+      {timelineEnabled && timeline.buckets.length > 0 && showChrome ? (
         <HotspotTimelineControl
           buckets={timeline.buckets}
           playheadIndex={timeline.playheadIndex}
