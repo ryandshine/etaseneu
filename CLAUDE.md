@@ -455,38 +455,39 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               kelas CSS supaya tidak makin menyimpang. Kartu KPI dibuat
               `display:flex; flexDirection:column; height:"100%"` + baris
               detail/badge terakhir `marginTop:"auto"` supaya kartu tetap sejajar
-              biar isi baris terakhirnya beda panjang [2026-09-05]. **5 kartu
-              KPI = SATU-SATUNYA selector, sumbu RENTANG WAKTU bukan status
-              rekap (2026-09-05, redesain kedua)**: versi sebelumnya (5 kartu
-              konsolidasi dari 4 kartu+5 tab, catatan lama di bawah) mencampur
-              DUA sumbu berbeda dalam satu baris kartu — status rekap Kemenhut
-              (`burned_*` vs `early_warning_*`) DAN rentang waktu — sehingga
-              3 dari 5 kartu ("Terbakar Hari Ini", "Padam Hari Ini", "Seluruh
-              KPS Terbakar") cuma menghitung KPS yang PERNAH tercatat resmi,
-              padahal menu "Peringatan Dini" harusnya menyorot KEDUANYA setara
-              (KPS belum-rekap justru yang paling butuh peringatan DINI).
-              State `category` diganti `bucket: TimeBucket` (`today|yesterday|
-              7d|inactive|total`); `BUCKET_CATEGORIES` memetakan tiap bucket ke
-              SEPASANG kategori backend (`burned_*` + `early_warning_*`),
-              `loadItems()` fetch KEDUANYA via `Promise.all` lalu digabung jadi
-              satu `items[]` — kartu KPI manapun yang diklik selalu menampilkan
-              gabungan kedua kelompok. Bucket "inactive" tidak match kategori
-              backend manapun untuk kelompok belum-rekap (tidak ada
-              `early_warning_padam`) — diambil `early_warning_all` lalu
-              disaring di klien jadi yang `hotspots_today/yesterday/7d` semua
-              0, supaya tidak perlu ubah backend. Angka kartu (`bucketCounts`)
-              dihitung dari `summary` yang sudah ada (jumlah field
-              `burned_area_stats.X + early_warning_stats.X`) — untuk
-              "inactive" dihitung sisa (`total_kps - active_today -
-              active_yesterday - active_7d`) karena `early_warning_stats`
-              tidak expose hitungan tidak-aktif langsung. Pembeda ber-rekap/
-              belum-rekap pindah jadi kolom badge **"Bekas Terbakar Kemenhut"**
-              di tabel (isi 🟢 "Ada" / 🟠 "Belum Ada", dari `total_burned_ha >
-              0` — artinya areal bekas terbakar sudah dipetakan resmi Kemenhut
-              atau belum; "Belum Ada" BUKAN berarti KPS-nya tidak terbakar,
-              cuma belum masuk peta resmi) — bukan lagi sumbu kartu. Tombol ekspor sekarang mengunduh **2
-              file** berurutan (kategori ber-rekap & belum-rekap terpisah,
-              endpoint backend cuma terima satu kategori per panggilan).
+              biar isi baris terakhirnya beda panjang [2026-09-05]. **Kartu KPI
+              = SATU-SATUNYA selector, 3 TINGKAT AKSI (2026-09-05, redesain
+              ke-3)**: v1 4 kartu+5 tab → v2 5 kartu berbasis rentang waktu
+              (buang sumbu "status rekap" → pindah ke badge kolom tabel) →
+              **v3 (sekarang)**: 5 kartu waktu terasa redundan ("Mereda
+              Kemarin" & "Aktif 7 Hari" bikin user bingung mana yang harus
+              reaksi cepat). Sekarang `bucket: TimeBucket` =
+              `"today" | "receding" | "inactive" | "total"`:
+              `today`=REAKSI CEPAT (aktif hari ini), `receding`=PANTAU KETAT
+              (baru mereda — gabungan "aktif kemarin" + "aktif 2-7 hari"),
+              `inactive`=PEMANTAUAN PASIF (0 hotspot 7 hari), `total`=seluruh
+              KPS 2026 (turun jadi **tautan teks kecil di bawah 3 kartu**,
+              bukan kartu — sengaja tidak menonjol). `BUCKET_FETCH` memetakan
+              tiap bucket ke SATU atau LEBIH pasang kategori backend
+              (`burned_*` + `early_warning_*`); `receding` = 2 pasang (kemarin
+              + 7 hari) → `loadItems()` fetch semua via `Promise.all`, flatten,
+              dedup by id. `receding` tidak menghidupkan lagi kartu terpisah —
+              rincian "N reda kemarin · N reda 2-7 hari" cuma sub-teks di
+              kartu. Bucket "inactive": kelompok belum-rekap tidak punya
+              kategori `early_warning_padam` di backend → ambil
+              `early_warning_all` lalu saring di klien jadi
+              `hotspots_today/yesterday/7d` semua 0. `bucketCounts` dihitung
+              dari `summary` yang sudah ada (`burned_area_stats.X +
+              early_warning_stats.X`); "inactive" belum-rekap = sisa
+              (`total_kps - active_today - active_yesterday - active_7d`).
+              Pembeda ber-rekap/belum-rekap ada di kolom badge **"Bekas
+              Terbakar Kemenhut"** (isi 🟢 "Ada" / 🟠 "Belum Ada", dari
+              `total_burned_ha > 0` — areal bekas terbakar sudah dipetakan
+              resmi Kemenhut atau belum; "Belum Ada" BUKAN berarti tidak
+              terbakar, cuma belum masuk peta resmi). Tombol ekspor mengunduh
+              **1 file per kategori** dari `currentCategories` (2 file untuk
+              kebanyakan bucket, 4 untuk `receding`) — endpoint backend cuma
+              terima satu kategori per panggilan.
               Filter Zona Perambatan cuma tampil saat `bucket==="today"`
               (zone_code KPS belum-rekap selalu `"new_2026"`, tidak match opsi
               manapun). Kolom "HS Agt" diganti **"HS Bulan Ini"** (label lama

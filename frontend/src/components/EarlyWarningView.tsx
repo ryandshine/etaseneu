@@ -8,36 +8,47 @@ import {
   RefreshCw,
   ChevronRight,
   TrendingUp,
-  FileSpreadsheet,
-  BarChart3,
   Wind,
   Lock
 } from "lucide-react";
 import { authFetch, downloadWithAuth } from "../lib/api";
 import type { AppSession } from "../types/api";
 
-// Kartu KPI dulu campur dua sumbu (status rekap Kemenhut vs rentang waktu)
-// dalam satu daftar kategori backend -- bikin user bingung karena judul
-// kartu tidak paralel (mis. "Terbakar Hari Ini" cuma KPS ber-rekap, "EW:
-// Titik Baru Hari Ini" cuma KPS belum-rekap, padahal keduanya sama-sama
-// "aktif hari ini"). Sekarang SATU sumbu (rentang waktu) yang jadi kartu;
-// tiap bucket menggabungkan KPS ber-rekap & belum-rekap via 2 kategori
-// backend (lihat BUCKET_CATEGORIES) -- status "bekas terbakar sudah
-// dipetakan Kemenhut atau belum" jadi badge per-baris di tabel (kolom
-// "Bekas Terbakar Kemenhut", isi "Ada"/"Belum Ada"), bukan kartu terpisah
-// lagi (2026-09-05, redesain atas masukan user).
-type TimeBucket = "today" | "yesterday" | "7d" | "inactive" | "total";
+// Riwayat singkat kartu KPI Peringatan Dini (semua 2026-09-05, iteratif
+// atas masukan user):
+//  v1: 4 kartu + 5 tab -> v2: 5 kartu berbasis RENTANG WAKTU, tiap kartu
+//      gabungan KPS ber-rekap & belum-rekap (buang sumbu "status rekap"
+//      yang dulu jadi 3 dari 5 kartu -> pindah jadi badge kolom tabel).
+//  v3 (sekarang): 5 kartu waktu terasa redundan ("Mereda Kemarin" 91 &
+//      "Aktif 7 Hari" 407 -- user bingung mana yang harus reaksi cepat).
+//      -> 3 TINGKAT AKSI: today=REAKSI CEPAT, receding=PANTAU KETAT (kemarin
+//      + 2-7 hari digabung), inactive=PEMANTAUAN PASIF. "Total 2026" turun
+//      jadi tautan teks kecil. Pembeda ber-rekap/belum-rekap tetap di kolom
+//      tabel "Bekas Terbakar Kemenhut" (isi "Ada"/"Belum Ada").
+// 3 tingkat AKSI (bukan 5 bucket waktu) -- 2026-09-05 iterasi ke-2 atas
+// masukan user: kartu "Mereda Kemarin" (91) & "Aktif 7 Hari" (407) terasa
+// redundan dan bikin bingung "mana yang harus reaksi cepat". Sekarang:
+//   today    = REAKSI CEPAT (aktif hari ini)
+//   receding = PANTAU KETAT (baru mereda: aktif kemarin ATAU 2-7 hari lalu,
+//              tidak hari ini) -- gabungan; rincian kemarin vs 2-7 hari
+//              cuma jadi sub-teks di kartu, bukan kartu sendiri
+//   inactive = PEMANTAUAN PASIF (0 hotspot 7 hari)
+//   total    = seluruh KPS terpantau 2026 (tautan teks kecil, bukan kartu)
+type TimeBucket = "today" | "receding" | "inactive" | "total";
 
-const BUCKET_CATEGORIES: Record<TimeBucket, { burned: string; earlyWarning: string }> = {
-  today: { burned: "burned_active_today", earlyWarning: "early_warning_today" },
-  yesterday: { burned: "burned_active_yesterday", earlyWarning: "early_warning_yesterday" },
-  "7d": { burned: "burned_active_7d", earlyWarning: "early_warning_7d" },
+// Tiap bucket = daftar PASANGAN kategori backend (ber-rekap + belum-rekap)
+// yang di-fetch lalu digabung. "receding" butuh 2 pasang (kemarin + 7 hari).
+const BUCKET_FETCH: Record<TimeBucket, Array<{ burned: string; earlyWarning: string }>> = {
+  today: [{ burned: "burned_active_today", earlyWarning: "early_warning_today" }],
+  receding: [
+    { burned: "burned_active_yesterday", earlyWarning: "early_warning_yesterday" },
+    { burned: "burned_active_7d", earlyWarning: "early_warning_7d" }
+  ],
   // Backend tidak punya kategori "early_warning_padam" tersendiri -- kita
-  // ambil early_warning_all (semua KPS belum-rekap yang pernah aktif tahun
-  // ini) lalu saring di klien (lihat loadItems) jadi yang BENAR-BENAR tidak
-  // aktif 7 hari terakhir, supaya tidak perlu ubah backend untuk ini.
-  inactive: { burned: "burned_padam_total", earlyWarning: "early_warning_all" },
-  total: { burned: "all_burned", earlyWarning: "early_warning_all" },
+  // ambil early_warning_all lalu saring di klien (lihat loadItems) jadi yang
+  // BENAR-BENAR 0 hotspot 7 hari, supaya tidak perlu ubah backend.
+  inactive: [{ burned: "burned_padam_total", earlyWarning: "early_warning_all" }],
+  total: [{ burned: "all_burned", earlyWarning: "early_warning_all" }]
 };
 
 interface SummaryMetrics {
@@ -170,11 +181,15 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
     }
   };
 
-  // Fetch list items -- SATU bucket waktu = SELALU 2 panggilan (kategori
-  // ber-rekap + belum-rekap) digabung jadi satu daftar, supaya kartu waktu
-  // manapun yang diklik menampilkan KEDUA kelompok KPS bersama, bukan cuma
-  // salah satu (itu keluhan awal soal "peringatan dini melulu yang pernah
-  // punya luas kebakaran").
+  // Fetch list items -- tiap bucket = 1 atau 2 pasang kategori backend
+  // (ber-rekap + belum-rekap), semua di-fetch paralel lalu digabung jadi
+  // satu daftar. Selalu menampilkan KEDUA kelompok KPS bersama (keluhan awal
+  // soal "peringatan dini melulu yang pernah punya luas kebakaran").
+  const currentCategories = useMemo(
+    () => BUCKET_FETCH[bucket].flatMap((p) => [p.burned, p.earlyWarning]),
+    [bucket]
+  );
+
   const buildListQuery = (cat: string) => {
     const query = new URLSearchParams({ category: cat, limit: "1500" });
     if (activeWilkerBps) query.append("wilker_bps", activeWilkerBps);
@@ -194,21 +209,21 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
   const loadItems = async () => {
     try {
       setLoadingItems(true);
-      const cats = BUCKET_CATEGORIES[bucket];
-      const [burnedItems, ewItemsRaw] = await Promise.all([
-        fetchCategory(cats.burned),
-        fetchCategory(cats.earlyWarning)
-      ]);
+      const results = await Promise.all(currentCategories.map(fetchCategory));
+      let merged = results.flat();
 
-      // Untuk bucket "inactive": early_warning_all tidak punya sub-kategori
-      // "tidak aktif" di backend -- saring di sini jadi yang benar-benar
-      // 0 hotspot di hari ini/kemarin/7 hari (lihat komentar BUCKET_CATEGORIES).
-      const ewItems =
-        bucket === "inactive"
-          ? ewItemsRaw.filter((i) => i.hotspots_today === 0 && i.hotspots_yesterday === 0 && i.hotspots_7d === 0)
-          : ewItemsRaw;
+      // Bucket "inactive": early_warning_all tidak punya sub-kategori
+      // "tidak aktif" di backend -- saring di sini jadi yang BENAR-BENAR
+      // 0 hotspot hari ini/kemarin/7 hari (lihat komentar BUCKET_FETCH).
+      if (bucket === "inactive") {
+        merged = merged.filter(
+          (i) => i.total_burned_ha > 0 || (i.hotspots_today === 0 && i.hotspots_yesterday === 0 && i.hotspots_7d === 0)
+        );
+      }
 
-      setItems([...burnedItems, ...ewItems]);
+      // Dedup by id (aman kalau nanti ada kategori yang tumpang tindih).
+      const seen = new Set<number>();
+      setItems(merged.filter((i) => (seen.has(i.id) ? false : (seen.add(i.id), true))));
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -236,10 +251,13 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
     const ew = summary.early_warning_stats;
     const burned = summary.burned_area_stats;
     const ewInactive = Math.max(0, ew.total_kps - ew.active_today - ew.active_yesterday - ew.active_7d);
+    const yesterday = burned.active_yesterday + ew.active_yesterday;
+    const d7 = burned.active_7d + ew.active_7d;
     return {
       today: burned.active_today + ew.active_today,
-      yesterday: burned.active_yesterday + ew.active_yesterday,
-      "7d": burned.active_7d + ew.active_7d,
+      yesterday, // rincian sub-teks kartu "Pantau Ketat"
+      d7,        // rincian sub-teks kartu "Pantau Ketat"
+      receding: yesterday + d7,
       inactive: burned.padam_total + ewInactive,
       total: burned.total_polygons + ew.total_kps
     };
@@ -295,25 +313,22 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
   }, [items, search, selectedZone, sortBy]);
 
   // Endpoint ekspor backend cuma terima SATU kategori sekaligus -- bucket
-  // waktu sekarang menggabungkan 2 kategori (ber-rekap + belum-rekap), jadi
-  // unduh dua file terpisah berurutan supaya kedua kelompok tetap lengkap
-  // di file yang diunduh (bukan cuma kelompok "ber-rekap" seperti dulu).
+  // aksi bisa memetakan ke 2 kategori (ber-rekap + belum-rekap) atau 4
+  // (bucket "receding" = kemarin + 7 hari), jadi unduh satu file per
+  // kategori berurutan supaya semua kelompok tetap lengkap.
   const handleDownloadExcel = async () => {
     try {
       setDownloading(true);
-      const cats = BUCKET_CATEGORIES[bucket];
       const wilkerQuery = activeWilkerBps ? `&wilker_bps=${encodeURIComponent(activeWilkerBps)}` : "";
       const wilkerFile = activeWilkerBps ? `-${activeWilkerBps.replace(/\s+/g, "_")}` : "";
       const dateSuffix = new Date().toISOString().slice(0, 10);
 
-      await downloadWithAuth(
-        `/api/early-warning/export.xlsx?category=${cats.burned}${wilkerQuery}`,
-        `rekap-analisis-kps-${cats.burned}${wilkerFile}-${dateSuffix}.xlsx`
-      );
-      await downloadWithAuth(
-        `/api/early-warning/export.xlsx?category=${cats.earlyWarning}${wilkerQuery}`,
-        `rekap-analisis-kps-${cats.earlyWarning}${wilkerFile}-${dateSuffix}.xlsx`
-      );
+      for (const cat of currentCategories) {
+        await downloadWithAuth(
+          `/api/early-warning/export.xlsx?category=${cat}${wilkerQuery}`,
+          `rekap-analisis-kps-${cat}${wilkerFile}-${dateSuffix}.xlsx`
+        );
+      }
     } catch (err: any) {
       alert("Gagal mengunduh Excel: " + err.message);
     } finally {
@@ -365,7 +380,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             }}
           >
             <Download size={15} />
-            {downloading ? "Mengunduh..." : "Download Excel (2 file)"}
+            {downloading ? "Mengunduh..." : `Download Excel (${currentCategories.length} file)`}
           </button>
 
           <button
@@ -426,172 +441,111 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
         </span>
       </div>
 
-      {/* KPI Cards -- redesain 2026-09-05: dulu 5 kartu mencampur 2 sumbu
-          (status rekap Kemenhut vs rentang waktu) tanpa pola konsisten (3
-          dari 5 kartu cuma KPS ber-rekap) -- bikin user bingung karena kartu
-          yang judulnya sekilas mirip ("Terbakar Hari Ini" vs "EW: Titik Baru
-          Hari Ini") sebenarnya dua populasi terpisah. Sekarang SATU sumbu
-          (rentang waktu) yang jadi kartu, tiap kartu = GABUNGAN KPS ber-rekap
-          & belum-rekap (lihat bucketCounts & BUCKET_CATEGORIES) -- status
-          rekap per-KPS dipindah jadi badge di kolom tabel "Status Rekap".
-          Style flex-column + marginTop:"auto" pada baris terakhir dipertahankan
-          dari versi sebelumnya supaya kartu tetap sejajar tingginya. */}
+      {/* KPI Cards -- 2026-09-05 iterasi ke-2: 5 kartu waktu (Hari Ini /
+          Kemarin / 7 Hari / Padam / Total) terasa redundan & bikin user
+          bingung "mana yang harus reaksi cepat". Sekarang 3 TINGKAT AKSI:
+          REAKSI CEPAT (aktif hari ini) / PANTAU KETAT (baru mereda: kemarin
+          ATAU 2-7 hari, digabung -- rincian jadi sub-teks) / PEMANTAUAN PASIF
+          (0 hotspot 7 hari). "Total 2026" turun jadi tautan teks kecil.
+          Tiap kartu tetap GABUNGAN KPS ber-rekap & belum-rekap. */}
       {summary && bucketCounts && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem", marginBottom: "1.1rem" }}>
-          {/* Card 1: Aktif hari ini (gabungan) */}
-          <div
-            onClick={() => setBucket("today")}
-            style={{
-              backgroundColor: bucket === "today" ? "rgba(239, 68, 68, 0.18)" : "rgba(255,255,255,0.04)",
-              border: `1px solid ${bucket === "today" ? "#ef4444" : "rgba(255,255,255,0.08)"}`,
-              borderRadius: "8px",
-              padding: "0.85rem",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-              display: "flex",
-              flexDirection: "column",
-              height: "100%"
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-              <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "#ef4444", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                🔴 Aktif Hari Ini
-              </span>
-              <AlertTriangle size={16} color="#ef4444" />
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "0.75rem", marginBottom: "0.55rem" }}>
+            {/* REAKSI CEPAT */}
+            <div
+              onClick={() => setBucket("today")}
+              style={{
+                backgroundColor: bucket === "today" ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.06)",
+                border: `1px solid ${bucket === "today" ? "#ef4444" : "rgba(239,68,68,0.35)"}`,
+                borderRadius: "8px", padding: "0.85rem", cursor: "pointer", transition: "all 0.2s ease",
+                display: "flex", flexDirection: "column", height: "100%"
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.15rem" }}>
+                <span style={{ fontSize: "0.8rem", fontWeight: "800", color: "#ef4444", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  🔴 Reaksi Cepat
+                </span>
+                <AlertTriangle size={16} color="#ef4444" />
+              </div>
+              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>Aktif hari ini — perlu verifikasi & regu siaga</div>
+              <div style={{ fontSize: "1.7rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
+                {bucketCounts.today} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
+              </div>
+              <div style={{ display: "flex", gap: "0.4rem", marginTop: "auto", paddingTop: "0.6rem", flexWrap: "wrap", fontSize: "0.7rem" }}>
+                <span style={{ backgroundColor: "rgba(34,197,94,0.2)", color: "#4ade80", padding: "0.15rem 0.4rem", borderRadius: "4px" }}>
+                  🟢 {summary.burned_area_stats.active_today} dipetakan
+                </span>
+                <span style={{ backgroundColor: "rgba(249,115,22,0.2)", color: "#fdba74", padding: "0.15rem 0.4rem", borderRadius: "4px" }}>
+                  🟠 {summary.early_warning_stats.active_today} belum
+                </span>
+              </div>
             </div>
-            <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
-              {bucketCounts.today} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
+
+            {/* PANTAU KETAT */}
+            <div
+              onClick={() => setBucket("receding")}
+              style={{
+                backgroundColor: bucket === "receding" ? "rgba(234, 179, 8, 0.18)" : "rgba(255,255,255,0.04)",
+                border: `1px solid ${bucket === "receding" ? "#eab308" : "rgba(255,255,255,0.08)"}`,
+                borderRadius: "8px", padding: "0.85rem", cursor: "pointer", transition: "all 0.2s ease",
+                display: "flex", flexDirection: "column", height: "100%"
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.15rem" }}>
+                <span style={{ fontSize: "0.8rem", fontWeight: "800", color: "#eab308", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  🟡 Pantau Ketat
+                </span>
+                <TrendingUp size={16} color="#eab308" />
+              </div>
+              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>Baru mereda — belum tentu padam, bisa nyala lagi</div>
+              <div style={{ fontSize: "1.7rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
+                {bucketCounts.receding} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
+              </div>
+              <div style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.6rem" }}>
+                {bucketCounts.yesterday} reda kemarin · {bucketCounts.d7} reda 2–7 hari
+              </div>
             </div>
-            {/* marginTop:auto -- baris terakhir tiap kartu dijepit ke bawah
-                supaya kelima kartu (badge 2 baris vs deskripsi 1 baris)
-                tetap terlihat sejajar bawahnya walau grid menyamakan tinggi. */}
-            <div style={{ display: "flex", gap: "0.4rem", marginTop: "auto", paddingTop: "0.6rem", flexWrap: "wrap", fontSize: "0.7rem" }}>
-              <span style={{ backgroundColor: "rgba(239,68,68,0.25)", color: "#fca5a5", padding: "0.15rem 0.4rem", borderRadius: "4px" }}>
-                🟢 {summary.burned_area_stats.active_today} bekas terbakar terpetakan
-              </span>
-              <span style={{ backgroundColor: "rgba(249,115,22,0.2)", color: "#fdba74", padding: "0.15rem 0.4rem", borderRadius: "4px" }}>
-                🟠 {summary.early_warning_stats.active_today} belum terpetakan
-              </span>
+
+            {/* PEMANTAUAN PASIF */}
+            <div
+              onClick={() => setBucket("inactive")}
+              style={{
+                backgroundColor: bucket === "inactive" ? "rgba(34, 197, 94, 0.18)" : "rgba(255,255,255,0.04)",
+                border: `1px solid ${bucket === "inactive" ? "#22c55e" : "rgba(255,255,255,0.08)"}`,
+                borderRadius: "8px", padding: "0.85rem", cursor: "pointer", transition: "all 0.2s ease",
+                display: "flex", flexDirection: "column", height: "100%"
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.15rem" }}>
+                <span style={{ fontSize: "0.8rem", fontWeight: "800", color: "#22c55e", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  🟢 Pemantauan Pasif
+                </span>
+                <ShieldCheck size={16} color="#22c55e" />
+              </div>
+              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>Tidak ada titik panas 7 hari terakhir</div>
+              <div style={{ fontSize: "1.7rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
+                {bucketCounts.inactive} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
+              </div>
             </div>
           </div>
 
-          {/* Card 2: Aktif kemarin / mereda (gabungan) */}
-          <div
-            onClick={() => setBucket("yesterday")}
-            style={{
-              backgroundColor: bucket === "yesterday" ? "rgba(249, 115, 22, 0.18)" : "rgba(255,255,255,0.04)",
-              border: `1px solid ${bucket === "yesterday" ? "#f97316" : "rgba(255,255,255,0.08)"}`,
-              borderRadius: "8px",
-              padding: "0.85rem",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-              display: "flex",
-              flexDirection: "column",
-              height: "100%"
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-              <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "#f97316", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                🟠 Mereda (Aktif Kemarin)
-              </span>
-              <TrendingUp size={16} color="#f97316" />
-            </div>
-            <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
-              {bucketCounts.yesterday} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
-            </div>
-            <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.5rem" }}>
-              Aktif kemarin, hari ini belum ada titik baru (bekas terbakar terpetakan & belum)
-            </div>
+          {/* Total 2026 -- tautan teks kecil, bukan kartu (sengaja tidak
+              menonjol: bukan info yang butuh reaksi). */}
+          <div style={{ marginBottom: "1rem" }}>
+            <button
+              type="button"
+              onClick={() => setBucket("total")}
+              style={{
+                background: "none", border: "none", cursor: "pointer", padding: "0.15rem 0",
+                fontSize: "0.75rem", color: bucket === "total" ? "#a78bfa" : "#6b7280",
+                textDecoration: bucket === "total" ? "underline" : "none"
+              }}
+            >
+              📊 Total terpantau 2026: <strong>{bucketCounts.total.toLocaleString("id-ID")}</strong> KPS
+              {bucket === "total" ? " (ditampilkan)" : " — klik untuk lihat semua"}
+            </button>
           </div>
-
-          {/* Card 3: Aktif 7 hari (gabungan) */}
-          <div
-            onClick={() => setBucket("7d")}
-            style={{
-              backgroundColor: bucket === "7d" ? "rgba(234, 179, 8, 0.18)" : "rgba(255,255,255,0.04)",
-              border: `1px solid ${bucket === "7d" ? "#eab308" : "rgba(255,255,255,0.08)"}`,
-              borderRadius: "8px",
-              padding: "0.85rem",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-              display: "flex",
-              flexDirection: "column",
-              height: "100%"
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-              <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "#eab308", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                🟡 Aktif 7 Hari
-              </span>
-              <FileSpreadsheet size={16} color="#eab308" />
-            </div>
-            <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
-              {bucketCounts["7d"]} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
-            </div>
-            <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.5rem" }}>
-              Sempat aktif 7 hari terakhir, tidak hari ini/kemarin (keduanya)
-            </div>
-          </div>
-
-          {/* Card 4: Tidak aktif / padam (gabungan) */}
-          <div
-            onClick={() => setBucket("inactive")}
-            style={{
-              backgroundColor: bucket === "inactive" ? "rgba(34, 197, 94, 0.18)" : "rgba(255,255,255,0.04)",
-              border: `1px solid ${bucket === "inactive" ? "#22c55e" : "rgba(255,255,255,0.08)"}`,
-              borderRadius: "8px",
-              padding: "0.85rem",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-              display: "flex",
-              flexDirection: "column",
-              height: "100%"
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-              <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "#22c55e", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                🟢 Tidak Aktif / Padam
-              </span>
-              <ShieldCheck size={16} color="#22c55e" />
-            </div>
-            <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
-              {bucketCounts.inactive} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
-            </div>
-            <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.5rem" }}>
-              0 hotspot 7 hari terakhir (bekas terbakar terpetakan & belum)
-            </div>
-          </div>
-
-          {/* Card 5: Total terpantau 2026 (gabungan) -- menggantikan "Total
-              Early Warning 2026" & "Seluruh KPS Terbakar" yang dulu terpisah. */}
-          <div
-            onClick={() => setBucket("total")}
-            style={{
-              backgroundColor: bucket === "total" ? "rgba(167, 139, 250, 0.18)" : "rgba(255,255,255,0.04)",
-              border: `1px solid ${bucket === "total" ? "#a78bfa" : "rgba(255,255,255,0.08)"}`,
-              borderRadius: "8px",
-              padding: "0.85rem",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-              display: "flex",
-              flexDirection: "column",
-              height: "100%"
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-              <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "#a78bfa", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                📊 Total Terpantau 2026
-              </span>
-              <BarChart3 size={16} color="#a78bfa" />
-            </div>
-            <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
-              {bucketCounts.total} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
-            </div>
-            <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.5rem" }}>
-              Seluruh KPS pernah tercatat luas terbakar ATAU hotspot 2026
-            </div>
-          </div>
-        </div>
+        </>
       )}
 
       {/* Search & Filter Bar */}
