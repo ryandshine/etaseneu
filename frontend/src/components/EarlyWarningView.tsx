@@ -21,15 +21,16 @@ import type { AppSession } from "../types/api";
 //      yang dulu jadi 3 dari 5 kartu -> pindah jadi badge kolom tabel).
 //  v3 (sekarang): 5 kartu waktu terasa redundan ("Mereda Kemarin" 91 &
 //      "Aktif 7 Hari" 407 -- user bingung mana yang harus reaksi cepat).
-//      -> 3 kartu berdasar STATUS API: today="Api Aktif Hari Ini",
-//      receding="Baru Reda" (kemarin + 2-7 hari digabung, rincian jadi
-//      sub-teks), inactive="Tidak Aktif". "Total 2026" turun jadi tautan
-//      teks kecil.
+//      -> 3 kartu berdasar STATUS HOTSPOT (bukan "api" -- 1 titik panas
+//      belum tentu kebakaran): today="Ada Hotspot Hari Ini",
+//      receding="Hotspot Mereda" (kemarin + 2-7 hari digabung, rincian jadi
+//      sub-teks), inactive="Tidak Ada Hotspot". "Total 2026" turun jadi
+//      tautan teks kecil.
 //  Pembeda "punya catatan luas terbakar resmi Kemenhut atau belum" TIDAK
 //  lagi jadi kolom badge terpisah (redundan dengan kolom "Luas Terbakar
 //  Tercatat" yang sudah ada -- dua-duanya dari total_burned_ha); kolom luas
 //  itu sekarang menampilkan "Belum tercatat" (bukan "-") kalau 0. Di kartu
-//  "Api Aktif Hari Ini" tetap ada rincian "N luasnya tercatat / N belum".
+//  "Ada Hotspot Hari Ini" tetap ada rincian "N luasnya tercatat / N belum".
 type TimeBucket = "today" | "receding" | "inactive" | "total";
 
 // Tiap bucket = daftar PASANGAN kategori backend (ber-rekap + belum-rekap)
@@ -135,6 +136,13 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
     }
     return selectedWilker || "";
   }, [session, selectedWilker]);
+
+  // Nama bulan berjalan (WIB), untuk label kolom "HS <bulan>" -- ikut
+  // DATE_TRUNC('month', NOW()) di backend, otomatis ganti tiap ganti bulan.
+  const namaBulanIni = useMemo(
+    () => new Date().toLocaleString("id-ID", { month: "long", timeZone: "Asia/Jakarta" }),
+    []
+  );
 
   // Filters
   const [search, setSearch] = useState("");
@@ -459,11 +467,11 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.15rem" }}>
                 <span style={{ fontSize: "0.8rem", fontWeight: "800", color: "#ef4444", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                  🔴 Api Aktif Hari Ini
+                  🔴 Ada Hotspot Hari Ini
                 </span>
                 <AlertTriangle size={16} color="#ef4444" />
               </div>
-              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>Perlu verifikasi lapangan & regu siaga</div>
+              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>Titik panas terdeteksi hari ini — perlu verifikasi lapangan & regu siaga</div>
               <div style={{ fontSize: "1.7rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
                 {bucketCounts.today} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
               </div>
@@ -489,11 +497,11 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.15rem" }}>
                 <span style={{ fontSize: "0.8rem", fontWeight: "800", color: "#eab308", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                  🟡 Baru Reda
+                  🟡 Hotspot Mereda
                 </span>
                 <TrendingUp size={16} color="#eab308" />
               </div>
-              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>Tidak ada titik hari ini, tapi aktif dalam 7 hari terakhir — bisa nyala lagi</div>
+              <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginBottom: "0.4rem" }}>Tidak ada titik hari ini, tapi ada dalam 7 hari terakhir — bisa muncul lagi</div>
               <div style={{ fontSize: "1.7rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
                 {bucketCounts.receding} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
               </div>
@@ -514,7 +522,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.15rem" }}>
                 <span style={{ fontSize: "0.8rem", fontWeight: "800", color: "#22c55e", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                  🟢 Tidak Aktif
+                  🟢 Tidak Ada Hotspot
                 </span>
                 <ShieldCheck size={16} color="#22c55e" />
               </div>
@@ -682,10 +690,11 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               </th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS Kemarin</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS 7 Hari</th>
-              {/* Label dulu hardcoded "HS Agt" padahal datanya
-                  DATE_TRUNC('month', NOW()) -- bulan BERJALAN, bukan selalu
-                  Agustus (sekarang sudah September). */}
-              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS Bulan Ini</th>
+              {/* Datanya DATE_TRUNC('month', NOW()) = bulan BERJALAN. Nama
+                  bulannya di-derive dari tanggal sekarang (WIB) supaya
+                  otomatis ganti tiap ganti bulan -- mis. "HS September" ->
+                  "HS Oktober" tanpa ubah kode. */}
+              <th style={{ padding: "0.75rem 0.8rem", textAlign: "center" }}>HS {namaBulanIni}</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "right" }}>Skor FTRI</th>
               <th style={{ padding: "0.75rem 0.8rem", textAlign: "center", minWidth: "150px" }}>
                 Kekuatan Sinyal

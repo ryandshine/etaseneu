@@ -463,10 +463,10 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               Kemarin" & "Aktif 7 Hari" bikin user bingung mana yang harus
               reaksi cepat). Sekarang `bucket: TimeBucket` =
               `"today" | "receding" | "inactive" | "total"`, dinamai berdasar
-              STATUS API (bukan intensitas tindakan — "Pantau Ketat"/"Pasif"
-              dulu bikin bingung): `today`="Api Aktif Hari Ini",
-              `receding`="Baru Reda" (gabungan "aktif kemarin" + "aktif 2-7
-              hari"), `inactive`="Tidak Aktif" (0 hotspot 7 hari),
+              STATUS HOTSPOT — SENGAJA hindari kata "api" (1 titik panas belum
+              tentu kebakaran): `today`="Ada Hotspot Hari Ini",
+              `receding`="Hotspot Mereda" (gabungan "aktif kemarin" + "aktif
+              2-7 hari"), `inactive`="Tidak Ada Hotspot" (0 hotspot 7 hari),
               `total`=seluruh
               KPS 2026 (turun jadi **tautan teks kecil di bawah 3 kartu**,
               bukan kartu — sengaja tidak menonjol). `BUCKET_FETCH` memetakan
@@ -489,16 +489,18 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               menampilkan `N ha` kalau `>0`, atau teks redup *"Belum tercatat"*
               kalau 0 (bukan "-" lagi) — "Belum tercatat" BUKAN berarti tidak
               terbakar, cuma belum masuk catatan luas resmi Kemenhut. Kartu
-              "Api Aktif Hari Ini" tetap bawa rincian "N luasnya sudah tercatat
-              / N belum tercatat". Tombol ekspor mengunduh
+              "Ada Hotspot Hari Ini" tetap bawa rincian "N luasnya sudah
+              tercatat / N belum tercatat". Tombol ekspor mengunduh
               **1 file per kategori** dari `currentCategories` (2 file untuk
               kebanyakan bucket, 4 untuk `receding`) — endpoint backend cuma
               terima satu kategori per panggilan.
               Filter Zona Perambatan cuma tampil saat `bucket==="today"`
               (zone_code KPS belum-rekap selalu `"new_2026"`, tidak match opsi
-              manapun). Kolom "HS Agt" diganti **"HS Bulan Ini"** (label lama
-              hardcode nama bulan padahal datanya `DATE_TRUNC('month', NOW())`
-              yang ikut bulan berjalan). Catatan konsolidasi lama (4 kartu+tab
+              manapun). Kolom "HS Agt" → **`HS {namaBulanIni}`** (mis. "HS
+              September") — nama bulan di-derive dari tanggal sekarang (WIB)
+              via `toLocaleString("id-ID", {month:"long"})`, otomatis ganti
+              tiap ganti bulan; datanya `DATE_TRUNC('month', NOW())` (bulan
+              berjalan). Catatan konsolidasi lama (4 kartu+tab
               → 5 kartu berbasis `category`) sudah digantikan seluruhnya oleh
               paragraf ini. **Kolom "Kekuatan Sinyal" (2026-09-05)**: supaya
               user yakin datanya, `get_kps_analysis_list` (early_warning_service.py)
