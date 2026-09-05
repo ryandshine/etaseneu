@@ -442,11 +442,19 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               view lain — kalau menambah section baru di sini pertimbangkan pindah ke
               kelas CSS supaya tidak makin menyimpang. Kartu KPI dibuat
               `display:flex; flexDirection:column; height:"100%"` + baris
-              detail/badge terakhir `marginTop:"auto"` supaya 4 kartu tetap sejajar
-              biar isi baris terakhirnya beda panjang [2026-09-05]. Tab kategori
-              `flexWrap:"wrap"` (BUKAN `overflowX:"auto"` satu baris) — dulu di
-              sidebar lebar/layar sempit label tab terpotong di belakang scrollbar
-              bawaan browser), FilterPanel.tsx, SidebarNav.tsx (satu area gulir
+              detail/badge terakhir `marginTop:"auto"` supaya kartu tetap sejajar
+              biar isi baris terakhirnya beda panjang [2026-09-05]. **5 kartu
+              KPI = SATU-SATUNYA selector kategori (2026-09-05, konsolidasi)**:
+              tadinya ada 4 kartu KPI DAN baris 5 tab kategori terpisah di
+              bawahnya yang mengubah `category` yang SAMA PERSIS (mis. kartu
+              "Terbakar Hari Ini" & tab "🔴 Terbakar Hari Ini (N)" sama-sama set
+              `category="burned_active_today"`) — dua band kontrol duplikat untuk
+              satu fungsi, dengan dua gaya "terpilih" berbeda pula (border+warna
+              kartu vs latar biru tab). Baris tab DIHAPUS, kartu ke-5 "Seluruh
+              KPS Terbakar" (`category="all_burned"`, dulu CUMA ada sebagai tab)
+              ditambahkan menyusul gaya 4 kartu lain — kalau menambah opsi
+              kategori baru, taruh sebagai kartu ke-6+ di grid ini, JANGAN
+              menghidupkan lagi pola tab terpisah. FilterPanel.tsx, SidebarNav.tsx (satu area gulir
               di `.side-rail`; menu Pengaturan menampilkan info akun untuk semua role,
               prop `isAdmin` → role user hanya tidak melihat tombol Sync/Prewarm),
               BurnedAreaCard.tsx, WeatherOverlay.tsx, dll.

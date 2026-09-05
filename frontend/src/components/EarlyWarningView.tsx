@@ -9,9 +9,8 @@ import {
   ChevronRight,
   TrendingUp,
   FileSpreadsheet,
-  Info,
+  BarChart3,
   Wind,
-  ShieldAlert,
   Lock
 } from "lucide-react";
 import { authFetch, downloadWithAuth } from "../lib/api";
@@ -342,7 +341,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               {summary.burned_area_stats.active_today} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
             </div>
             {/* marginTop:auto -- baris terakhir tiap kartu dijepit ke bawah
-                supaya keempat kartu (badge 2 baris vs deskripsi 1 baris)
+                supaya kelima kartu (badge 2 baris vs deskripsi 1 baris)
                 tetap terlihat sejajar bawahnya walau grid menyamakan tinggi. */}
             <div style={{ display: "flex", gap: "0.4rem", marginTop: "auto", paddingTop: "0.6rem", flexWrap: "wrap", fontSize: "0.7rem" }}>
               <span style={{ backgroundColor: "rgba(239,68,68,0.25)", color: "#fca5a5", padding: "0.15rem 0.4rem", borderRadius: "4px" }}>
@@ -440,44 +439,41 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
               Total KPS terdeteksi hotspot di 2026 tanpa rekap luasan
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Tabs Navigation -- flexWrap (bukan overflowX-only): di sidebar
-          expanded/layar sempit lima tab tidak muat satu baris; sebelumnya
-          dipaksa satu baris + overflow-x, hasilnya label terpotong ("Seluruh
-          KPS Terbakar (26...)") di belakang scrollbar bawaan browser yang
-          tidak konsisten dengan gaya panel lain. Wrap ke baris berikutnya
-          jauh lebih rapi untuk lima label pendek begini. */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "0.5rem", marginBottom: "0.85rem" }}>
-        {[
-          { id: "burned_active_today", label: `🔴 Terbakar Hari Ini (${summary?.burned_area_stats.active_today ?? 0})` },
-          { id: "burned_clear_today", label: `🟢 Padam Hari Ini (${summary?.burned_area_stats.clear_today ?? 0})` },
-          { id: "early_warning_today", label: `⚡ Early Warning Hari Ini (${summary?.early_warning_stats.active_today ?? 0})` },
-          { id: "early_warning_all", label: `📋 Semua Early Warning (${summary?.early_warning_stats.total_kps ?? 0})` },
-          { id: "all_burned", label: `📊 Seluruh KPS Terbakar (${summary?.burned_area_stats.total_polygons ?? 0})` }
-        ].map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setCategory(t.id as CategoryType)}
+          {/* Card 5: Seluruh KPS Terbakar -- dulu HANYA ada sebagai tab,
+              sekarang jadi kartu ke-5 di sini (2026-09-05, konsolidasi:
+              4 kartu + 5 tab dulu adalah SATU selector kategori yang sama
+              dirender dua kali dalam dua band terpisah -- boros ruang
+              vertikal & dua gaya "terpilih" berbeda untuk hal yang sama). */}
+          <div
+            onClick={() => setCategory("all_burned")}
             style={{
-              padding: "0.5rem 0.85rem",
-              borderRadius: "6px",
-              border: "none",
-              fontSize: "0.8rem",
-              fontWeight: category === t.id ? "700" : "500",
-              backgroundColor: category === t.id ? "#2563eb" : "rgba(255,255,255,0.05)",
-              color: category === t.id ? "#ffffff" : "#9ca3af",
+              backgroundColor: category === "all_burned" ? "rgba(167, 139, 250, 0.18)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${category === "all_burned" ? "#a78bfa" : "rgba(255,255,255,0.08)"}`,
+              borderRadius: "8px",
+              padding: "0.85rem",
               cursor: "pointer",
-              whiteSpace: "nowrap",
-              transition: "all 0.15s ease"
+              transition: "all 0.2s ease",
+              display: "flex",
+              flexDirection: "column",
+              height: "100%"
             }}
           >
-            {t.label}
-          </button>
-        ))}
-      </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+              <span style={{ fontSize: "0.75rem", fontWeight: "600", color: "#a78bfa", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                📊 Seluruh KPS Terbakar
+              </span>
+              <BarChart3 size={16} color="#a78bfa" />
+            </div>
+            <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
+              {summary.burned_area_stats.total_polygons} <span style={{ fontSize: "0.85rem", fontWeight: "normal", color: "#9ca3af" }}>KPS</span>
+            </div>
+            <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "auto", paddingTop: "0.5rem" }}>
+              Rekap seluruh KPS yang pernah tercatat luas bekas terbakar
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search & Filter Bar */}
       <div style={{ display: "flex", gap: "0.6rem", marginBottom: "0.85rem", flexWrap: "wrap", alignItems: "center" }}>
