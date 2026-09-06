@@ -1,6 +1,6 @@
-// Taksonomi 5 kelas mandiri ETA SENEU (formula v6, 2026-09-06)
+// Taksonomi 5 kelas mandiri ETA SENEU (formula v8, 2026-09-07)
 // Hutan, Pertanian/Perkebunan, Semak/Belukar, Lahan Basah/Perairan, Lahan Terbuka.
-// Multi-indeks Sentinel-2 (NDMI) + fenologi tahunan (ndvi_std) + SAR S1 tanpa bias sawit.
+// Ambang batas spektral adaptif persentil lokal + koefisien variasi fenologi (ndvi_cv).
 export type LandCoverClassKey =
   | "hutan"
   | "pertanian"
@@ -26,4 +26,4 @@ export const LAND_COVER_YEARS: readonly number[] = [2021, 2022, 2023, 2024, 2025
 // `FORMULA_VERSION` di backend/app/services/land_cover_service.py. Cuma
 // dipakai daftar Tutupan Lahan (endpoint /polygons tidak membawa versi
 // terkini); LandCoverPanel memakai `current_formula_version` dari /status.
-export const LAND_COVER_FORMULA_VERSION = 6;
+export const LAND_COVER_FORMULA_VERSION = 8;

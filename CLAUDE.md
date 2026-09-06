@@ -238,7 +238,10 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
     `land_cover_service.py` (v1 = sebelum audit 2026-09-05, v2 = formula audit tanggal itu, v3 =
     + SAR + konsensus Hansen/WorldCover + aturan transisi temporal, v4 = taksonomi IPCC, v5 = 5 kelas
     mandiri ETA SENEU tanpa model pihak ketiga, v6 = peningkatan akurasi lanskap KPS Nusantara dengan
-    fenologi temporal ndvi_std + kelembaban NDMI tanpa bias sempit kelapa sawit). Naikkan
+    fenologi temporal ndvi_std + kelembaban NDMI tanpa bias sempit kelapa sawit, v7 = kalibrasi pemisah
+    pertanian vs semak belukar tropis berbasis biomassa SAR VH, kelembaban NDMI & dinamika panen ndvi_std,
+    serta eliminasi lubang spasial MMU lewat absorpsi modal tetangga, v8 = ambang batas spektral adaptif
+    persentil lokal p15/p40/p65/p85 + koefisien variasi fenologi musiman ndvi_cv invarian-skala). Naikkan
     `FORMULA_VERSION` (+ `LAND_COVER_FORMULA_VERSION` frontend, WAJIB sama) tiap kali metode ATAU
     skema kelas berubah — SEMUA hasil versi lebih lama otomatis tampil badge "Metode lama" dan
     TIDAK dihitung ulang otomatis (admin hapus lalu jalankan lagi per poligon). Kolom

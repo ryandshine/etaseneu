@@ -31,12 +31,16 @@ import logging
 logger = logging.getLogger("land_cover.labels")
 
 
-def spectral_seed_image(ee, feat_img, class_idx_of: dict[str, int], use_sar: bool = False):
+def spectral_seed_image(ee, feat_img, class_idx_of: dict[str, int], sample_region=None, use_sar: bool = False):
     """Citra label latih murni ('seed') berband `class_idx`.
 
     Hanya piksel dengan keyakinan fisik/spektral tinggi untuk salah satu dari 5
     kelas yang diberi nilai (0..4). Piksel ambigu/transisi di-mask, sehingga
     `stratifiedSample` hanya mengambil contoh-contoh murni (endmembers).
+
+    Mendukung ambang batas adaptif (Local Percentiles p15/p40/p65/p85) jika
+    `sample_region` diberikan, menyesuaikan otomatis dengan biogeografi lokal
+    kawasan KPS di seluruh Indonesia (dari hutan hujan basah hingga savana).
     """
     ndvi = feat_img.select("ndvi")
     mndwi = feat_img.select("mndwi")
@@ -56,11 +60,41 @@ def spectral_seed_image(ee, feat_img, class_idx_of: dict[str, int], use_sar: boo
     except (KeyError, AttributeError):
         ndvi_std = None
 
+    try:
+        ndvi_cv = feat_img.select("ndvi_cv")
+    except (KeyError, AttributeError):
+        ndvi_cv = None
+
     idx_hutan = class_idx_of["hutan"]
     idx_pertanian = class_idx_of["pertanian"]
     idx_semak = class_idx_of["semak"]
     idx_basah = class_idx_of["basah"]
     idx_terbuka = class_idx_of["terbuka"]
+
+    # Ambang adaptif berbasis persentil spasial lokal kawasan
+    th_hutan = 0.76
+    th_semak_high = 0.70
+    th_semak_low = 0.35
+    th_terbuka = 0.28
+    if sample_region is not None and hasattr(feat_img, "reduceRegion") and hasattr(ee, "Reducer"):
+        try:
+            pct = feat_img.select(["ndvi"]).reduceRegion(
+                reducer=ee.Reducer.percentile([15, 40, 65, 85]),
+                geometry=sample_region,
+                scale=30,
+                maxPixels=1e7,
+                tileScale=4,
+            )
+            p85 = ee.Number(pct.get("ndvi_p85"))
+            p65 = ee.Number(pct.get("ndvi_p65"))
+            p40 = ee.Number(pct.get("ndvi_p40"))
+            p15 = ee.Number(pct.get("ndvi_p15"))
+            th_hutan = p85.max(0.68).min(0.84)
+            th_semak_high = p65.max(0.50).min(0.72)
+            th_semak_low = p40.max(0.28).min(0.42)
+            th_terbuka = p15.max(0.18).min(0.32)
+        except Exception:  # noqa: BLE001
+            pass
 
     # 1. Badan Air & Lahan Basah (rawa gambut/mangrove/sungai):
     #    MNDWI tinggi, serapan kuat di NIR, atau NDMI tinggi pada genangan/substrat jenuh air
@@ -74,46 +108,59 @@ def spectral_seed_image(ee, feat_img, class_idx_of: dict[str, int], use_sar: boo
         c_basah = c_basah.Or(mndwi.gt(0.0).And(vh.lt(-20.0)).And(vv.lt(-14.0)))
 
     # 2. Lahan Terbuka: BSI positif, NDVI sangat rendah, bukan air, pantulan merah nyata, NDMI negatif/kering
-    c_terbuka = ndvi.lt(0.28).And(bsi.gt(0.0)).And(mndwi.lt(-0.05)).And(b4.gt(0.06))
+    c_terbuka = ndvi.lt(th_terbuka).And(bsi.gt(0.0)).And(mndwi.lt(-0.05)).And(b4.gt(0.06))
     if ndmi is not None:
         c_terbuka = c_terbuka.And(ndmi.lt(0.0))
 
     # 3. Hutan Alami / Kanopi Rapat Permanen:
-    #    Kehijauan tinggi, NBR tinggi, kanopi tebal & lembab, stabilitas fenologi sepanjang tahun
-    c_hutan = ndvi.gte(0.76).And(nbr.gte(0.48)).And(b8.gte(0.24)).And(mndwi.lt(-0.15))
+    #    Kehijauan tinggi (adaptif terhadap tutupan lokal), NBR tinggi, kanopi tebal & lembab, fenologi stabil
+    c_hutan = ndvi.gte(th_hutan).And(nbr.gte(0.48)).And(b8.gte(0.24)).And(mndwi.lt(-0.15))
     if ndmi is not None:
         c_hutan = c_hutan.And(ndmi.gte(0.10))
     if ndvi_std is not None:
         # Kanopi pohon hutan mantap relatif stabil sepanjang tahun (stdDev NDVI rendah)
         c_hutan = c_hutan.And(ndvi_std.lt(0.13))
+    if ndvi_cv is not None:
+        c_hutan = c_hutan.And(ndvi_cv.lt(0.15))
     if use_sar:
         vh = feat_img.select("VH")
         # Hamburan volume tajuk pohon tidak beraturan (VH tinggi)
         c_hutan = c_hutan.And(vh.gte(-14.0))
 
     # 4. Semak / Belukar & Savana: Vegetasi sedang-rendah, tanah tertutup, bukan pohon tinggi
-    c_semak = ndvi.gte(0.32).And(ndvi.lt(0.52)).And(bsi.lte(0.04)).And(mndwi.lt(-0.05))
+    #    Rentang adaptif lokal p40..p65, kadar air & biomassa kayu rendah, fenologi stabil
+    c_semak = ndvi.gte(th_semak_low).And(ndvi.lt(th_semak_high)).And(bsi.lte(0.04)).And(mndwi.lt(-0.05))
     if ndmi is not None:
-        c_semak = c_semak.And(ndmi.lt(0.18))
+        c_semak = c_semak.And(ndmi.lt(0.14))
+    if ndvi_std is not None:
+        c_semak = c_semak.And(ndvi_std.lt(0.12))
+    if ndvi_cv is not None:
+        c_semak = c_semak.And(ndvi_cv.lt(0.18))
     if use_sar:
         vh = feat_img.select("VH")
-        c_semak = c_semak.And(vh.lt(-15.0))
+        c_semak = c_semak.And(vh.lt(-14.8))
 
     # 5. Pertanian, Agroforestri & Kebun Rakyat:
-    #    a) Pertanian/ladang semusim fase vegetatif kemarau: NDVI 0.52 s/d 0.76
-    #    b) Agroforestri & kebun campuran berkanopi rapat (kopi, kakao, karet, buah):
-    #       NDVI >= 0.74 dengan pantulan SWIR lebih nyata (B11 >= 0.13) dan NBR < 0.48
-    #    c) Pertanian/ladang semusim dengan variabilitas fenologi tanam-panen tinggi (ndvi_std >= 0.14)
-    c_pertanian_crop = ndvi.gte(0.52).And(ndvi.lt(0.76)).And(mndwi.lt(-0.05))
-    c_pertanian_agro = ndvi.gte(0.74).And(b11.gte(0.13)).And(nbr.lt(0.48))
-    c_pertanian = c_pertanian_crop.Or(c_pertanian_agro)
+    #    a) Pertanian/ladang semusim: variabilitas fenologi tanam-panen nyata (ndvi_std >= 0.12 atau ndvi_cv >= 0.20)
+    #    b) Pertanian/ladang lahan olahan kemarau: reflektansi tanah garapan nyata (B11 >= 0.13, bsi >= -0.04)
+    #    c) Agroforestri & kebun campuran berkanopi rapat (kopi, kakao, karet, buah):
+    #       NDVI >= 0.70 dengan pantulan SWIR lebih nyata (B11 >= 0.125) dan NBR < 0.48
+    #    d) Kebun pohon dengan biomassa tajuk tinggi pada radar SAR (VH >= -14.5 dB)
+    c_pertanian_tillage = ndvi.gte(0.45).And(ndvi.lt(0.72)).And(b11.gte(0.13)).And(bsi.gte(-0.04)).And(mndwi.lt(-0.05))
+    c_pertanian_agro = ndvi.gte(0.70).And(b11.gte(0.125)).And(nbr.lt(0.48))
+    if ndmi is not None:
+        c_pertanian_agro = c_pertanian_agro.And(ndmi.gte(0.10))
+    c_pertanian = c_pertanian_tillage.Or(c_pertanian_agro)
     if ndvi_std is not None:
-        c_pertanian_seasonal = ndvi.gte(0.45).And(ndvi_std.gte(0.14)).And(mndwi.lt(-0.05))
+        c_pertanian_seasonal = ndvi.gte(0.42).And(ndvi_std.gte(0.12)).And(mndwi.lt(-0.05))
         c_pertanian = c_pertanian.Or(c_pertanian_seasonal)
+    if ndvi_cv is not None:
+        c_pertanian_cv = ndvi.gte(0.38).And(ndvi_cv.gte(0.20)).And(mndwi.lt(-0.05))
+        c_pertanian = c_pertanian.Or(c_pertanian_cv)
     if use_sar:
         ratio = feat_img.select("VH_VV_ratio")
         vh = feat_img.select("VH")
-        c_pertanian = c_pertanian.Or(ndvi.gte(0.65).And(ratio.lt(-6.5)).And(vh.lt(-14.0)))
+        c_pertanian = c_pertanian.Or(ndvi.gte(0.62).And(vh.gte(-14.5)).And(ratio.lt(-6.2)))
 
     # Gabungkan seed berurutan pada citra tak termask, lalu mask hanya piksel valid
     valid_seed_mask = c_terbuka.Or(c_semak).Or(c_pertanian).Or(c_hutan).Or(c_basah)
@@ -152,6 +199,11 @@ def rule_based_classify(ee, feat_img, class_idx_of: dict[str, int], use_sar: boo
     except (KeyError, AttributeError):
         ndvi_std = None
 
+    try:
+        ndvi_cv = feat_img.select("ndvi_cv")
+    except (KeyError, AttributeError):
+        ndvi_cv = None
+
     idx_hutan = class_idx_of["hutan"]
     idx_pertanian = class_idx_of["pertanian"]
     idx_semak = class_idx_of["semak"]
@@ -168,12 +220,20 @@ def rule_based_classify(ee, feat_img, class_idx_of: dict[str, int], use_sar: boo
     classified = classified.where(is_terbuka, idx_terbuka)
 
     # 2. Pertanian, agroforestri & kebun rakyat:
-    is_pertanian = (
-        (ndvi.gte(0.50).And(ndvi.lt(0.74)))
-        .Or(ndvi.gte(0.74).And(b11.gte(0.13)).And(nbr.lt(0.50)))
-    )
+    #    Hanya jika memiliki penanda pertanian nyata (fenologi dinamis, tanah garapan kemarau,
+    #    atau profil spektral agroforestri), BUKAN sekadar NDVI vegetasi hijau.
+    is_pertanian_tillage = ndvi.gte(0.45).And(ndvi.lt(0.72)).And(b11.gte(0.13)).And(bsi.gte(-0.03)).And(mndwi.lt(-0.05))
+    is_pertanian_agro = ndvi.gte(0.70).And(b11.gte(0.125)).And(nbr.lt(0.50))
+    if ndmi is not None:
+        is_pertanian_agro = is_pertanian_agro.And(ndmi.gte(0.08))
+    is_pertanian = is_pertanian_tillage.Or(is_pertanian_agro)
     if ndvi_std is not None:
-        is_pertanian = is_pertanian.Or(ndvi.gte(0.45).And(ndvi_std.gte(0.13)).And(mndwi.lt(-0.05)))
+        is_pertanian = is_pertanian.Or(ndvi.gte(0.42).And(ndvi_std.gte(0.12)).And(mndwi.lt(-0.05)))
+    if ndvi_cv is not None:
+        is_pertanian = is_pertanian.Or(ndvi.gte(0.38).And(ndvi_cv.gte(0.20)).And(mndwi.lt(-0.05)))
+    if use_sar:
+        vh = feat_img.select("VH")
+        is_pertanian = is_pertanian.Or(ndvi.gte(0.62).And(vh.gte(-14.5)).And(nbr.lt(0.50)))
     classified = classified.where(is_pertanian, idx_pertanian)
 
     # 3. Hutan: kanopi rapat tebal & stabil

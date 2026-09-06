@@ -72,12 +72,15 @@ S2_COLLECTION = "COPERNICUS/S2_SR_HARMONIZED"
 #   6 = 2026-09-06: Peningkatan akurasi lanskap KPS Nusantara (agroforestri kopi/kakao/karet,
 #       hutan musim, sawah/ladang, rawa gambut): penambahan variabilitas fenologi tahunan
 #       (ndvi_std) dan indeks kelembaban kanopi (ndmi), tanpa bias sempit kelapa sawit.
-FORMULA_VERSION = 6
+#   7 = 2026-09-07: Kalibrasi pemisah pertanian vs semak belukar tropis (biomassa SAR VH,
+#       kelembaban NDMI, dan fenologi ndvi_std); eliminasi lubang spasial MMU (clump modal fill)
+#   8 = 2026-09-07: Ambang batas spektral adaptif persentil lokal (p15/p40/p65/p85) +
+#       koefisien variasi fenologi musiman (ndvi_cv) invarian-skala
+FORMULA_VERSION = 8
 FORMULA_LABEL = (
-    "Sentinel-2 L2A median kemarau + variabilitas fenologi ndvi_std + NDMI + "
+    "Sentinel-2 L2A median kemarau + variabilitas fenologi ndvi_std + ndvi_cv + NDMI + "
     "Sentinel-1 SAR + Random Forest; 5 kelas mandiri ETA SENEU (tanpa guru eksternal); "
-    "endmember spektral adaptif lanskap KPS; filter awan SCL multi-layer; "
-    "aturan transisi temporal (ETA SENEU v6)"
+    "endmember adaptif persentil lokal (p15/p40/p65/p85); eliminasi lubang spasial MMU (ETA SENEU v8)"
 )
 
 YEARS: tuple[int, ...] = (2021, 2022, 2023, 2024, 2025)
@@ -90,7 +93,7 @@ MIN_SAMPLES_PER_CLASS = 30
 DRY_SEASON = ("05-01", "10-31")
 OPTICAL_FEATURE_NAMES = [
     "B2", "B3", "B4", "B8", "B11", "B12",
-    "ndvi", "evi", "nbr", "ndmi", "mndwi", "ndbi", "bsi", "ndvi_std",
+    "ndvi", "evi", "nbr", "ndmi", "mndwi", "ndbi", "bsi", "ndvi_std", "ndvi_cv",
     "elevation", "slope",
 ]
 USE_SAR = True
@@ -329,11 +332,12 @@ class LandCoverService:
             .rename("evi")
         )
         ndvi_std = self._s2_ndvi_std(ee, clip_to, full_start, full_end)
+        ndvi_cv = ndvi_std.divide(ndvi.abs().max(0.05)).rename("ndvi_cv")
         dem = ee.Image("NASA/NASADEM_HGT/001").select("elevation")
         slope = ee.Terrain.products(dem).select("slope") if hasattr(ee, "Terrain") else dem.rename("slope")
         feat = ee.Image.cat(
             s2.select(["B2", "B3", "B4", "B8", "B11", "B12"]),
-            ndvi, evi, nbr, ndmi, mndwi, ndbi, bsi, ndvi_std,
+            ndvi, evi, nbr, ndmi, mndwi, ndbi, bsi, ndvi_std, ndvi_cv,
             dem.rename("elevation"), slope.rename("slope"),
         ).rename(OPTICAL_FEATURE_NAMES)
         if sar_img is not None:
@@ -380,7 +384,9 @@ class LandCoverService:
 
     def _year_training_points(self, ee, roi, feat_img, year: int, region=None, use_sar: bool = False):
         sample_region = region if region is not None else roi
-        class_idx = spectral_seed_image(ee, feat_img, _CLASS_IDX, use_sar=use_sar)
+        class_idx = spectral_seed_image(
+            ee, feat_img, _CLASS_IDX, sample_region=sample_region, use_sar=use_sar
+        )
         stack = feat_img.addBands(class_idx)
         return stack.stratifiedSample(
             numPoints=SAMPLES_PER_CLASS_PER_YEAR,
@@ -481,8 +487,11 @@ class LandCoverService:
         Dynamic World tidak kena karena sudah 10 m."""
         classified = classified.setDefaultProjection("EPSG:3857", None, 10)
         cpc = classified.connectedPixelCount(MIN_MMU_PX + 1, True)
-        mask = classified.updateMask(cpc.gte(MIN_MMU_PX))
-        return mask.reduceToVectors(
+        # Klaster kecil (< MIN_MMU_PX) diabsorpsi ke kelas mayoritas tetangga
+        # (focal_mode), BUKAN di-mask menjadi nodata yang melubangi poligon spasial.
+        smooth = classified.focal_mode(2, "square", "pixels")
+        clean = classified.where(cpc.lt(MIN_MMU_PX), smooth).setDefaultProjection("EPSG:3857", None, 10)
+        return clean.reduceToVectors(
             geometry=roi, scale=scale, geometryType="polygon",
             labelProperty="class_idx", eightConnected=True,
             maxPixels=1e9, bestEffort=True, tileScale=GEE_TILE_SCALE,

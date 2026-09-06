@@ -188,12 +188,21 @@ def test_spectral_seed_identifies_clean_endmembers() -> None:
     })
     assert labels.spectral_seed_image(ee, shrub_feat, IDX, use_sar=False).v == S
 
-    # Pertanian / perkebunan
+    # Pertanian / perkebunan (lahan garapan/pertanian kemarau dengan reflektansi B11 tanah)
     crop_feat = FakeFeatImage({
         "ndvi": 0.65, "nbr": 0.40, "B8": 0.25, "mndwi": -0.15,
-        "bsi": -0.02, "B4": 0.05, "B11": 0.12, "ndmi": 0.10, "ndvi_std": 0.08,
+        "bsi": 0.00, "B4": 0.05, "B11": 0.14, "ndmi": 0.10, "ndvi_std": 0.08,
     })
     assert labels.spectral_seed_image(ee, crop_feat, IDX, use_sar=False).v == P
+
+    # Semak belukar tropis hijau (NDVI tinggi 0.58, namun kadar air NDMI rendah dan fenologi stabil)
+    # Harus teridentifikasi sebagai Semak (S), BUKAN Pertanian (P)
+    green_shrub_feat = FakeFeatImage({
+        "ndvi": 0.58, "nbr": 0.35, "B8": 0.24, "mndwi": -0.12,
+        "bsi": -0.01, "B4": 0.05, "B11": 0.11, "ndmi": 0.09, "ndvi_std": 0.07,
+    })
+    assert labels.spectral_seed_image(ee, green_shrub_feat, IDX, use_sar=False).v == S
+    assert labels.rule_based_classify(ee, green_shrub_feat, IDX, use_sar=False).v == S
 
     # Piksel ambigu (tidak ada endmember yang cocok) -> harus ter-mask (None)
     ambiguous = FakeFeatImage({
@@ -234,6 +243,30 @@ def test_formula_v6_phenology_and_moisture_discrimination() -> None:
     })
     assert labels.spectral_seed_image(ee, wetland_peat, IDX, use_sar=False).v == B
     assert labels.rule_based_classify(ee, wetland_peat, IDX, use_sar=False).v == B
+
+
+def test_formula_v8_phenology_cv_and_adaptive_endmembers() -> None:
+    ee = FakeEE
+
+    # 1. Pertanian dengan dinamika CV tinggi (ndvi_cv = 0.28, fluktuasi panen)
+    #    teridentifikasi sebagai Pertanian (P)
+    crop_cv = FakeFeatImage({
+        "ndvi": 0.45, "nbr": 0.22, "B8": 0.20, "mndwi": -0.10,
+        "bsi": 0.01, "B4": 0.08, "B11": 0.12, "ndmi": 0.06,
+        "ndvi_std": 0.13, "ndvi_cv": 0.28,
+    })
+    assert labels.spectral_seed_image(ee, crop_cv, IDX, use_sar=False).v == P
+    assert labels.rule_based_classify(ee, crop_cv, IDX, use_sar=False).v == P
+
+    # 2. Semak belukar dengan NDVI sedang-tinggi tapi stabil (ndvi_cv = 0.09)
+    #    teridentifikasi sebagai Semak (S)
+    shrub_cv = FakeFeatImage({
+        "ndvi": 0.55, "nbr": 0.32, "B8": 0.22, "mndwi": -0.12,
+        "bsi": -0.01, "B4": 0.06, "B11": 0.11, "ndmi": 0.08,
+        "ndvi_std": 0.05, "ndvi_cv": 0.09,
+    })
+    assert labels.spectral_seed_image(ee, shrub_cv, IDX, use_sar=False).v == S
+    assert labels.rule_based_classify(ee, shrub_cv, IDX, use_sar=False).v == S
 
 
 def test_rule_based_classify_assigns_all_classes() -> None:
