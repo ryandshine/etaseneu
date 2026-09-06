@@ -9,7 +9,25 @@ from app.services.geojson_sync_service import _field_value
 _spatial_tree_cache: dict[str, tuple[list[dict], object]] = {}
 
 
-def filter_hotspots_by_layers(hotspots: list[dict], layers: list[dict]) -> list[dict]:
+def distance_to_perimeter_tier(dist_m: float) -> tuple[str, str]:
+    """Mengembalikan (threat_tier, threat_label) berdasarkan jarak buffer dari batas KPS.
+    - Ring 1 (< 1 km): Bahaya Kritis (Red)
+    - Ring 2 (1–3 km): Waspada (Orange)
+    - Ring 3 (3–5 km): Pantau (Yellow)
+    """
+    if dist_m < 1000.0:
+        return "bahaya", "Bahaya Kritis (< 1 km)"
+    if dist_m < 3000.0:
+        return "waspada", "Waspada (1–3 km)"
+    return "pantau", "Pantau (3–5 km)"
+
+
+def filter_hotspots_by_layers(
+    hotspots: list[dict],
+    layers: list[dict],
+    include_perimeter: bool = True,
+    max_perimeter_m: float = 5000.0,
+) -> list[dict]:
     if not layers:
         return []
 
@@ -40,24 +58,65 @@ def filter_hotspots_by_layers(hotspots: list[dict], layers: list[dict]) -> list[
     if not prepared_layers or tree is None:
         return []
 
+    # 1 derajat ~ 111.320 meter
+    max_deg = max_perimeter_m / 111320.0
     filtered: list[dict] = []
     for hotspot in hotspots:
         point = Point(hotspot["longitude"], hotspot["latitude"])
         indices = tree.query(point)
+        inside_layer = None
         for idx in indices:
-            layer = prepared_layers[idx]
-            if layer["geometry"].covers(point):
-                filtered.append(
-                    {
-                        **hotspot,
-                        "layer_id": layer["id"],
-                        "layer_name": layer["name"],
-                        "agency_name": layer["name"],
-                        "province_name": layer["province_name"],
-                        "polygon_metadata": layer["metadata"],
-                    }
-                )
+            cand = prepared_layers[idx]
+            if cand["geometry"].covers(point):
+                inside_layer = cand
                 break
+
+        if inside_layer is not None:
+            filtered.append(
+                {
+                    **hotspot,
+                    "layer_id": inside_layer["id"],
+                    "layer_name": inside_layer["name"],
+                    "agency_name": inside_layer["name"],
+                    "province_name": inside_layer["province_name"],
+                    "polygon_metadata": inside_layer["metadata"],
+                    "is_perimeter": False,
+                }
+            )
+            continue
+
+        if include_perimeter:
+            perimeter_candidates = tree.query(point.buffer(max_deg))
+            if len(perimeter_candidates) > 0:
+                min_dist_deg = float("inf")
+                nearest_layer = None
+                for idx in perimeter_candidates:
+                    cand = prepared_layers[idx]
+                    d_deg = cand["geometry"].distance(point)
+                    if d_deg < min_dist_deg:
+                        min_dist_deg = d_deg
+                        nearest_layer = cand
+
+                if nearest_layer is not None and min_dist_deg <= max_deg:
+                    dist_m = min_dist_deg * 111320.0
+                    tier_key, tier_label = distance_to_perimeter_tier(dist_m)
+                    filtered.append(
+                        {
+                            **hotspot,
+                            "layer_id": "perimeter_threat",
+                            "layer_name": f"Ancaman Buffer {nearest_layer['name']}",
+                            "agency_name": f"Luar Kawasan ({nearest_layer['name']})",
+                            "province_name": nearest_layer["province_name"],
+                            "polygon_metadata": {},
+                            "is_perimeter": True,
+                            "distance_to_kps_m": round(dist_m, 1),
+                            "threat_tier": tier_key,
+                            "threat_level": tier_key,
+                            "threat_label": tier_label,
+                            "nearest_kps_id": nearest_layer["id"],
+                            "nearest_kps_name": nearest_layer["name"],
+                        }
+                    )
 
     return filtered
 

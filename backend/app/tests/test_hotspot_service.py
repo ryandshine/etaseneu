@@ -150,8 +150,8 @@ def test_fetch_filtered_hotspots_warms_layer_year_archive(monkeypatch) -> None:
     assert len(payload["hotspots"]) == 2
     assert payload["stats"]["total"] == 2
     assert service.nasa_client.paths == [
-        "demo-key/MODIS_NRT/95,4,95.2,4.2/5/2026-05-01",
-        "demo-key/MODIS_NRT/95,4,95.2,4.2/2/2026-05-06",
+        "demo-key/MODIS_NRT/94.955084,3.955084,95.244916,4.244916/5/2026-05-01",
+        "demo-key/MODIS_NRT/94.955084,3.955084,95.244916,4.244916/2/2026-05-06",
     ]
     assert "history/2026/sample_area" in service.history_store.written
     assert service.history_store.written["history/2026/sample_area"]["coverage_start"] == "2026-05-01"

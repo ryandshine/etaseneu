@@ -118,8 +118,11 @@ class HotspotService:
                     self.postgres_store.upsert_hotspot_observations(filtered)
                 except Exception:
                     pass
-                self._persist_filtered_hotspots(filtered)
-            hydrated_hotspots = self._hydrate_polygon_metadata(query, filtered)
+                internal_hotspots = [h for h in filtered if not h.get("is_perimeter")]
+                self._persist_filtered_hotspots(internal_hotspots)
+            else:
+                internal_hotspots = [h for h in filtered if not h.get("is_perimeter")]
+            hydrated_hotspots = self._hydrate_polygon_metadata(query, internal_hotspots)
             self.cache_service.write(query.cache_key(), hydrated_hotspots)
 
         stats = build_stats(hydrated_hotspots)
@@ -416,12 +419,13 @@ class HotspotService:
             return []
 
         normalized: list[dict] = []
+        buffer_deg = 5000.0 / 111320.0
         area_coordinates = ",".join(
             [
-                _format_coord(float(bounds["min_lon"])),
-                _format_coord(float(bounds["min_lat"])),
-                _format_coord(float(bounds["max_lon"])),
-                _format_coord(float(bounds["max_lat"])),
+                _format_coord(max(-180.0, float(bounds["min_lon"]) - buffer_deg)),
+                _format_coord(max(-90.0, float(bounds["min_lat"]) - buffer_deg)),
+                _format_coord(min(180.0, float(bounds["max_lon"]) + buffer_deg)),
+                _format_coord(min(90.0, float(bounds["max_lat"]) + buffer_deg)),
             ]
         )
 
@@ -440,7 +444,7 @@ class HotspotService:
                 rows = await self.nasa_client.fetch_rows(path)
                 normalized.extend(normalize_hotspots(list(rows), source=source))
 
-        return filter_hotspots_by_layers(normalized, [layer])
+        return filter_hotspots_by_layers(normalized, [layer], include_perimeter=True)
 
     def _persist_filtered_hotspots(self, hotspots: list[dict]) -> None:
         if not hotspots or not self.postgres_store.enabled:
