@@ -100,6 +100,8 @@ class FireSpreadService:
                 SELECT
                     poly.id,
                     COUNT(DISTINCT obs.id) AS hotspot_count,
+                    COUNT(DISTINCT obs.id) FILTER (WHERE obs.layer_key = 'perimeter_threat') AS non_kps_count,
+                    COUNT(DISTINCT obs.id) FILTER (WHERE obs.layer_key != 'perimeter_threat') AS neighbor_kps_count,
                     ROUND(MIN(ST_Distance(poly.geometry::geography, obs.geom::geography)))::int AS min_dist_m
                 FROM polygon_metadata poly
                 JOIN hotspot_observations obs ON {where_sql}
@@ -108,6 +110,8 @@ class FireSpreadService:
             SELECT
                 COUNT(*) AS total_kps,
                 COALESCE(SUM(hotspot_count), 0) AS total_hotspots,
+                COALESCE(SUM(non_kps_count), 0) AS total_non_kps_hotspots,
+                COALESCE(SUM(neighbor_kps_count), 0) AS total_neighbor_kps_hotspots,
                 COUNT(*) FILTER (WHERE min_dist_m < 1000) AS bahaya_count,
                 COUNT(*) FILTER (WHERE min_dist_m >= 1000 AND min_dist_m < 3000) AS waspada_count,
                 COUNT(*) FILTER (WHERE min_dist_m >= 3000) AS pantau_count
@@ -125,12 +129,16 @@ class FireSpreadService:
                         "waspada_count": 0,
                         "pantau_count": 0,
                         "total_external_hotspots": 0,
+                        "non_kps_hotspots": 0,
+                        "neighbor_kps_hotspots": 0,
                         "time_window_hours": time_window_hours,
                         "max_distance_km": max_distance_km,
                     }
                 return {
                     "total_kps_threatened": int(row["total_kps"] or 0),
                     "total_external_hotspots": int(row["total_hotspots"] or 0),
+                    "non_kps_hotspots": int(row["total_non_kps_hotspots"] or 0),
+                    "neighbor_kps_hotspots": int(row["total_neighbor_kps_hotspots"] or 0),
                     "bahaya_count": int(row["bahaya_count"] or 0),
                     "waspada_count": int(row["waspada_count"] or 0),
                     "pantau_count": int(row["pantau_count"] or 0),
@@ -191,6 +199,8 @@ class FireSpreadService:
                     poly.wilker_bps,
                     poly.luas_final AS luas_ha,
                     COUNT(DISTINCT obs.id) AS external_hotspots_count,
+                    COUNT(DISTINCT obs.id) FILTER (WHERE obs.layer_key = 'perimeter_threat') AS non_kps_count,
+                    COUNT(DISTINCT obs.id) FILTER (WHERE obs.layer_key != 'perimeter_threat') AS neighbor_kps_count,
                     ROUND(MIN(ST_Distance(poly.geometry::geography, obs.geom::geography)))::int AS min_distance_m,
                     ROUND(MAX(COALESCE((obs.raw_payload->>'frp')::float, 0.0))::numeric, 1) AS max_frp,
                     ROUND(AVG(COALESCE((obs.raw_payload->>'frp')::float, 0.0))::numeric, 1) AS avg_frp,
@@ -240,6 +250,24 @@ class FireSpreadService:
                         LIMIT 1
                     ) AS nearest_confidence,
                     (
+                        SELECT obs2.layer_key
+                        FROM hotspot_observations obs2
+                        WHERE obs2.detected_at >= NOW() - INTERVAL '{int(time_window_hours)} hours'
+                          AND ST_DWithin(poly.geometry, obs2.geom, {max_deg:.6f})
+                          AND NOT ST_Intersects(poly.geometry, obs2.geom)
+                        ORDER BY ST_Distance(poly.geometry::geography, obs2.geom::geography) ASC
+                        LIMIT 1
+                    ) AS nearest_layer_key,
+                    (
+                        SELECT obs2.agency_name
+                        FROM hotspot_observations obs2
+                        WHERE obs2.detected_at >= NOW() - INTERVAL '{int(time_window_hours)} hours'
+                          AND ST_DWithin(poly.geometry, obs2.geom, {max_deg:.6f})
+                          AND NOT ST_Intersects(poly.geometry, obs2.geom)
+                        ORDER BY ST_Distance(poly.geometry::geography, obs2.geom::geography) ASC
+                        LIMIT 1
+                    ) AS nearest_agency_name,
+                    (
                         SELECT to_char(obs2.detected_at, 'YYYY-MM-DD HH24:MI:SS OF')
                         FROM hotspot_observations obs2
                         WHERE obs2.detected_at >= NOW() - INTERVAL '{int(time_window_hours)} hours'
@@ -287,6 +315,10 @@ class FireSpreadService:
                     else:
                         rekomendasi = f"PANTAU: Pantau pergerakan klaster api {dist_m/1000:.1f} km di arah {compass} via satelit secara berkala."
 
+                    is_non_kps = (r.get("nearest_layer_key") == "perimeter_threat")
+                    origin = "non_kps" if is_non_kps else "neighbor_kps"
+                    origin_label = "Luar Kawasan (Bukan KPS)" if is_non_kps else f"KPS Tetangga ({r.get('nearest_agency_name') or 'Lain'})"
+
                     items.append({
                         "polygon_id": int(r["polygon_id"]),
                         "lembaga": r.get("lembaga") or "-",
@@ -304,6 +336,10 @@ class FireSpreadService:
                         "status_level": lvl,
                         "status_label": lvl_label,
                         "external_hotspots_count": int(r["external_hotspots_count"]),
+                        "non_kps_hotspots_count": int(r.get("non_kps_count") or 0),
+                        "neighbor_kps_hotspots_count": int(r.get("neighbor_kps_count") or 0),
+                        "threat_origin": origin,
+                        "threat_origin_label": origin_label,
                         "max_frp": float(r["max_frp"]) if r.get("max_frp") is not None else 0.0,
                         "avg_frp": float(r["avg_frp"]) if r.get("avg_frp") is not None else 0.0,
                         "bearing_deg": round(bearing, 1) if bearing is not None else None,
@@ -314,6 +350,8 @@ class FireSpreadService:
                             "satellite": r.get("nearest_satellite"),
                             "confidence": r.get("nearest_confidence"),
                             "detected_at": r.get("nearest_detected_at"),
+                            "layer_key": r.get("nearest_layer_key"),
+                            "agency_name": r.get("nearest_agency_name"),
                         },
                         "nearest_boundary_point": near_pt.get("coordinates") if near_pt else None,
                     })
@@ -455,11 +493,16 @@ class FireSpreadService:
                     bearing = float(h["bearing_deg"]) if h.get("bearing_deg") is not None else None
                     c_pt = json.loads(h["closest_pt_geojson"]) if h.get("closest_pt_geojson") else None
 
+                    is_non_kps = (h.get("layer_key") == "perimeter_threat")
                     if is_inside:
                         lvl = "internal"
                         lvl_label = "Di Dalam Kawasan"
+                        origin = "internal"
+                        origin_label = "Di Dalam Kawasan"
                     else:
                         lvl, lvl_label = distance_to_level(dist_m)
+                        origin = "non_kps" if is_non_kps else "neighbor_kps"
+                        origin_label = "Luar Kawasan (Bukan KPS)" if is_non_kps else f"KPS Tetangga ({h.get('agency_name') or 'Lain'})"
 
                     compass = degrees_to_compass(bearing) if not is_inside else "Dalam Kawasan"
 
@@ -473,6 +516,10 @@ class FireSpreadService:
                         "frp": float(h["frp"]) if h.get("frp") is not None else 0.0,
                         "detected_at": h.get("detected_at_str"),
                         "is_inside": is_inside,
+                        "layer_key": h.get("layer_key"),
+                        "agency_name": h.get("agency_name"),
+                        "threat_origin": origin,
+                        "threat_origin_label": origin_label,
                         "distance_m": dist_m,
                         "distance_km": round(dist_m / 1000.0, 2),
                         "status_level": lvl,
@@ -515,6 +562,8 @@ class FireSpreadService:
                     "min_distance_m": min_dist,
                     "min_distance_km": round(min_dist / 1000.0, 2),
                     "total_external_hotspots": len(ext_hotspots),
+                    "total_non_kps_hotspots": len([h for h in ext_hotspots if h.get("threat_origin") == "non_kps"]),
+                    "total_neighbor_kps_hotspots": len([h for h in ext_hotspots if h.get("threat_origin") == "neighbor_kps"]),
                     "total_internal_hotspots": len(int_hotspots),
                     "hotspots": hotspots,
                     "neighbors": neighbors,

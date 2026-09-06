@@ -100,6 +100,7 @@ class HotspotService:
                                 layer=layer,
                                 year_start=year_start,
                                 year_end=year_end,
+                                all_layers=active_layers,
                             )
                         )
                     except Exception as e:
@@ -299,10 +300,11 @@ class HotspotService:
 
     async def _read_or_warm_layer_year_archive(
         self,
-    query: HotspotQuery,
-    layer: dict,
-    year_start: date,
-    year_end: date,
+        query: HotspotQuery,
+        layer: dict,
+        year_start: date,
+        year_end: date,
+        all_layers: list[dict] | None = None,
     ) -> list[dict]:
         archive_key = query.yearly_archive_key(year_start.year, str(layer["id"]))
         archive = self.history_store.read(archive_key)
@@ -317,6 +319,7 @@ class HotspotService:
                 start_date=fetch_start,
                 end_date=fetch_end,
                 satellites=requested_satellites,
+                all_layers=all_layers,
             )
             self.history_store.write(
                 archive_key,
@@ -356,6 +359,7 @@ class HotspotService:
                 start_date=fetch_start,
                 end_date=coverage_start - timedelta(days=1),
                 satellites=combined_satellites,
+                all_layers=all_layers,
             )
             if self.settings.nasa_firms_api_key:
                 fetched_from_nasa = True
@@ -366,6 +370,7 @@ class HotspotService:
                 start_date=coverage_end + timedelta(days=1),
                 end_date=fetch_end,
                 satellites=combined_satellites,
+                all_layers=all_layers,
             )
             if self.settings.nasa_firms_api_key:
                 fetched_from_nasa = True
@@ -376,6 +381,7 @@ class HotspotService:
                 start_date=year_start,
                 end_date=year_end,
                 satellites=missing_satellites,
+                all_layers=all_layers,
             )
             if self.settings.nasa_firms_api_key:
                 fetched_from_nasa = True
@@ -409,6 +415,7 @@ class HotspotService:
         start_date: date,
         end_date: date,
         satellites: list[str],
+        all_layers: list[dict] | None = None,
     ) -> list[dict]:
         if not self.settings.nasa_firms_api_key or not satellites:
             return []
@@ -444,7 +451,8 @@ class HotspotService:
                 rows = await self.nasa_client.fetch_rows(path)
                 normalized.extend(normalize_hotspots(list(rows), source=source))
 
-        return filter_hotspots_by_layers(normalized, [layer], include_perimeter=True)
+        target_layers = all_layers if all_layers else [layer]
+        return filter_hotspots_by_layers(normalized, target_layers, include_perimeter=True)
 
     def _persist_filtered_hotspots(self, hotspots: list[dict]) -> None:
         if not hotspots or not self.postgres_store.enabled:

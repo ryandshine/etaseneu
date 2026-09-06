@@ -25,6 +25,8 @@ import { authFetch, downloadWithAuth } from "../lib/api";
 interface SummaryData {
   total_kps_threatened: number;
   total_external_hotspots: number;
+  non_kps_hotspots?: number;
+  neighbor_kps_hotspots?: number;
   bahaya_count: number;
   waspada_count: number;
   pantau_count: number;
@@ -49,6 +51,10 @@ interface ThreatItem {
   status_level: "bahaya" | "waspada" | "pantau";
   status_label: string;
   external_hotspots_count: number;
+  non_kps_hotspots_count?: number;
+  neighbor_kps_hotspots_count?: number;
+  threat_origin?: "non_kps" | "neighbor_kps";
+  threat_origin_label?: string;
   max_frp: number;
   avg_frp: number;
   bearing_deg: number | null;
@@ -59,6 +65,8 @@ interface ThreatItem {
     satellite: string | null;
     confidence: string | null;
     detected_at: string | null;
+    layer_key?: string | null;
+    agency_name?: string | null;
   };
   nearest_boundary_point: [number, number] | null;
 }
@@ -77,6 +85,8 @@ interface ThreatDetailHotspot {
   distance_km: number;
   status_level: "bahaya" | "waspada" | "pantau" | "internal";
   status_label: string;
+  threat_origin?: "internal" | "non_kps" | "neighbor_kps";
+  threat_origin_label?: string;
   bearing_deg: number | null;
   bearing_compass: string;
   closest_kps_point: [number, number] | null;
@@ -480,6 +490,9 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
               Titik Api ({summary?.total_kps_threatened ?? 0} KPS)
             </span>
           </div>
+          <div style={{ fontSize: "0.68rem", color: "#94a3b8", marginTop: "0.2rem" }}>
+            Luar KPS: <strong style={{ color: "#f87171" }}>{summary?.non_kps_hotspots ?? 0}</strong> · Tetangga: <strong style={{ color: "#818cf8" }}>{summary?.neighbor_kps_hotspots ?? 0}</strong>
+          </div>
         </div>
       </div>
 
@@ -685,6 +698,20 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                         <Flame size={13} color="#f87171" />
                         <strong>{item.external_hotspots_count} titik api</strong> di luar
                       </span>
+                      {item.threat_origin_label && (
+                        <span
+                          style={{
+                            fontSize: "0.72rem",
+                            padding: "0.1rem 0.4rem",
+                            borderRadius: "4px",
+                            backgroundColor: item.threat_origin === "non_kps" ? "rgba(239, 68, 68, 0.15)" : "rgba(99, 102, 241, 0.15)",
+                            color: item.threat_origin === "non_kps" ? "#fca5a5" : "#c7d2fe",
+                            border: `1px solid ${item.threat_origin === "non_kps" ? "rgba(239, 68, 68, 0.3)" : "rgba(99, 102, 241, 0.3)"}`
+                          }}
+                        >
+                          Asal: {item.threat_origin_label}
+                        </span>
+                      )}
                       {item.max_frp > 0 && (
                         <span style={{ color: "#9ca3af" }}>
                           Max FRP: <strong>{item.max_frp} MW</strong>
@@ -1312,6 +1339,11 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                           <>
                             <div>Jarak ke KPS: <strong>{h.distance_m} m</strong> ({h.distance_km} km)</div>
                             <div>Arah dari KPS: <strong>{h.bearing_compass}</strong> ({h.bearing_deg}°)</div>
+                            {h.threat_origin_label && (
+                              <div style={{ color: h.threat_origin === "non_kps" ? "#ef4444" : "#6366f1", marginTop: "0.15rem", fontWeight: "600" }}>
+                                Asal: {h.threat_origin_label}
+                              </div>
+                            )}
                           </>
                         )}
                         {h.frp > 0 && <div>FRP: <strong>{h.frp} MW</strong></div>}
