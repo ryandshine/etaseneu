@@ -271,19 +271,27 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
     dilepas satu-satu, bukan 4 `<select>` berbaris — client-side, dasarnya masih pola Matriks Data),
     klik satu baris → detail me-reuse `LandCoverPanel.tsx` apa adanya. Detailnya dua tab
     ("Peta Spasial" default / "Tren Historis", state lokal `tab`, berbagi state `year` yang sama):
-    tab Peta **memakai tata letak Live Map** (2026-09-06) — peta full-bleed di `.lc-mapframe`
-    (`position:relative`, tinggi `min(78vh,780px)`), kontrol mengambang di kolom kiri pakai kelas
-    Live Map yang sama (`.map-left-stack` + `.map-legend` + `.basemap-switcher--stacked`): (1) basemap
-    Satelit/Jalan/Topografi (state `basemap` lokal, ganti URL `<TileLayer>` — Live Map sendiri tidak
-    di-reuse, terlalu terkopel ke data hotspot), (2) kartu "Tahun" berisi slider `.lc-range` +
-    prev/next + `.lc-year`, (3) kartu "Tutupan Lahan {year}" = legenda + luas per kelas jadi satu
-    (baris `.lc-legendrow` swatch/label/`N ha · N%`, `role="list"` + `aria-label="Luas per kelas
-    tahun {year}"` — TEST `LandCoverPanel.test.tsx` mencarinya lewat itu, jangan hapus). `<ZoomControl
-    position="bottomright" />` (desktop; mobile pinch saja). Mobile (`useIsMobile`, <=639px): kontrol
-    turun jadi blok `.lc-mobilecontrols` di bawah peta, peta lebih pendek — pola sama Live Map yang
-    mengganti kontrol mengambang dengan MapSheet. Mock `react-leaflet` di `LandCoverPanel.test.tsx`
-    WAJIB ekspor `ZoomControl`. Kelas lama `.lc-mapstage` / `.lc-mapstage__toolbar` / `.lc-floatcard` /
-    `.lc-classgrid*` sudah dihapus. TETAP per-poligon (semua data untuk `polygonId` terpilih saja).
+    seluruh detail **FULL-BLEED pola Live Map** (2026-09-06, iterasi ke-2): `TutupanLahanView`
+    TIDAK lagi merender `.tl-detail-head` block — identitas poligon (`polygonLabel`/`polygonSublabel`),
+    tombol "Lihat Detail KPS", "Hapus hasil", badge "Metode lama", dan "← Daftar" (mobile)
+    diteruskan sebagai PROP ke `LandCoverPanel` yang merendernya jadi **chrome mengambang**
+    (`.lc-chrome` kiri-atas/kanan-atas, `.lc-tabs--float` tengah-atas). `.tl-detail` dapat
+    modifier `.tl-detail--stage` (`>=901px`: `position:relative; overflow:hidden; padding:0`);
+    `<section class="land-cover-panel--stage">` jadi `position:absolute; inset:0`; `.lc-mapframe--fill`
+    / `.lc-trend--fill` juga `inset:0` (tren = panel scroll `bg:#12100e` di atas seluruh area).
+    **Full-bleed cuma `>=901px`** (di situ `.tl-body` grid 2 kolom kasih `.tl-detail` tinggi nyata);
+    `<=900px` `.tl-body` block → stage kembali aliran block biasa (peta kotak `min(68vh,640px)`,
+    chrome jadi block di atasnya). Kontrol kiri (di `.map-left-stack`, `top:6.2rem` biar lolos
+    chrome+tab): (1) basemap Satelit/Jalan/Topografi (state `basemap` lokal, ganti URL `<TileLayer>` —
+    Live Map sendiri tidak di-reuse, terlalu terkopel ke data hotspot), (2) kartu "Tahun" (slider
+    `.lc-range` + prev/next + `.lc-year`), (3) kartu "Tutupan Lahan {year}" = legenda + luas per
+    kelas jadi satu (baris `.lc-legendrow` swatch/label/`N ha · N%`, `role="list"` +
+    `aria-label="Luas per kelas tahun {year}"` — TEST `LandCoverPanel.test.tsx` mencarinya lewat itu,
+    jangan hapus). `<ZoomControl position="bottomright" />` (desktop; mobile pinch). Mobile
+    (`useIsMobile`, `<=639px`): kontrol turun jadi blok `.lc-mobilecontrols` di bawah peta. Mock
+    `react-leaflet` di `LandCoverPanel.test.tsx` WAJIB ekspor `ZoomControl`. Kelas lama `.lc-mapstage*`
+    / `.lc-floatcard` / `.lc-classgrid*` sudah dihapus. TETAP per-poligon (semua data untuk
+    `polygonId` terpilih saja).
     tab Tren = grafik
     garis multi-kelas (bukan stacked bar lagi — recharts `LineChart`), tabel Δ (sel ha tebal/persen
     redup bertingkat vertikal), ringkasan teks, tombol "Jalankan Analisis" manual — TIDAK ada tombol

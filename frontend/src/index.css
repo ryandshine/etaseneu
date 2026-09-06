@@ -1086,6 +1086,148 @@ body {
   color: #fff !important;
 }
 
+/* ============================================================================
+   FULL-BLEED STAGE -- 2026-09-06: peta/panel mengisi SELURUH kolom detail,
+   semua chrome (identitas poligon, aksi, tab, kontrol tahun/basemap/legenda)
+   MENGAMBANG di atasnya -- pola persis Live Map (App.tsx `.workspace-stage--map`).
+   Full-bleed cuma di >=901px (di situ `.tl-body` grid 2 kolom kasih `.tl-detail`
+   tinggi nyata); <=900px `.tl-body` jadi block -> stage kembali aliran normal.
+   ========================================================================= */
+
+/* Default (semua lebar / <=900px): aliran block aman -- peta kotak, chrome
+   di atasnya sebagai block biasa. */
+.land-cover-panel--stage {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.lc-mapframe--fill {
+  height: min(68vh, 640px);
+}
+.lc-trend--fill {
+  /* di block flow tetap seperti .lc-trend biasa */
+}
+.lc-chrome {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.lc-chrome__back {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(19, 21, 26, 0.92);
+  color: #d1d5db;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.lc-chrome__id {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+.lc-chrome__id strong {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #f5efe6;
+  line-height: 1.2;
+}
+.lc-chrome__id span {
+  font-size: 0.68rem;
+  color: rgba(245, 239, 230, 0.55);
+}
+.lc-chrome__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.lc-state-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: center;
+  padding: 2rem 0;
+}
+
+@media (min-width: 901px) {
+  .land-cover-panel--stage {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    gap: 0;
+    overflow: hidden;
+  }
+  .lc-mapframe--fill,
+  .lc-trend--fill {
+    position: absolute;
+    inset: 0;
+    height: auto;
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+  }
+  .lc-trend--fill {
+    overflow-y: auto;
+    padding: 4rem 1.25rem 1.5rem;
+    background: #12100e;
+  }
+  /* identitas kiri-atas, aksi kanan-atas -- klik tembus di celah tengah. */
+  .lc-chrome {
+    position: absolute;
+    z-index: 1100;
+    top: 0.7rem;
+    left: 0.9rem;
+    right: 0.9rem;
+    pointer-events: none;
+  }
+  .lc-chrome > * {
+    pointer-events: auto;
+  }
+  .lc-chrome__back,
+  .lc-chrome__id {
+    background: rgba(19, 21, 26, 0.92);
+    backdrop-filter: blur(8px);
+  }
+  .lc-chrome__id {
+    padding: 0.4rem 0.7rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    max-width: 24rem;
+  }
+  /* tab switcher mengambang di tengah-atas (pola tombol "Peta/Satelit"). */
+  .lc-tabs--float {
+    position: absolute;
+    z-index: 1100;
+    top: 3.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(19, 21, 26, 0.92);
+    backdrop-filter: blur(8px);
+  }
+  /* left stack digeser turun supaya tidak ketiban chrome + tab. */
+  .land-cover-panel--stage .map-left-stack {
+    top: 6.2rem;
+    max-height: calc(100% - 7.2rem);
+  }
+  .lc-state-center {
+    position: absolute;
+    inset: 3.5rem 1rem 1rem;
+    justify-content: center;
+    padding: 0;
+  }
+}
+
 /* Kartu "Tahun" -- pakai kotak .map-legend, isinya baris slider + angka. */
 .lc-yearcard__row {
   display: flex;
@@ -9353,6 +9495,19 @@ a + a {
   min-height: 0;
   overflow-y: auto;
   padding: 1rem 1.25rem 1.5rem;
+}
+
+/* Saat LandCoverPanel dirender (poligon terpilih): di desktop jadi wadah
+   `position:relative` tanpa padding/scroll sendiri supaya
+   `.land-cover-panel--stage` bisa `position:absolute; inset:0` (peta
+   full-bleed, chrome mengambang -- pola Live Map). <=900px `.tl-body` block
+   -> biarkan `.tl-detail` default (auto height, scroll). */
+@media (min-width: 901px) {
+  .tl-detail--stage {
+    position: relative;
+    overflow: hidden;
+    padding: 0;
+  }
 }
 
 .tl-back-btn {

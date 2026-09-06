@@ -158,9 +158,24 @@ type LandCoverPanelProps = {
    *  supaya lupa meneruskan prop tidak pernah memunculkan tombol yang
    *  bakal ditolak 403. */
   isAdmin?: boolean;
+  /** Identitas poligon -- ditampilkan di chrome mengambang di atas peta
+   *  (TutupanLahanView tidak lagi merender .tl-detail-head sendiri supaya
+   *  peta bisa full-bleed, pola sama Live Map). */
+  polygonLabel?: string;
+  polygonSublabel?: string;
+  onOpenKpsDetail?: () => void;
+  /** Mobile: kembali ke daftar poligon. */
+  onBack?: () => void;
 };
 
-export function LandCoverPanel({ polygonId, isAdmin = false }: LandCoverPanelProps): JSX.Element {
+export function LandCoverPanel({
+  polygonId,
+  isAdmin = false,
+  polygonLabel,
+  polygonSublabel,
+  onOpenKpsDetail,
+  onBack,
+}: LandCoverPanelProps): JSX.Element {
   const [state, setState] = useState<State>("idle");
   const [step, setStep] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -342,102 +357,20 @@ export function LandCoverPanel({ polygonId, isAdmin = false }: LandCoverPanelPro
     </p>
   );
 
-  if (state === "idle") {
-    return (
-      <section className="land-cover-panel">
-        <h3 className="lc-title">Tutupan Lahan 2021–2025</h3>
-        <p className="lc-lede">
-          Klasifikasi Sentinel-2 + Random Forest, 5 kelas. Sekali hitung per KPS,
-          hasilnya tersimpan permanen.
-        </p>
-        {!isAdmin ? (
-          nonAdminHint
-        ) : (
-          <>
-            {busyElsewhere && (
-              <p className="lc-busy" role="status">
-                Ada analisis KPS/Hutan Adat lain sedang berjalan — harap tunggu sebentar,
-                biar kuota GEE &amp; server tidak dipakai bersamaan.
-              </p>
-            )}
-            <button
-              type="button"
-              className="lc-cta"
-              disabled={busyElsewhere}
-              onClick={() => void runAnalyze(false)}
-            >
-              Jalankan Analisis
-            </button>
-          </>
-        )}
-      </section>
-    );
-  }
-
-  if (state === "running") {
-    return (
-      <section className="land-cover-panel">
-        <h3 className="lc-title">Tutupan Lahan 2021–2025</h3>
-        <div className="lc-running" aria-live="polite">
-          <span className="lc-running__bar" aria-hidden />
-          <p>Menghitung dari citra satelit… {step ?? "menyiapkan"}</p>
-          <span className="lc-running__hint">
-            Perlu 1–3 menit (lebih lama saat kuota GEE terbatas). Aman ditinggal —
-            hasilnya tetap tersimpan.
-          </span>
-        </div>
-        {isAdmin && (
-          <button
-            type="button"
-            className="lc-rerun"
-            onClick={() => {
-              if (window.confirm("Mulai ulang analisis? Proses yang sedang berjalan diabaikan.")) {
-                void runAnalyze(true);
-              }
-            }}
-          >
-            Mulai ulang
-          </button>
-        )}
-      </section>
-    );
-  }
-
-  if (state === "error") {
-    return (
-      <section className="land-cover-panel">
-        <h3 className="lc-title">Tutupan Lahan 2021–2025</h3>
-        <p className="lc-error" role="alert">
-          {errorMsg ?? "Terjadi kesalahan saat analisis."}
-        </p>
-        {!isAdmin ? (
-          nonAdminHint
-        ) : (
-          <>
-            {busyElsewhere && (
-              <p className="lc-busy" role="status">
-                Ada analisis KPS/Hutan Adat lain sedang berjalan — harap tunggu sebentar,
-                biar kuota GEE &amp; server tidak dipakai bersamaan.
-              </p>
-            )}
-            <button
-              type="button"
-              className="lc-cta"
-              disabled={busyElsewhere}
-              onClick={() => void runAnalyze(false)}
-            >
-              Coba lagi
-            </button>
-          </>
-        )}
-      </section>
-    );
-  }
-
-  return (
-    <section className="land-cover-panel">
-      <header className="lc-head">
-        <h3 className="lc-title">Tutupan Lahan 2021–2025</h3>
+  // Chrome mengambang di atas peta (pola Live Map: identitas + aksi di pojok,
+  // bukan header block yang mendorong peta jadi kotak kecil).
+  const chrome = (
+    <div className="lc-chrome">
+      {onBack && (
+        <button type="button" className="lc-chrome__back" onClick={onBack}>
+          ← Daftar
+        </button>
+      )}
+      <div className="lc-chrome__id">
+        <strong>{polygonLabel ?? "Tutupan Lahan"}</strong>
+        {polygonSublabel && <span>{polygonSublabel}</span>}
+      </div>
+      <div className="lc-chrome__actions">
         {outdatedFormula && (
           <span
             className="lc-formula-old"
@@ -446,7 +379,12 @@ export function LandCoverPanel({ polygonId, isAdmin = false }: LandCoverPanelPro
             Metode lama (v{formulaVersion ?? 1})
           </span>
         )}
-        {isAdmin && (
+        {onOpenKpsDetail && (
+          <button type="button" className="tl-detail-link" onClick={onOpenKpsDetail}>
+            Lihat Detail KPS →
+          </button>
+        )}
+        {state === "done" && isAdmin && (
           <button
             type="button"
             className="lc-rerun lc-rerun--danger"
@@ -463,9 +401,116 @@ export function LandCoverPanel({ polygonId, isAdmin = false }: LandCoverPanelPro
             Hapus hasil
           </button>
         )}
-      </header>
+      </div>
+    </div>
+  );
 
-      <div className="lc-tabs" role="tablist" aria-label="Tampilan tutupan lahan">
+  if (state === "idle") {
+    return (
+      <section className="land-cover-panel land-cover-panel--stage">
+        {chrome}
+        <div className="lc-state-center">
+          <h3 className="lc-title">Tutupan Lahan 2021–2025</h3>
+          <p className="lc-lede">
+            Klasifikasi Sentinel-2 + Random Forest, 6 kelas. Sekali hitung per KPS,
+            hasilnya tersimpan permanen.
+          </p>
+          {!isAdmin ? (
+            nonAdminHint
+          ) : (
+            <>
+              {busyElsewhere && (
+                <p className="lc-busy" role="status">
+                  Ada analisis KPS/Hutan Adat lain sedang berjalan — harap tunggu sebentar,
+                  biar kuota GEE &amp; server tidak dipakai bersamaan.
+                </p>
+              )}
+              <button
+                type="button"
+                className="lc-cta"
+                disabled={busyElsewhere}
+                onClick={() => void runAnalyze(false)}
+              >
+                Jalankan Analisis
+              </button>
+            </>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  if (state === "running") {
+    return (
+      <section className="land-cover-panel land-cover-panel--stage">
+        {chrome}
+        <div className="lc-state-center">
+          <h3 className="lc-title">Tutupan Lahan 2021–2025</h3>
+          <div className="lc-running" aria-live="polite">
+            <span className="lc-running__bar" aria-hidden />
+            <p>Menghitung dari citra satelit… {step ?? "menyiapkan"}</p>
+            <span className="lc-running__hint">
+              Perlu 1–3 menit (lebih lama saat kuota GEE terbatas). Aman ditinggal —
+              hasilnya tetap tersimpan.
+            </span>
+          </div>
+          {isAdmin && (
+            <button
+              type="button"
+              className="lc-rerun"
+              onClick={() => {
+                if (window.confirm("Mulai ulang analisis? Proses yang sedang berjalan diabaikan.")) {
+                  void runAnalyze(true);
+                }
+              }}
+            >
+              Mulai ulang
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  if (state === "error") {
+    return (
+      <section className="land-cover-panel land-cover-panel--stage">
+        {chrome}
+        <div className="lc-state-center">
+          <h3 className="lc-title">Tutupan Lahan 2021–2025</h3>
+          <p className="lc-error" role="alert">
+            {errorMsg ?? "Terjadi kesalahan saat analisis."}
+          </p>
+          {!isAdmin ? (
+            nonAdminHint
+          ) : (
+            <>
+              {busyElsewhere && (
+                <p className="lc-busy" role="status">
+                  Ada analisis KPS/Hutan Adat lain sedang berjalan — harap tunggu sebentar,
+                  biar kuota GEE &amp; server tidak dipakai bersamaan.
+                </p>
+              )}
+              <button
+                type="button"
+                className="lc-cta"
+                disabled={busyElsewhere}
+                onClick={() => void runAnalyze(false)}
+              >
+                Coba lagi
+              </button>
+            </>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="land-cover-panel land-cover-panel--stage">
+      {chrome}
+
+      <div className="lc-tabs lc-tabs--float" role="tablist" aria-label="Tampilan tutupan lahan">
         <button
           type="button"
           role="tab"
@@ -493,7 +538,7 @@ export function LandCoverPanel({ polygonId, isAdmin = false }: LandCoverPanelPro
         // Fungsi disesuaikan: pemilih TAHUN (bukan rentang waktu), legenda +
         // luas per KELAS tutupan lahan (bukan legenda hotspot). Tetap PER
         // POLIGON -- semua data untuk polygonId terpilih saja.
-        <div className={`lc-mapframe${isMobile ? " lc-mapframe--mobile" : ""}`}>
+        <div className={`lc-mapframe lc-mapframe--fill${isMobile ? " lc-mapframe--mobile" : ""}`}>
           <MapContainer
             {...SMOOTH_ZOOM_MAP_PROPS}
             center={[-2, 118]}
@@ -629,7 +674,7 @@ export function LandCoverPanel({ polygonId, isAdmin = false }: LandCoverPanelPro
           </div>
         </div>
       ) : (
-        <div className="lc-trend">
+        <div className="lc-trend lc-trend--fill">
           <div className="lc-chart">
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={chartData} margin={{ top: 8, right: 10, bottom: 0, left: -18 }}>

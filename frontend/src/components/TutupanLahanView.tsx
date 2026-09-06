@@ -451,7 +451,11 @@ export function TutupanLahanView({
         )}
 
         {showDetail && (
-          <div className="tl-detail">
+          <div
+            className={`tl-detail${
+              selectedId !== null && !loading && selectedRow ? " tl-detail--stage" : ""
+            }`}
+          >
             {selectedId === null ? (
               <p className="tl-empty tl-empty--detail">
                 Pilih satu poligon di daftar untuk melihat atau menjalankan analisis tutupan
@@ -464,37 +468,23 @@ export function TutupanLahanView({
                 Poligon tidak ditemukan atau sudah tidak aktif.
               </p>
             ) : (
-              <>
-                {isMobile && (
-                  <button
-                    type="button"
-                    className="tl-back-btn"
-                    onClick={() => setSelectedId(null)}
-                  >
-                    ← Kembali ke daftar
-                  </button>
-                )}
-                <div className="tl-detail-head">
-                  <div>
-                    <h3>{selectedRow.lembaga || "(tanpa nama)"}</h3>
-                    <p className="tl-detail-meta">
-                      {layerLabel(selectedRow.layer_key)} ·{" "}
-                      {[selectedRow.nama_kab, selectedRow.nama_prov].filter(Boolean).join(", ") ||
-                        "-"}
-                    </p>
-                  </div>
-                  {onOpenKpsDetail && selectedRow.lembaga ? (
-                    <button
-                      type="button"
-                      className="tl-detail-link"
-                      onClick={() => onOpenKpsDetail(selectedRow.lembaga as string)}
-                    >
-                      Lihat Detail KPS →
-                    </button>
-                  ) : null}
-                </div>
-                <LandCoverPanel polygonId={selectedRow.polygon_metadata_id} isAdmin={isAdmin} />
-              </>
+              // Header & aksi tidak lagi block di sini -- diteruskan ke
+              // LandCoverPanel yang merendernya sebagai chrome mengambang di
+              // atas peta full-bleed (pola Live Map).
+              <LandCoverPanel
+                polygonId={selectedRow.polygon_metadata_id}
+                isAdmin={isAdmin}
+                polygonLabel={selectedRow.lembaga || "(tanpa nama)"}
+                polygonSublabel={`${layerLabel(selectedRow.layer_key)} · ${
+                  [selectedRow.nama_kab, selectedRow.nama_prov].filter(Boolean).join(", ") || "-"
+                }`}
+                onOpenKpsDetail={
+                  onOpenKpsDetail && selectedRow.lembaga
+                    ? () => onOpenKpsDetail(selectedRow.lembaga as string)
+                    : undefined
+                }
+                onBack={isMobile ? () => setSelectedId(null) : undefined}
+              />
             )}
           </div>
         )}
