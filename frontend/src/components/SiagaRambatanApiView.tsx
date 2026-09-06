@@ -11,9 +11,13 @@ import {
   MapPin,
   ShieldAlert,
   Layers,
-  ArrowRight
+  ArrowRight,
+  Crosshair,
+  Copy,
+  Check,
+  X
 } from "lucide-react";
-import { Circle, CircleMarker, GeoJSON, MapContainer, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
+import { CircleMarker, GeoJSON, MapContainer, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 import { authFetch, downloadWithAuth } from "../lib/api";
 
@@ -106,26 +110,75 @@ interface ThreatDetail {
   max_distance_km: number;
 }
 
-function MapAutoFit({ geom, hotspots }: { geom: any; hotspots: ThreatDetailHotspot[] }) {
+const BASEMAP_CONFIGS = {
+  hybrid: {
+    key: "hybrid",
+    name: "Satelit + Label",
+    url: "https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+    subdomains: ["0", "1", "2", "3"] as readonly string[],
+    maxZoom: 20,
+  },
+  dark: {
+    key: "dark",
+    name: "Mode Gelap",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    subdomains: undefined,
+    maxZoom: 16,
+  },
+  street: {
+    key: "street",
+    name: "Peta Jalan",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+    subdomains: undefined,
+    maxZoom: 19,
+  },
+} as const;
+
+type BasemapKey = keyof typeof BASEMAP_CONFIGS;
+
+/**
+ * Pengontrol Viewport Peta: Otomatis Zoom & Fit ke Poligon KPS + Hotspot
+ */
+function MapViewportController({
+  polygonId,
+  geometry,
+  hotspots,
+  focusTrigger,
+}: {
+  polygonId: number | null;
+  geometry: any;
+  hotspots: ThreatDetailHotspot[];
+  focusTrigger: number;
+}) {
   const map = useMap();
+
   useEffect(() => {
+    if (!geometry) return;
     try {
-      map.invalidateSize();
-      const bounds = L.latLngBounds([]);
-      if (geom) {
-        const layer = L.geoJSON(geom);
-        bounds.extend(layer.getBounds());
+      if (typeof map?.invalidateSize === "function") {
+        map.invalidateSize({ animate: false });
       }
+      const feat = { type: "Feature", properties: {}, geometry };
+      const layer = L.geoJSON(feat as any);
+      const bounds = layer.getBounds();
+      if (!bounds || !bounds.isValid()) return;
+
       for (const h of hotspots) {
         bounds.extend([h.latitude, h.longitude]);
       }
+
       if (bounds.isValid()) {
-        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+        if (typeof map?.flyToBounds === "function") {
+          map.flyToBounds(bounds, { padding: [55, 55], maxZoom: 15, duration: 0.6 });
+        } else if (typeof map?.fitBounds === "function") {
+          map.fitBounds(bounds, { padding: [55, 55], maxZoom: 15 });
+        }
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn("Gagal fly ke poligon KPS:", err);
     }
-  }, [geom, hotspots, map]);
+  }, [polygonId, geometry, hotspots, focusTrigger, map]);
+
   return null;
 }
 
@@ -145,6 +198,10 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
   const [selectedKpsId, setSelectedKpsId] = useState<number | null>(null);
   const [threatDetail, setThreatDetail] = useState<ThreatDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState<boolean>(false);
+
+  const [basemap, setBasemap] = useState<BasemapKey>("hybrid");
+  const [focusTrigger, setFocusTrigger] = useState<number>(0);
+  const [copiedCoords, setCopiedCoords] = useState<boolean>(false);
 
   // 1. Fetch summary & threats
   const fetchData = async () => {
@@ -271,6 +328,8 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
     return [-2.5, 118.0]; // Pusat Indonesia
   }, [threatDetail]);
 
+  const activeBasemap = BASEMAP_CONFIGS[basemap];
+
   return (
     <div className="fs-shell">
       {/* Header Halaman */}
@@ -312,110 +371,78 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
         </div>
       </header>
 
-      {/* KPI Summary Cards */}
+      {/* KPI Summary Strip */}
       <div className="fs-kpi-grid">
         {/* Bahaya Kritis */}
         <div
           onClick={() => setSelectedLevel("bahaya")}
-          className="fs-kpi-card"
-          style={{
-            backgroundColor: selectedLevel === "bahaya" ? "rgba(239, 68, 68, 0.22)" : "rgba(239, 68, 68, 0.08)",
-            border: selectedLevel === "bahaya" ? "1.5px solid #ef4444" : "1px solid rgba(239, 68, 68, 0.25)"
-          }}
+          className={`fs-kpi-card ${selectedLevel === "bahaya" ? "fs-kpi-card--active-bahaya" : ""}`}
         >
           <div className="fs-kpi-card-header">
             <span className="fs-kpi-card-label" style={{ color: "#f87171" }}>
               Bahaya Kritis (&lt; 1 km)
             </span>
-            <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: "#ef4444" }} />
+            <span className="fs-kpi-dot fs-kpi-dot--bahaya" />
           </div>
           <div className="fs-kpi-card-count">
-            <span className="fs-kpi-card-num">
-              {summary?.bahaya_count ?? 0}
-            </span>
-            <span style={{ fontSize: "0.85rem", color: "#fca5a5" }}>KPS Terancam</span>
+            <span className="fs-kpi-card-num">{summary?.bahaya_count ?? 0}</span>
+            <span className="fs-kpi-card-unit" style={{ color: "#fca5a5" }}>KPS Terancam</span>
           </div>
-          <p className="fs-kpi-card-desc" style={{ color: "#d1d5db" }}>
-            Api sangat dekat batas luar, potensi tembus hitungan jam.
-          </p>
         </div>
 
         {/* Waspada */}
         <div
           onClick={() => setSelectedLevel("waspada")}
-          className="fs-kpi-card"
-          style={{
-            backgroundColor: selectedLevel === "waspada" ? "rgba(249, 115, 22, 0.22)" : "rgba(249, 115, 22, 0.08)",
-            border: selectedLevel === "waspada" ? "1.5px solid #f97316" : "1px solid rgba(249, 115, 22, 0.25)"
-          }}
+          className={`fs-kpi-card ${selectedLevel === "waspada" ? "fs-kpi-card--active-waspada" : ""}`}
         >
           <div className="fs-kpi-card-header">
             <span className="fs-kpi-card-label" style={{ color: "#fb923c" }}>
               Waspada (1–3 km)
             </span>
-            <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: "#f97316" }} />
+            <span className="fs-kpi-dot fs-kpi-dot--waspada" />
           </div>
           <div className="fs-kpi-card-count">
-            <span className="fs-kpi-card-num">
-              {summary?.waspada_count ?? 0}
-            </span>
-            <span style={{ fontSize: "0.85rem", color: "#fed7aa" }}>KPS Terancam</span>
+            <span className="fs-kpi-card-num">{summary?.waspada_count ?? 0}</span>
+            <span className="fs-kpi-card-unit" style={{ color: "#fed7aa" }}>KPS Terancam</span>
           </div>
-          <p className="fs-kpi-card-desc" style={{ color: "#d1d5db" }}>
-            Api aktif di area tetangga, butuh sekat perimeter.
-          </p>
         </div>
 
         {/* Pantau */}
         <div
           onClick={() => setSelectedLevel("pantau")}
-          className="fs-kpi-card"
-          style={{
-            backgroundColor: selectedLevel === "pantau" ? "rgba(234, 179, 8, 0.22)" : "rgba(234, 179, 8, 0.08)",
-            border: selectedLevel === "pantau" ? "1.5px solid #eab308" : "1px solid rgba(234, 179, 8, 0.25)"
-          }}
+          className={`fs-kpi-card ${selectedLevel === "pantau" ? "fs-kpi-card--active-pantau" : ""}`}
         >
           <div className="fs-kpi-card-header">
             <span className="fs-kpi-card-label" style={{ color: "#fde047" }}>
               Pantau (3–5 km)
             </span>
-            <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: "#eab308" }} />
+            <span className="fs-kpi-dot fs-kpi-dot--pantau" />
           </div>
           <div className="fs-kpi-card-count">
-            <span className="fs-kpi-card-num">
-              {summary?.pantau_count ?? 0}
-            </span>
-            <span style={{ fontSize: "0.85rem", color: "#fef08a" }}>KPS Terancam</span>
+            <span className="fs-kpi-card-num">{summary?.pantau_count ?? 0}</span>
+            <span className="fs-kpi-card-unit" style={{ color: "#fef08a" }}>KPS Terancam</span>
           </div>
-          <p className="fs-kpi-card-desc" style={{ color: "#d1d5db" }}>
-            Klaster api lanskap sekitarnya, siaga dini patroli.
-          </p>
         </div>
 
         {/* Total Hotspot Luar */}
         <div
           onClick={() => setSelectedLevel("all")}
-          className="fs-kpi-card"
-          style={{
-            backgroundColor: selectedLevel === "all" ? "rgba(59, 130, 246, 0.22)" : "rgba(31, 41, 55, 0.5)",
-            border: selectedLevel === "all" ? "1.5px solid #3b82f6" : "1px solid rgba(255,255,255,0.08)"
-          }}
+          className={`fs-kpi-card ${selectedLevel === "all" ? "fs-kpi-card--active-all" : ""}`}
         >
           <div className="fs-kpi-card-header">
             <span className="fs-kpi-card-label" style={{ color: "#93c5fd" }}>
               Total Hotspot Luar (5 km)
             </span>
-            <Flame size={16} color="#3b82f6" />
+            <Flame size={15} color="#3b82f6" />
           </div>
           <div className="fs-kpi-card-count">
             <span className="fs-kpi-card-num">
               {summary?.total_external_hotspots?.toLocaleString() ?? 0}
             </span>
-            <span style={{ fontSize: "0.85rem", color: "#9ca3af" }}>Titik Api</span>
+            <span className="fs-kpi-card-unit" style={{ color: "#9ca3af" }}>
+              Titik Api ({summary?.total_kps_threatened ?? 0} KPS)
+            </span>
           </div>
-          <p className="fs-kpi-card-desc" style={{ color: "#9ca3af" }}>
-            Menargetkan {summary?.total_kps_threatened ?? 0} KPS di seluruh Indonesia.
-          </p>
         </div>
       </div>
 
@@ -476,7 +503,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                 setSelectedRegency("");
               }}
               className="fs-filter-select"
-              style={{ maxWidth: "180px" }}
+              style={{ maxWidth: "160px" }}
             >
               <option value="">Semua Provinsi</option>
               {provinceOptions.map((p) => (
@@ -496,7 +523,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
               value={selectedRegency}
               onChange={(e) => setSelectedRegency(e.target.value)}
               className="fs-filter-select"
-              style={{ maxWidth: "180px" }}
+              style={{ maxWidth: "160px" }}
             >
               <option value="">Semua Kabupaten</option>
               {regencyOptions.map((k) => (
@@ -519,6 +546,18 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
             onKeyDown={(e) => e.key === "Enter" && fetchData()}
             className="fs-search-input"
           />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm("");
+                fetchData();
+              }}
+              style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", padding: "0 0.4rem" }}
+            >
+              <X size={13} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -656,58 +695,127 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
         {/* Right Column: Sticky Interactive Map */}
         <div className="fs-map-column">
           <div className="fs-map-header">
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <Layers size={17} color="#60a5fa" />
-              <span style={{ fontSize: "0.88rem", fontWeight: "700", color: "#ffffff" }}>
-                {threatDetail ? threatDetail.lembaga : "Peta Perimeter Ancaman"}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+              <Layers size={16} color="#38bdf8" />
+              <span style={{ fontSize: "0.88rem", fontWeight: "700", color: "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {threatDetail ? threatDetail.lembaga : "Peta Perimeter Ancaman KPS"}
               </span>
             </div>
-            {threatDetail && (
-              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                <span style={{ fontSize: "0.76rem", color: "#9ca3af" }}>
-                  {threatDetail.hotspots.length} titik api luar radius {threatDetail.max_distance_km} km
-                </span>
-                {onOpenKpsDetail && (
-                  <button
-                    type="button"
-                    onClick={() => onOpenKpsDetail(threatDetail.lembaga)}
-                    style={{
-                      background: "rgba(59, 130, 246, 0.15)",
-                      border: "1px solid rgba(59, 130, 246, 0.4)",
-                      borderRadius: "4px",
-                      color: "#93c5fd",
-                      fontSize: "0.72rem",
-                      cursor: "pointer",
-                      padding: "0.2rem 0.5rem",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.25rem"
-                    }}
-                  >
-                    Detail KPS <ArrowRight size={11} />
-                  </button>
-                )}
-              </div>
-            )}
+
+            {/* Pilihan Basemap */}
+            <div className="fs-basemap-group">
+              <button
+                type="button"
+                className={`fs-basemap-btn ${basemap === "hybrid" ? "fs-basemap-btn--active" : ""}`}
+                onClick={() => setBasemap("hybrid")}
+              >
+                Satelit
+              </button>
+              <button
+                type="button"
+                className={`fs-basemap-btn ${basemap === "dark" ? "fs-basemap-btn--active" : ""}`}
+                onClick={() => setBasemap("dark")}
+              >
+                Gelap
+              </button>
+              <button
+                type="button"
+                className={`fs-basemap-btn ${basemap === "street" ? "fs-basemap-btn--active" : ""}`}
+                onClick={() => setBasemap("street")}
+              >
+                Jalan
+              </button>
+            </div>
           </div>
 
           <div className="fs-map-stage">
             {loadingDetail && (
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  backgroundColor: "rgba(17, 24, 39, 0.75)",
-                  zIndex: 1000,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "0.5rem",
-                  fontSize: "0.85rem",
-                  color: "#e5e7eb"
-                }}
-              >
-                <RefreshCw size={18} className="animate-spin" /> Memuat visualisasi poligon KPS &amp; perimeter buffer...
+              <div className="fs-map-loading-overlay">
+                <RefreshCw size={18} className="animate-spin" color="#38bdf8" />
+                <span>Memuat batas poligon KPS &amp; sebaran hotspot...</span>
+              </div>
+            )}
+
+            {/* Floating Inspector: Informasi Taktis KPS Terpilih */}
+            {threatDetail && (
+              <div className="fs-map-inspector">
+                <div className="fs-inspector-top">
+                  <div className="fs-inspector-meta">
+                    <div className="fs-inspector-badge-row">
+                      <span
+                        className="fs-inspector-badge"
+                        style={{
+                          backgroundColor: threatDetail.status_level === "bahaya" ? "rgba(239, 68, 68, 0.2)" : threatDetail.status_level === "waspada" ? "rgba(249, 115, 22, 0.2)" : "rgba(234, 179, 8, 0.2)",
+                          color: threatDetail.status_level === "bahaya" ? "#f87171" : threatDetail.status_level === "waspada" ? "#fb923c" : "#fde047",
+                          borderColor: threatDetail.status_level === "bahaya" ? "#ef4444" : threatDetail.status_level === "waspada" ? "#f97316" : "#eab308",
+                        }}
+                      >
+                        {threatDetail.status_label}
+                      </span>
+                      {threatDetail.skema && (
+                        <span className="fs-inspector-skema">{threatDetail.skema}</span>
+                      )}
+                    </div>
+                    <h4 className="fs-inspector-title">{threatDetail.lembaga}</h4>
+                    <p className="fs-inspector-loc">
+                      {[threatDetail.nama_desa, threatDetail.nama_kab, threatDetail.nama_prov].filter(Boolean).join(", ")}
+                    </p>
+                  </div>
+
+                  <div className="fs-inspector-dist">
+                    <span className="fs-inspector-dist-val" style={{ color: threatDetail.status_level === "bahaya" ? "#f87171" : threatDetail.status_level === "waspada" ? "#fb923c" : "#fde047" }}>
+                      {threatDetail.min_distance_m < 1000 ? `${threatDetail.min_distance_m} m` : `${threatDetail.min_distance_km} km`}
+                    </span>
+                    <span className="fs-inspector-dist-sub">dari batas luar</span>
+                  </div>
+                </div>
+
+                <div className="fs-inspector-details">
+                  <span>🧭 Arah ancaman: <strong>{threatDetail.closest_vector?.bearing_compass || "-"}</strong></span>
+                  <span>🔥 <strong>{threatDetail.total_external_hotspots} hotspot luar</strong> radius {threatDetail.max_distance_km} km</span>
+                  {threatDetail.luas_ha && <span>📐 Luas: <strong>{threatDetail.luas_ha.toLocaleString()} ha</strong></span>}
+                </div>
+
+                <div className="fs-inspector-actions">
+                  <button
+                    type="button"
+                    onClick={() => setFocusTrigger((t) => t + 1)}
+                    className="fs-inspector-btn"
+                    title="Fokuskan kembali peta ke poligon KPS dan titik api"
+                  >
+                    <Crosshair size={13} color="#38bdf8" />
+                    Fokus Poligon
+                  </button>
+
+                  {threatDetail.hotspots.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const h = threatDetail.hotspots[0];
+                        navigator.clipboard.writeText(`${h.latitude.toFixed(6)}, ${h.longitude.toFixed(6)}`);
+                        setCopiedCoords(true);
+                        setTimeout(() => setCopiedCoords(false), 2000);
+                      }}
+                      className="fs-inspector-btn"
+                      title="Salin koordinat hotspot terdekat"
+                    >
+                      {copiedCoords ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
+                      {copiedCoords ? "Tersalin!" : "Salin Titik Api"}
+                    </button>
+                  )}
+
+                  {onOpenKpsDetail && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenKpsDetail(threatDetail.lembaga)}
+                      className="fs-inspector-btn fs-inspector-btn--primary"
+                      title="Buka Buku Besar KPS ini"
+                    >
+                      Buku Besar KPS
+                      <ArrowRight size={12} />
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -718,85 +826,111 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
               attributionControl={false}
             >
               <TileLayer
-                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                maxZoom={19}
+                key={activeBasemap.key}
+                url={activeBasemap.url}
+                subdomains={activeBasemap.subdomains ? (activeBasemap.subdomains as readonly string[] as string[]) : undefined}
+                maxZoom={activeBasemap.maxZoom}
               />
 
-              {/* Auto Fit Bounds ke Poligon KPS + Seluruh Titik Api */}
-              {threatDetail?.geometry && (
-                <MapAutoFit geom={threatDetail.geometry} hotspots={threatDetail.hotspots} />
-              )}
+              {/* Viewport controller: Auto fly ke poligon KPS & hotspot */}
+              <MapViewportController
+                polygonId={threatDetail?.polygon_id ?? null}
+                geometry={threatDetail?.geometry}
+                hotspots={threatDetail?.hotspots ?? []}
+                focusTrigger={focusTrigger}
+              />
 
-              {/* Render Poligon KPS */}
+              {/* Visualisasi Poligon KPS (High-Contrast Neon Cyan) */}
               {threatDetail?.geometry && (
                 <GeoJSON
-                  data={threatDetail.geometry}
+                  key={`threat-polygon-${threatDetail.polygon_id}`}
+                  data={{
+                    type: "Feature",
+                    properties: {
+                      lembaga: threatDetail.lembaga,
+                      desa: threatDetail.nama_desa,
+                      status_label: threatDetail.status_label,
+                      luas_ha: threatDetail.luas_ha
+                    },
+                    geometry: threatDetail.geometry
+                  } as never}
                   style={{
-                    color: "#10b981",
-                    weight: 2.5,
-                    fillColor: "#10b981",
-                    fillOpacity: 0.15
+                    color: "#00e5ff",
+                    weight: 3.5,
+                    opacity: 1,
+                    fillColor: "#0284c7",
+                    fillOpacity: 0.22,
+                    dashArray: "3 2"
                   }}
                 >
                   <Popup>
-                    <div style={{ color: "#111827", fontSize: "0.8rem" }}>
-                      <strong>{threatDetail.lembaga}</strong>
-                      <br />
-                      Status Siaga: <strong>{threatDetail.status_label}</strong>
-                      <br />
-                      Luas: {threatDetail.luas_ha ? `${threatDetail.luas_ha.toLocaleString()} ha` : "-"}
+                    <div style={{ color: "#111827", fontSize: "0.82rem", minWidth: "180px" }}>
+                      <div style={{ fontWeight: "700", fontSize: "0.92rem", color: "#0284c7", marginBottom: "0.2rem" }}>
+                        {threatDetail.lembaga}
+                      </div>
+                      <div>Status Ancaman: <strong>{threatDetail.status_label}</strong></div>
+                      <div>Luas Kawasan: <strong>{threatDetail.luas_ha ? `${threatDetail.luas_ha.toLocaleString()} ha` : "-"}</strong></div>
+                      <div style={{ marginTop: "0.3rem", fontSize: "0.74rem", color: "#4b5563" }}>
+                        {[threatDetail.nama_desa, threatDetail.nama_kec, threatDetail.nama_kab, threatDetail.nama_prov].filter(Boolean).join(", ")}
+                      </div>
                     </div>
                   </Popup>
                 </GeoJSON>
               )}
 
-              {/* Multi-Ring Buffers di sekeliling Centroid KPS (1 km, 3 km, 5 km) */}
-              {threatDetail?.centroid && (
+              {/* Garis Panah Vektor Rambatan Terdekat & Titik Batas Masuk */}
+              {threatDetail?.closest_vector && (
                 <>
-                  <Circle
-                    center={[threatDetail.centroid[1], threatDetail.centroid[0]]}
-                    radius={1000}
-                    pathOptions={{ color: "#ef4444", weight: 1.5, dashArray: "4, 4", fill: false }}
-                  />
-                  <Circle
-                    center={[threatDetail.centroid[1], threatDetail.centroid[0]]}
-                    radius={3000}
-                    pathOptions={{ color: "#f97316", weight: 1.5, dashArray: "4, 4", fill: false }}
-                  />
-                  <Circle
-                    center={[threatDetail.centroid[1], threatDetail.centroid[0]]}
-                    radius={5000}
-                    pathOptions={{ color: "#eab308", weight: 1.5, dashArray: "4, 4", fill: false }}
-                  />
+                  <Polyline
+                    key={`vector-line-${threatDetail.polygon_id}`}
+                    positions={[
+                      [threatDetail.closest_vector.hotspot_coords[1], threatDetail.closest_vector.hotspot_coords[0]],
+                      [threatDetail.closest_vector.kps_boundary_coords[1], threatDetail.closest_vector.kps_boundary_coords[0]]
+                    ]}
+                    pathOptions={{
+                      color: "#ef4444",
+                      weight: 3.5,
+                      dashArray: "6, 6",
+                      opacity: 0.95
+                    }}
+                  >
+                    <Popup>
+                      <div style={{ color: "#111827", fontSize: "0.8rem" }}>
+                        <strong style={{ color: "#ef4444" }}>⚡ Vektor Rambatan Terdekat</strong>
+                        <br />
+                        Jarak ke batas: <strong>{threatDetail.closest_vector.distance_m < 1000 ? `${threatDetail.closest_vector.distance_m} m` : `${(threatDetail.closest_vector.distance_m / 1000).toFixed(2)} km`}</strong>
+                        <br />
+                        Arah rambatan: <strong>{threatDetail.closest_vector.bearing_compass}</strong>
+                      </div>
+                    </Popup>
+                  </Polyline>
+
+                  {/* Marker Titik Batas KPS Terdekat */}
+                  <CircleMarker
+                    key={`kps-entry-${threatDetail.polygon_id}`}
+                    center={[threatDetail.closest_vector.kps_boundary_coords[1], threatDetail.closest_vector.kps_boundary_coords[0]]}
+                    radius={7}
+                    pathOptions={{
+                      color: "#ffffff",
+                      weight: 2,
+                      fillColor: "#00e5ff",
+                      fillOpacity: 1
+                    }}
+                  >
+                    <Popup>
+                      <div style={{ color: "#111827", fontSize: "0.8rem" }}>
+                        <strong style={{ color: "#0284c7" }}>📍 Titik Batas KPS Terdekat</strong>
+                        <br />
+                        Jarak ke api luar: <strong>{threatDetail.closest_vector.distance_m} meter</strong>
+                        <br />
+                        Arah rambatan: <strong>{threatDetail.closest_vector.bearing_compass}</strong>
+                      </div>
+                    </Popup>
+                  </CircleMarker>
                 </>
               )}
 
-              {/* Garis Panah Vektor Ancaman Terdekat */}
-              {threatDetail?.closest_vector && (
-                <Polyline
-                  positions={[
-                    [threatDetail.closest_vector.hotspot_coords[1], threatDetail.closest_vector.hotspot_coords[0]],
-                    [threatDetail.closest_vector.kps_boundary_coords[1], threatDetail.closest_vector.kps_boundary_coords[0]]
-                  ]}
-                  pathOptions={{
-                    color: "#ef4444",
-                    weight: 3.5,
-                    dashArray: "6, 6"
-                  }}
-                >
-                  <Popup>
-                    <div style={{ color: "#111827", fontSize: "0.78rem" }}>
-                      <strong>Garis Vektor Rambatan Terdekat</strong>
-                      <br />
-                      Jarak: <strong>{threatDetail.closest_vector.distance_m} meter</strong>
-                      <br />
-                      Arah: <strong>{threatDetail.closest_vector.bearing_compass}</strong>
-                    </div>
-                  </Popup>
-                </Polyline>
-              )}
-
-              {/* Titik-Titik Hotspot Luar */}
+              {/* Titik-Titik Hotspot di Perimeter Luar */}
               {threatDetail?.hotspots.map((h) => {
                 const isHbahaya = h.status_level === "bahaya";
                 const isHwaspada = h.status_level === "waspada";
@@ -806,16 +940,16 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                   <CircleMarker
                     key={h.id}
                     center={[h.latitude, h.longitude]}
-                    radius={isHbahaya ? 7 : 5.5}
+                    radius={isHbahaya ? 7.5 : 6}
                     pathOptions={{
                       color: "#ffffff",
-                      weight: 1.5,
+                      weight: 2,
                       fillColor: pColor,
                       fillOpacity: 0.95
                     }}
                   >
                     <Popup>
-                      <div style={{ color: "#111827", fontSize: "0.8rem", minWidth: "160px" }}>
+                      <div style={{ color: "#111827", fontSize: "0.8rem", minWidth: "170px" }}>
                         <div style={{ fontWeight: "700", color: pColor, marginBottom: "0.2rem" }}>
                           🔥 Hotspot Luar ({h.status_label})
                         </div>
@@ -823,7 +957,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                         <div>Arah dari KPS: <strong>{h.bearing_compass}</strong> ({h.bearing_deg}°)</div>
                         {h.frp > 0 && <div>FRP: <strong>{h.frp} MW</strong></div>}
                         <div>Satelit: {h.satellite || "-"} ({h.confidence || "-"})</div>
-                        <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: "0.2rem" }}>
+                        <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: "0.25rem" }}>
                           {h.detected_at || "-"}
                         </div>
                       </div>
@@ -833,28 +967,34 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
               })}
             </MapContainer>
 
-            {/* Legenda Peta Overlay */}
+            {/* Legenda Peta Overlay Ringkas */}
             <div className="fs-map-legend">
-              <div style={{ fontWeight: "700", marginBottom: "0.15rem", color: "#ffffff" }}>Legenda Peta:</div>
+              <div style={{ fontWeight: "700", marginBottom: "0.15rem", color: "#ffffff", fontSize: "0.74rem" }}>
+                Legenda Peta:
+              </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                <span style={{ width: "12px", height: "3px", backgroundColor: "#10b981" }} />
+                <span style={{ width: "14px", height: "3px", backgroundColor: "#00e5ff", border: "1px dashed #0284c7" }} />
                 <span>Batas Kawasan KPS</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#ef4444" }} />
+                <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#ef4444", border: "1.5px solid #fff" }} />
                 <span>Hotspot Luar &lt; 1 km (Kritis)</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#f97316" }} />
+                <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#f97316", border: "1.5px solid #fff" }} />
                 <span>Hotspot Luar 1–3 km (Waspada)</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#eab308" }} />
+                <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#eab308", border: "1.5px solid #fff" }} />
                 <span>Hotspot Luar 3–5 km (Pantau)</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
                 <span style={{ width: "14px", height: "2px", borderTop: "2px dashed #ef4444" }} />
-                <span>Garis Rambatan Api Terdekat</span>
+                <span>Vektor Rambatan Terdekat</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#00f0ff", border: "1.5px solid #fff" }} />
+                <span>Titik Masuk Batas Terdekat</span>
               </div>
             </div>
           </div>
