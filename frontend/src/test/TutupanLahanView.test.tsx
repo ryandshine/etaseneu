@@ -130,21 +130,18 @@ describe("TutupanLahanView", () => {
     ).toBeInTheDocument();
   });
 
-  it("filters via the Filter popover, shows a removable pill, and clearing it restores the list", async () => {
+  it("filters the list inline by Provinsi and 'Reset filter' restores it", async () => {
     render(<TutupanLahanView />);
     await screen.findByText("GAPOKTAN MEKAR JAYA");
 
-    fireEvent.click(screen.getByRole("button", { name: /^filter$/i }));
+    // Filter sekarang selalu tampil (bukan popover) -- langsung ubah select.
     const provinceSelect = screen.getByLabelText("Provinsi") as HTMLSelectElement;
     fireEvent.change(provinceSelect, { target: { value: "Sumatera Selatan" } });
 
     expect(screen.queryByText("GAPOKTAN MEKAR JAYA")).not.toBeInTheDocument();
     expect(screen.getByText("MHA BATU BATU")).toBeInTheDocument();
 
-    const pill = screen.getByRole("button", { name: /hapus filter sumatera selatan/i });
-    expect(pill).toBeInTheDocument();
-
-    fireEvent.click(pill);
+    fireEvent.click(screen.getByRole("button", { name: /reset filter/i }));
     expect(await screen.findByText("GAPOKTAN MEKAR JAYA")).toBeInTheDocument();
   });
 

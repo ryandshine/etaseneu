@@ -102,7 +102,6 @@ export function TutupanLahanView({
   const [kabupatenFilter, setKabupatenFilter] = useState("");
   const [wilkerFilter, setWilkerFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("");
-  const [filterOpen, setFilterOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(initialPolygonId);
   const isMobile = useIsMobile();
 
@@ -194,19 +193,6 @@ export function TutupanLahanView({
     [rows, selectedId],
   );
 
-  // Filter aktif sebagai pill yang bisa dilepas satu-satu, tanpa perlu buka
-  // popover -- popovernya sendiri cuma tempat MENGUBAH pilihan.
-  const activePills = useMemo(() => {
-    const pills: Array<{ key: string; label: string; clear: () => void }> = [];
-    if (provinceFilter) pills.push({ key: "prov", label: provinceFilter, clear: () => setProvinceFilter("") });
-    if (kabupatenFilter) pills.push({ key: "kab", label: kabupatenFilter, clear: () => setKabupatenFilter("") });
-    if (wilkerFilter) pills.push({ key: "wilker", label: wilkerFilter, clear: () => setWilkerFilter("") });
-    if (statusFilter) {
-      const label = STATUS_FILTER_OPTIONS.find((o) => o.value === statusFilter)?.label ?? statusFilter;
-      pills.push({ key: "status", label, clear: () => setStatusFilter("") });
-    }
-    return pills;
-  }, [provinceFilter, kabupatenFilter, wilkerFilter, statusFilter]);
 
   // Mobile: daftar dan detail bergantian tampil (bukan ditumpuk) supaya
   // sekali pilih poligon tidak perlu menggulir lewat ratusan baris untuk
@@ -300,96 +286,77 @@ export function TutupanLahanView({
                 </button>
               </div>
 
-              <div className="tl-filterbar">
-                <button
-                  type="button"
-                  className="tl-filter-toggle"
-                  aria-expanded={filterOpen}
-                  onClick={() => setFilterOpen((o) => !o)}
-                >
-                  Filter
-                  {activePills.length > 0 && (
-                    <span className="tl-filter-badge">{activePills.length}</span>
-                  )}
-                </button>
-
-                {activePills.length > 0 && (
-                  <div className="tl-filter-pills">
-                    {activePills.map((p) => (
-                      <button
-                        key={p.key}
-                        type="button"
-                        className="tl-filter-pill"
-                        onClick={p.clear}
-                        aria-label={`Hapus filter ${p.label}`}
-                      >
-                        {p.label} <span aria-hidden>✕</span>
-                      </button>
+              {/* Filter selalu tampil (bukan popover) -- 4 select ringkas
+                  2x2, font kecil biar muat di kolom daftar yang sempit. */}
+              <div className="tl-filters">
+                <label className="tl-filter-field">
+                  <span>Provinsi</span>
+                  <select
+                    value={provinceFilter}
+                    onChange={(e) => setProvinceFilter(e.currentTarget.value)}
+                  >
+                    <option value="">Semua</option>
+                    {provinceOptions.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
                     ))}
-                  </div>
-                )}
-
-                {filterOpen && (
-                  <>
-                    <div className="tl-filter-backdrop" onClick={() => setFilterOpen(false)} />
-                    <div className="tl-filter-popover">
-                      <label className="matrix-field">
-                        <span>Provinsi</span>
-                        <select
-                          value={provinceFilter}
-                          onChange={(e) => setProvinceFilter(e.currentTarget.value)}
-                        >
-                          <option value="">Semua</option>
-                          {provinceOptions.map((p) => (
-                            <option key={p} value={p}>
-                              {p}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="matrix-field">
-                        <span>Kabupaten</span>
-                        <select
-                          value={kabupatenFilter}
-                          onChange={(e) => setKabupatenFilter(e.currentTarget.value)}
-                        >
-                          <option value="">Semua</option>
-                          {kabupatenOptions.map((k) => (
-                            <option key={k} value={k}>
-                              {k}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="matrix-field">
-                        <span>Wilker BPS</span>
-                        <select
-                          value={wilkerFilter}
-                          onChange={(e) => setWilkerFilter(e.currentTarget.value)}
-                        >
-                          <option value="">Semua</option>
-                          {wilkerOptions.map((w) => (
-                            <option key={w} value={w}>
-                              {w}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="matrix-field">
-                        <span>Status</span>
-                        <select
-                          value={statusFilter}
-                          onChange={(e) => setStatusFilter(e.currentTarget.value as StatusFilterValue)}
-                        >
-                          {STATUS_FILTER_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                  </>
+                  </select>
+                </label>
+                <label className="tl-filter-field">
+                  <span>Kabupaten</span>
+                  <select
+                    value={kabupatenFilter}
+                    onChange={(e) => setKabupatenFilter(e.currentTarget.value)}
+                  >
+                    <option value="">Semua</option>
+                    {kabupatenOptions.map((k) => (
+                      <option key={k} value={k}>
+                        {k}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="tl-filter-field">
+                  <span>Wilker BPS</span>
+                  <select
+                    value={wilkerFilter}
+                    onChange={(e) => setWilkerFilter(e.currentTarget.value)}
+                  >
+                    <option value="">Semua</option>
+                    {wilkerOptions.map((w) => (
+                      <option key={w} value={w}>
+                        {w}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="tl-filter-field">
+                  <span>Status</span>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.currentTarget.value as StatusFilterValue)}
+                  >
+                    {STATUS_FILTER_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {(provinceFilter || kabupatenFilter || wilkerFilter || statusFilter) && (
+                  <button
+                    type="button"
+                    className="tl-filter-reset"
+                    onClick={() => {
+                      setProvinceFilter("");
+                      setKabupatenFilter("");
+                      setWilkerFilter("");
+                      setStatusFilter("");
+                    }}
+                  >
+                    Reset filter
+                  </button>
                 )}
               </div>
               {filteredRows.length !== rows.length && (

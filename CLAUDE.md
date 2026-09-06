@@ -267,8 +267,13 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
     daftar SEMUA poligon KPS+Hutan Adat sekaligus status analisisnya (`GET /api/land-cover/polygons`
     — bulk `LEFT JOIN polygon_metadata ↔ land_cover_analysis`, method
     `list_polygons_with_land_cover_status` di `postgres_store/_land_cover.py`), cari + filter
-    Provinsi/Kabupaten/Wilker BPS/Status (ringkas jadi tombol "Filter" + popover + pill yang bisa
-    dilepas satu-satu, bukan 4 `<select>` berbaris — client-side, dasarnya masih pola Matriks Data),
+    Provinsi/Kabupaten/Wilker BPS/Status — client-side; sejak 2026-09-06 **4 `<select>` inline
+    selalu tampil** (`.tl-filters` grid 2x2, font kecil `.tl-filter-field`) + link "Reset filter",
+    BUKAN lagi tombol "Filter"+popover+pill (buang state `filterOpen`/`activePills`). Kolom daftar
+    dipersempit `22rem→18.5rem` + `.tl-row`/`.ledger-search` diperkecil biar peta detail dapat
+    ruang. Kelas lama `.tl-filterbar`/`.tl-filter-toggle`/`.tl-filter-popover`/`.tl-filter-pill*`
+    dihapus. Test `TutupanLahanView.test.tsx` langsung ubah select (tak ada tombol "Filter" lagi;
+    "Reset filter" mengganti pill).
     klik satu baris → detail me-reuse `LandCoverPanel.tsx` apa adanya. Detailnya dua tab
     ("Peta Spasial" default / "Tren Historis", state lokal `tab`, berbagi state `year` yang sama):
     seluruh detail **FULL-BLEED pola Live Map** (2026-09-06, iterasi ke-2): `TutupanLahanView`

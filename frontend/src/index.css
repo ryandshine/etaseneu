@@ -9246,7 +9246,9 @@ a + a {
 
 .tl-body {
   display: grid;
-  grid-template-columns: 22rem minmax(0, 1fr);
+  /* kolom daftar dipersempit 22rem -> 18.5rem (filter sekarang inline &
+     ringkas) supaya peta detail dapat ruang lebih. */
+  grid-template-columns: 18.5rem minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   flex: 1;
   min-height: 0;
@@ -9261,124 +9263,88 @@ a + a {
 }
 
 .tl-list-head {
-  padding: 0.75rem 0.85rem 0.6rem;
+  padding: 0.55rem 0.6rem 0.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.45rem;
 }
 
-/* Filter jadi popover+pills (bukan 4 select berbaris) -- ringkas sesuai
-   permintaan desain "compact filter pills/popover". */
-.tl-filterbar {
-  position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.tl-filter-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.32rem 0.7rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.04);
-  color: #f4f5f7;
-  font: inherit;
-  font-size: 0.72rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-.tl-filter-toggle:hover {
-  border-color: rgba(255, 142, 66, 0.4);
-}
-.tl-filter-toggle[aria-expanded="true"] {
-  border-color: rgba(255, 142, 66, 0.55);
-  background: rgba(255, 142, 66, 0.1);
-}
-
-.tl-filter-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.1rem;
-  height: 1.1rem;
-  padding: 0 0.3rem;
-  border-radius: 999px;
-  background: #ff8c42;
-  color: #1a120d;
-  font-size: 0.62rem;
-  font-weight: 800;
-}
-
-.tl-filter-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-.tl-filter-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.28rem 0.55rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 142, 66, 0.3);
-  background: rgba(255, 142, 66, 0.08);
-  color: #ffd9bf;
-  font: inherit;
-  font-size: 0.68rem;
-  font-weight: 600;
-  cursor: pointer;
-  max-width: 11rem;
-}
-.tl-filter-pill span {
-  flex-shrink: 0;
-  opacity: 0.6;
-}
-.tl-filter-pill:hover {
-  background: rgba(255, 142, 66, 0.16);
-}
-
-.tl-filter-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  background: transparent;
-}
-.tl-filter-popover {
-  position: absolute;
-  z-index: 41;
-  top: calc(100% + 0.4rem);
-  left: 0;
-  width: 19rem;
-  max-width: calc(100vw - 2rem);
+/* Filter selalu tampil (bukan popover, 2026-09-06) -- 4 select ringkas 2x2,
+   font kecil biar muat di kolom daftar yang sempit tanpa melebarkannya. */
+.tl-filters {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  border-radius: 0.6rem;
-  background: #1a120d;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  gap: 0.35rem 0.5rem;
+  align-items: end;
 }
-.tl-filter-popover .matrix-field {
+.tl-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
   min-width: 0;
+}
+.tl-filter-field > span {
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: rgba(244, 245, 247, 0.45);
+}
+.tl-filter-field select {
+  width: 100%;
+  min-width: 0;
+  height: 1.85rem;
+  padding: 0 1.3rem 0 0.45rem;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #1e2128;
+  color: #e8e0d5;
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+  outline: none;
+  text-overflow: ellipsis;
+}
+.tl-filter-field select:focus {
+  border-color: rgba(255, 142, 66, 0.5);
+}
+.tl-filter-reset {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 0.1rem 0;
+  border: none;
+  background: none;
+  color: #ff8c42;
+  font: inherit;
+  font-size: 0.64rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
 }
 
 .tl-filter-count {
   margin: 0;
-  font-size: 0.66rem;
+  font-size: 0.64rem;
   color: rgba(244, 245, 247, 0.5);
+}
+
+/* Hemat ruang kolom daftar -- pencarian & baris lebih ringkas (scoped ke
+   Tutupan Lahan, `.ledger-search` juga dipakai di Matriks Data). */
+.tl-list-head .ledger-search {
+  margin-bottom: 0;
+  padding: 0.35rem 0.5rem;
+}
+.tl-list-head .ledger-search__input {
+  font-size: 0.76rem;
+  padding: 0.25rem 0;
 }
 
 .tl-list-scroll {
   overflow-y: auto;
   flex: 1;
   min-height: 0;
-  padding: 0.4rem;
+  padding: 0.3rem;
 }
 
 .tl-empty {
@@ -9399,9 +9365,9 @@ a + a {
 .tl-row {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.22rem;
   width: 100%;
-  padding: 0.65rem 0.6rem;
+  padding: 0.5rem 0.5rem;
   border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
@@ -9421,9 +9387,9 @@ a + a {
 }
 
 .tl-row-name {
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.28;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -9433,8 +9399,8 @@ a + a {
 .tl-row-meta {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  font-size: 0.68rem;
+  gap: 0.4rem;
+  font-size: 0.64rem;
   color: #9ca3af;
 }
 
