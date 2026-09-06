@@ -58,20 +58,16 @@ const POLL_IDLE_MS = 10000;
 const FIRST_YEAR = LAND_COVER_YEARS[0];
 const LAST_YEAR = LAND_COVER_YEARS[LAND_COVER_YEARS.length - 1];
 
-// Basemap seragam dengan Live Map (HotspotMap.tsx): satelit default, plus
-// jalan & topografi dari Esri ArcGIS (bebas API key, tanpa watermark CARTO
-// atau pembatasan rate limit OpenTopoMap).
+// Basemap seragam: satelit Google Maps Hybrid terbaru, plus
+// jalan & topografi dari Esri ArcGIS (bebas API key).
 const BASEMAPS = {
   satelit: {
     label: "Satelit",
     layers: [
       {
-        url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        maxZoom: 19,
-      },
-      {
-        url: "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-        maxZoom: 19,
+        url: "https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+        subdomains: "0123",
+        maxZoom: 20,
       },
     ],
   },
@@ -570,6 +566,7 @@ export function LandCoverPanel({
               <TileLayer
                 key={`${basemap}-${idx}`}
                 url={layer.url}
+                subdomains={"subdomains" in layer ? layer.subdomains : undefined}
                 maxZoom={layer.maxZoom}
               />
             ))}
