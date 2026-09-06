@@ -10,6 +10,7 @@ vi.mock("react-leaflet", () => ({
   GeoJSON: ({ children }: { children?: ReactNode }) => <div data-testid="lc-geojson">{children}</div>,
   MapContainer: ({ children }: { children?: ReactNode }) => <div data-testid="lc-map">{children}</div>,
   TileLayer: () => <div data-testid="lc-tile" />,
+  ZoomControl: () => <div data-testid="lc-zoom" />,
   useMap: () => ({
     invalidateSize: () => undefined,
     fitBounds: () => undefined,

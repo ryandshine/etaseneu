@@ -1029,70 +1029,9 @@ body {
   color: #ffd9bf;
 }
 
-/* Peta jadi elemen dominan tunggal di tab "Peta Spasial" -- toolbar tahun &
-   ringkasan kelas mengambang DI ATAS peta (glassmorphism), bukan block
-   statis yang mendorong peta jadi kecil. */
-.lc-mapstage {
-  position: relative;
-  border-radius: 0.6rem;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-.lc-mapstage .leaflet-container {
-  width: 100%;
-  height: 70vh;
-  min-height: 420px;
-  max-height: 760px;
-  background: #0c0907;
-}
-
-.lc-mapstage__toolbar {
-  position: absolute;
-  z-index: 500;
-  top: 0.85rem;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.6rem;
-  border-radius: 999px;
-  background: rgba(20, 15, 11, 0.55);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  width: min(20rem, calc(100% - 2rem));
-}
-
-/* Ringkasan luas per kelas TAHUN TERPILIH -- kartu mengambang di sudut peta.
-   Di layar sempit (sama ambang useIsMobile, <=639px) glass mengambang
-   menutupi peta alih-alih membantu, jadi diturunkan jadi block biasa di
-   bawah peta. */
-.lc-floatcard {
-  position: absolute;
-  z-index: 500;
-  bottom: 0.85rem;
-  left: 0.85rem;
-  max-width: 20rem;
-  padding: 0.6rem;
-  border-radius: 0.6rem;
-  background: rgba(20, 15, 11, 0.55);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-}
-@media (max-width: 639px) {
-  .lc-floatcard {
-    position: static;
-    max-width: none;
-    margin-top: 0.6rem;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    background: rgba(255, 255, 255, 0.03);
-  }
-}
+/* (Tata letak tab "Peta Spasial" -- lihat .lc-mapframe di bawah, mengikuti
+   pola Live Map. Kelas lama .lc-mapstage / .lc-mapstage__toolbar /
+   .lc-floatcard sudah dihapus 2026-09-06.) */
 
 .lc-map__empty {
   position: absolute;
@@ -1105,6 +1044,112 @@ body {
   color: rgba(245, 239, 230, 0.7);
   background: rgba(12, 9, 7, 0.82);
   backdrop-filter: blur(2px);
+}
+
+/* --- Tab "Peta Spasial": tata letak mengikuti Live Map (HotspotMap.tsx) ---
+   Peta jadi elemen dominan di .lc-mapframe (position:relative supaya
+   .map-left-stack yang position:absolute menempel ke sini), kontrol
+   mengambang di kolom kiri memakai kelas Live Map yang sama
+   (.map-left-stack, .map-legend, .basemap-switcher--stacked). */
+.lc-mapframe {
+  position: relative;
+  border-radius: 0.6rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  height: min(78vh, 780px);
+  min-height: 480px;
+}
+.lc-mapframe .leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: #0c0907;
+}
+/* Tidak ada kontrol Leaflet di sudut kiri-bawah di sini (zoom dipindah ke
+   kanan-bawah) -- kolom kiri boleh memakai hampir seluruh tinggi. */
+.lc-mapframe .map-left-stack {
+  max-height: calc(100% - 2rem);
+  max-width: 15.5rem;
+}
+.lc-mapframe .leaflet-control-zoom {
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 0.5rem !important;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+}
+.lc-mapframe .leaflet-control-zoom a {
+  background: rgba(19, 21, 26, 0.92) !important;
+  color: #f5efe6 !important;
+  border: none !important;
+}
+.lc-mapframe .leaflet-control-zoom a:not(.leaflet-disabled):hover {
+  background: rgba(255, 78, 0, 0.18) !important;
+  color: #fff !important;
+}
+
+/* Kartu "Tahun" -- pakai kotak .map-legend, isinya baris slider + angka. */
+.lc-yearcard__row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.lc-yearcard .lc-range {
+  flex: 1;
+  min-width: 0;
+}
+.lc-yearcard .lc-year {
+  min-width: 2.6ch;
+  text-align: right;
+}
+
+/* Kartu legenda + luas per kelas -- baris .map-legend-row dengan nilai
+   ha/% di kanan. */
+.lc-legendcard .lc-legendrow {
+  justify-content: flex-start;
+  gap: 0.4rem;
+}
+.lc-legendrow__label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lc-legendrow__value {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+.lc-legendrow__ha {
+  color: #f5efe6;
+  font-weight: 600;
+}
+.lc-legendrow__pct {
+  color: rgba(245, 239, 230, 0.5);
+}
+.lc-legendrow--zero {
+  opacity: 0.45;
+}
+
+/* Mobile (<=639px, sama ambang useIsMobile): kontrol turun jadi blok biasa
+   di bawah peta, peta lebih pendek -- pola sama seperti Live Map yang
+   mengganti kontrol mengambang dengan MapSheet di lebar ini. */
+.lc-mapframe--mobile {
+  height: 56vh;
+  min-height: 340px;
+}
+.lc-mobilecontrols {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+.lc-mobilecontrols .basemap-switcher {
+  position: static;
+  align-self: flex-start;
+}
+.lc-mobilecontrols .map-legend {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: none;
 }
 
 .lc-trend {
@@ -1188,61 +1233,11 @@ body {
   color: #f5efe6;
 }
 
-/* LandCoverPanel sekarang cuma dirender di panel detail TutupanLahanView
-   (lebar, lihat .tl-detail) -- BUKAN lagi di sidebar sempit Detail KPS
-   (panelnya sudah dicabut dari sana, diganti .lc-summary-link). Jadi aman
-   dibuat lebar & tinggi tanpa mikirin konteks sempit yang lain. Tata letak
-   dua-kolom lama (.lc-visual/.lc-map) sudah diganti .lc-mapstage + kartu
-   mengambang (lihat dekat .lc-tabs di atas) -- peta jadi satu-satunya
-   elemen dominan di tab "Peta Spasial". */
-
-/* Ringkasan luas per kelas UNTUK TAHUN TERPILIH -- sekarang isi kartu
-   mengambang (.lc-floatcard), jadi 2 kolom tetap (bukan auto-fill lebar)
-   biar muat di kartu sempit ~20rem. */
-.lc-classgrid {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.4rem;
-  align-content: start;
-}
-.lc-classgrid__item--zero {
-  opacity: 0.4;
-}
-.lc-classgrid__item {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  column-gap: 0.4rem;
-  row-gap: 0.05rem;
-  padding: 0.55rem 0.6rem;
-  border-radius: 0.4rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-}
-.lc-classgrid__label {
-  font-size: 0.66rem;
-  font-weight: 600;
-  color: rgba(245, 239, 230, 0.72);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.lc-classgrid__value {
-  grid-column: 2;
-  font-size: 1rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: #f5efe6;
-}
-.lc-classgrid__pct {
-  grid-column: 2;
-  font-size: 0.68rem;
-  color: rgba(245, 239, 230, 0.5);
-  font-variant-numeric: tabular-nums;
-}
+/* LandCoverPanel cuma dirender di panel detail TutupanLahanView (lebar,
+   lihat .tl-detail) -- BUKAN lagi di sidebar sempit Detail KPS. Tab "Peta
+   Spasial" sekarang pakai tata letak Live Map (.lc-mapframe + .map-left-stack
+   + .map-legend, lihat dekat .lc-map__empty di atas). Kelas .lc-classgrid*
+   lama dihapus 2026-09-06 (diganti baris .lc-legendrow di kartu legenda). */
 .lc-swatch {
   width: 11px;
   height: 11px;

@@ -271,9 +271,20 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
     dilepas satu-satu, bukan 4 `<select>` berbaris — client-side, dasarnya masih pola Matriks Data),
     klik satu baris → detail me-reuse `LandCoverPanel.tsx` apa adanya. Detailnya dua tab
     ("Peta Spasial" default / "Tren Historis", state lokal `tab`, berbagi state `year` yang sama):
-    tab Peta = peta jadi elemen dominan tunggal (`.lc-mapstage`, tinggi `70vh`) dengan toolbar tahun
-    & grid ringkasan luas-per-kelas mengambang di atasnya (glassmorphism, `.lc-mapstage__toolbar` /
-    `.lc-floatcard` — static/tanpa blur di layar <640px biar tidak menutupi peta); tab Tren = grafik
+    tab Peta **memakai tata letak Live Map** (2026-09-06) — peta full-bleed di `.lc-mapframe`
+    (`position:relative`, tinggi `min(78vh,780px)`), kontrol mengambang di kolom kiri pakai kelas
+    Live Map yang sama (`.map-left-stack` + `.map-legend` + `.basemap-switcher--stacked`): (1) basemap
+    Satelit/Jalan/Topografi (state `basemap` lokal, ganti URL `<TileLayer>` — Live Map sendiri tidak
+    di-reuse, terlalu terkopel ke data hotspot), (2) kartu "Tahun" berisi slider `.lc-range` +
+    prev/next + `.lc-year`, (3) kartu "Tutupan Lahan {year}" = legenda + luas per kelas jadi satu
+    (baris `.lc-legendrow` swatch/label/`N ha · N%`, `role="list"` + `aria-label="Luas per kelas
+    tahun {year}"` — TEST `LandCoverPanel.test.tsx` mencarinya lewat itu, jangan hapus). `<ZoomControl
+    position="bottomright" />` (desktop; mobile pinch saja). Mobile (`useIsMobile`, <=639px): kontrol
+    turun jadi blok `.lc-mobilecontrols` di bawah peta, peta lebih pendek — pola sama Live Map yang
+    mengganti kontrol mengambang dengan MapSheet. Mock `react-leaflet` di `LandCoverPanel.test.tsx`
+    WAJIB ekspor `ZoomControl`. Kelas lama `.lc-mapstage` / `.lc-mapstage__toolbar` / `.lc-floatcard` /
+    `.lc-classgrid*` sudah dihapus. TETAP per-poligon (semua data untuk `polygonId` terpilih saja).
+    tab Tren = grafik
     garis multi-kelas (bukan stacked bar lagi — recharts `LineChart`), tabel Δ (sel ha tebal/persen
     redup bertingkat vertikal), ringkasan teks, tombol "Jalankan Analisis" manual — TIDAK ada tombol
     massal. Dari state `done` tombolnya **"Hapus hasil"** (`DELETE /api/land-cover/result?polygon_id=`

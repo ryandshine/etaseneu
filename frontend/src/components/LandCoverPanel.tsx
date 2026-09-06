@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { geoJSON as buildLeafletGeoJSON } from "leaflet";
-import { GeoJSON, MapContainer, TileLayer, useMap } from "react-leaflet";
+import { GeoJSON, MapContainer, TileLayer, ZoomControl, useMap } from "react-leaflet";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import {
@@ -9,6 +9,7 @@ import {
   type LandCoverClassKey,
 } from "../constants/landCover";
 import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
+import { useIsMobile } from "../hooks/useIsMobile";
 import {
   buildChartData,
   formatDelta,
@@ -56,6 +57,24 @@ const POLL_MS = 5000;
 const POLL_IDLE_MS = 10000;
 const FIRST_YEAR = LAND_COVER_YEARS[0];
 const LAST_YEAR = LAND_COVER_YEARS[LAND_COVER_YEARS.length - 1];
+
+// Basemap seragam dengan Live Map (HotspotMap.tsx): satelit default, plus
+// jalan & topografi. URL {s}-less supaya tidak perlu opsi subdomain.
+const BASEMAPS = {
+  satelit: {
+    label: "Satelit",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  },
+  jalan: {
+    label: "Jalan",
+    url: "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+  },
+  topo: {
+    label: "Topografi",
+    url: "https://tile.opentopomap.org/{z}/{x}/{y}.png",
+  },
+} as const;
+type BasemapKey = keyof typeof BASEMAPS;
 
 function Chevron({ dir }: { dir: "left" | "right" }): JSX.Element {
   return (
@@ -151,6 +170,8 @@ export function LandCoverPanel({ polygonId, isAdmin = false }: LandCoverPanelPro
   const [result, setResult] = useState<ResultResponse | null>(null);
   const [tab, setTab] = useState<"peta" | "tren">("peta");
   const [year, setYear] = useState<number>(LAST_YEAR);
+  const [basemap, setBasemap] = useState<BasemapKey>("satelit");
+  const isMobile = useIsMobile();
   const [overlay, setOverlay] = useState<OverlayFC | null>(null);
   const [outline, setOutline] = useState<Record<string, unknown> | null>(null);
   const overlayCache = useRef<Map<number, OverlayFC>>(new Map());
@@ -466,46 +487,22 @@ export function LandCoverPanel({ polygonId, isAdmin = false }: LandCoverPanelPro
       </div>
 
       {tab === "peta" ? (
-        <div className="lc-mapstage">
-          <div className="lc-mapstage__toolbar">
-            <button
-              type="button"
-              className="lc-step"
-              aria-label="Tahun sebelumnya"
-              disabled={year <= FIRST_YEAR}
-              onClick={() => setYear((y) => Math.max(FIRST_YEAR, y - 1))}
-            >
-              <Chevron dir="left" />
-            </button>
-            <input
-              type="range"
-              className="lc-range"
-              min={FIRST_YEAR}
-              max={LAST_YEAR}
-              step={1}
-              value={year}
-              aria-label="Tahun tutupan lahan"
-              onChange={(e) => setYear(Number(e.target.value))}
-            />
-            <button
-              type="button"
-              className="lc-step"
-              aria-label="Tahun berikutnya"
-              disabled={year >= LAST_YEAR}
-              onClick={() => setYear((y) => Math.min(LAST_YEAR, y + 1))}
-            >
-              <Chevron dir="right" />
-            </button>
-            <strong className="lc-year">{year}</strong>
-          </div>
-
+        // Tata letak mengikuti Live Map (HotspotMap.tsx): peta elemen dominan
+        // full-bleed di dalam .lc-mapframe, kontrol mengambang di kolom kiri
+        // pola .map-left-stack (desktop) / blok di bawah peta (mobile).
+        // Fungsi disesuaikan: pemilih TAHUN (bukan rentang waktu), legenda +
+        // luas per KELAS tutupan lahan (bukan legenda hotspot). Tetap PER
+        // POLIGON -- semua data untuk polygonId terpilih saja.
+        <div className={`lc-mapframe${isMobile ? " lc-mapframe--mobile" : ""}`}>
           <MapContainer
             {...SMOOTH_ZOOM_MAP_PROPS}
             center={[-2, 118]}
             zoom={5}
+            zoomControl={false}
             attributionControl={false}
           >
-            <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
+            <TileLayer key={basemap} url={BASEMAPS[basemap].url} />
+            {!isMobile && <ZoomControl position="bottomright" />}
             {outline && (
               <GeoJSON
                 key={`outline-${polygonId}`}
@@ -532,6 +529,7 @@ export function LandCoverPanel({ polygonId, isAdmin = false }: LandCoverPanelPro
             )}
             <FitLandCover overlay={overlay} outline={outline} />
           </MapContainer>
+
           {overlayEmpty && (
             <p className="lc-map__empty">
               Rona kelas untuk {year} tidak tersedia — tutupan terlalu seragam atau
@@ -539,31 +537,95 @@ export function LandCoverPanel({ polygonId, isAdmin = false }: LandCoverPanelPro
             </p>
           )}
 
-          {/* Luas per kelas TAHUN TERPILIH, langsung kebaca tanpa hover
-              grafik atau pindah tab -- ini yang paling sering dicari orang
-              pertama kali ("berapa hektar hutannya sekarang?"). */}
-          <div className="lc-floatcard">
-            <ul className="lc-classgrid" aria-label={`Luas per kelas tahun ${year}`}>
+          <div className={isMobile ? "lc-mobilecontrols" : "map-left-stack"}>
+            {/* Basemap -- kelas & gaya sama dengan Live Map */}
+            <div
+              className={`basemap-switcher${isMobile ? "" : " basemap-switcher--stacked"}`}
+              role="group"
+              aria-label="Basemap peta"
+            >
+              {(Object.keys(BASEMAPS) as BasemapKey[]).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  className={basemap === k ? "basemap-switcher-btn--active" : undefined}
+                  aria-pressed={basemap === k}
+                  onClick={() => setBasemap(k)}
+                >
+                  {BASEMAPS[k].label}
+                </button>
+              ))}
+            </div>
+
+            {/* Pemilih tahun (menggantikan rentang waktu di Live Map) */}
+            <div className="map-legend lc-yearcard">
+              <span className="map-legend-title">Tahun</span>
+              <div className="lc-yearcard__row">
+                <button
+                  type="button"
+                  className="lc-step"
+                  aria-label="Tahun sebelumnya"
+                  disabled={year <= FIRST_YEAR}
+                  onClick={() => setYear((y) => Math.max(FIRST_YEAR, y - 1))}
+                >
+                  <Chevron dir="left" />
+                </button>
+                <input
+                  type="range"
+                  className="lc-range"
+                  min={FIRST_YEAR}
+                  max={LAST_YEAR}
+                  step={1}
+                  value={year}
+                  aria-label="Tahun tutupan lahan"
+                  onChange={(e) => setYear(Number(e.target.value))}
+                />
+                <button
+                  type="button"
+                  className="lc-step"
+                  aria-label="Tahun berikutnya"
+                  disabled={year >= LAST_YEAR}
+                  onClick={() => setYear((y) => Math.min(LAST_YEAR, y + 1))}
+                >
+                  <Chevron dir="right" />
+                </button>
+                <strong className="lc-year">{year}</strong>
+              </div>
+            </div>
+
+            {/* Legenda + luas per kelas TAHUN TERPILIH -- satu kartu pola
+                .map-legend (menggantikan legenda hotspot di Live Map). */}
+            <div
+              className="map-legend lc-legendcard"
+              role="list"
+              aria-label={`Luas per kelas tahun ${year}`}
+            >
+              <span className="map-legend-title">Tutupan Lahan {year}</span>
               {visibleClasses.map((c) => {
                 const cell = result?.table[String(year)]?.[c.key];
                 const negligible = !cell || cell.area_ha < 0.5;
                 return (
-                  <li
+                  <div
                     key={c.key}
-                    className={`lc-classgrid__item${negligible ? " lc-classgrid__item--zero" : ""}`}
+                    role="listitem"
+                    className={`map-legend-row lc-legendrow${negligible ? " lc-legendrow--zero" : ""}`}
                   >
                     <span className="lc-swatch" style={{ background: c.color }} aria-hidden />
-                    <span className="lc-classgrid__label">{c.label}</span>
-                    <span className="lc-classgrid__value">
-                      {negligible ? "–" : `${Math.round(cell!.area_ha).toLocaleString("id-ID")} ha`}
-                    </span>
-                    <span className="lc-classgrid__pct">
-                      {negligible ? "" : `${cell!.pct.toFixed(1)}%`}
-                    </span>
-                  </li>
+                    <span className="lc-legendrow__label">{c.label}</span>
+                    {negligible ? (
+                      <span className="lc-legendrow__value">–</span>
+                    ) : (
+                      <span className="lc-legendrow__value">
+                        <span className="lc-legendrow__ha">
+                          {Math.round(cell!.area_ha).toLocaleString("id-ID")} ha
+                        </span>
+                        <span className="lc-legendrow__pct"> · {cell!.pct.toFixed(0)}%</span>
+                      </span>
+                    )}
+                  </div>
                 );
               })}
-            </ul>
+            </div>
           </div>
         </div>
       ) : (
