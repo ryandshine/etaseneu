@@ -44,6 +44,24 @@ class _FakePolygonService:
             },
         )
 
+    def get_polygon_detail_by_agency(self, agency: str, *, tolerance: float | None = 0.0001):
+        self.agency_calls = getattr(self, "agency_calls", [])
+        self.agency_calls.append((agency, tolerance))
+        if agency == "TIDAK_ADA":
+            return None
+        return PolygonDetail(
+            id=123,
+            layer_key="psagustus2026",
+            feature_key="abc123",
+            lembaga=agency,
+            nama_prov="LAMPUNG",
+            no_sk="SK.123",
+            geometry={
+                "type": "Polygon",
+                "coordinates": [[[105.0, -5.0], [105.1, -5.0], [105.1, -5.1], [105.0, -5.0]]],
+            },
+        )
+
 
 @pytest.fixture
 def client(monkeypatch) -> tuple[TestClient, _FakePolygonService]:
@@ -126,3 +144,19 @@ def test_export_geojson_admin_downloads_raw_feature_collection(client) -> None:
 def test_export_geojson_admin_missing_returns_404(client) -> None:
     tc, _ = client
     assert tc.get("/api/polygons/999/export.geojson", headers=_auth("admin")).status_code == 404
+
+
+def test_get_polygon_by_agency_found(client) -> None:
+    tc, fake = client
+    resp = tc.get("/api/polygons/by-agency?agency=LPHD+Demo", headers=_auth("user"))
+    assert resp.status_code == 200
+    assert fake.agency_calls == [("LPHD Demo", 0.001)]
+    body = resp.json()
+    assert body["id"] == 123
+    assert body["lembaga"] == "LPHD Demo"
+
+
+def test_get_polygon_by_agency_not_found(client) -> None:
+    tc, _ = client
+    resp = tc.get("/api/polygons/by-agency?agency=TIDAK_ADA", headers=_auth("user"))
+    assert resp.status_code == 404

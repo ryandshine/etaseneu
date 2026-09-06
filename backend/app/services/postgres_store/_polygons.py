@@ -323,6 +323,80 @@ class _PolygonMetadataMixin:
             "geometry": _safe_json(row.get("geometry_json"), {}),
         }
 
+    def read_polygon_detail_by_agency(
+        self, agency: str, *, tolerance: float | None = 0.0001
+    ) -> dict[str, object] | None:
+        """Ambil satu polygon berdasarkan nama LEMBAGA/agency -- dipakai halaman
+        Detail KPS saat poligon tidak punya hotspot pada rentang waktu aktif
+        sehingga ID-nya tidak bisa disimpulkan dari titik hotspot."""
+        if not agency or not agency.strip():
+            return None
+        agency_clean = agency.strip()
+
+        if tolerance is None:
+            geometry_expr = "ST_AsGeoJSON(geometry)::json AS geometry_json"
+            geometry_params: tuple[object, ...] = ()
+        else:
+            geometry_expr = (
+                "ST_AsGeoJSON(COALESCE(ST_SimplifyPreserveTopology(geometry, %s), geometry))::json AS geometry_json"
+            )
+            geometry_params = (tolerance,)
+
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT
+                        id,
+                        layer_key,
+                        feature_key,
+                        lembaga,
+                        nama_prov,
+                        nama_kab,
+                        nama_kec,
+                        nama_desa,
+                        skema,
+                        no_sk,
+                        tgl_sk,
+                        status,
+                        wilker_bps,
+                        ps_id,
+                        luas_final,
+                        jml_kk,
+                        {geometry_expr}
+                    FROM polygon_metadata
+                    WHERE (TRIM(lembaga) ILIKE %s OR TRIM(lembaga) = %s)
+                      AND is_active = TRUE
+                    ORDER BY id DESC
+                    LIMIT 1
+                    """,
+                    (*geometry_params, agency_clean, agency_clean),
+                )
+                row = cur.fetchone()
+
+        if row is None:
+            return None
+
+        return {
+            "id": int(row["id"]),
+            "layer_key": row["layer_key"],
+            "feature_key": row["feature_key"],
+            "lembaga": row.get("lembaga"),
+            "nama_prov": row.get("nama_prov"),
+            "nama_kab": row.get("nama_kab"),
+            "nama_kec": row.get("nama_kec"),
+            "nama_desa": row.get("nama_desa"),
+            "skema": row.get("skema"),
+            "no_sk": row.get("no_sk"),
+            "tgl_sk": row.get("tgl_sk"),
+            "status": row.get("status"),
+            "wilker_bps": row.get("wilker_bps"),
+            "ps_id": row.get("ps_id"),
+            "luas_final": row.get("luas_final"),
+            "jml_kk": row.get("jml_kk"),
+            "geometry": _safe_json(row.get("geometry_json"), {}),
+        }
+
     def read_polygon_geometries(
         self, polygon_ids: Sequence[int], *, tolerance: float = 0.001
     ) -> dict[int, dict[str, object]]:

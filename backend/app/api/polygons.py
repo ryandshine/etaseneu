@@ -50,6 +50,24 @@ async def export_polygon_geojson(
     )
 
 
+@router.get("/polygons/by-agency")
+async def get_polygon_by_agency(
+    agency: str,
+    claims: TokenClaims | None = Depends(get_current_user_claims),
+) -> dict[str, object]:
+    """Cari satu polygon KPS/Hutan Adat berdasarkan nama LEMBAGA/agency.
+    Dipakai Detail KPS saat KPS terpilih tidak memiliki hotspot pada rentang waktu
+    aktif sehingga ID-nya tidak bisa disimpulkan dari titik hotspot."""
+    tolerance = (
+        _ADMIN_DETAIL_TOLERANCE if _is_admin(claims) else _PUBLIC_DETAIL_TOLERANCE
+    )
+    service = get_polygon_service()
+    detail = service.get_polygon_detail_by_agency(agency, tolerance=tolerance)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Polygon not found for this agency")
+    return detail.model_dump()
+
+
 @router.get("/polygons/{polygon_metadata_id}")
 async def get_polygon(
     polygon_metadata_id: int,

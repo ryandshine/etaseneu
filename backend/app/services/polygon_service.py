@@ -23,6 +23,20 @@ class PolygonService:
 
         return PolygonDetail(**row)
 
+    def get_polygon_detail_by_agency(
+        self, agency: str, *, tolerance: float | None = 0.0001
+    ) -> PolygonDetail | None:
+        if not self.postgres_store.enabled:
+            return None
+
+        row = self.postgres_store.read_polygon_detail_by_agency(
+            agency, tolerance=tolerance
+        )
+        if row is None:
+            return None
+
+        return PolygonDetail(**row)
+
 
 @lru_cache(maxsize=1)
 def get_polygon_service() -> PolygonService:

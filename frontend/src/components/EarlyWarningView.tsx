@@ -132,7 +132,7 @@ interface KpsItem {
 }
 
 interface EarlyWarningViewProps {
-  onOpenKpsDetail?: (agencyName: string) => void;
+  onOpenKpsDetail?: (agencyName: string, polygonId?: number) => void;
   session?: AppSession | null;
   selectedWilker?: string;
 }
@@ -950,7 +950,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
                       {onOpenKpsDetail ? (
                         <button
                           type="button"
-                          onClick={() => onOpenKpsDetail(item.lembaga)}
+                          onClick={() => onOpenKpsDetail(item.lembaga, item.id)}
                           style={{
                             display: "inline-flex",
                             alignItems: "center",

@@ -149,6 +149,16 @@ function readKpsAgencyFromUrl(): string | null {
   return new URLSearchParams(window.location.search).get("kps");
 }
 
+function readKpsPolygonIdFromUrl(): number | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const raw = new URLSearchParams(window.location.search).get("polygon");
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 // Preseleksi poligon di menu Tutupan Lahan (mis. tautan dari baris ringkas
 // di Detail KPS). Opsional -- menu itu tetap bisa dibuka tanpa ini, listnya
 // sendiri yang jadi titik masuk utama.
@@ -179,6 +189,9 @@ export default function App() {
   const [weatherOverlay, setWeatherOverlay] = useState<"temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null>(null);
   const [activeView, setActiveView] = useState<AppView>(readViewFromUrl);
   const [kpsAgency, setKpsAgency] = useState<string | null>(readKpsAgencyFromUrl);
+  const [kpsPolygonId, setKpsPolygonId] = useState<number | null>(() => {
+    return readViewFromUrl() === "kps" ? readKpsPolygonIdFromUrl() : null;
+  });
   const [landCoverPolygonId, setLandCoverPolygonId] = useState<number | null>(readLandCoverPolygonIdFromUrl);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [passwordGateOpen, setPasswordGateOpen] = useState(false);
@@ -281,6 +294,7 @@ export default function App() {
     setActiveView(view);
     if (view !== "kps") {
       setKpsAgency(null);
+      setKpsPolygonId(null);
     }
     if (view !== "landcover") {
       setLandCoverPolygonId(null);
@@ -310,18 +324,24 @@ export default function App() {
     commitViewChange(view);
   };
 
-  // Dipicu dari klik baris KPS di Buku Besar -- beda dari commitViewChange
-  // karena butuh menulis nama KPS juga ke URL supaya tautan halaman detail
-  // ini bisa dibagikan/di-bookmark.
+  // Dipicu dari klik baris KPS di Buku Besar / Tutupan Lahan / Peringatan Dini --
+  // beda dari commitViewChange karena butuh menulis nama KPS (dan polygon ID jika ada)
+  // juga ke URL supaya tautan halaman detail ini bisa dibagikan/di-bookmark.
   // `useCallback` supaya `HotspotMarkersLayer` (React.memo di HotspotMap)
   // tidak ikut re-render tiap state App lain berubah -- penting saat
   // timeline animasi jalan.
-  const openKpsDetail = useCallback((agency: string) => {
+  const openKpsDetail = useCallback((agency: string, polygonId?: number) => {
     setKpsAgency(agency);
+    setKpsPolygonId(polygonId ?? null);
     setActiveView("kps");
     const params = new URLSearchParams(window.location.search);
     params.set("view", "kps");
     params.set("kps", agency);
+    if (polygonId) {
+      params.set("polygon", String(polygonId));
+    } else {
+      params.delete("polygon");
+    }
     window.history.pushState({}, "", `?${params.toString()}`);
   }, []);
 
@@ -1002,6 +1022,7 @@ export default function App() {
               {kpsAgency !== null ? (
                 <KpsDetailView
                   agency={kpsAgency}
+                  initialPolygonId={kpsPolygonId}
                   hotspots={hotspots}
                   onClose={() => commitViewChange("matrix")}
                   onExportPdf={(filters) => void exportPdf(filters)}

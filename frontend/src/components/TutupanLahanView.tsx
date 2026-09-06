@@ -57,7 +57,7 @@ type TutupanLahanViewProps = {
    *  tiap kali activeView berpindah ke "landcover", jadi tidak perlu efek
    *  sinkronisasi tambahan. */
   initialPolygonId?: number | null;
-  onOpenKpsDetail?: (agency: string) => void;
+  onOpenKpsDetail?: (agency: string, polygonId?: number) => void;
   /** Diteruskan ke LandCoverPanel: tombol Jalankan/Hapus analisis khusus admin. */
   isAdmin?: boolean;
 };
@@ -447,7 +447,7 @@ export function TutupanLahanView({
                 }`}
                 onOpenKpsDetail={
                   onOpenKpsDetail && selectedRow.lembaga
-                    ? () => onOpenKpsDetail(selectedRow.lembaga as string)
+                    ? () => onOpenKpsDetail(selectedRow.lembaga as string, selectedRow.polygon_metadata_id)
                     : undefined
                 }
                 onBack={isMobile ? () => setSelectedId(null) : undefined}

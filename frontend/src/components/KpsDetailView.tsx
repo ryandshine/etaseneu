@@ -82,6 +82,7 @@ type KpsDetailViewProps = {
   onClose: () => void;
   onExportPdf: (filters: { agency?: string }) => void;
   isExportingPdf: boolean;
+  initialPolygonId?: number | null;
   /** Buka menu "Tutupan Lahan" langsung ke poligon ini. Opsional -- kalau
    *  tidak diberikan, baris ringkas tutupan lahan tidak dirender sama sekali. */
   onOpenTutupanLahan?: (polygonId: number) => void;
@@ -338,7 +339,15 @@ const KpsHotspotMarkersLayer = memo(function KpsHotspotMarkersLayer({
   );
 });
 
-export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExportingPdf, onOpenTutupanLahan }: KpsDetailViewProps) {
+export function KpsDetailView({
+  agency,
+  hotspots,
+  onClose,
+  onExportPdf,
+  isExportingPdf,
+  initialPolygonId,
+  onOpenTutupanLahan
+}: KpsDetailViewProps) {
   // Filter waktu independen, khusus halaman ini -- kosong (default) berarti
   // "ikuti apa pun rentang dashboard yang aktif" (perilaku lama, tidak
   // berubah). Begitu keduanya terisi, `customHotspots` menggantikan `hotspots`
@@ -382,16 +391,18 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
     [hotspots, customHotspots, agency]
   );
 
-  // Cari ID polygon dari hotspot MANAPUN di grup ini yang sudah ke-link --
-  // bukan cuma yang terbaru, supaya satu-dua titik yang belum sempat
-  // ke-spatial-join tidak bikin seluruh halaman kehilangan polygon-nya.
+  // Cari ID polygon dari prop initialPolygonId atau hotspot MANAPUN di grup ini
+  // yang sudah ke-link -- bukan cuma yang terbaru, supaya satu-dua titik yang
+  // belum sempat ke-spatial-join tidak bikin seluruh halaman kehilangan polygon-nya.
   //
   // Sengaja pakai `hotspots` (prop dashboard, tidak disaring rentang
   // kustom), BUKAN `kpsHotspots` -- polygon KPS adalah entitas tetap,
   // resolusinya tidak boleh hilang cuma karena rentang waktu kustom
-  // kebetulan tidak berisi titik untuk KPS ini (yang bikin seluruh info
-  // panel + riwayat KLHK ikut kosong padahal cuma titik hotspotnya yang nol).
-  const polygonId = useMemo(() => {
+  // kebetulan tidak berisi titik untuk KPS ini.
+  const hotspotPolygonId = useMemo(() => {
+    if (typeof initialPolygonId === "number" && Number.isFinite(initialPolygonId)) {
+      return initialPolygonId;
+    }
     for (const hotspot of hotspots) {
       if (formatMetadataValue(hotspot.polygonMetadata.LEMBAGA || hotspot.agencyName) !== agency) {
         continue;
@@ -403,14 +414,18 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
       }
     }
     return null;
-  }, [hotspots, agency]);
+  }, [initialPolygonId, hotspots, agency]);
 
   const [detail, setDetail] = useState<PolygonDetail | null>(null);
-  const [loading, setLoading] = useState(polygonId !== null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Polygon ID efektif: bisa berasal dari hotspot/initialPolygonId, atau
+  // terisi setelah detail poligon berhasil dimuat via lookup nama lembaga (/api/polygons/by-agency).
+  const polygonId = hotspotPolygonId ?? (detail ? detail.id : null);
+
   useEffect(() => {
-    if (polygonId === null) {
+    if (hotspotPolygonId === null && !agency) {
       setDetail(null);
       setLoading(false);
       setError(null);
@@ -422,7 +437,15 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
     setError(null);
     setDetail(null);
 
-    authFetch(`/api/polygons/${polygonId}`)
+    // Jika ID polygon sudah diketahui, ambil langsung berdasarkan ID.
+    // Jika KPS dibuka tanpa titik hotspot aktif (misal dari Tutupan Lahan, Early Warning, atau URL),
+    // lakukan lookup ke endpoint /by-agency berdasarkan nama lembaga.
+    const url =
+      hotspotPolygonId !== null
+        ? `/api/polygons/${hotspotPolygonId}`
+        : `/api/polygons/by-agency?agency=${encodeURIComponent(agency)}`;
+
+    authFetch(url)
       .then((response) => {
         if (!response.ok) {
           throw new Error(
@@ -452,7 +475,7 @@ export function KpsDetailView({ agency, hotspots, onClose, onExportPdf, isExport
     return () => {
       active = false;
     };
-  }, [polygonId]);
+  }, [hotspotPolygonId, agency]);
 
   // Fetch khusus halaman ini untuk rentang kustom -- lepas dari filter waktu
   // dashboard. Discope ke layer dataset KPS ini (`detail.layer_key`, PS atau

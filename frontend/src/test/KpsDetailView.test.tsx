@@ -260,4 +260,49 @@ describe("KpsDetailView", () => {
     fireEvent.click(link.closest("button") as HTMLButtonElement);
     expect(onOpenTutupanLahan).toHaveBeenCalledWith(292425);
   });
+
+  it("loads polygon detail by agency when hotspots array is empty (0 hotspot)", async () => {
+    render(
+      <KpsDetailView
+        agency="LD LINGAT"
+        hotspots={[]}
+        onClose={() => undefined}
+        onExportPdf={() => undefined}
+        isExportingPdf={false}
+      />
+    );
+
+    await waitFor(() => {
+      const byAgencyCall = fetchMock.mock.calls.find(([input]) =>
+        String(input).startsWith("/api/polygons/by-agency?agency=LD%20LINGAT")
+      );
+      expect(byAgencyCall).toBeTruthy();
+    });
+
+    expect(await screen.findByText("Riau")).toBeInTheDocument();
+    expect(screen.getByText("Total hotspot terpantau:")).toBeInTheDocument();
+  });
+
+  it("uses initialPolygonId when provided even if hotspots are empty", async () => {
+    render(
+      <KpsDetailView
+        agency="LD LINGAT"
+        initialPolygonId={292425}
+        hotspots={[]}
+        onClose={() => undefined}
+        onExportPdf={() => undefined}
+        isExportingPdf={false}
+      />
+    );
+
+    await waitFor(() => {
+      const directIdCall = fetchMock.mock.calls.find(([input]) =>
+        String(input).startsWith("/api/polygons/292425")
+      );
+      expect(directIdCall).toBeTruthy();
+    });
+
+    expect(await screen.findByText("Riau")).toBeInTheDocument();
+  });
 });
+

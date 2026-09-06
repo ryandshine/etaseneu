@@ -10,6 +10,13 @@ class FakePostgresStore:
         self.last_tolerance = tolerance
         return self.rows.get(polygon_metadata_id)
 
+    def read_polygon_detail_by_agency(self, agency: str, *, tolerance: float | None = 0.0001):
+        self.last_tolerance = tolerance
+        for row in self.rows.values():
+            if row.get("lembaga") == agency:
+                return row
+        return None
+
 
 def _sample_row(polygon_metadata_id: int) -> dict[str, object]:
     return {
@@ -86,3 +93,27 @@ def test_get_polygon_detail_returns_none_when_store_disabled() -> None:
     service.postgres_store = fake
 
     assert service.get_polygon_detail(1) is None
+
+
+def test_get_polygon_detail_by_agency_found() -> None:
+    from app.services.polygon_service import PolygonService
+
+    service = PolygonService("postgresql://demo")
+    fake = FakePostgresStore()
+    fake.rows[10] = _sample_row(10)
+    service.postgres_store = fake
+
+    detail = service.get_polygon_detail_by_agency("LPHD SEBUBUS")
+    assert detail is not None
+    assert detail.id == 10
+    assert detail.lembaga == "LPHD SEBUBUS"
+
+
+def test_get_polygon_detail_by_agency_not_found() -> None:
+    from app.services.polygon_service import PolygonService
+
+    service = PolygonService("postgresql://demo")
+    fake = FakePostgresStore()
+    service.postgres_store = fake
+
+    assert service.get_polygon_detail_by_agency("NON_EXISTENT") is None
