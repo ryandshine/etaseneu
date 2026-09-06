@@ -78,16 +78,18 @@ def spectral_seed_image(ee, feat_img, class_idx_of: dict[str, int], use_sar: boo
         vh = feat_img.select("VH")
         c_pertanian = c_pertanian.Or(ndvi.gte(0.65).And(ratio.lt(-6.5)).And(vh.lt(-14.0)))
 
-    # Gabungkan seed berurutan
+    # Gabungkan seed berurutan pada citra tak termask, lalu mask hanya piksel valid
+    valid_seed_mask = c_terbuka.Or(c_semak).Or(c_pertanian).Or(c_hutan).Or(c_basah)
     seed = (
-        ee.Image.constant(idx_terbuka).updateMask(c_terbuka)
+        ee.Image.constant(idx_terbuka)
         .where(c_semak, idx_semak)
         .where(c_pertanian, idx_pertanian)
         .where(c_hutan, idx_hutan)
         .where(c_basah, idx_basah)
+        .updateMask(valid_seed_mask)
+        .rename("class_idx")
     )
-    valid_seed_mask = c_terbuka.Or(c_semak).Or(c_pertanian).Or(c_hutan).Or(c_basah)
-    return seed.updateMask(valid_seed_mask).rename("class_idx")
+    return seed
 
 
 def rule_based_classify(ee, feat_img, class_idx_of: dict[str, int], use_sar: bool = False):

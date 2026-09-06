@@ -803,10 +803,10 @@ export function LandCoverPanel({
           {result && <p className="lc-summary">{result.summary_text}</p>}
 
           <p className="lc-note">
-            6 kelas mengikuti kategori penggunaan lahan IPCC. &quot;Hutan&quot; =
-            tutupan berpohon; kebun (termasuk sawit) masuk &quot;Pertanian/Perkebunan&quot;,
-            bukan hutan -- karet/kebun campur berpohon rapat belum tentu terpisah.
-            Estimasi satelit, bukan angka resmi.
+            5 kelas tutupan lahan mandiri ETA SENEU (Hutan, Pertanian/Perkebunan,
+            Semak/Belukar, Lahan Basah/Perairan, Lahan Terbuka) dianalisis langsung
+            dari citra Sentinel-2 L2A &amp; radar Sentinel-1 SAR tanpa ketergantungan
+            model pihak ketiga. Estimasi satelit, bukan angka resmi.
           </p>
 
           {result && (
@@ -817,7 +817,7 @@ export function LandCoverPanel({
                       ? Number(result.meta.oob_accuracy).toFixed(2)
                       : "–"
                   }`
-                : "Dynamic World langsung — area terlalu seragam untuk melatih Random Forest"}
+                : "Aturan Spektral Biofisik (Decision Tree) — poligon homogen"}
               {result.meta.computed_at
                 ? ` · ${new Date(String(result.meta.computed_at)).toLocaleDateString("id-ID", {
                     day: "numeric",

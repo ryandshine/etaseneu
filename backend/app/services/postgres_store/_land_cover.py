@@ -222,6 +222,7 @@ class _LandCoverMixin:
         formula_version: int | None = None,
         meta: dict[str, object] | None = None,
         source: str | None = None,
+        label_source: str | None = None,
     ) -> None:
         pid = int(polygon_id)
         # SATU transaksi: status 'done' tidak boleh terlihat sebelum luas &
@@ -237,10 +238,11 @@ class _LandCoverMixin:
                     INSERT INTO land_cover_analysis (
                         polygon_metadata_id, layer_key, status,
                         model_trees, n_training, oob_accuracy, duration_s, computed_at,
-                        formula_version, meta, source
+                        formula_version, meta, source, label_source
                     )
                     VALUES (%s, %s, 'done', %s, %s, %s, %s, NOW(), %s, %s::jsonb,
-                            COALESCE(%s, 'Sentinel-2 L2A + Random Forest (ETA SENEU)'))
+                            COALESCE(%s, 'Sentinel-2 L2A + Random Forest (ETA SENEU)'),
+                            COALESCE(%s, 'Autonomous Spectral Endmembers (ETA SENEU)'))
                     ON CONFLICT (polygon_metadata_id) DO UPDATE SET
                         layer_key = EXCLUDED.layer_key,
                         status = 'done',
@@ -252,13 +254,15 @@ class _LandCoverMixin:
                         computed_at = NOW(),
                         formula_version = EXCLUDED.formula_version,
                         meta = EXCLUDED.meta,
-                        source = EXCLUDED.source
+                        source = EXCLUDED.source,
+                        label_source = EXCLUDED.label_source
                     """,
                     (pid, str(layer_key), int(model_trees), int(n_training),
                      None if oob_accuracy is None else float(oob_accuracy), float(duration_s),
                      None if formula_version is None else int(formula_version),
                      json.dumps(meta or {}, default=float),
-                     source),
+                     source,
+                     label_source),
                 )
                 cur.executemany(
                     """

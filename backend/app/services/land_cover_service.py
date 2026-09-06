@@ -686,6 +686,7 @@ class LandCoverService:
                 formula_version=FORMULA_VERSION,
                 meta=meta,
                 source=FORMULA_LABEL,
+                label_source="Autonomous Spectral Endmembers (ETA SENEU v5)",
             )
             return {
                 "polygon_id": pid,

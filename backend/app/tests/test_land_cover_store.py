@@ -105,7 +105,7 @@ def test_save_result_runs_in_single_transaction():
     # 2 DELETE + 1 UPSERT + 2 executemany, semuanya di dalam transaksi
     assert len(dml) == 5
     upsert = next(e for e in dml if "INSERT INTO land_cover_analysis" in e[1])
-    assert upsert[2][-3:] == (2, '{"a": 1}', "v2")
+    assert upsert[2][-4:] == (2, '{"a": 1}', "v2", None)
 
 
 def test_delete_result_runs_in_single_transaction():
