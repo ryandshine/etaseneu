@@ -3,13 +3,22 @@
 Sistem tidak lagi bergantung pada model pihak ketiga (Google Dynamic World,
 ESA WorldCover, Hansen GFC, Descals). Sampel latih dibangkitkan mandiri
 dari 'Spectral Endmembers' (titik-titik arketipe spektral murni) yang
-diekstraksi langsung dari citra Sentinel-2 L2A + Sentinel-1 SAR.
+diekstraksi langsung dari citra Sentinel-2 L2A (multi-indeks + fenologi temporal ndvi_std
++ kelembaban kanopi NDMI) + Sentinel-1 SAR.
+
+Representatif untuk ragam bentang alam Perhutanan Sosial (KPS) di Indonesia:
+- Agroforestri rakyat (kopi, kakao, pala di bawah naungan pohon sengon/lamtoro/durian)
+- Hutan alami berkanopi stabil & hutan musim (misal jati/meranggas saat kemarau)
+- Kebun campuran rakyat (karet, kelapa, aren, buah-buahan, rempah)
+- Pertanian semusim (sawah irigasi/tadah hujan, ladang palawija berfenologi tanam-panen)
+- Lahan basah & rawa gambut / mangrove
+- Semak belukar suksesi & savana/padang rumput
 
 Taksonomi 5 kelas:
-  hutan       (0)  Hutan Alami / Tutupan Pohon Kanopi Rapat
-  pertanian   (1)  Pertanian & Perkebunan (kebun sawit, karet, sawah/ladang)
-  semak       (2)  Semak & Belukar (alang-alang, vegetasi rendah)
-  basah       (3)  Badan Air & Lahan Basah (sungai, danau, rawa basah)
+  hutan       (0)  Hutan Alami / Tutupan Pohon Kanopi Rapat Permanen
+  pertanian   (1)  Pertanian, Agroforestri & Kebun Campuran Rakyat
+  semak       (2)  Semak & Belukar (alang-alang, vegetasi rendah, savana)
+  basah       (3)  Badan Air & Lahan Basah (sungai, danau, rawa gambut/basah, mangrove)
   terbuka     (4)  Lahan Terbuka (tanah terbuka, bekas tebangan/bakar, pasir/batuan)
 
 Semua fungsi menerima modul `ee` sebagai argumen.
@@ -37,42 +46,70 @@ def spectral_seed_image(ee, feat_img, class_idx_of: dict[str, int], use_sar: boo
     b8 = feat_img.select("B8")
     b11 = feat_img.select("B11")
 
+    try:
+        ndmi = feat_img.select("ndmi")
+    except (KeyError, AttributeError):
+        ndmi = None
+
+    try:
+        ndvi_std = feat_img.select("ndvi_std")
+    except (KeyError, AttributeError):
+        ndvi_std = None
+
     idx_hutan = class_idx_of["hutan"]
     idx_pertanian = class_idx_of["pertanian"]
     idx_semak = class_idx_of["semak"]
     idx_basah = class_idx_of["basah"]
     idx_terbuka = class_idx_of["terbuka"]
 
-    # 1. Badan Air & Lahan Basah: MNDWI tinggi, serapan kuat di NIR, vegetasi rendah
+    # 1. Badan Air & Lahan Basah (rawa gambut/mangrove/sungai):
+    #    MNDWI tinggi, serapan kuat di NIR, atau NDMI tinggi pada genangan/substrat jenuh air
     c_basah = mndwi.gt(0.05).And(b8.lt(0.22)).And(ndvi.lt(0.40))
+    if ndmi is not None:
+        c_basah = c_basah.Or(mndwi.gt(-0.02).And(ndmi.gt(0.25)).And(b8.lt(0.25)))
     if use_sar:
         vh = feat_img.select("VH")
         vv = feat_img.select("VV")
         # Pantulan spekular air pada radar (backscatter sangat rendah)
         c_basah = c_basah.Or(mndwi.gt(0.0).And(vh.lt(-20.0)).And(vv.lt(-14.0)))
 
-    # 2. Lahan Terbuka: BSI positif, NDVI sangat rendah, bukan air, pantulan merah nyata
+    # 2. Lahan Terbuka: BSI positif, NDVI sangat rendah, bukan air, pantulan merah nyata, NDMI negatif/kering
     c_terbuka = ndvi.lt(0.28).And(bsi.gt(0.0)).And(mndwi.lt(-0.05)).And(b4.gt(0.06))
+    if ndmi is not None:
+        c_terbuka = c_terbuka.And(ndmi.lt(0.0))
 
-    # 3. Hutan Alami / Kanopi Rapat: Kehijauan tinggi, NBR tinggi, kanopi tebal
+    # 3. Hutan Alami / Kanopi Rapat Permanen:
+    #    Kehijauan tinggi, NBR tinggi, kanopi tebal & lembab, stabilitas fenologi sepanjang tahun
     c_hutan = ndvi.gte(0.76).And(nbr.gte(0.48)).And(b8.gte(0.24)).And(mndwi.lt(-0.15))
+    if ndmi is not None:
+        c_hutan = c_hutan.And(ndmi.gte(0.10))
+    if ndvi_std is not None:
+        # Kanopi pohon hutan mantap relatif stabil sepanjang tahun (stdDev NDVI rendah)
+        c_hutan = c_hutan.And(ndvi_std.lt(0.13))
     if use_sar:
         vh = feat_img.select("VH")
         # Hamburan volume tajuk pohon tidak beraturan (VH tinggi)
         c_hutan = c_hutan.And(vh.gte(-14.0))
 
-    # 4. Semak / Belukar: Vegetasi sedang-rendah, tanah tertutup, bukan kanopi pohon
-    c_semak = ndvi.gte(0.32).And(ndvi.lt(0.55)).And(bsi.lte(0.04)).And(mndwi.lt(-0.05))
+    # 4. Semak / Belukar & Savana: Vegetasi sedang-rendah, tanah tertutup, bukan pohon tinggi
+    c_semak = ndvi.gte(0.32).And(ndvi.lt(0.52)).And(bsi.lte(0.04)).And(mndwi.lt(-0.05))
+    if ndmi is not None:
+        c_semak = c_semak.And(ndmi.lt(0.18))
     if use_sar:
         vh = feat_img.select("VH")
         c_semak = c_semak.And(vh.lt(-15.0))
 
-    # 5. Pertanian & Perkebunan:
-    #    a) Pertanian/ladang: NDVI 0.55 s/d 0.76
-    #    b) Perkebunan berkanopi rapat (sawit/karet): NDVI >= 0.76 tapi SWIR tinggi
-    c_pertanian_crop = ndvi.gte(0.55).And(ndvi.lt(0.76)).And(mndwi.lt(-0.05))
-    c_pertanian_plantation = ndvi.gte(0.76).And(b11.gte(0.14)).And(nbr.lt(0.48))
-    c_pertanian = c_pertanian_crop.Or(c_pertanian_plantation)
+    # 5. Pertanian, Agroforestri & Kebun Rakyat:
+    #    a) Pertanian/ladang semusim fase vegetatif kemarau: NDVI 0.52 s/d 0.76
+    #    b) Agroforestri & kebun campuran berkanopi rapat (kopi, kakao, karet, buah):
+    #       NDVI >= 0.74 dengan pantulan SWIR lebih nyata (B11 >= 0.13) dan NBR < 0.48
+    #    c) Pertanian/ladang semusim dengan variabilitas fenologi tanam-panen tinggi (ndvi_std >= 0.14)
+    c_pertanian_crop = ndvi.gte(0.52).And(ndvi.lt(0.76)).And(mndwi.lt(-0.05))
+    c_pertanian_agro = ndvi.gte(0.74).And(b11.gte(0.13)).And(nbr.lt(0.48))
+    c_pertanian = c_pertanian_crop.Or(c_pertanian_agro)
+    if ndvi_std is not None:
+        c_pertanian_seasonal = ndvi.gte(0.45).And(ndvi_std.gte(0.14)).And(mndwi.lt(-0.05))
+        c_pertanian = c_pertanian.Or(c_pertanian_seasonal)
     if use_sar:
         ratio = feat_img.select("VH_VV_ratio")
         vh = feat_img.select("VH")
@@ -105,6 +142,16 @@ def rule_based_classify(ee, feat_img, class_idx_of: dict[str, int], use_sar: boo
     b8 = feat_img.select("B8")
     b11 = feat_img.select("B11")
 
+    try:
+        ndmi = feat_img.select("ndmi")
+    except (KeyError, AttributeError):
+        ndmi = None
+
+    try:
+        ndvi_std = feat_img.select("ndvi_std")
+    except (KeyError, AttributeError):
+        ndvi_std = None
+
     idx_hutan = class_idx_of["hutan"]
     idx_pertanian = class_idx_of["pertanian"]
     idx_semak = class_idx_of["semak"]
@@ -114,26 +161,36 @@ def rule_based_classify(ee, feat_img, class_idx_of: dict[str, int], use_sar: boo
     # Default baseline: semak (vegetasi menengah)
     classified = ee.Image.constant(idx_semak)
 
-    # Lahan terbuka: NDVI rendah, BSI tinggi
+    # 1. Lahan terbuka: NDVI rendah, BSI tinggi, bukan air
     is_terbuka = ndvi.lt(0.30).And(bsi.gt(0.0)).And(mndwi.lt(0.0))
+    if ndmi is not None:
+        is_terbuka = is_terbuka.And(ndmi.lt(0.02))
     classified = classified.where(is_terbuka, idx_terbuka)
 
-    # Pertanian / perkebunan:
+    # 2. Pertanian, agroforestri & kebun rakyat:
     is_pertanian = (
-        (ndvi.gte(0.52).And(ndvi.lt(0.74)))
-        .Or(ndvi.gte(0.74).And(b11.gte(0.14)).And(nbr.lt(0.50)))
+        (ndvi.gte(0.50).And(ndvi.lt(0.74)))
+        .Or(ndvi.gte(0.74).And(b11.gte(0.13)).And(nbr.lt(0.50)))
     )
+    if ndvi_std is not None:
+        is_pertanian = is_pertanian.Or(ndvi.gte(0.45).And(ndvi_std.gte(0.13)).And(mndwi.lt(-0.05)))
     classified = classified.where(is_pertanian, idx_pertanian)
 
-    # Hutan: kanopi rapat tebal
+    # 3. Hutan: kanopi rapat tebal & stabil
     is_hutan = ndvi.gte(0.74).And(nbr.gte(0.48)).And(mndwi.lt(-0.10))
+    if ndvi_std is not None:
+        is_hutan = is_hutan.And(ndvi_std.lt(0.14))
+    if ndmi is not None:
+        is_hutan = is_hutan.And(ndmi.gte(0.08))
     if use_sar:
         vh = feat_img.select("VH")
         is_hutan = is_hutan.And(vh.gte(-14.5))
     classified = classified.where(is_hutan, idx_hutan)
 
-    # Basah / Air: MNDWI > 0 atau MNDWI > -0.05 dengan serapan NIR kuat
+    # 4. Basah / Air: MNDWI > 0 atau MNDWI > -0.05 dengan serapan NIR kuat, atau lahan rawa jenuh
     is_basah = mndwi.gt(0.0).Or(mndwi.gt(-0.05).And(b8.lt(0.20)).And(ndvi.lt(0.38)))
+    if ndmi is not None:
+        is_basah = is_basah.Or(mndwi.gt(-0.02).And(ndmi.gt(0.28)).And(b8.lt(0.22)))
     classified = classified.where(is_basah, idx_basah)
 
     return classified.rename("class_idx")

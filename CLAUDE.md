@@ -234,9 +234,11 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
     adalah TEXT bebas (tanpa CHECK constraint) jadi rename kelas aman terhadap data lama — baris
     lama dengan kunci lama (`kebun`/`air`) tetap ada tapi otomatis "basi" lewat mekanisme
     `formula_version` di bawah (bukan tabrakan/duplikat kelas).
-  - **Versi formula & metadata (2026-09-05)**: `FORMULA_VERSION` / `FORMULA_LABEL` di
+  - **Versi formula & metadata (2026-09-05/06)**: `FORMULA_VERSION` / `FORMULA_LABEL` di
     `land_cover_service.py` (v1 = sebelum audit 2026-09-05, v2 = formula audit tanggal itu, v3 =
-    + SAR + konsensus Hansen/WorldCover + aturan transisi temporal, v4 = taksonomi IPCC). Naikkan
+    + SAR + konsensus Hansen/WorldCover + aturan transisi temporal, v4 = taksonomi IPCC, v5 = 5 kelas
+    mandiri ETA SENEU tanpa model pihak ketiga, v6 = peningkatan akurasi lanskap KPS Nusantara dengan
+    fenologi temporal ndvi_std + kelembaban NDMI tanpa bias sempit kelapa sawit). Naikkan
     `FORMULA_VERSION` (+ `LAND_COVER_FORMULA_VERSION` frontend, WAJIB sama) tiap kali metode ATAU
     skema kelas berubah — SEMUA hasil versi lebih lama otomatis tampil badge "Metode lama" dan
     TIDAK dihitung ulang otomatis (admin hapus lalu jalankan lagi per poligon). Kolom

@@ -160,47 +160,80 @@ def test_apply_transition_rules_short_series_is_noop() -> None:
 def test_spectral_seed_identifies_clean_endmembers() -> None:
     ee = FakeEE
 
-    # Hutan kanopi rapat
+    # Hutan kanopi rapat (stabil & lembab)
     hutan_feat = FakeFeatImage({
         "ndvi": 0.82, "nbr": 0.55, "B8": 0.30, "mndwi": -0.25,
-        "bsi": -0.10, "B4": 0.03, "B11": 0.08,
+        "bsi": -0.10, "B4": 0.03, "B11": 0.08, "ndmi": 0.20, "ndvi_std": 0.05,
     })
     assert labels.spectral_seed_image(ee, hutan_feat, IDX, use_sar=False).v == H
 
     # Badan air
     water_feat = FakeFeatImage({
         "ndvi": -0.10, "nbr": -0.20, "B8": 0.05, "mndwi": 0.20,
-        "bsi": -0.20, "B4": 0.03, "B11": 0.02,
+        "bsi": -0.20, "B4": 0.03, "B11": 0.02, "ndmi": -0.10, "ndvi_std": 0.02,
     })
     assert labels.spectral_seed_image(ee, water_feat, IDX, use_sar=False).v == B
 
     # Lahan terbuka
     bare_feat = FakeFeatImage({
         "ndvi": 0.15, "nbr": -0.10, "B8": 0.18, "mndwi": -0.30,
-        "bsi": 0.12, "B4": 0.18, "B11": 0.25,
+        "bsi": 0.12, "B4": 0.18, "B11": 0.25, "ndmi": -0.15, "ndvi_std": 0.04,
     })
     assert labels.spectral_seed_image(ee, bare_feat, IDX, use_sar=False).v == T
 
     # Semak belukar
     shrub_feat = FakeFeatImage({
         "ndvi": 0.42, "nbr": 0.30, "B8": 0.22, "mndwi": -0.15,
-        "bsi": 0.01, "B4": 0.07, "B11": 0.12,
+        "bsi": 0.01, "B4": 0.07, "B11": 0.12, "ndmi": 0.08, "ndvi_std": 0.06,
     })
     assert labels.spectral_seed_image(ee, shrub_feat, IDX, use_sar=False).v == S
 
     # Pertanian / perkebunan
     crop_feat = FakeFeatImage({
         "ndvi": 0.65, "nbr": 0.40, "B8": 0.25, "mndwi": -0.15,
-        "bsi": -0.02, "B4": 0.05, "B11": 0.12,
+        "bsi": -0.02, "B4": 0.05, "B11": 0.12, "ndmi": 0.10, "ndvi_std": 0.08,
     })
     assert labels.spectral_seed_image(ee, crop_feat, IDX, use_sar=False).v == P
 
     # Piksel ambigu (tidak ada endmember yang cocok) -> harus ter-mask (None)
     ambiguous = FakeFeatImage({
         "ndvi": 0.30, "nbr": 0.20, "B8": 0.20, "mndwi": -0.02,
-        "bsi": 0.08, "B4": 0.05, "B11": 0.10,
+        "bsi": 0.08, "B4": 0.05, "B11": 0.10, "ndmi": 0.05, "ndvi_std": 0.05,
     })
     assert labels.spectral_seed_image(ee, ambiguous, IDX, use_sar=False).v is None
+
+
+def test_formula_v6_phenology_and_moisture_discrimination() -> None:
+    ee = FakeEE
+
+    # 1. Pertanian/ladang pangan semusim: fenologi tahunan tinggi (ndvi_std = 0.16)
+    #    terdeteksi sebagai Pertanian (P) meskipun NDVI komposit kemarau di tingkat sedang (0.50)
+    seasonal_crop = FakeFeatImage({
+        "ndvi": 0.50, "nbr": 0.25, "B8": 0.20, "mndwi": -0.10,
+        "bsi": 0.02, "B4": 0.08, "B11": 0.15, "ndmi": 0.05, "ndvi_std": 0.16,
+    })
+    assert labels.spectral_seed_image(ee, seasonal_crop, IDX, use_sar=False).v == P
+    assert labels.rule_based_classify(ee, seasonal_crop, IDX, use_sar=False).v == P
+
+    # 2. Agroforestri kanopi rapat (kopi/kakao di bawah naungan pohon):
+    #    NDVI tinggi (0.78), SWIR tinggi (B11 = 0.14), NBR moderat (0.42)
+    #    teridentifikasi sebagai Pertanian/Agroforestri (P), bukan Hutan Alami (H)
+    agroforestry = FakeFeatImage({
+        "ndvi": 0.78, "nbr": 0.42, "B8": 0.28, "mndwi": -0.18,
+        "bsi": -0.05, "B4": 0.04, "B11": 0.14, "ndmi": 0.16, "ndvi_std": 0.07,
+    })
+    assert labels.spectral_seed_image(ee, agroforestry, IDX, use_sar=False).v == P
+    assert labels.rule_based_classify(ee, agroforestry, IDX, use_sar=False).v == P
+
+    # 3. Lahan basah rawa gambut / mangrove jenuh air:
+    #    NDMI sangat tinggi (0.30), MNDWI mendekati nol (-0.01), NIR teredam air (B8 = 0.18)
+    #    teridentifikasi sebagai Basah (B)
+    wetland_peat = FakeFeatImage({
+        "ndvi": 0.35, "nbr": 0.10, "B8": 0.18, "mndwi": -0.01,
+        "bsi": -0.08, "B4": 0.04, "B11": 0.08, "ndmi": 0.30, "ndvi_std": 0.04,
+    })
+    assert labels.spectral_seed_image(ee, wetland_peat, IDX, use_sar=False).v == B
+    assert labels.rule_based_classify(ee, wetland_peat, IDX, use_sar=False).v == B
 
 
 def test_rule_based_classify_assigns_all_classes() -> None:

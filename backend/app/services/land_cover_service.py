@@ -69,12 +69,15 @@ S2_COLLECTION = "COPERNICUS/S2_SR_HARMONIZED"
 #       tanpa guru eksternal (Dynamic World/WorldCover/Hansen/Descals dibuang);
 #       label latih dibangkitkan mandiri dari arketipe spektral (spectral endmembers);
 #       Sentinel-2 SCL cloud masking + kemarau median + fallback aturan spektral
-FORMULA_VERSION = 5
+#   6 = 2026-09-06: Peningkatan akurasi lanskap KPS Nusantara (agroforestri kopi/kakao/karet,
+#       hutan musim, sawah/ladang, rawa gambut): penambahan variabilitas fenologi tahunan
+#       (ndvi_std) dan indeks kelembaban kanopi (ndmi), tanpa bias sempit kelapa sawit.
+FORMULA_VERSION = 6
 FORMULA_LABEL = (
-    "Sentinel-2 L2A median kemarau + Sentinel-1 SAR + Random Forest; "
-    "5 kelas mandiri ETA SENEU (tanpa guru eksternal); "
-    "endmember spektral adaptif; filter awan SCL multi-layer; "
-    "aturan transisi temporal (ETA SENEU v5)"
+    "Sentinel-2 L2A median kemarau + variabilitas fenologi ndvi_std + NDMI + "
+    "Sentinel-1 SAR + Random Forest; 5 kelas mandiri ETA SENEU (tanpa guru eksternal); "
+    "endmember spektral adaptif lanskap KPS; filter awan SCL multi-layer; "
+    "aturan transisi temporal (ETA SENEU v6)"
 )
 
 YEARS: tuple[int, ...] = (2021, 2022, 2023, 2024, 2025)
@@ -87,7 +90,8 @@ MIN_SAMPLES_PER_CLASS = 30
 DRY_SEASON = ("05-01", "10-31")
 OPTICAL_FEATURE_NAMES = [
     "B2", "B3", "B4", "B8", "B11", "B12",
-    "ndvi", "evi", "nbr", "mndwi", "ndbi", "bsi", "elevation", "slope",
+    "ndvi", "evi", "nbr", "ndmi", "mndwi", "ndbi", "bsi", "ndvi_std",
+    "elevation", "slope",
 ]
 USE_SAR = True
 FEATURE_NAMES = OPTICAL_FEATURE_NAMES + (list(SAR_FEATURE_NAMES) if USE_SAR else [])
@@ -261,6 +265,28 @@ class LandCoverService:
             .median()
         )
 
+    def _s2_ndvi_std(self, ee, clip_to, start: str, end: str):
+        """Variabilitas fenologi tahunan (stdDev NDVI) dari Sentinel-2.
+        Penting untuk membedakan vegetasi kanopi permanen (hutan mantap -> stdDev rendah)
+        dari pertanian/ladang/sawah semusim (siklus tanam-panen -> stdDev tinggi)."""
+        def _calc_ndvi(img):
+            scl = img.select("SCL")
+            keep = (
+                scl.neq(0).And(scl.neq(1)).And(scl.neq(3))
+                .And(scl.neq(8)).And(scl.neq(9)).And(scl.neq(10)).And(scl.neq(11))
+            )
+            return img.updateMask(keep).normalizedDifference(["B8", "B4"]).rename("ndvi")
+
+        col = (
+            ee.ImageCollection(S2_COLLECTION)
+            .filterBounds(clip_to)
+            .filterDate(start, end)
+            .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", _MAX_CLOUD))
+            .select(["B8", "B4", "SCL"])
+            .map(_calc_ndvi)
+        )
+        return col.reduce(ee.Reducer.stdDev()).rename("ndvi_std").unmask(0.0).clip(clip_to)
+
     def _year_feature_image(self, ee, roi, year: int, region=None, sar_img=None):
         """Tumpukan fitur satu tahun: optik S2 + indeks + DEM, plus band SAR
         (`sar_img` dari land_cover/sar.py) kalau diberikan. Urutan band =
@@ -279,6 +305,7 @@ class LandCoverService:
             s2 = dry.unmask(self._s2_median(ee, clip_to, full_start, full_end)).clip(clip_to)
         ndvi = s2.normalizedDifference(["B8", "B4"]).rename("ndvi")
         nbr = s2.normalizedDifference(["B8", "B12"]).rename("nbr")
+        ndmi = s2.normalizedDifference(["B8", "B11"]).rename("ndmi")
         mndwi = s2.normalizedDifference(["B3", "B11"]).rename("mndwi")
         ndbi = s2.normalizedDifference(["B11", "B8"]).rename("ndbi")
         bsi = (
@@ -301,11 +328,12 @@ class LandCoverService:
             )
             .rename("evi")
         )
+        ndvi_std = self._s2_ndvi_std(ee, clip_to, full_start, full_end)
         dem = ee.Image("NASA/NASADEM_HGT/001").select("elevation")
         slope = ee.Terrain.products(dem).select("slope") if hasattr(ee, "Terrain") else dem.rename("slope")
         feat = ee.Image.cat(
             s2.select(["B2", "B3", "B4", "B8", "B11", "B12"]),
-            ndvi, evi, nbr, mndwi, ndbi, bsi,
+            ndvi, evi, nbr, ndmi, mndwi, ndbi, bsi, ndvi_std,
             dem.rename("elevation"), slope.rename("slope"),
         ).rename(OPTICAL_FEATURE_NAMES)
         if sar_img is not None:
