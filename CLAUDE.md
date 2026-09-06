@@ -324,6 +324,14 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   `::geography`, supaya index GIST di kolom `geom` tetap kepakai), lalu ekspansi klaster murni Python
   stdlib (BFS di `_graph_cluster`) — sengaja TIDAK pakai numpy/scipy/scikit-learn walau itu yang
   dipakai di prototipe awal, supaya `requirements.txt` tidak nambah dependency berat.
+- `fire_spread_service.py` & `api/fire_spread.py` — menu "Siaga Rambatan Api": deteksi ancaman kebakaran
+  dari luar poligon KPS (perimeter buffer 1 km, 3 km, 5 km) yang berpotensi merambat masuk ke kawasan.
+  Menggunakan spatial filter dua tingkat: `ST_DWithin(poly.geometry, obs.geom, max_deg)` (derajat
+  memanfaatkan index GIST spasial instan) lalu kalkulasi jarak presisi meter dengan
+  `ST_Distance(poly.geometry::geography, obs.geom::geography)`. Menghitung bearing/arah mata angin
+  (`degrees(ST_Azimuth(ST_Centroid(poly.geometry), obs.geom))`) dan titik gerbang terdekat batas
+  poligon (`ST_ClosestPoint`). Endpoint: `GET /api/fire-spread/summary`, `GET /api/fire-spread/threats`,
+  `GET /api/fire-spread/detail`, `GET /api/fire-spread/export.xlsx`.
 
 ### Atribusi Fungsi Kawasan Hutan (KWSHUTAN_AR_250K KLHK)
 
@@ -569,6 +577,9 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               (baris ke-3 🏛️ `wilker_bps`). FilterPanel.tsx, SidebarNav.tsx (satu area gulir
               di `.side-rail`; menu Pengaturan menampilkan info akun untuk semua role,
               prop `isAdmin` → role user hanya tidak melihat tombol Sync/Prewarm),
+              SiagaRambatanApiView.tsx ("Siaga Rambatan Api" — visualisasi perimeter buffer 1/3/5 km
+              luar poligon KPS, panah vektor perambatan api, titik gerbang batas terdekat, filter rentang
+              waktu 24h/48h/72h/7d, kartu KPI tingkat ancaman Bahaya/Waspada/Pantau, ekspor Excel),
               BurnedAreaCard.tsx, WeatherOverlay.tsx, dll.
               PETA LIVE — MOBILE vs DESKTOP DIVERGEN: `HotspotMap.tsx` pakai
               `hooks/useIsMobile.ts` (matchMedia `<=639px`). Di desktop kontrol

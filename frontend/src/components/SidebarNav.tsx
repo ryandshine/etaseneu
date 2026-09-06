@@ -15,8 +15,8 @@ type SidebarNavProps = {
   // "kps" (detail satu KPS dibuka dari Buku Besar) bukan tujuan navigasi
   // sidebar, tapi activeView tetap perlu menerimanya supaya perbandingan
   // "active" di bawah tidak salah tipe saat halaman itu sedang tampil.
-  activeView: "map" | "matrix" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "settings" | "kps";
-  onChangeView: (view: "map" | "matrix" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "settings") => void;
+  activeView: "map" | "matrix" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "firespread" | "settings" | "kps";
+  onChangeView: (view: "map" | "matrix" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "firespread" | "settings") => void;
   onManualSync: () => void;
   onPrewarmHistory: () => void;
   onLogout: () => void;
@@ -126,6 +126,9 @@ export function SidebarNav({
           </NavButton>
           <NavButton active={activeView === "earlywarning"} onClick={() => onChangeView("earlywarning")}>
             Peringatan Dini
+          </NavButton>
+          <NavButton active={activeView === "firespread"} onClick={() => onChangeView("firespread")}>
+            Siaga Rambatan Api
           </NavButton>
           <NavButton active={activeView === "settings"} onClick={() => onChangeView("settings")}>
             Pengaturan

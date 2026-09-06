@@ -46,6 +46,11 @@ const EarlyWarningView = lazy(async () => {
   return { default: module.EarlyWarningView };
 });
 
+const SiagaRambatanApiView = lazy(async () => {
+  const module = await import("./components/SiagaRambatanApiView");
+  return { default: module.SiagaRambatanApiView };
+});
+
 const SettingsPanel = lazy(async () => {
   const module = await import("./components/SettingsPanel");
   return { default: module.SettingsPanel };
@@ -55,7 +60,7 @@ function isSchedulerFailureStatus(status?: string | null): boolean {
   return status === "failure" || status === "failed";
 }
 
-type AppView = "map" | "matrix" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "settings" | "kps";
+type AppView = "map" | "matrix" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "firespread" | "settings" | "kps";
 
 const PERSISTED_SESSION_KEY = "etaseneu.session.v1";
 
@@ -134,6 +139,9 @@ function readViewFromUrl(): AppView {
   }
   if (view === "earlywarning") {
     return "earlywarning";
+  }
+  if (view === "firespread") {
+    return "firespread";
   }
   if (view === "kps" && params.get("kps")) {
     return "kps";
@@ -1014,6 +1022,12 @@ export default function App() {
                 session={session}
                 selectedWilker={session?.role === "bps" ? (session.wilker_bps || selectedWilker) : selectedWilker}
               />
+            </Suspense>
+          </section>
+        ) : activeView === "firespread" ? (
+          <section aria-label="Siaga Rambatan Api workspace" className="workspace-stage workspace-stage--firespread">
+            <Suspense fallback={<ViewLoader label="Memuat siaga rambatan api..." />}>
+              <SiagaRambatanApiView onOpenKpsDetail={openKpsDetail} />
             </Suspense>
           </section>
         ) : activeView === "kps" ? (
