@@ -59,19 +59,39 @@ const FIRST_YEAR = LAND_COVER_YEARS[0];
 const LAST_YEAR = LAND_COVER_YEARS[LAND_COVER_YEARS.length - 1];
 
 // Basemap seragam dengan Live Map (HotspotMap.tsx): satelit default, plus
-// jalan & topografi. URL {s}-less supaya tidak perlu opsi subdomain.
+// jalan & topografi dari Esri ArcGIS (bebas API key, tanpa watermark CARTO
+// atau pembatasan rate limit OpenTopoMap).
 const BASEMAPS = {
   satelit: {
     label: "Satelit",
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    layers: [
+      {
+        url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        maxZoom: 19,
+      },
+      {
+        url: "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+        maxZoom: 19,
+      },
+    ],
   },
   jalan: {
     label: "Jalan",
-    url: "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+    layers: [
+      {
+        url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+        maxZoom: 19,
+      },
+    ],
   },
   topo: {
     label: "Topografi",
-    url: "https://tile.opentopomap.org/{z}/{x}/{y}.png",
+    layers: [
+      {
+        url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+        maxZoom: 19,
+      },
+    ],
   },
 } as const;
 type BasemapKey = keyof typeof BASEMAPS;
@@ -546,7 +566,13 @@ export function LandCoverPanel({
             zoomControl={false}
             attributionControl={false}
           >
-            <TileLayer key={basemap} url={BASEMAPS[basemap].url} />
+            {BASEMAPS[basemap].layers.map((layer, idx) => (
+              <TileLayer
+                key={`${basemap}-${idx}`}
+                url={layer.url}
+                maxZoom={layer.maxZoom}
+              />
+            ))}
             {!isMobile && <ZoomControl position="bottomright" />}
             {outline && (
               <GeoJSON
