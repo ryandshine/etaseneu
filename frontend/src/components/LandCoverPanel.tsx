@@ -66,7 +66,7 @@ const BASEMAPS = {
     layers: [
       {
         url: "https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
-        subdomains: "0123",
+        subdomains: ["0", "1", "2", "3"],
         maxZoom: 20,
       },
     ],
@@ -227,6 +227,8 @@ export function LandCoverPanel({
     setOutline(null);
     setYear(LAST_YEAR);
     setTab("peta");
+    setState("idle");
+    setErrorMsg(null);
     void fetchStatus();
     void authFetch(`/api/polygons/${polygonId}`)
       .then((r) => (r.ok ? r.json() : null))
@@ -428,7 +430,7 @@ export function LandCoverPanel({
         <div className="lc-state-center">
           <h3 className="lc-title">Tutupan Lahan 2021–2025</h3>
           <p className="lc-lede">
-            Klasifikasi Sentinel-2 + Random Forest, 6 kelas. Sekali hitung per KPS,
+            Klasifikasi Sentinel-2 + Random Forest, 5 kelas. Sekali hitung per KPS,
             hasilnya tersimpan permanen.
           </p>
           {!isAdmin ? (
@@ -566,7 +568,7 @@ export function LandCoverPanel({
               <TileLayer
                 key={`${basemap}-${idx}`}
                 url={layer.url}
-                subdomains={"subdomains" in layer ? layer.subdomains : undefined}
+                subdomains={"subdomains" in layer ? (layer.subdomains as readonly string[] as string[]) : undefined}
                 maxZoom={layer.maxZoom}
               />
             ))}
@@ -585,7 +587,7 @@ export function LandCoverPanel({
             )}
             {overlay && overlay.features.length > 0 && (
               <GeoJSON
-                key={`lc-${year}`}
+                key={`lc-${polygonId}-${year}`}
                 data={overlay as never}
                 style={(feature) => {
                   const c = landCoverColor(
