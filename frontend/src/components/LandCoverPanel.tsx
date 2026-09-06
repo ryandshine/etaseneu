@@ -76,6 +76,7 @@ const BASEMAPS = {
     layers: [
       {
         url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+        subdomains: ["a", "b", "c"],
         maxZoom: 19,
       },
     ],
@@ -85,6 +86,7 @@ const BASEMAPS = {
     layers: [
       {
         url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+        subdomains: ["a", "b", "c"],
         maxZoom: 19,
       },
     ],
@@ -568,7 +570,7 @@ export function LandCoverPanel({
               <TileLayer
                 key={`${basemap}-${idx}`}
                 url={layer.url}
-                subdomains={"subdomains" in layer ? (layer.subdomains as readonly string[] as string[]) : undefined}
+                subdomains={"subdomains" in layer && layer.subdomains ? (layer.subdomains as readonly string[] as string[]) : ["a", "b", "c"]}
                 maxZoom={layer.maxZoom}
               />
             ))}

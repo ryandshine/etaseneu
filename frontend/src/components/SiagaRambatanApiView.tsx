@@ -140,14 +140,14 @@ const BASEMAP_CONFIGS = {
     key: "dark",
     name: "Mode Gelap",
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-    subdomains: undefined,
+    subdomains: ["a", "b", "c"] as readonly string[],
     maxZoom: 16,
   },
   street: {
     key: "street",
     name: "Peta Jalan",
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
-    subdomains: undefined,
+    subdomains: ["a", "b", "c"] as readonly string[],
     maxZoom: 19,
   },
 } as const;
@@ -1102,7 +1102,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
               <TileLayer
                 key={activeBasemap.key}
                 url={activeBasemap.url}
-                subdomains={activeBasemap.subdomains ? (activeBasemap.subdomains as readonly string[] as string[]) : undefined}
+                subdomains={activeBasemap.subdomains as readonly string[] as string[]}
                 maxZoom={activeBasemap.maxZoom}
               />
 
