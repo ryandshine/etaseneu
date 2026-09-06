@@ -15,7 +15,8 @@ import {
   Crosshair,
   Copy,
   Check,
-  X
+  X,
+  ChevronLeft
 } from "lucide-react";
 import { CircleMarker, GeoJSON, MapContainer, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
@@ -155,17 +156,20 @@ type BasemapKey = keyof typeof BASEMAP_CONFIGS;
 
 /**
  * Pengontrol Viewport Peta: Otomatis Zoom & Fit ke Poligon KPS + Hotspot
+ * Mendukung auto-panning ke kiri saat Sliding Right Panel dibuka
  */
 function MapViewportController({
   polygonId,
   geometry,
   hotspots,
   focusTrigger,
+  isDrawerOpen,
 }: {
   polygonId: number | null;
   geometry: any;
   hotspots: ThreatDetailHotspot[];
   focusTrigger: number;
+  isDrawerOpen: boolean;
 }) {
   const map = useMap();
 
@@ -185,16 +189,30 @@ function MapViewportController({
       }
 
       if (bounds.isValid()) {
+        const containerWidth = typeof map?.getSize === "function" ? map.getSize().x : (typeof window !== "undefined" ? window.innerWidth : 1200);
+        // Lebar sliding drawer panel adalah ~390px.
+        // Dengan paddingBottomRight x = drawerOffset + 45, Leaflet secara otomatis
+        // melakukan panning kanvas ke kiri sebesar drawerOffset / 2,
+        // sehingga seluruh poligon KPS dan titik api berada tepat di tengah sisa area kanvas yang bebas.
+        const drawerOffset = isDrawerOpen ? Math.min(410, Math.floor(containerWidth * 0.52)) : 0;
+
+        const options: L.FitBoundsOptions = {
+          paddingTopLeft: [45, 45],
+          paddingBottomRight: [drawerOffset + 45, 45],
+          maxZoom: 15,
+          duration: 0.6,
+        };
+
         if (typeof map?.flyToBounds === "function") {
-          map.flyToBounds(bounds, { padding: [55, 55], maxZoom: 15, duration: 0.6 });
+          map.flyToBounds(bounds, options);
         } else if (typeof map?.fitBounds === "function") {
-          map.fitBounds(bounds, { padding: [55, 55], maxZoom: 15 });
+          map.fitBounds(bounds, options);
         }
       }
     } catch (err) {
       console.warn("Gagal fly ke poligon KPS:", err);
     }
-  }, [polygonId, geometry, hotspots, focusTrigger, map]);
+  }, [polygonId, geometry, hotspots, focusTrigger, isDrawerOpen, map]);
 
   return null;
 }
@@ -219,6 +237,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
   const [basemap, setBasemap] = useState<BasemapKey>("hybrid");
   const [focusTrigger, setFocusTrigger] = useState<number>(0);
   const [copiedCoords, setCopiedCoords] = useState<boolean>(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(true);
 
   // 1. Fetch summary & threats
   const fetchData = async () => {
@@ -247,6 +266,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
         setThreats(items);
         if (items.length > 0 && !selectedKpsId) {
           setSelectedKpsId(items[0].polygon_id);
+          setIsDrawerOpen(true);
         }
       }
     } catch (err) {
@@ -616,7 +636,10 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                 return (
                   <div
                     key={item.polygon_id}
-                    onClick={() => setSelectedKpsId(item.polygon_id)}
+                    onClick={() => {
+                      setSelectedKpsId(item.polygon_id);
+                      setIsDrawerOpen(true);
+                    }}
                     className={`fs-card ${isSelected ? "fs-card--selected" : ""}`}
                   >
                     <div className="fs-card-head">
@@ -753,97 +776,321 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
               </div>
             )}
 
-            {/* Floating Inspector: Informasi Taktis KPS Terpilih */}
-            {threatDetail && (
-              <div className="fs-map-inspector">
-                <div className="fs-inspector-top">
-                  <div className="fs-inspector-meta">
-                    <div className="fs-inspector-badge-row">
-                      <span
-                        className="fs-inspector-badge"
-                        style={{
-                          backgroundColor: threatDetail.status_level === "bahaya" ? "rgba(239, 68, 68, 0.2)" : threatDetail.status_level === "waspada" ? "rgba(249, 115, 22, 0.2)" : "rgba(234, 179, 8, 0.2)",
-                          color: threatDetail.status_level === "bahaya" ? "#f87171" : threatDetail.status_level === "waspada" ? "#fb923c" : "#fde047",
-                          borderColor: threatDetail.status_level === "bahaya" ? "#ef4444" : threatDetail.status_level === "waspada" ? "#f97316" : "#eab308",
-                        }}
+            {/* Sliding Right Drawer Panel */}
+            <aside
+              className={`fs-drawer ${isDrawerOpen && threatDetail ? "fs-drawer--open" : ""}`}
+              aria-label="Panel Detail KPS Terancam"
+            >
+              {threatDetail && (
+                <div className="fs-drawer-content">
+                  {/* Drawer Header */}
+                  <div className="fs-drawer-header">
+                    <div className="fs-drawer-header-top">
+                      <div className="fs-drawer-badges">
+                        <span
+                          className="fs-drawer-status-badge"
+                          style={{
+                            backgroundColor:
+                              threatDetail.status_level === "bahaya"
+                                ? "rgba(239, 68, 68, 0.2)"
+                                : threatDetail.status_level === "waspada"
+                                ? "rgba(249, 115, 22, 0.2)"
+                                : "rgba(234, 179, 8, 0.2)",
+                            color:
+                              threatDetail.status_level === "bahaya"
+                                ? "#f87171"
+                                : threatDetail.status_level === "waspada"
+                                ? "#fb923c"
+                                : "#fde047",
+                            borderColor:
+                              threatDetail.status_level === "bahaya"
+                                ? "#ef4444"
+                                : threatDetail.status_level === "waspada"
+                                ? "#f97316"
+                                : "#eab308",
+                          }}
+                        >
+                          {threatDetail.status_label}
+                        </span>
+                        {threatDetail.skema && (
+                          <span className="fs-drawer-skema-badge">{threatDetail.skema}</span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsDrawerOpen(false)}
+                        className="fs-drawer-close-btn"
+                        title="Tutup Panel Laci"
+                        aria-label="Tutup panel"
                       >
-                        {threatDetail.status_label}
-                      </span>
-                      {threatDetail.skema && (
-                        <span className="fs-inspector-skema">{threatDetail.skema}</span>
-                      )}
+                        <X size={18} />
+                      </button>
                     </div>
-                    <h4 className="fs-inspector-title">{threatDetail.lembaga}</h4>
-                    <p className="fs-inspector-loc">
-                      {[threatDetail.nama_desa, threatDetail.nama_kab, threatDetail.nama_prov].filter(Boolean).join(", ")}
+
+                    <h3 className="fs-drawer-title">{threatDetail.lembaga}</h3>
+                    <p className="fs-drawer-loc">
+                      <MapPin size={13} style={{ flexShrink: 0, marginTop: "2px" }} />
+                      <span>
+                        {[threatDetail.nama_desa, threatDetail.nama_kab, threatDetail.nama_prov]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </span>
                     </p>
                   </div>
 
-                  <div className="fs-inspector-dist">
-                    <span className="fs-inspector-dist-val" style={{ color: threatDetail.status_level === "bahaya" ? "#f87171" : threatDetail.status_level === "waspada" ? "#fb923c" : "#fde047" }}>
-                      {threatDetail.min_distance_m < 1000 ? `${threatDetail.min_distance_m} m` : `${threatDetail.min_distance_km} km`}
-                    </span>
-                    <span className="fs-inspector-dist-sub">dari batas luar</span>
+                  {/* Drawer Scrollable Body */}
+                  <div className="fs-drawer-body">
+                    {/* Hero Metric: Jarak ke Batas Luar */}
+                    <div className="fs-drawer-hero-metric">
+                      <div className="fs-drawer-hero-label">Jarak Terdekat dari Batas Luar</div>
+                      <div
+                        className="fs-drawer-hero-val"
+                        style={{
+                          color:
+                            threatDetail.status_level === "bahaya"
+                              ? "#f87171"
+                              : threatDetail.status_level === "waspada"
+                              ? "#fb923c"
+                              : "#fde047",
+                        }}
+                      >
+                        {threatDetail.min_distance_m < 1000
+                          ? `${threatDetail.min_distance_m} m`
+                          : `${threatDetail.min_distance_km} km`}
+                      </div>
+                      <div className="fs-drawer-hero-sub">
+                        <Compass size={13} color="#38bdf8" />
+                        <span>
+                          Arah rambatan: <strong>{threatDetail.closest_vector?.bearing_compass || "-"}</strong>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Alert: Hotspot di DALAM Kawasan jika ada */}
+                    {(threatDetail.total_internal_hotspots ?? 0) > 0 && (
+                      <div className="fs-drawer-alert-internal">
+                        <div className="fs-drawer-alert-header">
+                          <AlertOctagon size={16} color="#f43f5e" />
+                          <span style={{ fontWeight: 700, color: "#fca5a5", fontSize: "0.82rem" }}>
+                            🚨 {threatDetail.total_internal_hotspots} hotspot di DALAM kawasan
+                          </span>
+                        </div>
+                        <p style={{ margin: "0.25rem 0 0", fontSize: "0.74rem", color: "#fecdd3", lineHeight: 1.35 }}>
+                          Titik api aktif terdeteksi menembus masuk ke dalam poligon batas kelola masyarakat KPS. Prioritaskan aksi pemadaman darurat segera!
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Grid Metrik Utama (2 Kolom) */}
+                    <div className="fs-drawer-metrics-grid">
+                      {/* Luas Kawasan */}
+                      <div className="fs-drawer-metric-item">
+                        <span className="fs-drawer-metric-label">Luas Kawasan</span>
+                        <span className="fs-drawer-metric-val">
+                          {threatDetail.luas_ha ? `${threatDetail.luas_ha.toLocaleString()} ha` : "-"}
+                        </span>
+                        <span className="fs-drawer-metric-sub">wilayah izin kelola</span>
+                      </div>
+
+                      {/* Titik Api Luar */}
+                      <div className="fs-drawer-metric-item">
+                        <span className="fs-drawer-metric-label">Hotspot Luar</span>
+                        <span className="fs-drawer-metric-val" style={{ color: "#fb923c" }}>
+                          🔥 {threatDetail.total_external_hotspots} titik
+                        </span>
+                        <span className="fs-drawer-metric-sub">radius {threatDetail.max_distance_km} km</span>
+                      </div>
+
+                      {/* KPS Sekitar */}
+                      <div className="fs-drawer-metric-item">
+                        <span className="fs-drawer-metric-label">KPS Sekitar</span>
+                        <span className="fs-drawer-metric-val" style={{ color: "#a5b4fc" }}>
+                          🏘️ {threatDetail.neighbors?.length ?? 0} KPS sekitar
+                        </span>
+                        <span className="fs-drawer-metric-sub">zona perbatasan</span>
+                      </div>
+
+                      {/* Max FRP */}
+                      <div className="fs-drawer-metric-item">
+                        <span className="fs-drawer-metric-label">Intensitas (Max FRP)</span>
+                        <span className="fs-drawer-metric-val" style={{ color: "#f87171" }}>
+                          {threatDetail.hotspots.length > 0
+                            ? `${Math.max(...threatDetail.hotspots.map((h) => h.frp || 0)).toFixed(1)} MW`
+                            : "-"}
+                        </span>
+                        <span className="fs-drawer-metric-sub">Fire Radiative Power</span>
+                      </div>
+                    </div>
+
+                    {/* Rekomendasi Taktis */}
+                    <div
+                      className="fs-drawer-rekom-box"
+                      style={{
+                        backgroundColor:
+                          threatDetail.status_level === "bahaya"
+                            ? "rgba(239, 68, 68, 0.08)"
+                            : "rgba(249, 115, 22, 0.08)",
+                        borderColor:
+                          threatDetail.status_level === "bahaya"
+                            ? "rgba(239, 68, 68, 0.25)"
+                            : "rgba(249, 115, 22, 0.25)",
+                      }}
+                    >
+                      <div className="fs-drawer-rekom-header">
+                        <ShieldAlert
+                          size={14}
+                          color={threatDetail.status_level === "bahaya" ? "#f87171" : "#fb923c"}
+                        />
+                        <span
+                          style={{
+                            fontWeight: 700,
+                            fontSize: "0.76rem",
+                            color: threatDetail.status_level === "bahaya" ? "#fca5a5" : "#fed7aa",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.03em",
+                          }}
+                        >
+                          Rekomendasi Respons Lapangan
+                        </span>
+                      </div>
+                      <p className="fs-drawer-rekom-text">
+                        {threatDetail.closest_vector
+                          ? `DARURAT: Api berjarak ${
+                              threatDetail.closest_vector.distance_m < 1000
+                                ? `${threatDetail.closest_vector.distance_m} m`
+                                : `${(threatDetail.closest_vector.distance_m / 1000).toFixed(2)} km`
+                            } dari arah ${threatDetail.closest_vector.bearing_compass}. Segera terjunkan tim patroli batas & buat sekat bakar darurat!`
+                          : "Pantau perkembangan titik api secara berkala melalui citra satelit dan siagakan MPA setempat."}
+                      </p>
+                    </div>
+
+                    {/* Vektor Titik Masuk & Koordinat */}
+                    {threatDetail.closest_vector && (
+                      <div className="fs-drawer-vector-info">
+                        <div className="fs-drawer-subheading">📍 Koordinat Vektor Batas Masuk</div>
+                        <div className="fs-drawer-vector-row">
+                          <span>Titik Batas KPS:</span>
+                          <strong>
+                            {threatDetail.closest_vector.kps_boundary_coords[1].toFixed(5)},{" "}
+                            {threatDetail.closest_vector.kps_boundary_coords[0].toFixed(5)}
+                          </strong>
+                        </div>
+                        <div className="fs-drawer-vector-row">
+                          <span>Titik Api Terdekat:</span>
+                          <strong>
+                            {threatDetail.closest_vector.hotspot_coords[1].toFixed(5)},{" "}
+                            {threatDetail.closest_vector.hotspot_coords[0].toFixed(5)}
+                          </strong>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* KPS Sekitar / Tetangga List */}
+                    {threatDetail.neighbors && threatDetail.neighbors.length > 0 && (
+                      <div className="fs-drawer-neighbors-wrap">
+                        <div className="fs-drawer-subheading">
+                          🏘️ KPS Bersebelahan / Sekitar ({threatDetail.neighbors.length})
+                        </div>
+                        <div className="fs-drawer-neighbors-list">
+                          {threatDetail.neighbors.map((n) => (
+                            <div key={`neighbor-${threatDetail.polygon_id}-${n.id}`} className="fs-drawer-neighbor-item">
+                              <div className="fs-drawer-neighbor-header">
+                                <span className="fs-drawer-neighbor-name">{n.lembaga}</span>
+                                <span className="fs-drawer-neighbor-dist">
+                                  {n.distance_m === 0 ? "0 m (Batas Langsung)" : `${n.distance_m} m`}
+                                </span>
+                              </div>
+                              <div className="fs-drawer-neighbor-sub">
+                                <span>{n.skema || "KPS"}</span>
+                                <span>•</span>
+                                <span style={{ color: n.hotspot_count > 0 ? "#f87171" : "#10b981", fontWeight: 600 }}>
+                                  🔥 {n.hotspot_count} titik api
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedKpsId(n.id);
+                                  setIsDrawerOpen(true);
+                                }}
+                                className="fs-drawer-neighbor-btn"
+                              >
+                                Pilih &amp; Pantau KPS Ini
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Drawer Footer Actions */}
+                  <div className="fs-drawer-footer">
+                    <button
+                      type="button"
+                      onClick={() => setFocusTrigger((t) => t + 1)}
+                      className="fs-drawer-btn"
+                      title="Fokuskan kembali peta ke poligon KPS dan titik api"
+                    >
+                      <Crosshair size={13} color="#38bdf8" />
+                      Fokus Poligon
+                    </button>
+
+                    {threatDetail.hotspots.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const h = threatDetail.hotspots[0];
+                          navigator.clipboard.writeText(`${h.latitude.toFixed(6)}, ${h.longitude.toFixed(6)}`);
+                          setCopiedCoords(true);
+                          setTimeout(() => setCopiedCoords(false), 2000);
+                        }}
+                        className="fs-drawer-btn"
+                        title="Salin koordinat hotspot terdekat"
+                      >
+                        {copiedCoords ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
+                        {copiedCoords ? "Tersalin!" : "Salin Titik Api"}
+                      </button>
+                    )}
+
+                    {onOpenKpsDetail && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenKpsDetail(threatDetail.lembaga)}
+                        className="fs-drawer-btn fs-drawer-btn--primary"
+                        title="Buka Buku Besar KPS ini"
+                      >
+                        Buku Besar KPS
+                        <ArrowRight size={13} />
+                      </button>
+                    )}
                   </div>
                 </div>
+              )}
+            </aside>
 
-                <div className="fs-inspector-details">
-                  <span>🧭 Arah ancaman luar: <strong>{threatDetail.closest_vector?.bearing_compass || "-"}</strong></span>
-                  {(threatDetail.total_internal_hotspots ?? 0) > 0 && (
-                    <span style={{ color: "#fb7185", fontWeight: "700" }}>
-                      🚨 <strong>{threatDetail.total_internal_hotspots} hotspot di DALAM</strong> kawasan
-                    </span>
-                  )}
-                  <span>🔥 <strong>{threatDetail.total_external_hotspots} hotspot luar</strong> radius {threatDetail.max_distance_km} km</span>
-                  {threatDetail.neighbors && threatDetail.neighbors.length > 0 && (
-                    <span style={{ color: "#a5b4fc" }}>
-                      🏘️ <strong>{threatDetail.neighbors.length} KPS sekitar</strong>
-                    </span>
-                  )}
-                  {threatDetail.luas_ha && <span>📐 Luas: <strong>{threatDetail.luas_ha.toLocaleString()} ha</strong></span>}
-                </div>
-
-                <div className="fs-inspector-actions">
-                  <button
-                    type="button"
-                    onClick={() => setFocusTrigger((t) => t + 1)}
-                    className="fs-inspector-btn"
-                    title="Fokuskan kembali peta ke poligon KPS dan titik api"
-                  >
-                    <Crosshair size={13} color="#38bdf8" />
-                    Fokus Poligon
-                  </button>
-
-                  {threatDetail.hotspots.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const h = threatDetail.hotspots[0];
-                        navigator.clipboard.writeText(`${h.latitude.toFixed(6)}, ${h.longitude.toFixed(6)}`);
-                        setCopiedCoords(true);
-                        setTimeout(() => setCopiedCoords(false), 2000);
-                      }}
-                      className="fs-inspector-btn"
-                      title="Salin koordinat hotspot terdekat"
-                    >
-                      {copiedCoords ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
-                      {copiedCoords ? "Tersalin!" : "Salin Titik Api"}
-                    </button>
-                  )}
-
-                  {onOpenKpsDetail && (
-                    <button
-                      type="button"
-                      onClick={() => onOpenKpsDetail(threatDetail.lembaga)}
-                      className="fs-inspector-btn fs-inspector-btn--primary"
-                      title="Buka Buku Besar KPS ini"
-                    >
-                      Buku Besar KPS
-                      <ArrowRight size={12} />
-                    </button>
-                  )}
-                </div>
-              </div>
+            {/* Tombol Membuka Kembali Panel jika Ditutup */}
+            {!isDrawerOpen && threatDetail && (
+              <button
+                type="button"
+                onClick={() => setIsDrawerOpen(true)}
+                className="fs-drawer-reopen-btn"
+                title="Buka Panel Detail Metrik KPS"
+              >
+                <ChevronLeft size={16} />
+                <span>Detail KPS</span>
+                <span
+                  className="fs-drawer-reopen-dot"
+                  style={{
+                    backgroundColor:
+                      threatDetail.status_level === "bahaya"
+                        ? "#ef4444"
+                        : threatDetail.status_level === "waspada"
+                        ? "#f97316"
+                        : "#eab308",
+                  }}
+                />
+              </button>
             )}
 
             <MapContainer
@@ -865,6 +1112,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                 geometry={threatDetail?.geometry}
                 hotspots={threatDetail?.hotspots ?? []}
                 focusTrigger={focusTrigger}
+                isDrawerOpen={isDrawerOpen}
               />
 
               {/* Visualisasi Poligon KPS Bersebelahan / Sekitar (Indigo Putus-putus) */}
@@ -908,7 +1156,10 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                       </div>
                       <button
                         type="button"
-                        onClick={() => setSelectedKpsId(n.id)}
+                        onClick={() => {
+                          setSelectedKpsId(n.id);
+                          setIsDrawerOpen(true);
+                        }}
                         style={{
                           marginTop: "0.5rem",
                           width: "100%",
