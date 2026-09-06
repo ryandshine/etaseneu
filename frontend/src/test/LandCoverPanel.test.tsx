@@ -202,11 +202,11 @@ describe("LandCoverPanel", () => {
           {
             hutan: { area_ha: 100, pct: 76.9 },
             semak: { area_ha: 30, pct: 23.1 },
-            // pertanian/basah/permukiman/terbuka tidak pernah ada di poligon ini.
+            // pertanian/basah/terbuka tidak pernah ada di poligon ini.
           },
         ]),
       ),
-      net_change: { hutan: -10, semak: 10, pertanian: 0, basah: 0, permukiman: 0, terbuka: 0 },
+      net_change: { hutan: -10, semak: 10, pertanian: 0, basah: 0, terbuka: 0 },
     };
     mockFetch((url) => {
       if (url.includes("/land-cover/status")) {
@@ -230,7 +230,7 @@ describe("LandCoverPanel", () => {
     expect(screen.queryByText("Pertanian/Perkebunan")).not.toBeInTheDocument();
     expect(screen.queryByText("Lahan Terbuka")).not.toBeInTheDocument();
     expect(screen.queryByText("Lahan Basah/Perairan")).not.toBeInTheDocument();
-    expect(screen.getByText(/4 kelas lain tidak ditemukan di poligon ini/i)).toBeInTheDocument();
+    expect(screen.getByText(/3 kelas lain tidak ditemukan di poligon ini/i)).toBeInTheDocument();
   });
 
   it("done: 'Hapus hasil' sends DELETE and returns the panel to idle", async () => {

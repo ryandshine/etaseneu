@@ -48,7 +48,7 @@ def test_land_cover_any_running_returns_the_running_polygon() -> None:
 @pytest.mark.parametrize(
     "label,expected",
     [(0, "basah"), (1, "hutan"), (2, "semak"), (3, "basah"), (4, "pertanian"),
-     (5, "semak"), (6, "permukiman"), (7, "terbuka"), (8, None), (99, None)],
+     (5, "semak"), (6, None), (7, "terbuka"), (8, None), (99, None)],
 )
 def test_dw_label_to_class(label, expected) -> None:
     assert _dw_label_to_class(label) == expected
@@ -209,6 +209,10 @@ class _FakeImageClass(_FakeImg):
     def cat(*a, **k):
         return _FakeImg()
 
+    @staticmethod
+    def constant(*a, **k):
+        return _FakeImg()
+
 
 class _FakeColl:
     # jumlah scene S1 per koleksi -- test SAR menimpa lewat class attr
@@ -364,7 +368,7 @@ def test_analyze_polygon_happy_path_saves_all_years_classes(monkeypatch) -> None
     assert meta["feature_names"] == list(OPTICAL_FEATURE_NAMES) + list(SAR_FEATURE_NAMES)
     assert meta["sar"]["enabled"] is True
     assert meta["sar"]["orbit_pass"] in ("ASCENDING", "DESCENDING")
-    assert "Hansen GFC 2024 v1.12" in meta["labels"]["sources"]
+    assert "Spectral Endmembers" in meta["labels"]["sources"][0]
     assert sum(meta["labels"]["samples_per_class"].values()) == store.saved["n_training"]
     assert store.saved["n_training"] == SAMPLES_PER_CLASS_PER_YEAR * len(CLASS_KEYS) * len(YEARS)
     for year in YEARS:
@@ -450,9 +454,9 @@ def test_analyze_polygon_samples_training_from_buffered_region(monkeypatch) -> N
         seen["feat"].append(region)
         return real_feat(ee, roi, year, region=region)
 
-    def spy_pts(ee, roi, feat_img, year, region=None):
+    def spy_pts(ee, roi, feat_img, year, region=None, **k):
         seen["pts"].append(region)
-        return real_pts(ee, roi, feat_img, year, region=region)
+        return real_pts(ee, roi, feat_img, year, region=region, **k)
 
     monkeypatch.setattr(svc, "_year_feature_image", spy_feat)
     monkeypatch.setattr(svc, "_year_training_points", spy_pts)

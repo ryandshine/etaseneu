@@ -1,10 +1,9 @@
 """Tes logika land_cover/temporal.py & land_cover/labels.py dengan citra
-"skalar" palsu yang benar-benar menghitung (eq/neq/And/Or/where), bukan
-no-op -- supaya aturan transisinya teruji, bukan cuma jalan. Tanpa GEE/DB.
+"skalar" palsu yang benar-benar menghitung (eq/neq/And/Or/where/gt/lt), bukan
+no-op -- supaya aturan transisi & penentuan seed spektral teruji. Tanpa GEE/DB.
 
-Taksonomi IPCC (formula v4): hutan|pertanian|semak|basah|permukiman|terbuka.
-Sawit TIDAK jadi kelas sendiri -- dilebur ke "pertanian" (lihat
-land_cover_service.py docstring)."""
+Taksonomi 5 kelas mandiri (formula v5): hutan|pertanian|semak|basah|terbuka.
+"""
 
 from __future__ import annotations
 
@@ -14,11 +13,11 @@ from app.services.land_cover import labels, temporal
 from app.services.land_cover_service import CLASS_KEYS, _CLASS_IDX
 
 IDX = _CLASS_IDX
-H, P, S, B, M, T = (IDX[k] for k in ("hutan", "pertanian", "semak", "basah", "permukiman", "terbuka"))
+H, P, S, B, T = (IDX[k] for k in ("hutan", "pertanian", "semak", "basah", "terbuka"))
 
 
 class Px:
-    """Satu piksel: nilai int atau None (= ter-mask)."""
+    """Satu piksel: nilai int/float atau None (= ter-mask)."""
 
     def __init__(self, v):
         self.v = v
@@ -34,6 +33,18 @@ class Px:
 
     def neq(self, o):
         return self._bin(o, lambda a, b: a != b)
+
+    def gt(self, o):
+        return self._bin(o, lambda a, b: a > b)
+
+    def gte(self, o):
+        return self._bin(o, lambda a, b: a >= b)
+
+    def lt(self, o):
+        return self._bin(o, lambda a, b: a < b)
+
+    def lte(self, o):
+        return self._bin(o, lambda a, b: a <= b)
 
     def And(self, o):
         return self._bin(o, lambda a, b: bool(a) and bool(b))
@@ -59,6 +70,26 @@ class Px:
 
     def updateMask(self, m):
         return Px(None if not m.v else self.v)
+
+
+class FakeImage:
+    """Mock Image yang mendukung .constant() untuk tes rule spektral."""
+
+    @staticmethod
+    def constant(v):
+        return Px(v)
+
+
+class FakeEE:
+    Image = FakeImage
+
+
+class FakeFeatImage:
+    def __init__(self, bands: dict[str, float]):
+        self.bands = {k: Px(v) for k, v in bands.items()}
+
+    def select(self, name: str) -> Px:
+        return self.bands[name]
 
 
 def _series(*vals):
@@ -123,37 +154,81 @@ def test_apply_transition_rules_short_series_is_noop() -> None:
     assert _vals(out) == [H, T] and rules == []
 
 
-# --- labels --------------------------------------------------------------
+# --- labels (spectral endmembers & rule classifier) -----------------------
 
 
-@pytest.mark.parametrize(
-    "dw,ref,wc,tolerated,expected",
-    [
-        (H, H, H, 0, 1),        # stabil, WC setuju (hutan alam)
-        (H, H, S, 0, 0),        # stabil, WC bilang semak -> buang (DW salah sistematis)
-        (T, H, H, 0, 1),        # DW anggap berubah sejak 2021 -> lolos tanpa dicek
-        (P, P, H, 1, 1),        # sawit dipaksa "pertanian", WC bilang "tree cover" -> ditoleransi
-        (P, P, P, 0, 1),        # pertanian biasa (sawah/ladang), WC setuju langsung
-        (P, P, H, 0, 0),        # sawit TANPA toleransi (mis. bukan sawit) -> WC tree != pertanian -> buang
-        (M, M, None, 0, 0),     # WC salju/lumut (tanpa padanan) -> buang
-    ],
-)
-def test_consensus_mask_rules(dw, ref, wc, tolerated, expected) -> None:
-    ok = labels.consensus_mask(None, Px(dw), Px(ref), Px(wc), Px(tolerated))
-    assert ok.v == expected
+def test_spectral_seed_identifies_clean_endmembers() -> None:
+    ee = FakeEE
+
+    # Hutan kanopi rapat
+    hutan_feat = FakeFeatImage({
+        "ndvi": 0.82, "nbr": 0.55, "B8": 0.30, "mndwi": -0.25,
+        "bsi": -0.10, "B4": 0.03, "B11": 0.08,
+    })
+    assert labels.spectral_seed_image(ee, hutan_feat, IDX, use_sar=False).v == H
+
+    # Badan air
+    water_feat = FakeFeatImage({
+        "ndvi": -0.10, "nbr": -0.20, "B8": 0.05, "mndwi": 0.20,
+        "bsi": -0.20, "B4": 0.03, "B11": 0.02,
+    })
+    assert labels.spectral_seed_image(ee, water_feat, IDX, use_sar=False).v == B
+
+    # Lahan terbuka
+    bare_feat = FakeFeatImage({
+        "ndvi": 0.15, "nbr": -0.10, "B8": 0.18, "mndwi": -0.30,
+        "bsi": 0.12, "B4": 0.18, "B11": 0.25,
+    })
+    assert labels.spectral_seed_image(ee, bare_feat, IDX, use_sar=False).v == T
+
+    # Semak belukar
+    shrub_feat = FakeFeatImage({
+        "ndvi": 0.42, "nbr": 0.30, "B8": 0.22, "mndwi": -0.15,
+        "bsi": 0.01, "B4": 0.07, "B11": 0.12,
+    })
+    assert labels.spectral_seed_image(ee, shrub_feat, IDX, use_sar=False).v == S
+
+    # Pertanian / perkebunan
+    crop_feat = FakeFeatImage({
+        "ndvi": 0.65, "nbr": 0.40, "B8": 0.25, "mndwi": -0.15,
+        "bsi": -0.02, "B4": 0.05, "B11": 0.12,
+    })
+    assert labels.spectral_seed_image(ee, crop_feat, IDX, use_sar=False).v == P
+
+    # Piksel ambigu (tidak ada endmember yang cocok) -> harus ter-mask (None)
+    ambiguous = FakeFeatImage({
+        "ndvi": 0.30, "nbr": 0.20, "B8": 0.20, "mndwi": -0.02,
+        "bsi": 0.08, "B4": 0.05, "B11": 0.10,
+    })
+    assert labels.spectral_seed_image(ee, ambiguous, IDX, use_sar=False).v is None
 
 
-def test_consensus_mask_without_tolerated_arg_still_works() -> None:
-    ok = labels.consensus_mask(None, Px(H), Px(H), Px(H))
-    assert ok.v == 1
+def test_rule_based_classify_assigns_all_classes() -> None:
+    ee = FakeEE
 
+    # Hutan
+    hutan_feat = FakeFeatImage({
+        "ndvi": 0.78, "nbr": 0.52, "B8": 0.28, "mndwi": -0.20,
+        "bsi": -0.05, "B4": 0.03, "B11": 0.08,
+    })
+    assert labels.rule_based_classify(ee, hutan_feat, IDX, use_sar=False).v == H
 
-def test_worldcover_map_only_uses_known_class_keys() -> None:
-    assert set(labels.WORLDCOVER_MAP.values()) <= set(CLASS_KEYS)
-    assert 70 not in labels.WORLDCOVER_MAP  # salju sengaja tidak dipetakan
-    assert labels.WORLDCOVER_MAP[50] == "permukiman"
+    # Air
+    water_feat = FakeFeatImage({
+        "ndvi": -0.05, "nbr": 0.0, "B8": 0.06, "mndwi": 0.10,
+        "bsi": -0.10, "B4": 0.02, "B11": 0.02,
+    })
+    assert labels.rule_based_classify(ee, water_feat, IDX, use_sar=False).v == B
+
+    # Lahan terbuka
+    bare_feat = FakeFeatImage({
+        "ndvi": 0.18, "nbr": -0.10, "B8": 0.15, "mndwi": -0.20,
+        "bsi": 0.10, "B4": 0.15, "B11": 0.22,
+    })
+    assert labels.rule_based_classify(ee, bare_feat, IDX, use_sar=False).v == T
 
 
 def test_sparse_classes_flags_only_small_nonzero_counts() -> None:
     counts = {"hutan": 400, "pertanian": 12, "semak": 0, "basah": 30}
     assert labels.sparse_classes(counts, CLASS_KEYS, 30) == ["pertanian"]
+

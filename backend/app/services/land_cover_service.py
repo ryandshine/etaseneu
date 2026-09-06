@@ -1,58 +1,27 @@
 """Klasifikasi tutupan lahan per poligon KPS/Hutan Adat (2021-2025) dari
-Sentinel-2 L2A via Google Earth Engine, Random Forest dengan guru label
-Google Dynamic World. On-demand per poligon; hasil di-cache permanen di
-tabel `land_cover_*` (lihat postgres_store/_land_cover.py).
+Sentinel-2 L2A + Sentinel-1 SAR via Google Earth Engine, Random Forest dengan
+label latih mandiri berbasis arketipe spektral (spectral endmembers).
+On-demand per poligon; hasil di-cache permanen di tabel `land_cover_*`
+(lihat postgres_store/_land_cover.py).
 
-Estimasi, bukan angka resmi. 6 kelas mengikuti taksonomi PENGGUNAAN LAHAN
-IPCC (Forest/Cropland/Grassland/Wetland/Settlement/Other Land), bukan
-skema penutupan lahan yang lebih rinci:
-  hutan       Forest      tutupan berpohon (hutan alam + mangrove)
-  pertanian   Cropland    sawah, ladang, DAN kebun -- termasuk sawit
-  semak       Grassland   semak/belukar/rumput
-  basah       Wetland     rawa bervegetasi + badan air (sungai/danau)
-  permukiman  Settlement  area terbangun
-  terbuka     Other Land  lahan terbuka/tandus, tanpa vegetasi berarti
+Estimasi, bukan angka resmi. 5 kelas mandiri ETA SENEU (tanpa ketergantungan
+pada model/guru pihak ketiga seperti Google Dynamic World, ESA WorldCover,
+Hansen GFC, atau Descals):
+  hutan       tutupan berpohon alami kanopi rapat
+  pertanian   perkebunan (sawit/karet/campuran) & pertanian (sawah/ladang)
+  semak       semak/belukar/alang-alang/vegetasi rendah
+  basah       badan air (sungai/danau) & lahan basah/rawa
+  terbuka     lahan terbuka/tandus/bekas tebangan/pasir
 
-Sawit TIDAK dipisah jadi kelas sendiri (menyamai standar IPCC: kebun apa
-pun masuk Cropland) TAPI tetap dijaga eksplisit tidak jatuh ke "hutan":
-piksel DW=trees yang ada di peta sawit global Descals (2019) dipaksa ke
-"pertanian" sebelum label lain diproses -- inilah "aturan pemisah
-eksplisit" yang memperbaiki bug lama (271 ha sawit dewasa di Muaro Jambi
-pernah terhitung "hutan" karena spektralnya mirip). Karet/kebun campur
-berpohon rapat yang TIDAK ada di peta Descals masih bisa lolos ke "hutan".
-
-Formula (2026-09-05, revisi setelah audit vs Dynamic World/Hansen/Descals):
-1. Komposit tahunan = median MUSIM KEMARAU (Mei-Okt); celah diisi median
-   setahun penuh. Median setahun penuh di musim hujan menyisakan haze/awan
-   berbeda tiap tahun -> luas kelas "berosilasi" ratusan ha antar-tahun.
-2. Label latih = argmax rata-rata probabilitas DW setahun (konsisten dengan
-   ambang keyakinan), bukan mode label yang bisa menunjuk kelas lain.
-3. Sawit: piksel DW=trees yang ada di peta sawit Descals dilabel "kebun".
-4. Pasca-klasifikasi: isi lubang awan, filter mayoritas 3x3, lalu hapus
-   lonjakan satu tahun (kelas t != t-1 == t+1 -> pakai t-1).
-
-Formula v3 (2026-09-05, "akurat > cepat/hemat" -- keputusan user):
-5. Fitur Sentinel-1 SAR (VV/VH/rasio dB, satu orbit dominan) ikut RF kalau
-   scene cukup di semua tahun (land_cover/sar.py).
-6. Konsensus label latih: DW x Hansen (hutan harus tutupan pohon 2000 >= 50 %
-   tanpa loss s/d tahun target) x ESA WorldCover 2021 (piksel yang DW anggap
-   stabil sejak 2021 harus disetujui WorldCover) -- land_cover/labels.py.
-7. Aturan transisi antar-tahun selain despike: hutan yang muncul satu tahun
-   lalu hilang lagi, dan pertanian/kebun -> hutan satu tahun -> dikembalikan
-   ke kelas sebelumnya (land_cover/temporal.py).
-8. Sampel latih 200/kelas/tahun (dari 100): konsensus membuang sebagian,
-   sisanya harus tetap cukup.
-
-Formula v4 (2026-09-05, keputusan user: taksonomi standar IPCC):
-9. 6 kelas dirombak ke taksonomi IPCC di atas (bukan lagi skema ad-hoc
-   hutan/kebun/semak/pertanian/terbuka/air). Kelas "kebun" (sawit) DILEBUR
-   ke "pertanian" (Cropland) -- pemisahannya dari hutan tetap dijaga lewat
-   guru Descals, cuma target labelnya berubah. Kelas "permukiman"
-   (Settlement, DW label 6 "built") diaktifkan -- sebelumnya di-skip.
-   "air" (badan air) digabung "basah" bersama rawa bervegetasi (DW
-   flooded_vegetation), sesuai kategori Wetland IPCC. Konsensus WorldCover
-   untuk piksel sawit memberi toleransi tambahan (WC menyebut sawit sebagai
-   "tree cover", bukan cropland) supaya sampel sawit tidak habis dibuang.
+Formula v5 (2026-09-06, keputusan user: sistem mandiri & bebas awan):
+1. Komposit tahunan = median MUSIM KEMARAU (Mei-Okt) dengan cloud-mask SCL
+   Sentinel-2 ketat; celah diisi median setahun penuh.
+2. Label latih mandiri (spectral endmembers): diekstraksi langsung dari citra
+   lokal poligon menggunakan indeks kanonik (NDVI, EVI, MNDWI, BSI, NBR) dan
+   fitur radar Sentinel-1 SAR (VV, VH, VH/VV ratio).
+3. Random Forest lokal dilatih dari titik-titik endmembers murni tersebut.
+4. Pasca-klasifikasi: gap-fill aturan spektral internal, filter mayoritas 3x3,
+   dan aturan konsistensi transisi temporal.
 """
 
 from __future__ import annotations
@@ -68,12 +37,9 @@ from shapely.ops import unary_union
 
 from app.core.config import get_settings
 from app.services.land_cover.labels import (
-    WORLDCOVER_LABEL,
-    WORLDCOVER_YEAR,
-    consensus_mask,
+    rule_based_classify,
     sparse_classes,
-    worldcover_class_image,
-    worldcover_is_tree,
+    spectral_seed_image,
 )
 from app.services.land_cover.sar import (
     S1_MIN_SCENES,
@@ -88,7 +54,6 @@ from app.services.postgres_store import PostgresStore
 logger = logging.getLogger("land_cover")
 
 S2_COLLECTION = "COPERNICUS/S2_SR_HARMONIZED"
-DW_COLLECTION = "GOOGLE/DYNAMICWORLD/V1"
 
 # Versi formula yang tersimpan di land_cover_analysis.formula_version.
 # Naikkan tiap kali metode berubah sehingga hasil lama bisa dibedakan di UI.
@@ -100,91 +65,46 @@ DW_COLLECTION = "GOOGLE/DYNAMICWORLD/V1"
 #   4 = 2026-09-05: taksonomi 6 kelas standar IPCC (kebun/sawit dilebur ke
 #       pertanian/Cropland, kelas permukiman/Settlement diaktifkan, air+rawa
 #       digabung jadi basah/Wetland); toleransi konsensus khusus sawit
-FORMULA_VERSION = 4
+#   5 = 2026-09-06: 5 kelas mandiri ETA SENEU (hutan, pertanian, semak, basah, terbuka),
+#       tanpa guru eksternal (Dynamic World/WorldCover/Hansen/Descals dibuang);
+#       label latih dibangkitkan mandiri dari arketipe spektral (spectral endmembers);
+#       Sentinel-2 SCL cloud masking + kemarau median + fallback aturan spektral
+FORMULA_VERSION = 5
 FORMULA_LABEL = (
-    "Sentinel-2 L2A median kemarau + Sentinel-1 SAR + Random Forest; taksonomi "
-    "IPCC 6 kelas; label Dynamic World argmax x Hansen x WorldCover + Descals "
-    "sawit; aturan transisi temporal (ETA SENEU v4)"
+    "Sentinel-2 L2A median kemarau + Sentinel-1 SAR + Random Forest; "
+    "5 kelas mandiri ETA SENEU (tanpa guru eksternal); "
+    "endmember spektral adaptif; filter awan SCL multi-layer; "
+    "aturan transisi temporal (ETA SENEU v5)"
 )
 
 YEARS: tuple[int, ...] = (2021, 2022, 2023, 2024, 2025)
-CLASS_KEYS: tuple[str, ...] = ("hutan", "pertanian", "semak", "basah", "permukiman", "terbuka")
+CLASS_KEYS: tuple[str, ...] = ("hutan", "pertanian", "semak", "basah", "terbuka")
 _CLASS_IDX = {k: i for i, k in enumerate(CLASS_KEYS)}
 
 RF_TREES = 150
-# Riwayat: 240 -> 100 (2026-09-04, throttling GEE tier gratis) -> 200 (v3):
-# konsensus label (Hansen + WorldCover) membuang sebagian sampel, dan user
-# memutuskan akurasi lebih penting daripada beban stratifiedSample. Ini
-# jumlah yang DIMINTA per kelas per tahun; yang benar-benar dipakai ada di
-# meta.labels.samples_per_class.
 SAMPLES_PER_CLASS_PER_YEAR = 200
-# Kelas dengan total sampel latih (5 tahun) di bawah ini dicatat sebagai
-# "sparse" di meta.labels -- RF praktis tidak bisa memprediksinya.
 MIN_SAMPLES_PER_CLASS = 30
-# Konsensus WorldCover untuk sampel latih (lihat land_cover/labels.py).
-# Default nyala; env LAND_COVER_USE_CONSENSUS_LABELS=false untuk rollback.
-USE_CONSENSUS_LABELS = True
-DW_CONF_MIN = 0.6
-# Peta sawit global Descals dkk. 2021 (referensi 2019, 10 m):
-# 1 = perkebunan industri, 2 = sawit rakyat, 3 = bukan sawit. Guru untuk
-# aturan pemisah eksplisit hutan/sawit -- target labelnya kelas "pertanian"
-# (Cropland, taksonomi IPCC), BUKAN kelas sawit tersendiri.
-OILPALM_COLLECTION = "BIOPAMA/GlobalOilPalm/v1"
-# Musim kemarau Indonesia (Sumatra/Kalimantan/Jawa/Bali) -- komposit utama.
 DRY_SEASON = ("05-01", "10-31")
 OPTICAL_FEATURE_NAMES = [
     "B2", "B3", "B4", "B8", "B11", "B12",
-    "ndvi", "nbr", "mndwi", "ndbi", "elevation", "slope",
+    "ndvi", "evi", "nbr", "mndwi", "ndbi", "bsi", "elevation", "slope",
 ]
-# Sentinel-1 SAR (lihat land_cover/sar.py). Default nyala; bisa dimatikan
-# lewat env LAND_COVER_USE_SAR=false tanpa ubah kode. Per poligon tetap bisa
-# jatuh ke optik saja (guard scene S1 di analyze_polygon) -- daftar fitur
-# yang benar-benar dipakai tersimpan di meta.feature_names, bukan konstanta ini.
 USE_SAR = True
 FEATURE_NAMES = OPTICAL_FEATURE_NAMES + (list(SAR_FEATURE_NAMES) if USE_SAR else [])
-# Hansen Global Forest Change: validator silang label "hutan" dari DW.
-# treecover2000 >= 50 % DAN belum pernah loss s/d tahun target. lossyear:
-# 0 = tidak ada loss, 1..24 = tahun 2001..2024.
-HANSEN_IMAGE = "UMD/hansen/global_forest_change_2024_v1_12"
-HANSEN_TREECOVER_MIN = 50
-# Toleransi simplify HARUS jauh di bawah ukuran piksel (10 m). Dulu 0.0003°
-# (~33 m): patch kecil diremas jadi segitiga & tepi antar kelas bergeser tak
-# seragam -> celah/"bolong" di peta rona. Sekarang ~4 m: cuma menghaluskan
-# tangga piksel, bentuk patch tetap.
-SIMPLIFY_TOL = 0.00004
-MIN_MMU_PX = 10         # buang patch < 10 px (~0.1 ha @ 10 m) dari peta rona
-                        # (luas per kelas TIDAK terpengaruh -- dihitung piksel)
-# tileScale>1 membuat GEE memproses ubin lebih kecil per worker -> memori per
-# request turun (ubin lebih banyak, sedikit lebih lambat). Poligon besar /
-# terfragmentasi pernah gagal "User memory limit exceeded" pada vektorisasi
-# 10 m dengan tileScale 1 (default).
-GEE_TILE_SCALE = 4
-# Kalau dengan tileScale pun masih kehabisan memori, vektor peta rona
-# diturunkan ke resolusi ini (luas per kelas tetap dihitung di 10 m).
-VECTOR_FALLBACK_SCALE = 20
-# Scene dengan awan > 60% dibuang sebelum masking SCL: median jadi lebih bersih
-# (lebih sedikit sisa haze/bayangan) DAN koleksi yang diproses lebih kecil.
-_MAX_CLOUD = 60
-_S2_BANDS = ["B2", "B3", "B4", "B8", "B11", "B12"]
 
-# Titik latih diambil dari bbox poligon + buffer ini (meter), bukan dari
-# dalam poligon saja: poligon KPS yang hampir seluruhnya satu kelas (mis.
-# hutan rapat) tidak menyediakan >1 kelas untuk melatih Random Forest.
-# Klasifikasi & pengukuran luas tetap dibatasi ke poligon asli.
+SIMPLIFY_TOL = 0.00004
+MIN_MMU_PX = 10
+GEE_TILE_SCALE = 4
+VECTOR_FALLBACK_SCALE = 20
+_MAX_CLOUD = 50
+_S2_BANDS = ["B2", "B3", "B4", "B8", "B11", "B12"]
 TRAIN_BUFFER_M = 3000
 
-# {0..8} Dynamic World label -> kunci kelas IPCC (8=snow dibuang, Indonesia
-# dataran rendah/menengah tidak punya salju permanen). 6=built diaktifkan
-# jadi "permukiman" (v4, sebelumnya di-skip). 0=water & 3=flooded_vegetation
-# sama-sama "basah" (Wetland IPCC mencakup rawa bervegetasi + badan air).
+# Pemetaan DW lama untuk kompatibilitas fungsi _dw_label_to_class
 _DW_MAP = {
     0: "basah", 1: "hutan", 2: "semak", 3: "basah",
-    4: "pertanian", 5: "semak", 6: "permukiman", 7: "terbuka",
+    4: "pertanian", 5: "semak", 7: "terbuka",
 }
-_DW_PROBS = [
-    "water", "trees", "grass", "flooded_vegetation", "crops",
-    "shrub_and_scrub", "built", "bare", "snow_and_ice",
-]
 
 # Progres langkah live — boleh hilang saat restart; status final ada di DB.
 _LAND_COVER_RUN_STATE: dict[int, dict] = {}
@@ -228,7 +148,7 @@ def _net_change(table: dict[int, dict[str, dict]]) -> dict[str, float]:
 
 _CLASS_LABEL = {
     "hutan": "Hutan", "pertanian": "Pertanian/Perkebunan", "semak": "Semak/Belukar",
-    "basah": "Lahan Basah/Perairan", "permukiman": "Permukiman", "terbuka": "Lahan Terbuka",
+    "basah": "Lahan Basah/Perairan", "terbuka": "Lahan Terbuka",
 }
 
 # Ambang "berarti" dalam hektar -- dipakai supaya kalimat ringkasan tidak
@@ -361,24 +281,36 @@ class LandCoverService:
         nbr = s2.normalizedDifference(["B8", "B12"]).rename("nbr")
         mndwi = s2.normalizedDifference(["B3", "B11"]).rename("mndwi")
         ndbi = s2.normalizedDifference(["B11", "B8"]).rename("ndbi")
+        bsi = (
+            s2.select("B11").add(s2.select("B4"))
+            .subtract(s2.select("B8").add(s2.select("B2")))
+            .divide(
+                s2.select("B11").add(s2.select("B4"))
+                .add(s2.select("B8").add(s2.select("B2")))
+            )
+            .rename("bsi")
+        )
+        evi = (
+            s2.select("B8").subtract(s2.select("B4"))
+            .multiply(2.5)
+            .divide(
+                s2.select("B8")
+                .add(s2.select("B4").multiply(6.0))
+                .subtract(s2.select("B2").multiply(7.5))
+                .add(1.0)
+            )
+            .rename("evi")
+        )
         dem = ee.Image("NASA/NASADEM_HGT/001").select("elevation")
         slope = ee.Terrain.products(dem).select("slope") if hasattr(ee, "Terrain") else dem.rename("slope")
         feat = ee.Image.cat(
             s2.select(["B2", "B3", "B4", "B8", "B11", "B12"]),
-            ndvi, nbr, mndwi, ndbi,
+            ndvi, evi, nbr, mndwi, ndbi, bsi,
             dem.rename("elevation"), slope.rename("slope"),
         ).rename(OPTICAL_FEATURE_NAMES)
         if sar_img is not None:
-            # Piksel S1 yang ter-mask (tepi swath) ikut membuat sampel latih
-            # di titik itu None -> dibuang di _materialize_samples; saat
-            # klasifikasi, piksel tanpa SAR jatuh ke gap-fill DW seperti
-            # lubang awan (lihat _postprocess_classified).
             feat = feat.addBands(sar_img.select(list(SAR_FEATURE_NAMES)))
         return feat
-
-    def _consensus_enabled(self) -> bool:
-        settings = getattr(self, "settings", None)
-        return bool(getattr(settings, "land_cover_use_consensus_labels", USE_CONSENSUS_LABELS))
 
     def _sar_enabled(self) -> bool:
         settings = getattr(self, "settings", None)
@@ -388,11 +320,7 @@ class LandCoverService:
         """Komposit S1 per tahun untuk poligon ini, atau `{}` kalau SAR tidak
         layak dipakai (toggle mati / koleksi kosong / scene kurang / GEE
         gagal). Selalu graceful: kegagalan apa pun di sini -> optik saja,
-        BUKAN exception. `info` disimpan ke meta.sar untuk audit.
-
-        2 request GEE tambahan per poligon (orbit dominan + hitung scene per
-        tahun), komposit sendiri tidak dievaluasi terpisah -- ikut ke sampling
-        & klasifikasi yang memang sudah ada."""
+        BUKAN exception. `info` disimpan ke meta.sar untuk audit."""
         if not self._sar_enabled():
             return {}, {"enabled": False, "reason": "toggle_off"}
         windows = {y: self._year_window(y) for y in YEARS}
@@ -422,97 +350,9 @@ class LandCoverService:
             by_year[y] = img
         return by_year, {**info, "enabled": True}
 
-    def _dw_class_image(self, ee, roi, year: int, *, confidence_masked: bool):
-        """Citra `class_idx` (0..5) dari Dynamic World untuk satu tahun.
-
-        `confidence_masked=True` untuk sampel latih (buang piksel ragu, lalu
-        konsensus Hansen + WorldCover); `False` untuk klasifikasi fallback /
-        gap-fill (biar luas mengisi poligon penuh).
-        """
-        class_idx, mean_prob, is_palm = self._dw_class_raw(ee, roi, year)
-        if confidence_masked:
-            prob = mean_prob.reduce(ee.Reducer.max())
-            class_idx = class_idx.updateMask(prob.gte(DW_CONF_MIN))
-            # Konsensus Hansen untuk label "hutan" (sampel latih SAJA -- pada
-            # klasifikasi fallback DW tidak dimask supaya luas tetap penuh):
-            # DW "trees" yang oleh Hansen tercatat tutupan pohon 2000 < 50 %
-            # atau sudah loss pada/sebelum tahun target = semak tinggi atau
-            # bekas tebangan yang masih "hijau" -> label noise yang
-            # mengajari RF bahwa itu hutan. Piksel begitu dibuang dari
-            # sampel (bukan dilabel ulang: kelas sebenarnya tidak diketahui).
-            class_idx = class_idx.updateMask(
-                class_idx.neq(_CLASS_IDX["hutan"]).Or(self._hansen_intact_forest(ee, year))
-            )
-            if self._consensus_enabled():
-                # Konsensus WorldCover 2021 untuk SEMUA kelas -- lihat
-                # land_cover/labels.py soal kenapa piksel yang DW anggap
-                # berubah sejak 2021 dilewatkan tanpa dicek. Piksel sawit
-                # (is_palm) dapat toleransi tambahan: WorldCover tidak
-                # membedakan sawit dari tutupan pohon lain (menyebutnya
-                # "tree cover"), jadi kalau dicek apa adanya sampel sawit
-                # yang sudah dipaksa "pertanian" akan SELALU dianggap tidak
-                # setuju dengan WC -> habis dibuang, bukan salah label,
-                # tapi kehilangan seluruh sinyal pemisah hutan/sawit yang
-                # justru ingin dijaga (aturan pemisah eksplisit, lihat
-                # docstring modul).
-                if year == WORLDCOVER_YEAR:
-                    ref_idx = class_idx
-                else:
-                    ref_idx, _, _ = self._dw_class_raw(ee, roi, WORLDCOVER_YEAR)
-                tolerated = is_palm.And(worldcover_is_tree(ee))
-                ok = consensus_mask(
-                    ee, class_idx, ref_idx,
-                    worldcover_class_image(ee, _CLASS_IDX), tolerated,
-                )
-                class_idx = class_idx.updateMask(ok)
-        return class_idx
-
-    def _dw_class_raw(self, ee, roi, year: int):
-        """`(class_idx, mean_prob, is_palm)` DW satu tahun TANPA mask
-        keyakinan -- `class_idx` sudah termasuk relabel sawit (Descals) ke
-        kelas "pertanian"; `is_palm` dikembalikan terpisah supaya pemanggil
-        bisa memberi toleransi konsensus WorldCover khusus sawit."""
-        start, end = self._year_window(year)
-        dw = (
-            ee.ImageCollection(DW_COLLECTION)
-            .filterBounds(roi)
-            .filterDate(start, end)
-        )
-        # Label = argmax RATA-RATA probabilitas setahun (bukan mode label):
-        # lebih stabil terhadap scene berawan, dan pasti konsisten dengan
-        # ambang keyakinan di bawah (dulu mode label bisa menunjuk kelas lain
-        # dari kelas yang probabilitasnya dipakai buat ambang).
-        mean_prob = dw.select(_DW_PROBS).mean()
-        label = mean_prob.toArray().arrayArgmax().arrayGet(0)
-        from_list = [k for k in _DW_MAP]
-        to_list = [_CLASS_IDX[_DW_MAP[k]] for k in from_list]
-        class_idx = label.remap(from_list, to_list).rename("class_idx")
-        # Sawit: DW menyebutnya "trees". Piksel berpohon yang ada di peta
-        # sawit Descals dipaksa ke "pertanian" (Cropland, taksonomi IPCC) --
-        # RF lalu belajar ciri spektral sawit lokal dan menerapkannya per
-        # tahun (peta Descals cuma guru, bukan hasil akhir, jadi sawit yang
-        # ditebang/ditanam setelah 2019 tetap terdeteksi dari citra).
-        oilpalm = (
-            ee.ImageCollection(OILPALM_COLLECTION).select("classification").mosaic()
-        )
-        is_palm = oilpalm.eq(1).Or(oilpalm.eq(2))
-        class_idx = class_idx.where(
-            class_idx.eq(_CLASS_IDX["hutan"]).And(is_palm), _CLASS_IDX["pertanian"]
-        )
-        return class_idx, mean_prob, is_palm
-
-    def _hansen_intact_forest(self, ee, year: int):
-        """Mask 1 = tutupan pohon Hansen 2000 >= HANSEN_TREECOVER_MIN dan
-        tidak ada loss sampai `year` (lossyear 0 atau > year-2000)."""
-        hansen = ee.Image(HANSEN_IMAGE)
-        treecover = hansen.select("treecover2000")
-        lossyear = hansen.select("lossyear")
-        no_loss = lossyear.eq(0).Or(lossyear.gt(year - 2000))
-        return treecover.gte(HANSEN_TREECOVER_MIN).And(no_loss)
-
-    def _year_training_points(self, ee, roi, feat_img, year: int, region=None):
+    def _year_training_points(self, ee, roi, feat_img, year: int, region=None, use_sar: bool = False):
         sample_region = region if region is not None else roi
-        class_idx = self._dw_class_image(ee, sample_region, year, confidence_masked=True)
+        class_idx = spectral_seed_image(ee, feat_img, _CLASS_IDX, use_sar=use_sar)
         stack = feat_img.addBands(class_idx)
         return stack.stratifiedSample(
             numPoints=SAMPLES_PER_CLASS_PER_YEAR,
@@ -733,7 +573,7 @@ class LandCoverService:
                     sar_img=sar_by_year.get(year) if use_sar else None,
                 )
                 feat_by_year[year] = feat
-                pts = self._year_training_points(ee, roi, feat, year, region=train_region)
+                pts = self._year_training_points(ee, roi, feat, year, region=train_region, use_sar=use_sar)
                 samples = pts if samples is None else samples.merge(pts)
 
             _LAND_COVER_RUN_STATE[pid] = {
@@ -757,10 +597,10 @@ class LandCoverService:
                 n_training = len(sample_rows)
             else:
                 # Poligon homogen: sampel latih < 2 kelas. Random Forest tak
-                # bisa dilatih ("Only one class") -> pakai Dynamic World langsung.
+                # bisa dilatih ("Only one class") -> pakai aturan spektral langsung.
                 logger.warning(
                     "LAND_COVER: poligon %s homogen (sampel latih < 2 kelas) — "
-                    "fallback ke klasifikasi Dynamic World langsung",
+                    "fallback ke klasifikasi aturan spektral mandiri",
                     pid,
                 )
                 rf = None
@@ -773,16 +613,14 @@ class LandCoverService:
             # ber-buffer 3 km (yang cuma perlu saat sampling latih).
             per_year: dict[int, object] = {}
             for year in YEARS:
-                dw_img = self._dw_class_image(
-                    ee, roi, year, confidence_masked=False
-                ).rename("class_idx")
+                fallback_img = rule_based_classify(ee, feat_by_year[year], _CLASS_IDX, use_sar=use_sar)
                 if use_rf:
                     classified = feat_by_year[year].clip(roi).classify(rf).rename("class_idx")
                     per_year[year] = self._postprocess_classified(
-                        ee, roi, classified, gap_fill=dw_img
+                        ee, roi, classified, gap_fill=fallback_img
                     )
                 else:
-                    per_year[year] = self._postprocess_classified(ee, roi, dw_img)
+                    per_year[year] = self._postprocess_classified(ee, roi, fallback_img)
             per_year, temporal_rules = self._apply_temporal_rules(ee, per_year)
 
             table: dict[int, dict[str, dict]] = {}
@@ -814,24 +652,20 @@ class LandCoverService:
                 key = CLASS_KEYS[int(r["class_idx"])]
                 samples_per_class[key] = samples_per_class.get(key, 0) + 1
             # coverage < ~95 % = ada piksel yang tetap kosong walau sudah
-            # gap-fill DW (awan permanen); UI bisa memperingatkan.
+            # gap-fill (awan permanen); UI bisa memperingatkan.
             poly_ha = target.get("area_ha")
             coverage_pct = {}
             if poly_ha:
                 for year, row in table.items():
                     total_ha = sum(v["area_ha"] for v in row.values())
                     coverage_pct[str(year)] = round(total_ha / float(poly_ha) * 100.0, 1)
-            consensus_on = self._consensus_enabled()
-            label_sources = ["Dynamic World v1", "Descals 2019", "Hansen GFC 2024 v1.12"]
-            if consensus_on:
-                label_sources.append(WORLDCOVER_LABEL)
+            label_sources = ["Sentinel-2 L2A + Sentinel-1 SAR Spectral Endmembers (ETA SENEU v5)"]
             meta = {
-                "method": "random_forest" if use_rf else "dynamic_world",
+                "method": "random_forest" if use_rf else "spectral_rules",
                 "feature_names": feature_names,
                 "sar": sar_info,
                 "labels": {
                     "sources": label_sources,
-                    "consensus_worldcover": consensus_on,
                     "requested_per_class_per_year": SAMPLES_PER_CLASS_PER_YEAR,
                     "samples_per_class": samples_per_class,
                     "sparse_classes": sparse_classes(samples_per_class, CLASS_KEYS, MIN_SAMPLES_PER_CLASS),
@@ -857,7 +691,7 @@ class LandCoverService:
                 "polygon_id": pid,
                 "years": list(YEARS),
                 "classes": list(CLASS_KEYS),
-                "method": "random_forest" if use_rf else "dynamic_world",
+                "method": "random_forest" if use_rf else "spectral_rules",
                 "oob_accuracy": oob_accuracy,
                 "n_training": n_training,
                 "duration_s": duration_s,

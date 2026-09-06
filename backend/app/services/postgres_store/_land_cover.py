@@ -3,10 +3,9 @@ Forest). Tiga tabel terisolasi — tidak menyentuh `burned_area_summary`
 maupun `s2_burned_area`. Hasil di-cache permanen: satu poligon dianalisis
 sekali, lalu dibaca berkali-kali.
 
-Kunci kelas (taksonomi IPCC Forest/Cropland/Grassland/Wetland/Settlement/
-Other Land sejak formula v4, 2026-09-05): hutan|pertanian|semak|basah|
-permukiman|terbuka. HARUS sinkron dengan CLASS_KEYS di land_cover_service.py
-(lihat catatan di sana kalau menambah/mengubah kelas).
+Kunci kelas (5 kelas mandiri sejak formula v5, 2026-09-06):
+hutan|pertanian|semak|basah|terbuka. HARUS sinkron dengan CLASS_KEYS di
+land_cover_service.py (lihat catatan di sana kalau menambah/mengubah kelas).
 """
 
 from __future__ import annotations
@@ -15,7 +14,7 @@ import json
 from collections.abc import Sequence
 
 _TARGET_LAYERS = ("psagustus2026", "HUTAN_ADAT_APR26")
-CLASS_KEYS = ("hutan", "pertanian", "semak", "basah", "permukiman", "terbuka")
+CLASS_KEYS = ("hutan", "pertanian", "semak", "basah", "terbuka")
 _CLASS_ORDER = {k: i for i, k in enumerate(CLASS_KEYS)}
 # 'running' lebih tua dari ini (menit) dianggap yatim -> error.
 LAND_COVER_STALE_RUNNING_MIN = 30
@@ -43,7 +42,7 @@ class _LandCoverMixin:
                     n_training INTEGER,
                     oob_accuracy DOUBLE PRECISION,
                     source TEXT NOT NULL DEFAULT 'Sentinel-2 L2A + Random Forest (ETA SENEU)',
-                    label_source TEXT NOT NULL DEFAULT 'Google Dynamic World v1',
+                    label_source TEXT NOT NULL DEFAULT 'Autonomous Spectral Endmembers (ETA SENEU)',
                     error_message TEXT,
                     duration_s DOUBLE PRECISION,
                     computed_at TIMESTAMPTZ,

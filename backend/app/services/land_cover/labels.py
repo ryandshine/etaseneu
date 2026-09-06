@@ -1,31 +1,18 @@
-"""Konsensus label latih: Dynamic World x ESA WorldCover (x Hansen di service).
+"""Penentuan label latih & klasifikasi aturan mandiri ETA SENEU (tanpa pihak ketiga).
 
-Masalah yang diselesaikan: Random Forest cuma sebaik gurunya. Dynamic World
-(DW) per-scene sering "ragu" secara sistematis di Indonesia -- semak tinggi
-jadi trees, sawah kering jadi bare, kebun campur jadi crops/trees bergantian.
-Ambang keyakinan DW (>= 0,6) menyaring piksel ragu, tapi TIDAK menangkap
-kesalahan yang DW yakini. Sumber kedua yang independen dibutuhkan: ESA
-WorldCover v200 (referensi 2021, 10 m, model & data latih berbeda dari DW).
-Sampel latih hanya dipakai kalau kedua sumber SETUJU -> label lebih bersih,
-dengan harga jumlah sampel berkurang (diterima: akurasi > kuota).
+Sistem tidak lagi bergantung pada model pihak ketiga (Google Dynamic World,
+ESA WorldCover, Hansen GFC, Descals). Sampel latih dibangkitkan mandiri
+dari 'Spectral Endmembers' (titik-titik arketipe spektral murni) yang
+diekstraksi langsung dari citra Sentinel-2 L2A + Sentinel-1 SAR.
 
-Jebakan waktu: WorldCover cuma ada untuk 2021 (v200; v100 = 2020). Untuk tahun
-> 2021, piksel yang BENAR-BENAR berubah (hutan -> terbuka) pasti "tidak setuju"
-dengan peta 2021 -- kalau semua dibuang, kelas yang cuma muncul di area yang
-berubah (lahan terbuka bekas kebakaran) kehilangan seluruh sampelnya dan RF
-tidak pernah bisa memprediksinya. Aturannya:
+Taksonomi 5 kelas:
+  hutan       (0)  Hutan Alami / Tutupan Pohon Kanopi Rapat
+  pertanian   (1)  Pertanian & Perkebunan (kebun sawit, karet, sawah/ladang)
+  semak       (2)  Semak & Belukar (alang-alang, vegetasi rendah)
+  basah       (3)  Badan Air & Lahan Basah (sungai, danau, rawa basah)
+  terbuka     (4)  Lahan Terbuka (tanah terbuka, bekas tebangan/bakar, pasir/batuan)
 
-    setuju(t) = WC == DW(t)                       untuk piksel yang DW anggap
-                                                  TIDAK berubah sejak 2021
-                                                  (DW(t) == DW(2021));
-              = tidak dicek (lolos)               kalau DW(t) != DW(2021)
-                                                  (perubahan nyata versi DW --
-                                                  WC 2021 tak bisa menilai).
-
-Jadi WC dipakai menangkap kesalahan SISTEMATIS DW (kelas yang sama-sama salah
-di 2021 dan t), bukan menghukum perubahan tutupan yang sungguhan.
-
-Semua fungsi menerima modul `ee` sebagai argumen (lihat `__init__.py`).
+Semua fungsi menerima modul `ee` sebagai argumen.
 """
 
 from __future__ import annotations
@@ -34,72 +21,120 @@ import logging
 
 logger = logging.getLogger("land_cover.labels")
 
-WORLDCOVER_IMAGE = "ESA/WorldCover/v200/2021"
-WORLDCOVER_YEAR = 2021
-WORLDCOVER_LABEL = "ESA WorldCover v200 (2021)"
 
-# Kode WorldCover -> kunci kelas IPCC (sama taksonomi 6 kelas dengan
-# service). Kode tanpa padanan (70 salju, 100 lumut) di-mask: sampel di
-# sana dibuang apa pun kata DW.
-#   10 tree cover -> hutan        20 shrubland -> semak
-#   30 grassland -> semak         40 cropland -> pertanian
-#   50 built-up -> permukiman     60 bare/sparse -> terbuka
-#   80 permanent water -> basah   90 herbaceous wetland -> basah
-#   95 mangroves -> hutan (forested wetland, disamakan Forest IPCC seperti DW)
-WORLDCOVER_MAP: dict[int, str] = {
-    10: "hutan", 20: "semak", 30: "semak", 40: "pertanian",
-    50: "permukiman", 60: "terbuka", 80: "basah", 90: "basah", 95: "hutan",
-}
-_WC_TREE_CODES = (10, 95)
+def spectral_seed_image(ee, feat_img, class_idx_of: dict[str, int], use_sar: bool = False):
+    """Citra label latih murni ('seed') berband `class_idx`.
 
-
-def worldcover_class_image(ee, class_idx_of: dict[str, int]):
-    """Citra `class_idx` (skema ETA SENEU) dari peta WorldCover, ter-mask di
-    kode yang tak punya padanan. `class_idx_of` = {kunci kelas -> indeks}
-    milik service supaya modul ini tidak menduplikasi CLASS_KEYS."""
-    wc = ee.Image(WORLDCOVER_IMAGE).select("Map")
-    from_list = list(WORLDCOVER_MAP)
-    to_list = [class_idx_of[WORLDCOVER_MAP[k]] for k in from_list]
-    return wc.remap(from_list, to_list).rename("wc_class_idx")
-
-
-def worldcover_is_tree(ee):
-    """Mask 1 = WorldCover tree cover / mangrove. Dipakai untuk sawit: WC
-    tidak membedakan kebun sawit dari tutupan pohon lain (menyebut keduanya
-    "tree cover"), jadi piksel sawit yang dipaksa ke kelas "pertanian" oleh
-    service perlu jalur toleransi tersendiri (lihat `consensus_mask`)."""
-    wc = ee.Image(WORLDCOVER_IMAGE).select("Map")
-    mask = wc.eq(_WC_TREE_CODES[0])
-    for code in _WC_TREE_CODES[1:]:
-        mask = mask.Or(wc.eq(code))
-    return mask
-
-
-def consensus_mask(ee, dw_class, dw_class_ref, wc_class, tolerated=None):
-    """Mask 1 = sampel boleh dipakai.
-
-    dw_class     : class_idx DW tahun target (sudah termasuk relabel sawit)
-    dw_class_ref : class_idx DW tahun referensi WorldCover (2021)
-    wc_class     : hasil `worldcover_class_image`
-    tolerated    : mask opsional -- piksel yang dianggap "setuju" apa pun
-                   kata WC (mis. sawit x `worldcover_is_tree`, lihat
-                   pemanggil di service). `None` = tidak ada toleransi
-                   tambahan.
-
-    Piksel yang DW anggap berubah sejak 2021 lolos tanpa dicek (lihat
-    docstring modul). Untuk yang stabil: WC harus sama, kecuali yang masuk
-    `tolerated`. Piksel di kode WC tanpa padanan (salju dsb.) ter-mask di
-    `wc_class` -> `eq` menghasilkan mask kosong -> dibuang.
+    Hanya piksel dengan keyakinan fisik/spektral tinggi untuk salah satu dari 5
+    kelas yang diberi nilai (0..4). Piksel ambigu/transisi di-mask, sehingga
+    `stratifiedSample` hanya mengambil contoh-contoh murni (endmembers).
     """
-    stable = dw_class.eq(dw_class_ref)
-    agree = wc_class.eq(dw_class)
-    if tolerated is not None:
-        agree = agree.Or(tolerated)
-    # unmask(0): piksel WC tanpa padanan -> agree=0 (bukan mask kosong yang
-    # oleh Or() dianggap "tidak ada data" dan bisa lolos lewat cabang lain).
-    agree = agree.unmask(0)
-    changed = stable.Not().unmask(0)
-    return agree.Or(changed)
+    ndvi = feat_img.select("ndvi")
+    mndwi = feat_img.select("mndwi")
+    bsi = feat_img.select("bsi")
+    nbr = feat_img.select("nbr")
+    b4 = feat_img.select("B4")
+    b8 = feat_img.select("B8")
+    b11 = feat_img.select("B11")
+
+    idx_hutan = class_idx_of["hutan"]
+    idx_pertanian = class_idx_of["pertanian"]
+    idx_semak = class_idx_of["semak"]
+    idx_basah = class_idx_of["basah"]
+    idx_terbuka = class_idx_of["terbuka"]
+
+    # 1. Badan Air & Lahan Basah: MNDWI tinggi, serapan kuat di NIR, vegetasi rendah
+    c_basah = mndwi.gt(0.05).And(b8.lt(0.22)).And(ndvi.lt(0.40))
+    if use_sar:
+        vh = feat_img.select("VH")
+        vv = feat_img.select("VV")
+        # Pantulan spekular air pada radar (backscatter sangat rendah)
+        c_basah = c_basah.Or(mndwi.gt(0.0).And(vh.lt(-20.0)).And(vv.lt(-14.0)))
+
+    # 2. Lahan Terbuka: BSI positif, NDVI sangat rendah, bukan air, pantulan merah nyata
+    c_terbuka = ndvi.lt(0.28).And(bsi.gt(0.0)).And(mndwi.lt(-0.05)).And(b4.gt(0.06))
+
+    # 3. Hutan Alami / Kanopi Rapat: Kehijauan tinggi, NBR tinggi, kanopi tebal
+    c_hutan = ndvi.gte(0.76).And(nbr.gte(0.48)).And(b8.gte(0.24)).And(mndwi.lt(-0.15))
+    if use_sar:
+        vh = feat_img.select("VH")
+        # Hamburan volume tajuk pohon tidak beraturan (VH tinggi)
+        c_hutan = c_hutan.And(vh.gte(-14.0))
+
+    # 4. Semak / Belukar: Vegetasi sedang-rendah, tanah tertutup, bukan kanopi pohon
+    c_semak = ndvi.gte(0.32).And(ndvi.lt(0.55)).And(bsi.lte(0.04)).And(mndwi.lt(-0.05))
+    if use_sar:
+        vh = feat_img.select("VH")
+        c_semak = c_semak.And(vh.lt(-15.0))
+
+    # 5. Pertanian & Perkebunan:
+    #    a) Pertanian/ladang: NDVI 0.55 s/d 0.76
+    #    b) Perkebunan berkanopi rapat (sawit/karet): NDVI >= 0.76 tapi SWIR tinggi
+    c_pertanian_crop = ndvi.gte(0.55).And(ndvi.lt(0.76)).And(mndwi.lt(-0.05))
+    c_pertanian_plantation = ndvi.gte(0.76).And(b11.gte(0.14)).And(nbr.lt(0.48))
+    c_pertanian = c_pertanian_crop.Or(c_pertanian_plantation)
+    if use_sar:
+        ratio = feat_img.select("VH_VV_ratio")
+        vh = feat_img.select("VH")
+        c_pertanian = c_pertanian.Or(ndvi.gte(0.65).And(ratio.lt(-6.5)).And(vh.lt(-14.0)))
+
+    # Gabungkan seed berurutan
+    seed = (
+        ee.Image.constant(idx_terbuka).updateMask(c_terbuka)
+        .where(c_semak, idx_semak)
+        .where(c_pertanian, idx_pertanian)
+        .where(c_hutan, idx_hutan)
+        .where(c_basah, idx_basah)
+    )
+    valid_seed_mask = c_terbuka.Or(c_semak).Or(c_pertanian).Or(c_hutan).Or(c_basah)
+    return seed.updateMask(valid_seed_mask).rename("class_idx")
+
+
+def rule_based_classify(ee, feat_img, class_idx_of: dict[str, int], use_sar: bool = False):
+    """Pengklasifikasi aturan spektral deterministik (Decision Tree).
+
+    Digunakan untuk mengisi sisa celah awan (gap-fill) atau sebagai fallback
+    jika Random Forest tidak dapat dilatih (poligon sangat homogen).
+    """
+    ndvi = feat_img.select("ndvi")
+    mndwi = feat_img.select("mndwi")
+    bsi = feat_img.select("bsi")
+    nbr = feat_img.select("nbr")
+    b8 = feat_img.select("B8")
+    b11 = feat_img.select("B11")
+
+    idx_hutan = class_idx_of["hutan"]
+    idx_pertanian = class_idx_of["pertanian"]
+    idx_semak = class_idx_of["semak"]
+    idx_basah = class_idx_of["basah"]
+    idx_terbuka = class_idx_of["terbuka"]
+
+    # Default baseline: semak (vegetasi menengah)
+    classified = ee.Image.constant(idx_semak)
+
+    # Lahan terbuka: NDVI rendah, BSI tinggi
+    is_terbuka = ndvi.lt(0.30).And(bsi.gt(0.0)).And(mndwi.lt(0.0))
+    classified = classified.where(is_terbuka, idx_terbuka)
+
+    # Pertanian / perkebunan:
+    is_pertanian = (
+        (ndvi.gte(0.52).And(ndvi.lt(0.74)))
+        .Or(ndvi.gte(0.74).And(b11.gte(0.14)).And(nbr.lt(0.50)))
+    )
+    classified = classified.where(is_pertanian, idx_pertanian)
+
+    # Hutan: kanopi rapat tebal
+    is_hutan = ndvi.gte(0.74).And(nbr.gte(0.48)).And(mndwi.lt(-0.10))
+    if use_sar:
+        vh = feat_img.select("VH")
+        is_hutan = is_hutan.And(vh.gte(-14.5))
+    classified = classified.where(is_hutan, idx_hutan)
+
+    # Basah / Air: MNDWI > 0 atau MNDWI > -0.05 dengan serapan NIR kuat
+    is_basah = mndwi.gt(0.0).Or(mndwi.gt(-0.05).And(b8.lt(0.20)).And(ndvi.lt(0.38)))
+    classified = classified.where(is_basah, idx_basah)
+
+    return classified.rename("class_idx")
 
 
 def sparse_classes(samples_per_class: dict[str, int], class_keys, minimum: int) -> list[str]:
@@ -113,7 +148,7 @@ def sparse_classes(samples_per_class: dict[str, int], class_keys, minimum: int) 
             out.append(key)
     if out:
         logger.warning(
-            "LABELS: kelas dengan sampel latih < %d setelah konsensus: %s",
+            "LABELS: kelas dengan sampel latih < %d: %s",
             minimum, ", ".join(f"{k}={samples_per_class.get(k, 0)}" for k in out),
         )
     return out
