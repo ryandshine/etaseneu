@@ -44,14 +44,58 @@ async def get_early_warning_list(
     }
 
 
+from typing import Any
+from pydantic import BaseModel
+
+class EarlyWarningExportPayload(BaseModel):
+    title: str | None = None
+    subtitle: str | None = None
+    category: str | None = None
+    wilker_bps: str | None = None
+    items: list[dict[str, Any]] | None = None
+
+
+@router.post("/early-warning/export.xlsx")
+async def export_early_warning_excel_post(
+    payload: EarlyWarningExportPayload,
+) -> Response:
+    """Ekspor data analisis KPS langsung ke file Excel dengan payload items yang difilter/diurutkan di klien."""
+    service = EarlyWarningService()
+    content = service.build_excel_export(
+        category=payload.category or "all",
+        wilker_bps=payload.wilker_bps,
+        items=payload.items,
+        custom_title=payload.title,
+        custom_subtitle=payload.subtitle,
+    )
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"rekap-peringatan-dini-{timestamp}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 @router.get("/early-warning/export.xlsx")
 async def export_early_warning_excel(
     category: str = Query(default="all"),
     wilker_bps: str | None = Query(default=None),
+    province: str | None = Query(default=None),
+    skema: str | None = Query(default=None),
+    search: str | None = Query(default=None),
+    zone: str | None = Query(default=None),
 ) -> Response:
-    """Ekspor data analisis KPS langsung ke file Excel."""
+    """Ekspor data analisis KPS langsung ke file Excel via query params."""
     service = EarlyWarningService()
-    content = service.build_excel_export(category=category, wilker_bps=wilker_bps)
+    content = service.build_excel_export(
+        category=category,
+        wilker_bps=wilker_bps,
+        province=province,
+        skema=skema,
+        search=search,
+        zone=zone,
+    )
     wilker_suffix = f"-{wilker_bps.replace(' ', '_')}" if wilker_bps else ""
     filename = f"rekap-early-warning-{category}{wilker_suffix}-{datetime.now().strftime('%Y%m%d')}.xlsx"
     return Response(

@@ -366,25 +366,67 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
     return result;
   }, [items, search, selectedZone, selectedBps, sortBy]);
 
-  // Endpoint ekspor backend cuma terima SATU kategori sekaligus -- bucket
-  // aksi bisa memetakan ke 2 kategori (ber-rekap + belum-rekap) atau 4
-  // (bucket "receding" = kemarin + 7 hari), jadi unduh satu file per
-  // kategori berurutan supaya semua kelompok tetap lengkap.
+  // Ekspor Excel mengikuti persis data yang sedang dilihat pengguna (displayItems),
+  // termasuk status kartu aktif, filter wilayah/skema/zona, pencarian, dan pengurutan (sortBy).
   const handleDownloadExcel = async () => {
+    if (displayItems.length === 0) return;
     try {
       setDownloading(true);
-      const wilkerQuery = activeWilkerBps ? `&wilker_bps=${encodeURIComponent(activeWilkerBps)}` : "";
       const wilkerFile = activeWilkerBps ? `-${activeWilkerBps.replace(/\s+/g, "_")}` : "";
+      const bucketSlug =
+        bucket === "today"
+          ? "ada-hotspot-hari-ini"
+          : bucket === "receding"
+            ? "hotspot-mereda"
+            : bucket === "inactive"
+              ? "tidak-ada-hotspot"
+              : "semua";
       const dateSuffix = new Date().toISOString().slice(0, 10);
+      const filename = `rekap-peringatan-dini-${bucketSlug}${wilkerFile}-${dateSuffix}.xlsx`;
 
-      for (const cat of currentCategories) {
-        await downloadWithAuth(
-          `/api/early-warning/export.xlsx?category=${cat}${wilkerQuery}`,
-          `rekap-analisis-kps-${cat}${wilkerFile}-${dateSuffix}.xlsx`
-        );
+      const filterParts: string[] = [];
+      const bucketLabel =
+        bucket === "today"
+          ? "Ada Hotspot Hari Ini"
+          : bucket === "receding"
+            ? "Hotspot Mereda"
+            : bucket === "inactive"
+              ? "Tidak Ada Hotspot"
+              : "Semua KPS";
+      filterParts.push(`Status: ${bucketLabel}`);
+      if (activeWilkerBps || selectedBps) {
+        filterParts.push(`Balai PS: ${activeWilkerBps || selectedBps}`);
       }
+      if (selectedProvince) {
+        filterParts.push(`Provinsi: ${selectedProvince}`);
+      }
+      if (selectedSkema) {
+        filterParts.push(`Skema: ${selectedSkema}`);
+      }
+      if (selectedZone && selectedZone !== "all") {
+        filterParts.push(`Zona: ${selectedZone}`);
+      }
+      if (search.trim()) {
+        filterParts.push(`Pencarian: "${search.trim()}"`);
+      }
+
+      await downloadWithAuth(
+        "/api/early-warning/export.xlsx",
+        filename,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title: "REKAPITULASI ANALISIS KEBAKARAN & PERINGATAN DINI KPS",
+            subtitle: filterParts.join(" | "),
+            items: displayItems,
+          }),
+        }
+      );
     } catch (err: any) {
-      alert("Gagal mengunduh Excel: " + err.message);
+      alert("Gagal mengunduh Excel: " + (err?.message || "Terjadi kesalahan saat mengunduh"));
     } finally {
       setDownloading(false);
     }
@@ -417,24 +459,29 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
           <button
             type="button"
             onClick={handleDownloadExcel}
-            disabled={downloading}
+            disabled={downloading || displayItems.length === 0}
+            title={
+              displayItems.length === 0
+                ? "Tidak ada data yang sesuai filter untuk diunduh"
+                : `Unduh ${displayItems.length} KPS hasil filter ke file Excel`
+            }
             style={{
               display: "flex",
               alignItems: "center",
               gap: "0.45rem",
-              backgroundColor: "#15803d",
+              backgroundColor: displayItems.length === 0 ? "#4b5563" : "#15803d",
               color: "#ffffff",
               border: "none",
               borderRadius: "6px",
               padding: "0.55rem 0.95rem",
               fontSize: "0.82rem",
               fontWeight: "600",
-              cursor: downloading ? "not-allowed" : "pointer",
+              cursor: downloading || displayItems.length === 0 ? "not-allowed" : "pointer",
               boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
             }}
           >
             <Download size={15} />
-            {downloading ? "Mengunduh..." : `Download Excel (${currentCategories.length} file)`}
+            {downloading ? "Mengunduh..." : `Download Excel (${displayItems.length} KPS)`}
           </button>
 
           <button

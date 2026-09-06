@@ -536,8 +536,23 @@ class EarlyWarningService:
             })
         return results
 
-    def build_excel_export(self, category: str = "all", wilker_bps: str | None = None) -> bytes:
-        """Bangun file Excel ekspor terstruktur langsung dari memori."""
+    def build_excel_export(
+        self,
+        category: str = "all",
+        wilker_bps: str | None = None,
+        items: list[dict[str, Any]] | None = None,
+        custom_title: str | None = None,
+        custom_subtitle: str | None = None,
+        province: str | None = None,
+        skema: str | None = None,
+        search: str | None = None,
+        zone: str | None = None,
+    ) -> bytes:
+        """Bangun file Excel ekspor terstruktur langsung dari memori.
+
+        Mendukung items yang sudah difilter/diurutkan di klien, atau query langsung
+        ke database bila items tidak disediakan.
+        """
         wb = openpyxl.Workbook()
         font_title = Font(name="Calibri", size=15, bold=True, color="1B365D")
         font_subtitle = Font(name="Calibri", size=10, italic=True, color="555555")
@@ -562,10 +577,27 @@ class EarlyWarningService:
         ws.title = "Rekap Analisis Kebakaran"
         ws.views.sheetView[0].showGridLines = True
 
-        ws["A1"] = "REKAPITULASI ANALISIS KEBAKARAN & PERINGATAN DINI KPS"
+        ws["A1"] = custom_title or "REKAPITULASI ANALISIS KEBAKARAN & PERINGATAN DINI KPS"
         ws["A1"].font = font_title
-        wilker_str = f" | Balai PS: {wilker_bps}" if wilker_bps else ""
-        ws["A2"] = f"Dihasilkan pada: {datetime.now().strftime('%d %B %Y %H:%M WIB')} | Kategori: {category.upper()}{wilker_str}"
+
+        if items is None:
+            items = self.get_kps_analysis_list(
+                category=category,
+                wilker_bps=wilker_bps,
+                province=province,
+                skema=skema,
+                search=search,
+                limit=2500,
+            )
+            if zone and zone != "all":
+                items = [r for r in items if r.get("zone_code") == zone]
+
+        if custom_subtitle:
+            sub_text = f"Dihasilkan: {datetime.now().strftime('%d %B %Y %H:%M WIB')} | {custom_subtitle} | Total: {len(items)} KPS"
+        else:
+            wilker_str = f" | Balai PS: {wilker_bps}" if wilker_bps else ""
+            sub_text = f"Dihasilkan pada: {datetime.now().strftime('%d %B %Y %H:%M WIB')} | Kategori: {category.upper()}{wilker_str} | Total: {len(items)} KPS"
+        ws["A2"] = sub_text
         ws["A2"].font = font_subtitle
 
         headers = [
@@ -585,32 +617,78 @@ class EarlyWarningService:
             cell.fill = fill_header
             cell.alignment = align_center
 
-        items = self.get_kps_analysis_list(category=category, wilker_bps=wilker_bps, limit=2000)
         for row_idx, r in enumerate(items, 5):
-            dt_str = r["latest_hotspot_at"][:16].replace("T", " ") if r["latest_hotspot_at"] else "-"
+            raw_dt = r.get("latest_hotspot_at")
+            dt_str = str(raw_dt)[:16].replace("T", " ") if raw_dt else "-"
+
+            luas_sk = r.get("luas_sk")
+            luas_sk_val = float(luas_sk) if luas_sk is not None else None
+
+            total_burned = r.get("total_burned_ha")
+            total_burned_val = float(total_burned) if total_burned is not None else 0.0
+
+            burn_freq = r.get("burn_frequency")
+            burn_freq_val = int(burn_freq) if burn_freq is not None else 0
+
+            h_today = int(r.get("hotspots_today") or 0)
+            h_strict = int(r.get("hotspots_today_strict_reburn") or 0)
+            h_expanding = int(r.get("hotspots_today_expanding") or 0)
+
+            min_d = r.get("min_distance_km")
+            max_d = r.get("max_distance_km")
+            avg_d = r.get("avg_distance_km")
+
+            h_yest = int(r.get("hotspots_yesterday") or 0)
+            h_7d = int(r.get("hotspots_7d") or 0)
+            h_month = int(r.get("hotspots_month") or 0)
+            h_year = int(r.get("hotspots_year") or 0)
+
+            ftri = float(r.get("ftri_score") or 0)
+            zone_code = r.get("zone_code")
+
             row_values = [
-                row_idx - 4, r["id"], r["lembaga"], r["wilker_bps"] or "-", r["skema"], r["nama_desa"] or "-", r["nama_kec"] or "-",
-                r["nama_kab"] or "-", r["nama_prov"] or "-", r["luas_sk"], r["total_burned_ha"], r["burn_frequency"],
-                r["hotspots_today"], r["hotspots_today_strict_reburn"], r["hotspots_today_expanding"],
-                r["min_distance_km"], r["max_distance_km"], r["avg_distance_km"],
-                r["fire_direction"] or "-", r["fire_azimuth_deg"] or "-",
-                r["propagation_zone"],
-                r["hotspots_yesterday"], r["hotspots_7d"], r["hotspots_month"], r["hotspots_year"],
-                dt_str, r["ftri_score"], r["status_label"]
+                row_idx - 4,
+                r.get("id"),
+                r.get("lembaga"),
+                r.get("wilker_bps") or "-",
+                r.get("skema") or "-",
+                r.get("nama_desa") or "-",
+                r.get("nama_kec") or "-",
+                r.get("nama_kab") or "-",
+                r.get("nama_prov") or "-",
+                luas_sk_val,
+                total_burned_val,
+                burn_freq_val,
+                h_today,
+                h_strict,
+                h_expanding,
+                min_d,
+                max_d,
+                avg_d,
+                r.get("fire_direction") or "-",
+                r.get("fire_azimuth_deg") or "-",
+                r.get("propagation_zone") or "-",
+                h_yest,
+                h_7d,
+                h_month,
+                h_year,
+                dt_str,
+                ftri,
+                r.get("status_label") or "-",
             ]
             for col_idx, val in enumerate(row_values, 1):
                 cell = ws.cell(row=row_idx, column=col_idx, value=val)
                 cell.font = font_regular
                 cell.border = border_thin
-                if r["hotspots_today"] > 0:
+                if h_today > 0:
                     if col_idx in [1, 13, 14, 15, 21, 27, 28]:
-                        if r["zone_code"] == "zone1" or r["zone_code"] == "strict" or r["zone_code"] == "combo":
+                        if zone_code in ["zone1", "strict", "combo"]:
                             cell.fill = fill_red_light
-                        elif r["zone_code"] == "zone2":
+                        elif zone_code == "zone2":
                             cell.fill = fill_orange_light
                         else:
                             cell.fill = fill_yellow_light
-                elif r["hotspots_yesterday"] > 0:
+                elif h_yest > 0:
                     if col_idx in [1, 22, 27, 28]:
                         cell.fill = fill_orange_light
 
@@ -632,7 +710,7 @@ class EarlyWarningService:
                 val_str = str(cell.value or "")
                 if len(val_str) > max_len and cell.row > 2:
                     max_len = len(val_str)
-            ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+            ws.column_dimensions[col_letter].width = min(max(max_len + 4, 12), 48)
 
         output = io.BytesIO()
         wb.save(output)

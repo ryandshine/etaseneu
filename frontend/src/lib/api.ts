@@ -131,8 +131,8 @@ export async function authFetch(input: string, init: RequestInit = {}): Promise<
  * tidak bisa membawa header Authorization, jadi tarik sebagai blob lalu klik
  * anchor sementara. Dipakai untuk tombol unduh Excel/PDF.
  */
-export async function downloadWithAuth(url: string, filename: string): Promise<void> {
-  const response = await authFetch(url);
+export async function downloadWithAuth(url: string, filename: string, init?: RequestInit): Promise<void> {
+  const response = await authFetch(url, init);
   if (!response.ok) {
     throw new Error(`Download failed with status ${response.status}`);
   }
