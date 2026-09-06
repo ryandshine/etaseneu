@@ -110,6 +110,7 @@ function MapAutoFit({ geom, hotspots }: { geom: any; hotspots: ThreatDetailHotsp
   const map = useMap();
   useEffect(() => {
     try {
+      map.invalidateSize();
       const bounds = L.latLngBounds([]);
       if (geom) {
         const layer = L.geoJSON(geom);
@@ -271,40 +272,29 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
   }, [threatDetail]);
 
   return (
-    <div style={{ padding: "1.25rem 1.5rem", maxWidth: "1600px", margin: "0 auto", color: "#f3f4f6" }}>
+    <div className="fs-shell">
       {/* Header Halaman */}
-      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", marginBottom: "1.25rem" }}>
+      <header className="fs-header">
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-            <span style={{ display: "inline-flex", padding: "0.4rem", borderRadius: "8px", backgroundColor: "rgba(239, 68, 68, 0.15)", color: "#ef4444" }}>
+          <div className="fs-title-box">
+            <span className="fs-title-icon">
               <ShieldAlert size={24} />
             </span>
-            <h1 style={{ fontSize: "1.45rem", fontWeight: "700", color: "#ffffff", margin: 0 }}>
+            <h1 className="fs-title">
               Siaga Rambatan Api (Deteksi Ancaman Luar KPS)
             </h1>
           </div>
-          <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.85rem", color: "#9ca3af" }}>
+          <p className="fs-subtitle">
             Peringatan dini deteksi titik api (hotspot) di luar batas kawasan KPS (radius buffer 1–5 km) yang berpotensi merambat masuk ke dalam wilayah kelola masyarakat.
           </p>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        <div className="fs-header-actions">
           <button
             type="button"
             onClick={fetchData}
             disabled={loading}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.4rem",
-              padding: "0.55rem 0.9rem",
-              borderRadius: "6px",
-              backgroundColor: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              color: "#e5e7eb",
-              fontSize: "0.82rem",
-              cursor: "pointer"
-            }}
+            className="fs-btn-refresh"
           >
             <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
             Segarkan
@@ -314,53 +304,38 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
             type="button"
             onClick={handleExportExcel}
             disabled={downloading || threats.length === 0}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.4rem",
-              padding: "0.55rem 1rem",
-              borderRadius: "6px",
-              backgroundColor: "#1e3a8a",
-              border: "1px solid #2563eb",
-              color: "#ffffff",
-              fontSize: "0.82rem",
-              fontWeight: "600",
-              cursor: downloading || threats.length === 0 ? "not-allowed" : "pointer"
-            }}
+            className="fs-btn-export"
           >
             <Download size={15} />
             {downloading ? "Mengunduh..." : "Ekspor Excel (.xlsx)"}
           </button>
         </div>
-      </div>
+      </header>
 
       {/* KPI Summary Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "0.9rem", marginBottom: "1.25rem" }}>
+      <div className="fs-kpi-grid">
         {/* Bahaya Kritis */}
         <div
           onClick={() => setSelectedLevel("bahaya")}
+          className="fs-kpi-card"
           style={{
-            padding: "1rem 1.15rem",
-            borderRadius: "10px",
-            backgroundColor: selectedLevel === "bahaya" ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.08)",
-            border: selectedLevel === "bahaya" ? "1.5px solid #ef4444" : "1px solid rgba(239, 68, 68, 0.25)",
-            cursor: "pointer",
-            transition: "all 0.2s ease"
+            backgroundColor: selectedLevel === "bahaya" ? "rgba(239, 68, 68, 0.22)" : "rgba(239, 68, 68, 0.08)",
+            border: selectedLevel === "bahaya" ? "1.5px solid #ef4444" : "1px solid rgba(239, 68, 68, 0.25)"
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "0.78rem", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "#f87171" }}>
+          <div className="fs-kpi-card-header">
+            <span className="fs-kpi-card-label" style={{ color: "#f87171" }}>
               Bahaya Kritis (&lt; 1 km)
             </span>
             <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: "#ef4444" }} />
           </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem", marginTop: "0.4rem" }}>
-            <span style={{ fontSize: "2rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
+          <div className="fs-kpi-card-count">
+            <span className="fs-kpi-card-num">
               {summary?.bahaya_count ?? 0}
             </span>
             <span style={{ fontSize: "0.85rem", color: "#fca5a5" }}>KPS Terancam</span>
           </div>
-          <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.74rem", color: "#d1d5db" }}>
+          <p className="fs-kpi-card-desc" style={{ color: "#d1d5db" }}>
             Api sangat dekat batas luar, potensi tembus hitungan jam.
           </p>
         </div>
@@ -368,28 +343,25 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
         {/* Waspada */}
         <div
           onClick={() => setSelectedLevel("waspada")}
+          className="fs-kpi-card"
           style={{
-            padding: "1rem 1.15rem",
-            borderRadius: "10px",
-            backgroundColor: selectedLevel === "waspada" ? "rgba(249, 115, 22, 0.2)" : "rgba(249, 115, 22, 0.08)",
-            border: selectedLevel === "waspada" ? "1.5px solid #f97316" : "1px solid rgba(249, 115, 22, 0.25)",
-            cursor: "pointer",
-            transition: "all 0.2s ease"
+            backgroundColor: selectedLevel === "waspada" ? "rgba(249, 115, 22, 0.22)" : "rgba(249, 115, 22, 0.08)",
+            border: selectedLevel === "waspada" ? "1.5px solid #f97316" : "1px solid rgba(249, 115, 22, 0.25)"
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "0.78rem", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "#fb923c" }}>
+          <div className="fs-kpi-card-header">
+            <span className="fs-kpi-card-label" style={{ color: "#fb923c" }}>
               Waspada (1–3 km)
             </span>
             <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: "#f97316" }} />
           </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem", marginTop: "0.4rem" }}>
-            <span style={{ fontSize: "2rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
+          <div className="fs-kpi-card-count">
+            <span className="fs-kpi-card-num">
               {summary?.waspada_count ?? 0}
             </span>
             <span style={{ fontSize: "0.85rem", color: "#fed7aa" }}>KPS Terancam</span>
           </div>
-          <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.74rem", color: "#d1d5db" }}>
+          <p className="fs-kpi-card-desc" style={{ color: "#d1d5db" }}>
             Api aktif di area tetangga, butuh sekat perimeter.
           </p>
         </div>
@@ -397,28 +369,25 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
         {/* Pantau */}
         <div
           onClick={() => setSelectedLevel("pantau")}
+          className="fs-kpi-card"
           style={{
-            padding: "1rem 1.15rem",
-            borderRadius: "10px",
-            backgroundColor: selectedLevel === "pantau" ? "rgba(234, 179, 8, 0.2)" : "rgba(234, 179, 8, 0.08)",
-            border: selectedLevel === "pantau" ? "1.5px solid #eab308" : "1px solid rgba(234, 179, 8, 0.25)",
-            cursor: "pointer",
-            transition: "all 0.2s ease"
+            backgroundColor: selectedLevel === "pantau" ? "rgba(234, 179, 8, 0.22)" : "rgba(234, 179, 8, 0.08)",
+            border: selectedLevel === "pantau" ? "1.5px solid #eab308" : "1px solid rgba(234, 179, 8, 0.25)"
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "0.78rem", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "#fde047" }}>
+          <div className="fs-kpi-card-header">
+            <span className="fs-kpi-card-label" style={{ color: "#fde047" }}>
               Pantau (3–5 km)
             </span>
             <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: "#eab308" }} />
           </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem", marginTop: "0.4rem" }}>
-            <span style={{ fontSize: "2rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
+          <div className="fs-kpi-card-count">
+            <span className="fs-kpi-card-num">
               {summary?.pantau_count ?? 0}
             </span>
             <span style={{ fontSize: "0.85rem", color: "#fef08a" }}>KPS Terancam</span>
           </div>
-          <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.74rem", color: "#d1d5db" }}>
+          <p className="fs-kpi-card-desc" style={{ color: "#d1d5db" }}>
             Klaster api lanskap sekitarnya, siaga dini patroli.
           </p>
         </div>
@@ -426,61 +395,39 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
         {/* Total Hotspot Luar */}
         <div
           onClick={() => setSelectedLevel("all")}
+          className="fs-kpi-card"
           style={{
-            padding: "1rem 1.15rem",
-            borderRadius: "10px",
-            backgroundColor: selectedLevel === "all" ? "rgba(59, 130, 246, 0.2)" : "rgba(31, 41, 55, 0.5)",
-            border: selectedLevel === "all" ? "1.5px solid #3b82f6" : "1px solid rgba(255,255,255,0.08)",
-            cursor: "pointer",
-            transition: "all 0.2s ease"
+            backgroundColor: selectedLevel === "all" ? "rgba(59, 130, 246, 0.22)" : "rgba(31, 41, 55, 0.5)",
+            border: selectedLevel === "all" ? "1.5px solid #3b82f6" : "1px solid rgba(255,255,255,0.08)"
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "0.78rem", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "#93c5fd" }}>
+          <div className="fs-kpi-card-header">
+            <span className="fs-kpi-card-label" style={{ color: "#93c5fd" }}>
               Total Hotspot Luar (5 km)
             </span>
             <Flame size={16} color="#3b82f6" />
           </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem", marginTop: "0.4rem" }}>
-            <span style={{ fontSize: "2rem", fontWeight: "800", color: "#ffffff", lineHeight: 1 }}>
+          <div className="fs-kpi-card-count">
+            <span className="fs-kpi-card-num">
               {summary?.total_external_hotspots?.toLocaleString() ?? 0}
             </span>
             <span style={{ fontSize: "0.85rem", color: "#9ca3af" }}>Titik Api</span>
           </div>
-          <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.74rem", color: "#9ca3af" }}>
+          <p className="fs-kpi-card-desc" style={{ color: "#9ca3af" }}>
             Menargetkan {summary?.total_kps_threatened ?? 0} KPS di seluruh Indonesia.
           </p>
         </div>
       </div>
 
       {/* Filter Toolbar */}
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "0.75rem",
-          alignItems: "center",
-          padding: "0.85rem 1rem",
-          borderRadius: "8px",
-          backgroundColor: "rgba(17, 24, 39, 0.8)",
-          border: "1px solid rgba(255, 255, 255, 0.08)",
-          marginBottom: "1.25rem"
-        }}
-      >
+      <div className="fs-toolbar">
         {/* Rentang Waktu */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-          <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>Waktu:</span>
+        <div className="fs-filter-group">
+          <span className="fs-filter-label">Waktu:</span>
           <select
             value={timeWindow}
             onChange={(e) => setTimeWindow(Number(e.target.value))}
-            style={{
-              padding: "0.45rem 0.75rem",
-              borderRadius: "6px",
-              backgroundColor: "#1f2937",
-              color: "#ffffff",
-              border: "1px solid #374151",
-              fontSize: "0.82rem"
-            }}
+            className="fs-filter-select"
           >
             <option value={24}>24 Jam Terakhir</option>
             <option value={48}>48 Jam Terakhir</option>
@@ -490,19 +437,12 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
         </div>
 
         {/* Radius Maksimum */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-          <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>Radius:</span>
+        <div className="fs-filter-group">
+          <span className="fs-filter-label">Radius:</span>
           <select
             value={maxDistanceKm}
             onChange={(e) => setMaxDistanceKm(Number(e.target.value))}
-            style={{
-              padding: "0.45rem 0.75rem",
-              borderRadius: "6px",
-              backgroundColor: "#1f2937",
-              color: "#ffffff",
-              border: "1px solid #374151",
-              fontSize: "0.82rem"
-            }}
+            className="fs-filter-select"
           >
             <option value={1.0}>1 km (Zona Kritis)</option>
             <option value={3.0}>3 km (Zona Waspada)</option>
@@ -511,19 +451,12 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
         </div>
 
         {/* Level Status Filter */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-          <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>Status:</span>
+        <div className="fs-filter-group">
+          <span className="fs-filter-label">Status:</span>
           <select
             value={selectedLevel}
             onChange={(e) => setSelectedLevel(e.target.value as any)}
-            style={{
-              padding: "0.45rem 0.75rem",
-              borderRadius: "6px",
-              backgroundColor: "#1f2937",
-              color: "#ffffff",
-              border: "1px solid #374151",
-              fontSize: "0.82rem"
-            }}
+            className="fs-filter-select"
           >
             <option value="all">Semua Status</option>
             <option value="bahaya">Bahaya Kritis (&lt; 1 km)</option>
@@ -534,23 +467,16 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
 
         {/* Dropdown Provinsi */}
         {provinceOptions.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>Provinsi:</span>
+          <div className="fs-filter-group">
+            <span className="fs-filter-label">Provinsi:</span>
             <select
               value={selectedProvince}
               onChange={(e) => {
                 setSelectedProvince(e.target.value);
                 setSelectedRegency("");
               }}
-              style={{
-                padding: "0.45rem 0.75rem",
-                borderRadius: "6px",
-                backgroundColor: "#1f2937",
-                color: "#ffffff",
-                border: "1px solid #374151",
-                fontSize: "0.82rem",
-                maxWidth: "180px"
-              }}
+              className="fs-filter-select"
+              style={{ maxWidth: "180px" }}
             >
               <option value="">Semua Provinsi</option>
               {provinceOptions.map((p) => (
@@ -564,20 +490,13 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
 
         {/* Dropdown Kabupaten */}
         {regencyOptions.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>Kabupaten:</span>
+          <div className="fs-filter-group">
+            <span className="fs-filter-label">Kabupaten:</span>
             <select
               value={selectedRegency}
               onChange={(e) => setSelectedRegency(e.target.value)}
-              style={{
-                padding: "0.45rem 0.75rem",
-                borderRadius: "6px",
-                backgroundColor: "#1f2937",
-                color: "#ffffff",
-                border: "1px solid #374151",
-                fontSize: "0.82rem",
-                maxWidth: "180px"
-              }}
+              className="fs-filter-select"
+              style={{ maxWidth: "180px" }}
             >
               <option value="">Semua Kabupaten</option>
               {regencyOptions.map((k) => (
@@ -590,50 +509,24 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
         )}
 
         {/* Search Input */}
-        <div style={{ position: "relative", flex: "1 1 200px", minWidth: "160px" }}>
-          <Search size={14} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#9ca3af" }} />
+        <div className="fs-search-wrap">
+          <Search size={14} className="fs-search-icon" />
           <input
             type="text"
             placeholder="Cari KPS / Desa / Kabupaten..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && fetchData()}
-            style={{
-              width: "100%",
-              padding: "0.45rem 0.75rem 0.45rem 2rem",
-              borderRadius: "6px",
-              backgroundColor: "#1f2937",
-              color: "#ffffff",
-              border: "1px solid #374151",
-              fontSize: "0.82rem"
-            }}
+            className="fs-search-input"
           />
         </div>
       </div>
 
-      {/* Main Layout: Left Column (Threat List) + Right Column (Interactive Perimeter Map) */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: "1.25rem", minHeight: "650px" }}>
+      {/* Main Layout: Left Column (Threat List) + Right Column (Sticky Interactive Map) */}
+      <div className="fs-main-grid">
         {/* Left Column: Daftar KPS Terancam */}
-        <div
-          style={{
-            backgroundColor: "rgba(17, 24, 39, 0.6)",
-            borderRadius: "10px",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden"
-          }}
-        >
-          <div
-            style={{
-              padding: "0.9rem 1.15rem",
-              borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              backgroundColor: "rgba(31, 41, 55, 0.5)"
-            }}
-          >
+        <div className="fs-list-column">
+          <div className="fs-list-header">
             <div>
               <span style={{ fontSize: "0.88rem", fontWeight: "700", color: "#ffffff" }}>
                 Prioritas KPS Terancam
@@ -644,7 +537,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
             </div>
           </div>
 
-          <div style={{ flex: 1, overflowY: "auto", maxHeight: "650px", padding: "0.75rem" }}>
+          <div className="fs-list-body">
             {loading ? (
               <div style={{ padding: "3rem 1rem", textAlign: "center", color: "#9ca3af", fontSize: "0.88rem" }}>
                 <RefreshCw size={24} className="animate-spin" style={{ margin: "0 auto 0.75rem" }} />
@@ -656,157 +549,113 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                 Tidak ada titik api terdeteksi di perimeter luar poligon pada kriteria filter ini.
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-                {threats.map((item, idx) => {
-                  const isSelected = selectedKpsId === item.polygon_id;
-                  const isBahaya = item.status_level === "bahaya";
-                  const isWaspada = item.status_level === "waspada";
-                  const badgeBg = isBahaya ? "rgba(239, 68, 68, 0.18)" : isWaspada ? "rgba(249, 115, 22, 0.18)" : "rgba(234, 179, 8, 0.18)";
-                  const badgeColor = isBahaya ? "#f87171" : isWaspada ? "#fb923c" : "#fde047";
-                  const badgeBorder = isBahaya ? "#ef4444" : isWaspada ? "#f97316" : "#eab308";
+              threats.map((item, idx) => {
+                const isSelected = selectedKpsId === item.polygon_id;
+                const isBahaya = item.status_level === "bahaya";
+                const isWaspada = item.status_level === "waspada";
+                const badgeBg = isBahaya ? "rgba(239, 68, 68, 0.18)" : isWaspada ? "rgba(249, 115, 22, 0.18)" : "rgba(234, 179, 8, 0.18)";
+                const badgeColor = isBahaya ? "#f87171" : isWaspada ? "#fb923c" : "#fde047";
+                const badgeBorder = isBahaya ? "#ef4444" : isWaspada ? "#f97316" : "#eab308";
 
-                  return (
-                    <div
-                      key={item.polygon_id}
-                      onClick={() => setSelectedKpsId(item.polygon_id)}
-                      style={{
-                        padding: "0.85rem 1rem",
-                        borderRadius: "8px",
-                        backgroundColor: isSelected ? "rgba(37, 99, 235, 0.15)" : "rgba(31, 41, 55, 0.4)",
-                        border: isSelected ? "1.5px solid #3b82f6" : "1px solid rgba(255, 255, 255, 0.06)",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease"
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.6rem" }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
-                            <span style={{ fontSize: "0.72rem", fontWeight: "700", padding: "0.15rem 0.5rem", borderRadius: "4px", backgroundColor: badgeBg, color: badgeColor, border: `1px solid ${badgeBorder}` }}>
-                              {item.status_label}
-                            </span>
-                            <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>
-                              #{idx + 1}
-                            </span>
-                            {item.skema && (
-                              <span style={{ fontSize: "0.72rem", padding: "0.1rem 0.4rem", borderRadius: "4px", backgroundColor: "rgba(255,255,255,0.06)", color: "#d1d5db" }}>
-                                {item.skema}
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: "0.92rem", fontWeight: "700", color: "#ffffff", marginTop: "0.35rem" }}>
-                            {item.lembaga}
-                          </div>
-                          <div style={{ fontSize: "0.76rem", color: "#9ca3af", marginTop: "0.2rem" }}>
-                            {[item.nama_desa, item.nama_kab, item.nama_prov].filter(Boolean).join(", ")}
-                          </div>
-                        </div>
-
-                        <div style={{ textAlign: "right", flexShrink: 0 }}>
-                          <div style={{ fontSize: "1.1rem", fontWeight: "800", color: badgeColor }}>
-                            {item.min_distance_m < 1000 ? `${item.min_distance_m} m` : `${item.min_distance_km} km`}
-                          </div>
-                          <div style={{ fontSize: "0.72rem", color: "#9ca3af" }}>
-                            dari batas luar
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Detail Ancaman Bar */}
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          alignItems: "center",
-                          gap: "0.8rem",
-                          marginTop: "0.55rem",
-                          paddingTop: "0.5rem",
-                          borderTop: "1px solid rgba(255,255,255,0.05)",
-                          fontSize: "0.75rem",
-                          color: "#d1d5db"
-                        }}
-                      >
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-                          <Compass size={13} color="#60a5fa" />
-                          Arah: <strong>{item.bearing_compass}</strong>
-                        </span>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-                          <Flame size={13} color="#f87171" />
-                          <strong>{item.external_hotspots_count} titik api</strong> di luar
-                        </span>
-                        {item.max_frp > 0 && (
-                          <span style={{ color: "#9ca3af" }}>
-                            Max FRP: <strong>{item.max_frp} MW</strong>
+                return (
+                  <div
+                    key={item.polygon_id}
+                    onClick={() => setSelectedKpsId(item.polygon_id)}
+                    className={`fs-card ${isSelected ? "fs-card--selected" : ""}`}
+                  >
+                    <div className="fs-card-head">
+                      <div className="fs-card-info">
+                        <div className="fs-card-badges">
+                          <span style={{ fontSize: "0.72rem", fontWeight: "700", padding: "0.15rem 0.5rem", borderRadius: "4px", backgroundColor: badgeBg, color: badgeColor, border: `1px solid ${badgeBorder}` }}>
+                            {item.status_label}
                           </span>
-                        )}
-                        {onOpenKpsDetail && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onOpenKpsDetail(item.lembaga);
-                            }}
-                            style={{
-                              marginLeft: "auto",
-                              background: "none",
-                              border: "none",
-                              color: "#60a5fa",
-                              fontSize: "0.72rem",
-                              cursor: "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.2rem",
-                              padding: 0
-                            }}
-                          >
-                            Buku Besar <ArrowRight size={12} />
-                          </button>
-                        )}
+                          <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>
+                            #{idx + 1}
+                          </span>
+                          {item.skema && (
+                            <span style={{ fontSize: "0.72rem", padding: "0.1rem 0.4rem", borderRadius: "4px", backgroundColor: "rgba(255,255,255,0.06)", color: "#d1d5db" }}>
+                              {item.skema}
+                            </span>
+                          )}
+                        </div>
+                        <div className="fs-card-title">
+                          {item.lembaga}
+                        </div>
+                        <div className="fs-card-location">
+                          {[item.nama_desa, item.nama_kab, item.nama_prov].filter(Boolean).join(", ")}
+                        </div>
                       </div>
 
-                      {/* Teks Rekomendasi Taktis */}
-                      <div
-                        style={{
-                          marginTop: "0.45rem",
-                          fontSize: "0.73rem",
-                          fontStyle: "italic",
-                          color: isBahaya ? "#fca5a5" : "#d1d5db",
-                          backgroundColor: isBahaya ? "rgba(239, 68, 68, 0.08)" : "rgba(0,0,0,0.15)",
-                          padding: "0.3rem 0.5rem",
-                          borderRadius: "4px"
-                        }}
-                      >
-                        {item.rekomendasi}
+                      <div className="fs-card-dist">
+                        <div className="fs-card-dist-value" style={{ color: badgeColor }}>
+                          {item.min_distance_m < 1000 ? `${item.min_distance_m} m` : `${item.min_distance_km} km`}
+                        </div>
+                        <div className="fs-card-dist-unit">
+                          dari batas luar
+                        </div>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+
+                    {/* Detail Ancaman Bar */}
+                    <div className="fs-card-metrics">
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+                        <Compass size={13} color="#60a5fa" />
+                        Arah: <strong>{item.bearing_compass}</strong>
+                      </span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+                        <Flame size={13} color="#f87171" />
+                        <strong>{item.external_hotspots_count} titik api</strong> di luar
+                      </span>
+                      {item.max_frp > 0 && (
+                        <span style={{ color: "#9ca3af" }}>
+                          Max FRP: <strong>{item.max_frp} MW</strong>
+                        </span>
+                      )}
+                      {onOpenKpsDetail && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenKpsDetail(item.lembaga);
+                          }}
+                          style={{
+                            marginLeft: "auto",
+                            background: "none",
+                            border: "none",
+                            color: "#60a5fa",
+                            fontSize: "0.72rem",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.2rem",
+                            padding: 0
+                          }}
+                        >
+                          Buku Besar <ArrowRight size={12} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Teks Rekomendasi Taktis */}
+                    <div
+                      className="fs-card-rekom"
+                      style={{
+                        color: isBahaya ? "#fca5a5" : "#d1d5db",
+                        backgroundColor: isBahaya ? "rgba(239, 68, 68, 0.08)" : "rgba(0,0,0,0.2)"
+                      }}
+                    >
+                      {item.rekomendasi}
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
 
-        {/* Right Column: Peta Interaktif & Visualisasi Perimeter */}
-        <div
-          style={{
-            backgroundColor: "rgba(17, 24, 39, 0.6)",
-            borderRadius: "10px",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            position: "relative"
-          }}
-        >
-          <div
-            style={{
-              padding: "0.85rem 1.15rem",
-              borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-              backgroundColor: "rgba(31, 41, 55, 0.5)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center"
-            }}
-          >
+        {/* Right Column: Sticky Interactive Map */}
+        <div className="fs-map-column">
+          <div className="fs-map-header">
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <Layers size={17} color="#60a5fa" />
               <span style={{ fontSize: "0.88rem", fontWeight: "700", color: "#ffffff" }}>
@@ -814,19 +663,41 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
               </span>
             </div>
             {threatDetail && (
-              <span style={{ fontSize: "0.76rem", color: "#9ca3af" }}>
-                {threatDetail.hotspots.length} titik api luar radius {threatDetail.max_distance_km} km
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <span style={{ fontSize: "0.76rem", color: "#9ca3af" }}>
+                  {threatDetail.hotspots.length} titik api luar radius {threatDetail.max_distance_km} km
+                </span>
+                {onOpenKpsDetail && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenKpsDetail(threatDetail.lembaga)}
+                    style={{
+                      background: "rgba(59, 130, 246, 0.15)",
+                      border: "1px solid rgba(59, 130, 246, 0.4)",
+                      borderRadius: "4px",
+                      color: "#93c5fd",
+                      fontSize: "0.72rem",
+                      cursor: "pointer",
+                      padding: "0.2rem 0.5rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.25rem"
+                    }}
+                  >
+                    Detail KPS <ArrowRight size={11} />
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
-          <div style={{ flex: 1, minHeight: "550px", position: "relative" }}>
+          <div className="fs-map-stage">
             {loadingDetail && (
               <div
                 style={{
                   position: "absolute",
                   inset: 0,
-                  backgroundColor: "rgba(17, 24, 39, 0.7)",
+                  backgroundColor: "rgba(17, 24, 39, 0.75)",
                   zIndex: 1000,
                   display: "flex",
                   alignItems: "center",
@@ -843,7 +714,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
             <MapContainer
               center={mapCenter}
               zoom={11}
-              style={{ width: "100%", height: "100%", minHeight: "550px", background: "#0b1120" }}
+              style={{ width: "100%", height: "100%", background: "#0b1120" }}
               attributionControl={false}
             >
               <TileLayer
@@ -963,24 +834,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
             </MapContainer>
 
             {/* Legenda Peta Overlay */}
-            <div
-              style={{
-                position: "absolute",
-                bottom: "16px",
-                left: "16px",
-                backgroundColor: "rgba(17, 24, 39, 0.88)",
-                backdropFilter: "blur(6px)",
-                padding: "0.6rem 0.85rem",
-                borderRadius: "8px",
-                border: "1px solid rgba(255, 255, 255, 0.12)",
-                fontSize: "0.73rem",
-                color: "#e5e7eb",
-                zIndex: 900,
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.3rem"
-              }}
-            >
+            <div className="fs-map-legend">
               <div style={{ fontWeight: "700", marginBottom: "0.15rem", color: "#ffffff" }}>Legenda Peta:</div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
                 <span style={{ width: "12px", height: "3px", backgroundColor: "#10b981" }} />
