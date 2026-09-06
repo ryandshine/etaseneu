@@ -116,3 +116,73 @@ def test_fire_spread_export_excel_mock(monkeypatch):
     )
     wb = openpyxl.load_workbook(io.BytesIO(resp.content))
     assert "Siaga Rambatan Api" in wb.sheetnames
+
+
+def test_fire_spread_detail_endpoint_mock(monkeypatch):
+    client = _build_client()
+
+    class _MockService:
+        def get_threat_detail(self, polygon_id, time_window_hours=48, max_distance_km=5.0):
+            if polygon_id == 999999:
+                return None
+            return {
+                "polygon_id": polygon_id,
+                "lembaga": "LPHD PEMATANG GADUNG",
+                "nama_kps": "LPHD PEMATANG GADUNG",
+                "geometry": {"type": "Polygon", "coordinates": [[[109.9, -1.8], [110.0, -1.8], [110.0, -1.9], [109.9, -1.9], [109.9, -1.8]]]},
+                "centroid": [109.95, -1.85],
+                "status_level": "bahaya",
+                "status_label": "Bahaya Kritis (< 1 km)",
+                "min_distance_m": 59,
+                "min_distance_km": 0.06,
+                "total_external_hotspots": 152,
+                "total_internal_hotspots": 33,
+                "hotspots": [
+                    {
+                        "id": 1,
+                        "latitude": -1.85,
+                        "longitude": 109.95,
+                        "is_inside": True,
+                        "status_level": "internal",
+                        "status_label": "Di Dalam Kawasan",
+                        "distance_m": 0,
+                    },
+                    {
+                        "id": 2,
+                        "latitude": -1.799,
+                        "longitude": 109.95,
+                        "is_inside": False,
+                        "status_level": "bahaya",
+                        "status_label": "Bahaya Kritis (< 1 km)",
+                        "distance_m": 59,
+                    },
+                ],
+                "neighbors": [
+                    {
+                        "id": 287888,
+                        "lembaga": "LPHD SUNGAI BESAR",
+                        "distance_m": 0,
+                        "distance_km": 0.0,
+                        "hotspot_count": 139,
+                        "geometry": {"type": "Polygon", "coordinates": [[[109.9, -1.7], [110.0, -1.7], [110.0, -1.8], [109.9, -1.8], [109.9, -1.7]]]},
+                    }
+                ],
+                "closest_vector": None,
+                "time_window_hours": time_window_hours,
+                "max_distance_km": max_distance_km,
+            }
+
+    monkeypatch.setattr("app.api.fire_spread.FireSpreadService", _MockService)
+    resp = client.get("/api/fire-spread/detail?polygon_id=101")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_internal_hotspots"] == 33
+    assert data["total_external_hotspots"] == 152
+    assert len(data["neighbors"]) == 1
+    assert data["neighbors"][0]["lembaga"] == "LPHD SUNGAI BESAR"
+    assert data["hotspots"][0]["is_inside"] is True
+
+    # Test 404
+    resp_404 = client.get("/api/fire-spread/detail?polygon_id=999999")
+    assert resp_404.status_code == 404
+

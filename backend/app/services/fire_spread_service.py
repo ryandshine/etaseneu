@@ -361,6 +361,60 @@ class FireSpreadService:
                 geom_json = json.loads(poly["geometry_json"]) if poly.get("geometry_json") else None
                 centroid = json.loads(poly["centroid_json"]) if poly.get("centroid_json") else None
 
+                # Query KPS bersebelahan/tetangga dalam radius buffer
+                cur.execute(
+                    f"""
+                    SELECT
+                        p2.id,
+                        p2.lembaga,
+                        p2.nama_desa,
+                        p2.nama_kec,
+                        p2.nama_kab,
+                        p2.skema,
+                        p2.luas_final AS luas_ha,
+                        ROUND(ST_Distance(p_target.geometry::geography, p2.geometry::geography))::int AS distance_m,
+                        ST_AsGeoJSON(p2.geometry) AS geometry_json,
+                        (
+                            SELECT COUNT(*)
+                            FROM hotspot_observations h
+                            WHERE h.detected_at >= NOW() - INTERVAL '{int(time_window_hours)} hours'
+                              AND ST_Intersects(p2.geometry, h.geom)
+                        ) AS hotspot_count
+                    FROM polygon_metadata p_target
+                    CROSS JOIN LATERAL (
+                        SELECT id, lembaga, nama_desa, nama_kec, nama_kab, skema, luas_final, geometry
+                        FROM polygon_metadata
+                        WHERE is_active = true
+                          AND id != p_target.id
+                          AND geometry && ST_Expand(p_target.geometry, {max_deg:.6f})
+                          AND ST_DWithin(p_target.geometry, geometry, {max_deg:.6f})
+                    ) p2
+                    WHERE p_target.id = %s
+                    ORDER BY distance_m ASC
+                    LIMIT 30;
+                    """,
+                    (polygon_id,),
+                )
+                neighbor_rows = cur.fetchall()
+                neighbors = []
+                for nr in neighbor_rows:
+                    n_geom = json.loads(nr["geometry_json"]) if nr.get("geometry_json") else None
+                    if n_geom:
+                        neighbors.append({
+                            "id": int(nr["id"]),
+                            "lembaga": nr.get("lembaga") or "-",
+                            "nama_desa": nr.get("nama_desa"),
+                            "nama_kec": nr.get("nama_kec"),
+                            "nama_kab": nr.get("nama_kab"),
+                            "skema": nr.get("skema"),
+                            "luas_ha": float(nr["luas_ha"]) if nr.get("luas_ha") is not None else None,
+                            "distance_m": int(nr["distance_m"]),
+                            "distance_km": round(int(nr["distance_m"]) / 1000.0, 2),
+                            "hotspot_count": int(nr["hotspot_count"] or 0),
+                            "geometry": n_geom,
+                        })
+
+                # Query hotspot baik di perimeter luar maupun di dalam kawasan
                 cur.execute(
                     f"""
                     SELECT
@@ -372,15 +426,21 @@ class FireSpreadService:
                         obs.brightness,
                         COALESCE((obs.raw_payload->>'frp')::float, 0.0) AS frp,
                         to_char(obs.detected_at, 'YYYY-MM-DD HH24:MI:SS OF') AS detected_at_str,
-                        ROUND(ST_Distance(poly.geometry::geography, obs.geom::geography))::int AS distance_m,
+                        ST_Intersects(poly.geometry, obs.geom) AS is_inside,
+                        CASE
+                            WHEN ST_Intersects(poly.geometry, obs.geom) THEN 0
+                            ELSE ROUND(ST_Distance(poly.geometry::geography, obs.geom::geography))::int
+                        END AS distance_m,
                         degrees(ST_Azimuth(ST_Centroid(poly.geometry), obs.geom)) AS bearing_deg,
-                        ST_AsGeoJSON(ST_ClosestPoint(poly.geometry, obs.geom)) AS closest_pt_geojson
+                        CASE
+                            WHEN ST_Intersects(poly.geometry, obs.geom) THEN NULL
+                            ELSE ST_AsGeoJSON(ST_ClosestPoint(poly.geometry, obs.geom))
+                        END AS closest_pt_geojson
                     FROM hotspot_observations obs
                     JOIN polygon_metadata poly ON poly.id = %s
                     WHERE obs.detected_at >= NOW() - INTERVAL '{int(time_window_hours)} hours'
                       AND ST_DWithin(poly.geometry, obs.geom, {max_deg:.6f})
-                      AND NOT ST_Intersects(poly.geometry, obs.geom)
-                    ORDER BY distance_m ASC;
+                    ORDER BY is_inside DESC, distance_m ASC;
                     """,
                     (polygon_id,),
                 )
@@ -388,11 +448,20 @@ class FireSpreadService:
 
                 hotspots = []
                 closest_vector = None
-                for idx, h in enumerate(hs_rows):
+                closest_ext_found = False
+                for h in hs_rows:
+                    is_inside = bool(h["is_inside"])
                     dist_m = int(h["distance_m"])
-                    lvl, lvl_label = distance_to_level(dist_m)
                     bearing = float(h["bearing_deg"]) if h.get("bearing_deg") is not None else None
                     c_pt = json.loads(h["closest_pt_geojson"]) if h.get("closest_pt_geojson") else None
+
+                    if is_inside:
+                        lvl = "internal"
+                        lvl_label = "Di Dalam Kawasan"
+                    else:
+                        lvl, lvl_label = distance_to_level(dist_m)
+
+                    compass = degrees_to_compass(bearing) if not is_inside else "Dalam Kawasan"
 
                     item = {
                         "id": h["id"],
@@ -403,24 +472,28 @@ class FireSpreadService:
                         "brightness": float(h["brightness"]) if h.get("brightness") is not None else None,
                         "frp": float(h["frp"]) if h.get("frp") is not None else 0.0,
                         "detected_at": h.get("detected_at_str"),
+                        "is_inside": is_inside,
                         "distance_m": dist_m,
                         "distance_km": round(dist_m / 1000.0, 2),
                         "status_level": lvl,
                         "status_label": lvl_label,
                         "bearing_deg": round(bearing, 1) if bearing is not None else None,
-                        "bearing_compass": degrees_to_compass(bearing),
+                        "bearing_compass": compass,
                         "closest_kps_point": c_pt.get("coordinates") if c_pt else None,
                     }
                     hotspots.append(item)
-                    if idx == 0 and c_pt:
+                    if not is_inside and not closest_ext_found and c_pt:
                         closest_vector = {
                             "hotspot_coords": [float(h["longitude"]), float(h["latitude"])],
                             "kps_boundary_coords": c_pt.get("coordinates"),
                             "distance_m": dist_m,
                             "bearing_compass": item["bearing_compass"],
                         }
+                        closest_ext_found = True
 
-                min_dist = hotspots[0]["distance_m"] if hotspots else 0
+                ext_hotspots = [h for h in hotspots if not h["is_inside"]]
+                int_hotspots = [h for h in hotspots if h["is_inside"]]
+                min_dist = ext_hotspots[0]["distance_m"] if ext_hotspots else 0
                 status_lvl, status_lbl = distance_to_level(min_dist)
 
                 return {
@@ -441,8 +514,10 @@ class FireSpreadService:
                     "status_label": status_lbl,
                     "min_distance_m": min_dist,
                     "min_distance_km": round(min_dist / 1000.0, 2),
-                    "total_external_hotspots": len(hotspots),
+                    "total_external_hotspots": len(ext_hotspots),
+                    "total_internal_hotspots": len(int_hotspots),
                     "hotspots": hotspots,
+                    "neighbors": neighbors,
                     "closest_vector": closest_vector,
                     "time_window_hours": time_window_hours,
                     "max_distance_km": max_distance_km,

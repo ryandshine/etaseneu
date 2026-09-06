@@ -90,7 +90,26 @@ const mockDetail = {
   min_distance_m: 350,
   min_distance_km: 0.35,
   total_external_hotspots: 1,
+  total_internal_hotspots: 2,
   hotspots: [
+    {
+      id: 998,
+      latitude: -2.12,
+      longitude: 111.52,
+      satellite: "N21",
+      confidence: "h",
+      brightness: 355.0,
+      frp: 50.0,
+      detected_at: "2026-09-06 10:15:00 +07",
+      is_inside: true,
+      distance_m: 0,
+      distance_km: 0.0,
+      status_level: "internal",
+      status_label: "Di Dalam Kawasan",
+      bearing_deg: null,
+      bearing_compass: "Dalam Kawasan",
+      closest_kps_point: null,
+    },
     {
       id: 999,
       latitude: -2.1,
@@ -100,6 +119,7 @@ const mockDetail = {
       brightness: 340.0,
       frp: 42.0,
       detected_at: "2026-09-06 10:00:00 +07",
+      is_inside: false,
       distance_m: 350,
       distance_km: 0.35,
       status_level: "bahaya",
@@ -107,6 +127,32 @@ const mockDetail = {
       bearing_deg: 315.0,
       bearing_compass: "Barat Laut (NW)",
       closest_kps_point: [111.502, -2.102],
+    },
+  ],
+  neighbors: [
+    {
+      id: 202,
+      lembaga: "KPS Rimba Sebelah",
+      nama_desa: "Desa Tetangga",
+      nama_kec: "Kecamatan Hijau",
+      nama_kab: "Lamandau",
+      skema: "HKm",
+      luas_ha: 850.0,
+      distance_m: 0,
+      distance_km: 0.0,
+      hotspot_count: 5,
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [111.45, -2.1],
+            [111.5, -2.1],
+            [111.5, -2.15],
+            [111.45, -2.15],
+            [111.45, -2.1],
+          ],
+        ],
+      },
     },
   ],
   closest_vector: {
@@ -150,6 +196,12 @@ describe("SiagaRambatanApiView", () => {
       expect(screen.getByText("KPS Rimba Lestari")).toBeInTheDocument();
       expect(screen.getByText("350 m")).toBeInTheDocument();
       expect(screen.getByText("Barat Laut (NW)")).toBeInTheDocument();
+    });
+
+    // Cek tampilan indikator hotspot internal dan KPS tetangga
+    await waitFor(() => {
+      expect(screen.getByText(/2 hotspot di DALAM/)).toBeInTheDocument();
+      expect(screen.getByText(/1 KPS sekitar/)).toBeInTheDocument();
     });
   });
 

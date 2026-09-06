@@ -71,13 +71,28 @@ interface ThreatDetailHotspot {
   brightness: number | null;
   frp: number;
   detected_at: string | null;
+  is_inside?: boolean;
   distance_m: number;
   distance_km: number;
-  status_level: "bahaya" | "waspada" | "pantau";
+  status_level: "bahaya" | "waspada" | "pantau" | "internal";
   status_label: string;
   bearing_deg: number | null;
   bearing_compass: string;
   closest_kps_point: [number, number] | null;
+}
+
+interface ThreatNeighbor {
+  id: number;
+  lembaga: string;
+  nama_desa: string | null;
+  nama_kec: string | null;
+  nama_kab: string | null;
+  skema: string | null;
+  luas_ha: number | null;
+  distance_m: number;
+  distance_km: number;
+  hotspot_count: number;
+  geometry: any;
 }
 
 interface ThreatDetail {
@@ -94,12 +109,14 @@ interface ThreatDetail {
   luas_ha: number | null;
   geometry: any;
   centroid: [number, number] | null;
-  status_level: "bahaya" | "waspada" | "pantau";
+  status_level: "bahaya" | "waspada" | "pantau" | "internal";
   status_label: string;
   min_distance_m: number;
   min_distance_km: number;
   total_external_hotspots: number;
+  total_internal_hotspots?: number;
   hotspots: ThreatDetailHotspot[];
+  neighbors?: ThreatNeighbor[];
   closest_vector: {
     hotspot_coords: [number, number];
     kps_boundary_coords: [number, number];
@@ -771,8 +788,18 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                 </div>
 
                 <div className="fs-inspector-details">
-                  <span>🧭 Arah ancaman: <strong>{threatDetail.closest_vector?.bearing_compass || "-"}</strong></span>
+                  <span>🧭 Arah ancaman luar: <strong>{threatDetail.closest_vector?.bearing_compass || "-"}</strong></span>
+                  {(threatDetail.total_internal_hotspots ?? 0) > 0 && (
+                    <span style={{ color: "#fb7185", fontWeight: "700" }}>
+                      🚨 <strong>{threatDetail.total_internal_hotspots} hotspot di DALAM</strong> kawasan
+                    </span>
+                  )}
                   <span>🔥 <strong>{threatDetail.total_external_hotspots} hotspot luar</strong> radius {threatDetail.max_distance_km} km</span>
+                  {threatDetail.neighbors && threatDetail.neighbors.length > 0 && (
+                    <span style={{ color: "#a5b4fc" }}>
+                      🏘️ <strong>{threatDetail.neighbors.length} KPS sekitar</strong>
+                    </span>
+                  )}
                   {threatDetail.luas_ha && <span>📐 Luas: <strong>{threatDetail.luas_ha.toLocaleString()} ha</strong></span>}
                 </div>
 
@@ -840,7 +867,73 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                 focusTrigger={focusTrigger}
               />
 
-              {/* Visualisasi Poligon KPS (High-Contrast Neon Cyan) */}
+              {/* Visualisasi Poligon KPS Bersebelahan / Sekitar (Indigo Putus-putus) */}
+              {threatDetail?.neighbors?.map((n) => (
+                <GeoJSON
+                  key={`threat-neighbor-${threatDetail.polygon_id}-${n.id}`}
+                  data={{
+                    type: "Feature",
+                    properties: {
+                      id: n.id,
+                      lembaga: n.lembaga,
+                      desa: n.nama_desa,
+                      skema: n.skema,
+                      distance_m: n.distance_m,
+                      hotspot_count: n.hotspot_count,
+                    },
+                    geometry: n.geometry,
+                  } as never}
+                  style={{
+                    color: "#818cf8",
+                    weight: 2.2,
+                    opacity: 0.9,
+                    fillColor: "#6366f1",
+                    fillOpacity: 0.12,
+                    dashArray: "5 4",
+                  }}
+                >
+                  <Popup>
+                    <div style={{ color: "#111827", fontSize: "0.82rem", minWidth: "190px" }}>
+                      <div style={{ display: "inline-block", fontSize: "0.7rem", fontWeight: "700", color: "#6366f1", backgroundColor: "rgba(99,102,241,0.12)", padding: "1px 6px", borderRadius: "4px", marginBottom: "0.25rem" }}>
+                        KPS Bersebelahan / Sekitar
+                      </div>
+                      <div style={{ fontWeight: "700", fontSize: "0.92rem", color: "#1e1b4b", marginBottom: "0.2rem" }}>
+                        {n.lembaga}
+                      </div>
+                      <div>Jarak ke KPS target: <strong>{n.distance_m === 0 ? "Berbatasan Langsung (0 m)" : `${n.distance_m} m`}</strong></div>
+                      {n.skema && <div>Skema: <strong>{n.skema}</strong></div>}
+                      <div>🔥 Hotspot di dalamnya: <strong style={{ color: n.hotspot_count > 0 ? "#dc2626" : "#059669" }}>{n.hotspot_count} titik api</strong></div>
+                      <div style={{ marginTop: "0.25rem", fontSize: "0.74rem", color: "#4b5563" }}>
+                        {[n.nama_desa, n.nama_kec, n.nama_kab].filter(Boolean).join(", ")}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedKpsId(n.id)}
+                        style={{
+                          marginTop: "0.5rem",
+                          width: "100%",
+                          backgroundColor: "#4f46e5",
+                          color: "#ffffff",
+                          border: "none",
+                          borderRadius: "4px",
+                          padding: "5px 8px",
+                          fontSize: "0.75rem",
+                          fontWeight: "600",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "0.3rem",
+                        }}
+                      >
+                        Pilih &amp; Pantau KPS Ini
+                      </button>
+                    </div>
+                  </Popup>
+                </GeoJSON>
+              ))}
+
+              {/* Visualisasi Poligon KPS Utama Terpilih (High-Contrast Neon Cyan) */}
               {threatDetail?.geometry && (
                 <GeoJSON
                   key={`threat-polygon-${threatDetail.polygon_id}`}
@@ -930,31 +1023,46 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                 </>
               )}
 
-              {/* Titik-Titik Hotspot di Perimeter Luar */}
+              {/* Titik-Titik Hotspot: Di Dalam Kawasan & Perimeter Luar */}
               {threatDetail?.hotspots.map((h) => {
+                const isInside = Boolean(h.is_inside || h.status_level === "internal");
                 const isHbahaya = h.status_level === "bahaya";
                 const isHwaspada = h.status_level === "waspada";
-                const pColor = isHbahaya ? "#ef4444" : isHwaspada ? "#f97316" : "#eab308";
+                const pColor = isInside
+                  ? "#f43f5e"
+                  : isHbahaya
+                  ? "#ef4444"
+                  : isHwaspada
+                  ? "#f97316"
+                  : "#eab308";
 
                 return (
                   <CircleMarker
                     key={h.id}
                     center={[h.latitude, h.longitude]}
-                    radius={isHbahaya ? 7.5 : 6}
+                    radius={isInside ? 8 : isHbahaya ? 7.5 : 6}
                     pathOptions={{
                       color: "#ffffff",
-                      weight: 2,
+                      weight: isInside ? 2.5 : 2,
                       fillColor: pColor,
-                      fillOpacity: 0.95
+                      fillOpacity: isInside ? 1 : 0.95
                     }}
                   >
                     <Popup>
-                      <div style={{ color: "#111827", fontSize: "0.8rem", minWidth: "170px" }}>
+                      <div style={{ color: "#111827", fontSize: "0.8rem", minWidth: "180px" }}>
                         <div style={{ fontWeight: "700", color: pColor, marginBottom: "0.2rem" }}>
-                          🔥 Hotspot Luar ({h.status_label})
+                          {isInside ? "🚨 Hotspot di DALAM Kawasan (Aktif)" : `🔥 Hotspot Luar (${h.status_label})`}
                         </div>
-                        <div>Jarak ke KPS: <strong>{h.distance_m} m</strong> ({h.distance_km} km)</div>
-                        <div>Arah dari KPS: <strong>{h.bearing_compass}</strong> ({h.bearing_deg}°)</div>
+                        {isInside ? (
+                          <div style={{ color: "#dc2626", fontWeight: "600", marginBottom: "0.2rem" }}>
+                            Titik api aktif terdeteksi di dalam poligon KPS
+                          </div>
+                        ) : (
+                          <>
+                            <div>Jarak ke KPS: <strong>{h.distance_m} m</strong> ({h.distance_km} km)</div>
+                            <div>Arah dari KPS: <strong>{h.bearing_compass}</strong> ({h.bearing_deg}°)</div>
+                          </>
+                        )}
                         {h.frp > 0 && <div>FRP: <strong>{h.frp} MW</strong></div>}
                         <div>Satelit: {h.satellite || "-"} ({h.confidence || "-"})</div>
                         <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: "0.25rem" }}>
@@ -974,7 +1082,15 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
                 <span style={{ width: "14px", height: "3px", backgroundColor: "#00e5ff", border: "1px dashed #0284c7" }} />
-                <span>Batas Kawasan KPS</span>
+                <span>Batas Kawasan KPS (Terpilih)</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                <span style={{ width: "14px", height: "3px", backgroundColor: "#818cf8", border: "1px dashed #6366f1" }} />
+                <span>Batas KPS Bersebelahan / Sekitar</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: "#f43f5e", border: "2px solid #fff" }} />
+                <span style={{ color: "#fda4af", fontWeight: "600" }}>Hotspot di DALAM Kawasan</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
                 <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#ef4444", border: "1.5px solid #fff" }} />
