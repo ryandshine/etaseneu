@@ -45,7 +45,7 @@ class _CacheMixin:
                         expires_at = EXCLUDED.expires_at,
                         updated_at = NOW()
                     """,
-                    (key, Json(payload), expires_at),
+                    (key, Json(payload, dumps=lambda obj: json.dumps(obj, default=str)), expires_at),
                 )
 
     def clear_cache_entries(self) -> int:

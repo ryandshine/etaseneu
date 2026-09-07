@@ -14,10 +14,13 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from math import asin, cos, floor, radians, sin, sqrt
 
+from pathlib import Path
+
 from shapely.geometry import Point, mapping
 from shapely.ops import unary_union
 
 from app.core.config import get_settings
+from app.services.cache_service import CacheService
 from app.services.postgres_store import PostgresStore
 
 
@@ -375,9 +378,18 @@ def _summarize(
 
 
 class HotspotClusterService:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        postgres_store: PostgresStore | None = None,
+        cache_service: CacheService | None = None,
+    ) -> None:
         settings = get_settings()
-        self.postgres_store = PostgresStore(settings.database_url)
+        self.postgres_store = postgres_store or PostgresStore(settings.database_url)
+        self.cache_service = cache_service or CacheService(
+            Path(settings.cache_dir),
+            settings.cache_ttl_hours,
+            settings.database_url,
+        )
 
     def compute_clusters(
         self,
@@ -389,9 +401,17 @@ class HotspotClusterService:
         min_samples: int,
         location_eps_km: float,
     ) -> dict[str, object]:
+        cache_key = (
+            f"hotspot_clusters_{start_at.isoformat()}_{end_at.isoformat()}_"
+            f"{eps_km:.2f}_{eps_hours:.1f}_{min_samples}_{location_eps_km:.2f}"
+        )
+        cached = self.cache_service.read(cache_key)
+        if cached is not None and isinstance(cached, dict):
+            return cached
+
         points = self.postgres_store.get_hotspots_in_range(start_at, end_at)
         if not points:
-            return {
+            empty_res = {
                 "count": 0,
                 "clusters": [],
                 "points": [],
@@ -401,6 +421,8 @@ class HotspotClusterService:
                     "unclustered_hotspots": 0,
                 },
             }
+            self.cache_service.write(cache_key, empty_res, ttl_hours=1)
+            return empty_res
 
         edges = self.postgres_store.find_proximity_edges(
             start_at=start_at, end_at=end_at, eps_km=eps_km, eps_hours=eps_hours
@@ -408,4 +430,6 @@ class HotspotClusterService:
         point_ids = [p["id"] for p in points]
         labels = _graph_cluster(point_ids, edges, min_samples)
         core_point_ids = _core_point_ids(point_ids, edges, min_samples)
-        return _summarize(points, labels, core_point_ids, eps_km, location_eps_km)
+        result = _summarize(points, labels, core_point_ids, eps_km, location_eps_km)
+        self.cache_service.write(cache_key, result, ttl_hours=1)
+        return result

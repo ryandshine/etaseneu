@@ -31,9 +31,9 @@ async def get_hotspot_clusters(
 ) -> dict[str, object]:
     preset = SENSITIVITY_PRESETS.get(sensitivity, SENSITIVITY_PRESETS["sedang"])
 
-    resolved_end_at = _normalize_datetime(end_at) if end_at else datetime.now(timezone.utc)
+    resolved_end_at = _normalize_cluster_time(end_at) if end_at else _normalize_cluster_time(datetime.now(timezone.utc))
     resolved_start_at = (
-        _normalize_datetime(start_at) if start_at else resolved_end_at - timedelta(days=7)
+        _normalize_cluster_time(start_at) if start_at else resolved_end_at - timedelta(days=7)
     )
 
     service = HotspotClusterService()
@@ -80,3 +80,10 @@ def _normalize_datetime(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+def _normalize_cluster_time(value: datetime) -> datetime:
+    dt = _normalize_datetime(value)
+    # Bulatkan ke batas 10 menit agar cache key stabil untuk permintaan berulang
+    minute = (dt.minute // 10) * 10
+    return dt.replace(minute=minute, second=0, microsecond=0)

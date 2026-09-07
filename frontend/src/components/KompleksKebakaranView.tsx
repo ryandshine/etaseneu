@@ -423,7 +423,9 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
     setSelectedId(null);
     setShowCoreRadii(false);
 
-    const endAt = new Date();
+    const now = new Date();
+    const TEN_MIN_MS = 10 * 60 * 1000;
+    const endAt = new Date(Math.floor(now.getTime() / TEN_MIN_MS) * TEN_MIN_MS);
     const startAt = new Date(endAt.getTime() - timeRangeDays * 24 * 60 * 60 * 1000);
 
     api

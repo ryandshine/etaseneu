@@ -50,7 +50,7 @@ class CacheService:
             except Exception:
                 pass
         try:
-            cache_file.write_text(json.dumps(payload), encoding="utf-8")
+            cache_file.write_text(json.dumps(payload, default=str), encoding="utf-8")
         except OSError:
             pass
 
