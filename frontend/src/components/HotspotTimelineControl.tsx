@@ -1,4 +1,4 @@
-import { Pause, Play, X } from "lucide-react";
+import { Film, Pause, Play, X } from "lucide-react";
 import type { HotspotTimeline } from "../hooks/useHotspotTimeline";
 
 export type HotspotTimelineControlProps = Pick<
@@ -11,7 +11,10 @@ export type HotspotTimelineControlProps = Pick<
   | "toggle"
   | "seek"
   | "cycleSpeed"
-> & { onClose(): void };
+> & {
+  onClose(): void;
+  onDownloadAnimation?: () => void;
+};
 
 /** Bar pemutar waktu melayang di bawah-tengah peta: play/pause,
  *  histogram-scrubber (jumlah titik per bucket), label WIB, kecepatan. */
@@ -25,6 +28,7 @@ export function HotspotTimelineControl({
   seek,
   cycleSpeed,
   onClose,
+  onDownloadAnimation,
 }: HotspotTimelineControlProps) {
   const maxCount = Math.max(1, ...buckets.map((b) => b.count));
   const lastIndex = Math.max(buckets.length - 1, 0);
@@ -88,6 +92,18 @@ export function HotspotTimelineControl({
       >
         {speed}×
       </button>
+
+      {onDownloadAnimation && (
+        <button
+          type="button"
+          className="timeline-control__download"
+          onClick={onDownloadAnimation}
+          aria-label="Unduh animasi"
+          title="Unduh animasi (GIF / Video)"
+        >
+          <Film size={14} />
+        </button>
+      )}
 
       <button
         type="button"

@@ -22,6 +22,10 @@ export type PopupHotspot = {
   fungsiKawasan?: string;
   namaKawasan?: string;
   kelompokKawasan?: string;
+  is_inside?: boolean;
+  distance_km?: number;
+  bearing_compass?: string;
+  threat_origin_label?: string;
 };
 
 type SpotWeather = {
@@ -302,6 +306,13 @@ export function HotspotPopupContent({
           </span>
         )}
       </div>
+
+      {hotspot.is_inside === false && (
+        <div className="popup-external-threat-banner">
+          <span>⚠️ Luar Kawasan ({hotspot.distance_km ?? "?"} km dari batas)</span>
+          {hotspot.bearing_compass && <span> • Arah {hotspot.bearing_compass}</span>}
+        </div>
+      )}
 
       <dl className="popup-grid popup-grid--tight">
         <div style={{ gridColumn: "span 2" }}>

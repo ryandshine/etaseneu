@@ -348,3 +348,57 @@ class _HotspotObservationMixin:
                 )
                 rows = cur.fetchall()
         return [(row["id_a"], row["id_b"]) for row in rows]
+
+    def read_polygon_surrounding_hotspots(
+        self,
+        *,
+        polygon_id: int,
+        buffer_km: float,
+        start_at: datetime,
+        end_at: datetime,
+        sources: list[str] | None = None,
+    ) -> list[dict[str, object]]:
+        """Baca seluruh titik hotspot di dalam poligon dan di area penyangga (buffer) luarnya.
+
+        Memanfaatkan ST_DWithin(poly.geometry, obs.geom, buffer_deg) untuk GiST index,
+        dan menghitung jarak riil geodetik (meter) serta bearing arah mata angin.
+        """
+        buffer_deg = max(0.001, buffer_km / 111.32)
+        source_filter = "AND obs.source = ANY(%s)" if sources else ""
+
+        sql = f"""
+            SELECT
+                obs.id,
+                obs.source,
+                obs.satellite,
+                obs.latitude,
+                obs.longitude,
+                obs.brightness,
+                obs.confidence,
+                COALESCE((obs.raw_payload->>'frp')::float, 0.0) AS frp,
+                to_char(obs.detected_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS detected_at,
+                obs.layer_key,
+                obs.agency_name,
+                obs.raw_payload,
+                ST_Intersects(poly.geometry, obs.geom) AS is_inside,
+                CASE
+                    WHEN ST_Intersects(poly.geometry, obs.geom) THEN 0
+                    ELSE ROUND(ST_Distance(poly.geometry::geography, obs.geom::geography))::int
+                END AS distance_m,
+                degrees(ST_Azimuth(ST_Centroid(poly.geometry), obs.geom)) AS bearing_deg
+            FROM hotspot_observations obs
+            JOIN polygon_metadata poly ON poly.id = %s
+            WHERE obs.detected_at >= %s::timestamptz AND obs.detected_at <= %s::timestamptz
+              AND ST_DWithin(poly.geometry, obs.geom, %s)
+              {source_filter}
+            ORDER BY obs.detected_at ASC, obs.id ASC;
+        """
+        params: list[object] = [polygon_id, start_at, end_at, buffer_deg]
+        if sources:
+            params.append(sources)
+
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                return cur.fetchall()
+

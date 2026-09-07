@@ -14,7 +14,8 @@ import type {
   ManualSyncResponse,
   SchedulerMetricsResponse,
   StatsResponse,
-  StorageStatusResponse
+  StorageStatusResponse,
+  SurroundingHotspotResponse
 } from "../types/api";
 
 type QueryPrimitive = string | number | boolean;
@@ -257,6 +258,16 @@ export function createApiClient(baseUrl = "/api"): ApiClient {
     getStorageStatus: () => fetchJson<StorageStatusResponse>(endpoints.storageStatus),
     getSchedulerMetrics: () => fetchJson<SchedulerMetricsResponse>(endpoints.schedulerMetrics),
     triggerManualSync: (adminKey, authToken) =>
-      fetchJson<ManualSyncResponse>(endpoints.schedulerSync, "POST", adminHeaders(adminKey, authToken))
+      fetchJson<ManualSyncResponse>(endpoints.schedulerSync, "POST", adminHeaders(adminKey, authToken)),
+    getPolygonSurroundingHotspots: (polygonId, params) => {
+      const queryRecord: Record<string, QueryValue> = {};
+      if (params?.buffer_km !== undefined) queryRecord.buffer_km = params.buffer_km;
+      if (params?.start_at) queryRecord.start_at = params.start_at;
+      if (params?.end_at) queryRecord.end_at = params.end_at;
+      if (params?.satellites && params.satellites.length > 0) queryRecord.satellites = params.satellites;
+      return fetchJson<SurroundingHotspotResponse>(
+        withQuery(`${baseUrl}/polygons/${polygonId}/surrounding-hotspots`, queryRecord)
+      );
+    }
   };
 }

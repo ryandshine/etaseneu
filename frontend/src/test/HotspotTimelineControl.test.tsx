@@ -71,4 +71,13 @@ describe("HotspotTimelineControl", () => {
     fireEvent.click(screen.getByRole("button", { name: /tutup pemutar/i }));
     expect(p.onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("renders download animation button and calls onDownloadAnimation when clicked", () => {
+    const onDownloadAnimation = vi.fn();
+    setup({ onDownloadAnimation });
+    const downloadBtn = screen.getByRole("button", { name: /unduh animasi/i });
+    expect(downloadBtn).toBeInTheDocument();
+    fireEvent.click(downloadBtn);
+    expect(onDownloadAnimation).toHaveBeenCalledTimes(1);
+  });
 });

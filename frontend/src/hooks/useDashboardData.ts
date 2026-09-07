@@ -46,6 +46,12 @@ export type DashboardHotspot = {
   fungsiKawasan: string;
   namaKawasan: string;
   kelompokKawasan: string;
+  is_inside?: boolean;
+  distance_m?: number;
+  distance_km?: number;
+  bearing_compass?: string;
+  threat_origin?: "internal" | "non_kps" | "neighbor_kps";
+  threat_origin_label?: string;
 };
 type RemoteStats = {
   total: number;

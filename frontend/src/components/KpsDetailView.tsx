@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Clock, Download } from "lucide-react";
+import { ArrowLeft, Clock, Download, Film, ShieldAlert } from "lucide-react";
 import { CircleMarker, GeoJSON, LayerGroup, MapContainer, Pane, Popup, TileLayer, useMap } from "react-leaflet";
 import { canvas as buildLeafletCanvas, circleMarker as buildLeafletCircleMarker, geoJSON as buildLeafletGeoJSON } from "leaflet";
 import type { CircleMarker as LCircleMarker, LayerGroup as LLayerGroup } from "leaflet";
@@ -9,11 +9,13 @@ import { TIME_PRESET_OPTIONS } from "../constants/time-windows";
 import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
 import type { DashboardHotspot } from "../hooks/useDashboardData";
 import { useHotspotTimeline } from "../hooks/useHotspotTimeline";
-import { opacityForBucket } from "../lib/hotspotTimeline";
+import { bucketLabelWIB, opacityForBucket } from "../lib/hotspotTimeline";
 import { applyMarkerOpacity } from "../lib/leafletMarkerOpacity";
 import { authFetch, createApiClient } from "../lib/api";
 import { getTodayWIB } from "../lib/date";
-import type { PolygonDetail } from "../types/api";
+import type { PolygonDetail, SurroundingHotspotItem } from "../types/api";
+import { ExportAnimationModal } from "./ExportAnimationModal";
+import { exportToGif, exportToVideo, downloadBlob } from "../lib/exportAnimation";
 import { HotspotPopupContent } from "./HotspotPopupContent";
 import { HotspotTimelineControl } from "./HotspotTimelineControl";
 import { WeatherConditionCard } from "./WeatherConditionCard";
@@ -303,6 +305,41 @@ type KpsMarkersLayerProps = {
   registerMarker: (id: string, layer: LCircleMarker | null) => void;
 };
 
+function mapSurroundingToDashboardHotspot(item: SurroundingHotspotItem): DashboardHotspot {
+  return {
+    id: String(item.id),
+    latitude: item.latitude,
+    longitude: item.longitude,
+    source: item.source,
+    satellite: item.satellite,
+    layerName: item.layer_key ?? "perimeter_threat",
+    agencyName: item.agency_name ?? (item.is_inside ? "Dalam Kawasan" : "Luar Kawasan"),
+    provinceName: "",
+    brightness: item.brightness,
+    frp: item.frp,
+    confidence: item.confidence ?? "nominal",
+    daynight: "D",
+    detectedAt: item.detected_at,
+    polygonMetadata: {
+      LEMBAGA: item.agency_name ?? (item.is_inside ? "Dalam Kawasan" : "Luar Kawasan"),
+      is_external: item.is_inside ? "false" : "true",
+      distance_m: String(item.distance_m ?? 0),
+      distance_km: String(item.distance_km ?? 0),
+      bearing_compass: item.bearing_compass ?? "",
+      threat_origin: item.threat_origin ?? "internal",
+    },
+    fungsiKawasan: "",
+    namaKawasan: "",
+    kelompokKawasan: "",
+    is_inside: item.is_inside,
+    distance_m: item.distance_m,
+    distance_km: item.distance_km,
+    bearing_compass: item.bearing_compass,
+    threat_origin: item.threat_origin,
+    threat_origin_label: item.threat_origin_label,
+  };
+}
+
 // Sama pola dengan HotspotMarkersLayer di HotspotMap.tsx: diekstrak ke
 // child `memo` supaya animasi timeline TIDAK me-render ulang seluruh
 // `KpsDetailView` (tabel deteksi, grafik, dst. di bawah peta) tiap tick --
@@ -315,26 +352,39 @@ const KpsHotspotMarkersLayer = memo(function KpsHotspotMarkersLayer({
 }: KpsMarkersLayerProps) {
   return (
     <>
-      {hotspots.map((hotspot) => (
-        <CircleMarker
-          key={hotspot.id}
-          center={[hotspot.latitude, hotspot.longitude]}
-          radius={6}
-          renderer={renderer}
-          ref={(l) => registerMarker(hotspot.id, (l as unknown as LCircleMarker | null) ?? null)}
-          pathOptions={{
-            color: "#1b120d",
-            weight: 2,
-            fillColor: sourceColor(hotspot.source),
-            fillOpacity: 0.95
-          }}
-          eventHandlers={{ click: () => onSelect(hotspot.id) }}
-        >
-          <Popup pane="popupPane">
-            <HotspotPopupContent hotspot={hotspot} />
-          </Popup>
-        </CircleMarker>
-      ))}
+      {hotspots.map((hotspot) => {
+        const isExternal = hotspot.is_inside === false;
+        return (
+          <CircleMarker
+            key={hotspot.id}
+            center={[hotspot.latitude, hotspot.longitude]}
+            radius={isExternal ? 7 : 6}
+            renderer={renderer}
+            ref={(l) => registerMarker(hotspot.id, (l as unknown as LCircleMarker | null) ?? null)}
+            pathOptions={
+              isExternal
+                ? {
+                    color: "#f59e0b",
+                    weight: 2.2,
+                    dashArray: "3 3",
+                    fillColor: hotspot.threat_origin === "non_kps" ? "#f59e0b" : "#f43f5e",
+                    fillOpacity: 0.9
+                  }
+                : {
+                    color: "#1b120d",
+                    weight: 2,
+                    fillColor: sourceColor(hotspot.source),
+                    fillOpacity: 0.95
+                  }
+            }
+            eventHandlers={{ click: () => onSelect(hotspot.id) }}
+          >
+            <Popup pane="popupPane">
+              <HotspotPopupContent hotspot={hotspot} />
+            </Popup>
+          </CircleMarker>
+        );
+      })}
     </>
   );
 });
@@ -423,6 +473,89 @@ export function KpsDetailView({
   // Polygon ID efektif: bisa berasal dari hotspot/initialPolygonId, atau
   // terisi setelah detail poligon berhasil dimuat via lookup nama lembaga (/api/polygons/by-agency).
   const polygonId = hotspotPolygonId ?? (detail ? detail.id : null);
+
+  // Kontrol zona penyangga (buffer) untuk menyertakan hotspot di luar poligon KPS
+  const [includeSurrounding, setIncludeSurrounding] = useState(true);
+  const [bufferKm, setBufferKm] = useState<number>(5.0);
+  const [surroundingData, setSurroundingData] = useState<SurroundingHotspotItem[] | null>(null);
+  const [surroundingLoading, setSurroundingLoading] = useState(false);
+
+  // Rentang waktu dashboard efektif saat filter tanggal kustom halaman ini tidak aktif
+  const dashboardTimeRange = useMemo(() => {
+    if (!hotspots || hotspots.length === 0) return { start_at: undefined, end_at: undefined };
+    let minT = Infinity;
+    let maxT = -Infinity;
+    for (const h of hotspots) {
+      const t = new Date(h.detectedAt).getTime();
+      if (!Number.isNaN(t)) {
+        if (t < minT) minT = t;
+        if (t > maxT) maxT = t;
+      }
+    }
+    if (!Number.isFinite(minT) || !Number.isFinite(maxT)) {
+      return { start_at: undefined, end_at: undefined };
+    }
+    return {
+      start_at: new Date(minT - 3600000).toISOString(),
+      end_at: new Date(maxT + 3600000).toISOString()
+    };
+  }, [hotspots]);
+
+  useEffect(() => {
+    if (polygonId === null) {
+      setSurroundingData(null);
+      return;
+    }
+
+    let active = true;
+    setSurroundingLoading(true);
+
+    const startIso = isCustomRangeActive
+      ? wibDateBoundaryIso(customStartDate, false)
+      : dashboardTimeRange.start_at;
+    const endIso = isCustomRangeActive
+      ? wibDateBoundaryIso(customEndDate, true)
+      : dashboardTimeRange.end_at;
+
+    api
+      .getPolygonSurroundingHotspots(polygonId, {
+        buffer_km: bufferKm,
+        start_at: startIso,
+        end_at: endIso,
+        satellites: SATELLITE_OPTIONS.map((o) => o.value)
+      })
+      .then((res) => {
+        if (active && res && Array.isArray(res.hotspots)) {
+          setSurroundingData(res.hotspots);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setSurroundingData(null);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setSurroundingLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [polygonId, bufferKm, isCustomRangeActive, customStartDate, customEndDate, dashboardTimeRange]);
+
+  // Titik hotspot aktif untuk peta, tabel deteksi, dan pemutar waktu (timeline):
+  const activeHotspots = useMemo(() => {
+    if (surroundingData && surroundingData.length > 0) {
+      const mapped = surroundingData.map(mapSurroundingToDashboardHotspot);
+      const filtered = includeSurrounding ? mapped : mapped.filter((h) => h.is_inside !== false);
+      return filtered.sort(
+        (a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime()
+      );
+    }
+    return kpsHotspots;
+  }, [surroundingData, includeSurrounding, kpsHotspots]);
 
   useEffect(() => {
     if (hotspotPolygonId === null && !agency) {
@@ -704,9 +837,11 @@ export function KpsDetailView({
     let tinggi = 0;
     let sedang = 0;
     let rendah = 0;
+    let insideCount = 0;
+    let outsideCount = 0;
     const satellites = new Set<string>();
 
-    kpsHotspots.forEach((hotspot) => {
+    activeHotspots.forEach((hotspot) => {
       const frp = hotspot.frp ?? 0;
       if (frp > 30) {
         tinggi += 1;
@@ -715,24 +850,37 @@ export function KpsDetailView({
       } else {
         rendah += 1;
       }
+      if (hotspot.is_inside === false) {
+        outsideCount += 1;
+      } else {
+        insideCount += 1;
+      }
       satellites.add(hotspot.source);
     });
 
-    return { total: kpsHotspots.length, tinggi, sedang, rendah, satellites: Array.from(satellites) };
-  }, [kpsHotspots]);
+    return {
+      total: activeHotspots.length,
+      insideCount,
+      outsideCount,
+      tinggi,
+      sedang,
+      rendah,
+      satellites: Array.from(satellites)
+    };
+  }, [activeHotspots]);
 
   // Deteksi yang sedang ditelaah di bawah -- default ke yang paling baru,
   // tapi user bisa ketuk baris lain di "Daftar Deteksi Hotspot".
   const [selectedDetectionId, setSelectedDetectionId] = useState<string | null>(null);
   const [detectionPage, setDetectionPage] = useState(1);
-  const detectionTotalPages = Math.max(1, Math.ceil(kpsHotspots.length / DETECTION_PAGE_SIZE));
-  const pagedKpsHotspots = kpsHotspots.slice(
+  const detectionTotalPages = Math.max(1, Math.ceil(activeHotspots.length / DETECTION_PAGE_SIZE));
+  const pagedKpsHotspots = activeHotspots.slice(
     (detectionPage - 1) * DETECTION_PAGE_SIZE,
     detectionPage * DETECTION_PAGE_SIZE
   );
   const selectedDetection = useMemo(
-    () => kpsHotspots.find((hotspot) => hotspot.id === selectedDetectionId) ?? kpsHotspots[0] ?? null,
-    [kpsHotspots, selectedDetectionId]
+    () => activeHotspots.find((hotspot) => hotspot.id === selectedDetectionId) ?? activeHotspots[0] ?? null,
+    [activeHotspots, selectedDetectionId]
   );
 
   const comparison = useMemo(
@@ -779,14 +927,10 @@ export function KpsDetailView({
         layer.bringToFront();
       }
     });
-  }, [kpsHotspots, effectiveBurnedGeometry, effectiveS2Geometry]);
+  }, [activeHotspots, effectiveBurnedGeometry, effectiveS2Geometry]);
 
-  // ---- Pemutar waktu (timeline animasi) -- sama seperti di HotspotMap.tsx
-  // (peta utama), atas `kpsHotspots` (sudah difilter rentang tanggal halaman
-  // ini). Cuma CircleMarker di sini (tidak ada varian ikon FRP tinggi seperti
-  // di peta utama), jadi registry-nya lebih sederhana. `applyMarkerOpacity`
-  // & `opacityForBucket` diimpor dari modul yang sama dengan HotspotMap.tsx
-  // supaya keduanya tidak diam-diam menyimpang.
+  // ---- Pemutar waktu (timeline animasi) -- atas activeHotspots
+  // (mencakup titik dalam kawasan dan titik di zona penyangga luar).
   const markerRefs = useRef(new Map<string, LCircleMarker>());
   const registerMarker = useCallback((id: string, layer: LCircleMarker | null) => {
     if (layer) markerRefs.current.set(id, layer);
@@ -794,8 +938,8 @@ export function KpsDetailView({
   }, []);
 
   const [timelineOn, setTimelineOn] = useState(false);
-  const timelineEnabled = timelineOn && kpsHotspots.length > 0;
-  const timeline = useHotspotTimeline(kpsHotspots, { enabled: timelineEnabled });
+  const timelineEnabled = timelineOn && activeHotspots.length > 0;
+  const timeline = useHotspotTimeline(activeHotspots, { enabled: timelineEnabled });
 
   useEffect(() => {
     const refs = markerRefs.current;
@@ -807,7 +951,121 @@ export function KpsDetailView({
       const b = timeline.bucketIndexById.get(id) ?? 0;
       applyMarkerOpacity(layer, opacityForBucket(timeline.playheadIndex, b));
     });
-  }, [timelineEnabled, timeline.playheadIndex, timeline.bucketIndexById, kpsHotspots]);
+  }, [timelineEnabled, timeline.playheadIndex, timeline.bucketIndexById, activeHotspots]);
+
+  // ---- Ekspor & Unduh Animasi (GIF / Video)
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+  const handleStartExport = async (
+    format: "gif" | "webm",
+    speedMs: number,
+    onProgress: (current: number, total: number, statusText: string) => void,
+    signal: AbortSignal
+  ) => {
+    const container = mapContainerRef.current;
+    if (!container) {
+      throw new Error("Elemen peta tidak ditemukan");
+    }
+
+    setTimelineOn(true);
+
+    const originalPlayhead = timeline.playheadIndex;
+    const totalFrames = timeline.buckets.length;
+    const kpsTitle = detail?.lembaga || agency;
+    const locationParts = [detail?.nama_desa, detail?.nama_kec, detail?.nama_kab, detail?.nama_prov]
+      .filter(Boolean)
+      .join(", ");
+    const luasHa = detail?.luas_final ? Number(detail.luas_final) : null;
+
+    // Label rentang waktu analisis (misal: "01 Sep 2026 s/d 07 Sep 2026 (WIB)" atau "6 Sep 2026, 01:00 WIB – 7 Sep 2026, 23:00 WIB")
+    let dateRangeLabel = "";
+    if (isCustomRangeActive && customStartDate && customEndDate) {
+      dateRangeLabel = `${customStartDate} s/d ${customEndDate} (WIB)`;
+    } else if (timeline.buckets.length > 0) {
+      const firstB = timeline.buckets[0];
+      const lastB = timeline.buckets[timeline.buckets.length - 1];
+      const startStr = bucketLabelWIB(firstB.start, timeline.bucketMs);
+      const endStr = bucketLabelWIB(lastB.end, timeline.bucketMs);
+      dateRangeLabel = `${startStr} – ${endStr}`;
+    } else {
+      dateRangeLabel = "Rentang Waktu Dashboard";
+    }
+
+    const stepToFrame = async (frameIndex: number) => {
+      timeline.seek(frameIndex);
+      const refs = markerRefs.current;
+      refs.forEach((layer, id) => {
+        const b = timeline.bucketIndexById.get(id) ?? 0;
+        applyMarkerOpacity(layer, opacityForBucket(frameIndex, b));
+      });
+    };
+
+    const getOverlayInfo = (frameIndex: number) => {
+      const bucket = timeline.buckets[frameIndex];
+      let activeCount = 0;
+      let insideCount = 0;
+      let outsideCount = 0;
+      activeHotspots.forEach((h) => {
+        const b = timeline.bucketIndexById.get(h.id);
+        if (b !== undefined && opacityForBucket(frameIndex, b) > 0.05) {
+          activeCount += 1;
+          if (h.is_inside === false) outsideCount += 1;
+          else insideCount += 1;
+        }
+      });
+
+      return {
+        title: kpsTitle,
+        subtitle: locationParts ? `${locationParts} • Luas: ${luasHa ? luasHa.toLocaleString() : "-"} Ha` : undefined,
+        dateRangeLabel,
+        timeLabel: bucket ? bucketLabelWIB(bucket.start, timeline.bucketMs) : "WIB",
+        activeCount,
+        insideCount,
+        outsideCount,
+        bufferKm,
+        frameIndex,
+        totalFrames
+      };
+    };
+
+    try {
+      let blob: Blob;
+      if (format === "gif") {
+        blob = await exportToGif({
+          mapContainer: container,
+          totalFrames,
+          stepToFrame,
+          getOverlayInfo,
+          delayMs: speedMs,
+          onProgress,
+          signal
+        });
+      } else {
+        blob = await exportToVideo({
+          mapContainer: container,
+          totalFrames,
+          stepToFrame,
+          getOverlayInfo,
+          delayMs: speedMs,
+          onProgress,
+          signal
+        });
+      }
+
+      const dateStr = getTodayWIB();
+      const safeTitle = kpsTitle.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
+      const filename = `Animasi_Hotspot_${safeTitle}_${dateStr}.${format}`;
+      downloadBlob(blob, filename);
+    } finally {
+      timeline.seek(originalPlayhead);
+      const refs = markerRefs.current;
+      refs.forEach((layer, id) => {
+        const b = timeline.bucketIndexById.get(id) ?? 0;
+        applyMarkerOpacity(layer, opacityForBucket(originalPlayhead, b));
+      });
+    }
+  };
 
   return (
     <div className="kps-detail">
@@ -915,11 +1173,72 @@ export function KpsDetailView({
             <p className="help-copy">Polygon KPS ini belum terhubung ke data spasial.</p>
           )}
 
+          {/* Panel Kontrol Hotspot Sekitar Kawasan (Buffer) */}
+          <div className="kps-detail-buffer-card">
+            <div className="kps-detail-buffer-header">
+              <div className="kps-detail-buffer-title">
+                <ShieldAlert size={15} style={{ color: "#f59e0b" }} />
+                <span>Titik Luar Kawasan (Buffer)</span>
+              </div>
+              <label className="buffer-toggle-switch" title="Sertakan titik hotspot di luar poligon KPS">
+                <input
+                  type="checkbox"
+                  checked={includeSurrounding}
+                  onChange={(e) => setIncludeSurrounding(e.target.checked)}
+                />
+                <span className="buffer-toggle-slider" />
+              </label>
+            </div>
+            <p className="help-copy" style={{ fontSize: "0.76rem", margin: "0.25rem 0 0.5rem" }}>
+              Hotspot di sekitar kawasan untuk deteksi dini arah rambatan api.
+            </p>
+            {includeSurrounding && (
+              <div className="kps-detail-buffer-radius-row">
+                <span className="buffer-radius-label">Radius Buffer:</span>
+                <div className="buffer-radius-options">
+                  {[2.0, 5.0, 10.0].map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      className={`buffer-radius-btn${bufferKm === r ? " buffer-radius-btn--active" : ""}`}
+                      onClick={() => setBufferKm(r)}
+                      disabled={surroundingLoading}
+                    >
+                      {r} km
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {surroundingLoading ? (
+              <p className="help-copy" style={{ fontSize: "0.74rem", color: "#f59e0b", marginTop: "0.35rem" }}>
+                Memindai titik sekitar kawasan...
+              </p>
+            ) : surroundingData ? (
+              <div className="buffer-summary-badge" style={{ marginTop: "0.4rem" }}>
+                {includeSurrounding ? (
+                  <span style={{ fontSize: "0.76rem", color: "#d1d5db" }}>
+                    Terdeteksi <strong style={{ color: "#f59e0b" }}>{stats.outsideCount}</strong> titik luar kawasan ({bufferKm} km)
+                  </span>
+                ) : (
+                  <span style={{ fontSize: "0.74rem", color: "#6b7280" }}>
+                    Titik luar kawasan disembunyikan
+                  </span>
+                )}
+              </div>
+            ) : null}
+          </div>
+
           <div className="kps-detail-stats">
             <div className="control-metric">
               <span>Total hotspot terpantau:</span>
               <strong>{stats.total}</strong>
             </div>
+            {includeSurrounding && stats.outsideCount > 0 && (
+              <div style={{ fontSize: "0.76rem", color: "#9ca3af", margin: "0.2rem 0 0.4rem" }}>
+                Dalam kawasan: <strong style={{ color: "#f5efe6" }}>{stats.insideCount}</strong> &bull; Luar kawasan: <strong style={{ color: "#f59e0b" }}>{stats.outsideCount}</strong>
+              </div>
+            )}
             {stats.total > 0 && (
               <div className="kps-detail-frp-breakdown">
                 <div>
@@ -1089,22 +1408,34 @@ export function KpsDetailView({
           </div>
         </aside>
 
-        <div className="kps-detail-map">
-          <button
-            type="button"
-            className={`kps-detail-timeline-toggle${timelineOn ? " kps-detail-timeline-toggle--active" : ""}`}
-            onClick={() => setTimelineOn((current) => !current)}
-            disabled={kpsHotspots.length === 0}
-            title={
-              timelineOn
-                ? "Tutup pemutar waktu hotspot"
-                : "Putar sebaran titik panas dari awal ke akhir rentang waktu terpilih"
-            }
-            aria-pressed={timelineOn}
-          >
-            <Clock size={14} />
-            <span>Timeline</span>
-          </button>
+        <div className="kps-detail-map" ref={mapContainerRef}>
+          <div className="kps-detail-map-actions">
+            <button
+              type="button"
+              className="kps-detail-action-btn kps-detail-export-btn"
+              onClick={() => setIsExportModalOpen(true)}
+              disabled={activeHotspots.length === 0}
+              title="Unduh animasi pergerakan titik panas (GIF / Video WebM)"
+            >
+              <Film size={14} />
+              <span>Unduh Animasi</span>
+            </button>
+            <button
+              type="button"
+              className={`kps-detail-timeline-toggle${timelineOn ? " kps-detail-timeline-toggle--active" : ""}`}
+              onClick={() => setTimelineOn((current) => !current)}
+              disabled={activeHotspots.length === 0}
+              title={
+                timelineOn
+                  ? "Tutup pemutar waktu hotspot"
+                  : "Putar sebaran titik panas dari awal ke akhir rentang waktu terpilih"
+              }
+              aria-pressed={timelineOn}
+            >
+              <Clock size={14} />
+              <span>Timeline</span>
+            </button>
+          </div>
           <MapContainer
             center={[-2.5, 118]}
             zoom={5}
@@ -1117,10 +1448,12 @@ export function KpsDetailView({
               attribution="Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors"
               url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
               maxZoom={16}
+              crossOrigin="anonymous"
             />
             <TileLayer
               url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
               maxZoom={16}
+              crossOrigin="anonymous"
             />
             {detail ? (
               <>
@@ -1310,7 +1643,7 @@ export function KpsDetailView({
               )}
               <LayerGroup ref={hotspotLayerGroupRef}>
                 <KpsHotspotMarkersLayer
-                  hotspots={kpsHotspots}
+                  hotspots={activeHotspots}
                   renderer={fireCanvasRenderer}
                   onSelect={setSelectedDetectionId}
                   registerMarker={registerMarker}
@@ -1330,6 +1663,7 @@ export function KpsDetailView({
               seek={timeline.seek}
               cycleSpeed={timeline.cycleSpeed}
               onClose={() => setTimelineOn(false)}
+              onDownloadAnimation={() => setIsExportModalOpen(true)}
             />
           ) : null}
         </div>
@@ -1435,7 +1769,7 @@ export function KpsDetailView({
 
           <section className="matrix-detail-card">
             <div className="matrix-detail-card__head">
-              <span>Daftar Deteksi Hotspot ({kpsHotspots.length} titik)</span>
+              <span>Daftar Deteksi Hotspot ({activeHotspots.length} titik)</span>
               <strong>Ketuk untuk detail</strong>
             </div>
             <div className="detect-list">
@@ -1468,7 +1802,17 @@ export function KpsDetailView({
                         }}
                       >
                         <td className="dt-waktu">{formatTimestamp(hotspot.detectedAt)}</td>
-                        <td className="dt-satelit">{hotspot.source}</td>
+                        <td className="dt-satelit">
+                          {hotspot.source}
+                          {hotspot.is_inside === false && (
+                            <span
+                              className="threat-outside-badge"
+                              title={`Jarak ${hotspot.distance_km ?? "?"} km arah ${hotspot.bearing_compass ?? ""}`}
+                            >
+                              Luar ({hotspot.distance_km ?? "?"} km)
+                            </span>
+                          )}
+                        </td>
                         <td className="dt-kelas">
                           <span
                             className={`confidence-pill confidence-pill--${
@@ -1489,7 +1833,7 @@ export function KpsDetailView({
               </table>
             </div>
             <div className="matrix-footer">
-              <span className="matrix-footer__count">{kpsHotspots.length} titik</span>
+              <span className="matrix-footer__count">{activeHotspots.length} titik</span>
               <div className="matrix-pagination">
                 <button
                   type="button"
@@ -1517,6 +1861,25 @@ export function KpsDetailView({
           </section>
         </div>
       )}
+
+      <ExportAnimationModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        totalFrames={timeline.buckets.length}
+        activeHotspotCount={activeHotspots.length}
+        kpsName={detail?.lembaga || agency}
+        dateRangeLabel={
+          isCustomRangeActive && customStartDate && customEndDate
+            ? `${customStartDate} s/d ${customEndDate} (WIB)`
+            : timeline.buckets.length > 0
+              ? `${bucketLabelWIB(timeline.buckets[0].start, timeline.bucketMs)} – ${bucketLabelWIB(
+                  timeline.buckets[timeline.buckets.length - 1].end,
+                  timeline.bucketMs
+                )}`
+              : "Rentang Waktu Dashboard"
+        }
+        onStartExport={handleStartExport}
+      />
     </div>
   );
 }

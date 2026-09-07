@@ -98,6 +98,45 @@ export interface HotspotRecord {
   kawasan_hutan?: KawasanHutan | null;
   fungsi_kawasan?: string;
   kelompok?: string;
+  // Field tambahan saat hotspot berasal dari perimeter threat / buffer luar
+  is_inside?: boolean;
+  distance_m?: number;
+  distance_km?: number;
+  bearing_deg?: number | null;
+  bearing_compass?: string;
+  threat_origin?: "internal" | "non_kps" | "neighbor_kps";
+  threat_origin_label?: string;
+}
+
+export interface SurroundingHotspotItem {
+  id: string;
+  source: string;
+  satellite: string;
+  latitude: number;
+  longitude: number;
+  brightness: number | null;
+  confidence: string | null;
+  frp: number;
+  detected_at: string;
+  is_inside: boolean;
+  distance_m: number;
+  distance_km: number;
+  bearing_deg: number | null;
+  bearing_compass: string;
+  threat_origin: "internal" | "non_kps" | "neighbor_kps";
+  threat_origin_label: string;
+  agency_name: string | null;
+  layer_key: string | null;
+  polygon_metadata: Record<string, unknown>;
+}
+
+export interface SurroundingHotspotResponse {
+  polygon_id: number;
+  buffer_km: number;
+  total_inside: number;
+  total_outside: number;
+  total_hotspots: number;
+  hotspots: SurroundingHotspotItem[];
 }
 
 export interface KawasanHutan {
@@ -359,4 +398,13 @@ export interface ApiClient {
   getStorageStatus: () => Promise<StorageStatusResponse>;
   getSchedulerMetrics: () => Promise<SchedulerMetricsResponse>;
   triggerManualSync: (adminKey?: string | null, authToken?: string | null) => Promise<ManualSyncResponse>;
+  getPolygonSurroundingHotspots: (
+    polygonId: number,
+    params?: {
+      buffer_km?: number;
+      start_at?: string;
+      end_at?: string;
+      satellites?: string[];
+    }
+  ) => Promise<SurroundingHotspotResponse>;
 }
