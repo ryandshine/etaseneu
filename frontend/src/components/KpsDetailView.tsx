@@ -162,15 +162,6 @@ function wibDateBoundaryIso(dateStr: string, endOfDay: boolean): string {
   return new Date(`${dateStr}T${endOfDay ? "23:59:59" : "00:00:00"}+07:00`).toISOString();
 }
 
-// Perbandingan "YYYYMM" supaya baris/riwayat KLHK bisa disaring ke rentang
-// kustom halaman ini tanpa perlu ubah endpoint backend (datanya kecil per-KPS).
-function isPeriodInRange(year: number, month: number, startDate: string, endDate: string): boolean {
-  const period = year * 100 + month;
-  const [startYear, startMonth] = startDate.split("-").map(Number);
-  const [endYear, endMonth] = endDate.split("-").map(Number);
-  return period >= startYear * 100 + startMonth && period <= endYear * 100 + endMonth;
-}
-
 // Titik tengah (bounding-box midpoint) dari geometry GeoJSON apa pun --
 // Point, Polygon, atau MultiPolygon -- dipakai utk tombol "Salin
 // koordinat"/"Google Maps" di popup area terbakar. Bukan centroid presisi
@@ -729,24 +720,12 @@ export function KpsDetailView({
     };
   }, [polygonId]);
 
-  const effectiveS2Burned = useMemo(() => {
-    if (!isCustomRangeActive) {
-      return s2BurnedRows;
-    }
-    return s2BurnedRows.filter((row) => isPeriodInRange(row.year, row.month, customStartDate, customEndDate));
-  }, [s2BurnedRows, isCustomRangeActive, customStartDate, customEndDate]);
-
-  const effectiveS2Geometry = useMemo(() => {
-    if (!s2BurnedGeometry || !isCustomRangeActive) {
-      return s2BurnedGeometry;
-    }
-    return {
-      ...s2BurnedGeometry,
-      features: s2BurnedGeometry.features.filter((feature) =>
-        isPeriodInRange(feature.properties.year, feature.properties.month, customStartDate, customEndDate)
-      )
-    };
-  }, [s2BurnedGeometry, isCustomRangeActive, customStartDate, customEndDate]);
+  // Luas & poligon bekas terbakar (Sentinel-2 DAN Kementerian Kehutanan) SENGAJA
+  // TIDAK ikut saringan rentang waktu -- keduanya rekap/estimasi periodik yang
+  // harus selalu tampil utuh di kartu Detail KPS, apa pun rentang hotspot yang
+  // dipilih (keputusan user). Yang mengikuti rentang cuma titik hotspot.
+  const effectiveS2Burned = s2BurnedRows;
+  const effectiveS2Geometry = s2BurnedGeometry;
 
   const s2BurnedStats = useMemo(() => {
     if (effectiveS2Burned.length === 0) {
@@ -768,31 +747,10 @@ export function KpsDetailView({
     };
   }, [effectiveS2Burned]);
 
-  // Riwayat KLHK disaring ke rentang kustom (kalau aktif) di titik pemakaian
-  // ini -- fetch-nya sendiri (di atas) tetap ambil SELURUH riwayat sekali
-  // saja, datanya kecil per-KPS jadi tidak perlu bolak-balik ke server tiap
-  // ganti tanggal.
-  const effectiveBurnedAreas = useMemo(() => {
-    if (!isCustomRangeActive) {
-      return burnedAreas;
-    }
-    return burnedAreas.filter((row) => isPeriodInRange(row.year, row.month, customStartDate, customEndDate));
-  }, [burnedAreas, isCustomRangeActive, customStartDate, customEndDate]);
-
-  // Overlay peta (jejak area terbakar) mengikuti saringan rentang kustom yang
-  // sama -- supaya arsiran merah di peta konsisten dengan daftar & badge di
-  // sidebar, bukan selalu menampilkan seluruh riwayat.
-  const effectiveBurnedGeometry = useMemo(() => {
-    if (!burnedGeometry || !isCustomRangeActive) {
-      return burnedGeometry;
-    }
-    return {
-      ...burnedGeometry,
-      features: burnedGeometry.features.filter((feature) =>
-        isPeriodInRange(feature.properties.year, feature.properties.month, customStartDate, customEndDate)
-      )
-    };
-  }, [burnedGeometry, isCustomRangeActive, customStartDate, customEndDate]);
+  // Rekap resmi Kementerian Kehutanan: seluruh riwayat, tanpa saringan rentang
+  // (lihat catatan di effectiveS2Burned). Angka & poligon selalu penuh.
+  const effectiveBurnedAreas = burnedAreas;
+  const effectiveBurnedGeometry = burnedGeometry;
 
   const burnedAreaStats = useMemo(() => {
     if (effectiveBurnedAreas.length === 0) {
@@ -802,36 +760,16 @@ export function KpsDetailView({
     const sorted = [...effectiveBurnedAreas].sort(
       (a, b) => b.year - a.year || b.month - a.month
     );
-    // uniqueHa (dari ST_Union server) dihitung utk SELURUH riwayat polygon --
-    // kalau rentang kustom aktif dan tidak mencakup semua periode, angka itu
-    // jadi tidak representatif utk subset yang sedang ditampilkan, jadi ikut
-    // jatuh ke akumulasi bulanan (subset) juga, sama seperti fallback KPS yang
-    // belum punya geometry tersimpan.
-    const coversFullHistory = !isCustomRangeActive || effectiveBurnedAreas.length === burnedAreas.length;
-    const displayHa = uniqueHa !== null && coversFullHistory ? uniqueHa : accumulatedHa;
-    const isAccumulated = !(uniqueHa !== null && coversFullHistory);
+    // Selalu seluruh riwayat sekarang -> pakai uniqueHa (ST_Union server) kalau
+    // ada; kalau KPS belum punya geometry tersimpan, jatuh ke akumulasi bulanan.
+    const displayHa = uniqueHa !== null ? uniqueHa : accumulatedHa;
+    const isAccumulated = uniqueHa === null;
     // Periode (bulan) TERPISAH KPS ini tercatat terbakar -- beda dari
     // `burnedAreas.length`/`months.length` yang bisa lebih dari satu baris
     // untuk bulan yang sama (mis. beberapa bidang bekas terbakar sekaligus).
     const periodeTerbakar = new Set(effectiveBurnedAreas.map((row) => `${row.year}-${row.month}`)).size;
     return { displayHa, isAccumulated, latest: sorted[0], months: sorted, periodeTerbakar };
-  }, [effectiveBurnedAreas, burnedAreas.length, uniqueHa, isCustomRangeActive]);
-
-  // Dipakai cuma untuk pesan "tidak ada data di rentang ini" -- supaya rentang
-  // kustom yang tidak overlap dengan bulan manapun di riwayat KLHK KPS ini
-  // menampilkan penjelasan, bukan menghilangkan seluruh section "Luas
-  // terbakar" tanpa keterangan (dulu terlihat seperti data hilang/bug).
-  const fullBurnedHistoryRange = useMemo(() => {
-    if (burnedAreas.length === 0) {
-      return null;
-    }
-    const sorted = [...burnedAreas].sort((a, b) => a.year - b.year || a.month - b.month);
-    return {
-      earliest: sorted[0],
-      latest: sorted[sorted.length - 1],
-      periodeTerbakar: new Set(burnedAreas.map((row) => `${row.year}-${row.month}`)).size
-    };
-  }, [burnedAreas]);
+  }, [effectiveBurnedAreas, uniqueHa]);
 
   const stats = useMemo(() => {
     let tinggi = 0;
@@ -1133,7 +1071,7 @@ export function KpsDetailView({
               ? "Mengikuti rentang waktu dashboard saat ini."
               : customLoading
                 ? "Memuat data untuk rentang ini..."
-                : "Menampilkan titik hotspot & riwayat bekas terbakar untuk rentang kustom ini saja."}
+                : "Rentang kustom ini hanya menyaring titik hotspot. Luas & poligon bekas terbakar (Sentinel-2 & Kementerian Kehutanan) tetap tampil penuh."}
         </p>
         {isCustomRangeActive && (
           <button
@@ -1256,21 +1194,6 @@ export function KpsDetailView({
             )}
             {stats.satellites.length > 0 && (
               <p className="help-copy">Satelit: {stats.satellites.join(", ")}</p>
-            )}
-
-            {!burnedAreaStats && isCustomRangeActive && fullBurnedHistoryRange && (
-              <div style={{ marginTop: "1rem", paddingTop: "0.85rem", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-                <p className="help-copy">
-                  Tidak ada data luas terbakar (Kementerian Kehutanan) pada rentang tanggal ini.
-                </p>
-                <p className="help-copy" style={{ marginTop: "0.3rem" }}>
-                  Riwayat penuh KPS ini: {MONTH_LABELS[fullBurnedHistoryRange.earliest.month - 1]}{" "}
-                  {fullBurnedHistoryRange.earliest.year} &ndash;{" "}
-                  {MONTH_LABELS[fullBurnedHistoryRange.latest.month - 1]} {fullBurnedHistoryRange.latest.year}
-                  {" "}({fullBurnedHistoryRange.periodeTerbakar}&times; periode). Ubah rentang tanggal di atas
-                  supaya mencakup salah satu bulan itu untuk melihat datanya.
-                </p>
-              </div>
             )}
 
             {burnedAreaStats && (
@@ -1523,7 +1446,7 @@ export function KpsDetailView({
             <Pane name="kps-interaktif" style={{ zIndex: 420 }}>
               {effectiveS2Geometry && effectiveS2Geometry.features.length > 0 && (
                 <GeoJSON
-                  key={`s2burned-${polygonId}-${customStartDate}-${customEndDate}`}
+                  key={`s2burned-${polygonId}`}
                   data={effectiveS2Geometry as never}
                   {...fireRendererProp}
                   style={{
@@ -1562,10 +1485,9 @@ export function KpsDetailView({
               )}
               {effectiveBurnedGeometry && effectiveBurnedGeometry.features.length > 0 && (
                 <GeoJSON
-                  // Disertakan rentang kustom di key -- GeoJSON react-leaflet
-                  // tidak mendiff ulang `data` di render berikutnya, jadi tanpa
-                  // ini overlay tidak ikut menyempit saat filter diganti.
-                  key={`burned-${polygonId}-${customStartDate}-${customEndDate}`}
+                  // `key` per-polygon: GeoJSON react-leaflet tidak mendiff ulang
+                  // `data` di render berikutnya, jadi remount saat ganti KPS.
+                  key={`burned-${polygonId}`}
                   data={effectiveBurnedGeometry as never}
                   {...fireRendererProp}
                   style={{

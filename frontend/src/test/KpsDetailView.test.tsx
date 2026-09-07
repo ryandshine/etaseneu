@@ -177,7 +177,9 @@ describe("KpsDetailView", () => {
     // harus mengikuti hasil itu, bukan lagi 2 dari prop `hotspots` semula.
     await waitFor(() => expect(screen.getByText("1 titik")).toBeInTheDocument());
     expect(
-      screen.getByText("Menampilkan titik hotspot & riwayat bekas terbakar untuk rentang kustom ini saja.")
+      screen.getByText(
+        "Rentang kustom ini hanya menyaring titik hotspot. Luas & poligon bekas terbakar (Sentinel-2 & Kementerian Kehutanan) tetap tampil penuh."
+      )
     ).toBeInTheDocument();
 
     const resetButton = screen.getByText("Kembali ke rentang dashboard");

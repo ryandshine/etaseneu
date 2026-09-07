@@ -121,6 +121,12 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   Detail KPS (`KpsDetailView.tsx` → `GET /api/burned-area/s2-summary?polygon_ids=...`), terpisah dari
   angka Kementerian Kehutanan di kartu yang sama. Analisis dijalankan `analyze_month()` (butuh env GEE); menampilkan
   hasilnya TIDAK butuh env — cuma baca tabel.
+  **Di kartu Detail KPS, luas & poligon bekas terbakar (S2 DAN Kementerian Kehutanan) SENGAJA tidak
+  ikut saringan rentang waktu** (keputusan user) — dulu `effectiveS2*`/`effectiveBurned*` di
+  `KpsDetailView.tsx` menyaring baris/fitur ke `customStartDate..customEndDate` lewat `isPeriodInRange`
+  (dihapus); sekarang keduanya alias langsung ke state penuh (`s2BurnedRows`/`s2BurnedGeometry`/
+  `burnedAreas`/`burnedGeometry`), `burnedAreaStats` selalu pakai `uniqueHa` (ST_Union server).
+  Rentang kustom cuma menyaring titik hotspot.
 - `land_cover_service.py` — **analisis tutupan lahan per poligon** KPS/Hutan Adat, 2021–2025 (5
   tahun, dipersempit dari 2020–2025 semula), dari
   Sentinel-2 L2A via GEE + Random Forest (`ee.Classifier.smileRandomForest`, guru label Google
