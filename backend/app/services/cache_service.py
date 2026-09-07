@@ -19,7 +19,7 @@ class CacheService:
             raise ValueError("cache key must not contain path traversal segments")
         return self.cache_dir / f"{safe_key}.json"
 
-    def read(self, key: str) -> list[dict] | None:
+    def read(self, key: str) -> list[dict] | dict | None:
         if self.postgres_store.enabled:
             try:
                 cached = self.postgres_store.read_cache_entry(key)
@@ -41,13 +41,18 @@ class CacheService:
         except json.JSONDecodeError:
             return None
 
-    def write(self, key: str, payload: list[dict]) -> None:
+    def write(self, key: str, payload: list[dict] | dict, ttl_hours: float | int | None = None) -> None:
+        cache_file = self._path(key)
+        hours = ttl_hours if ttl_hours is not None else self.ttl_hours
         if self.postgres_store.enabled:
             try:
-                self.postgres_store.write_cache_entry(key, payload, self.ttl_hours)
+                self.postgres_store.write_cache_entry(key, payload, hours)
             except Exception:
                 pass
-        self._path(key).write_text(json.dumps(payload), encoding="utf-8")
+        try:
+            cache_file.write_text(json.dumps(payload), encoding="utf-8")
+        except OSError:
+            pass
 
     def clear_query_cache(self) -> int:
         removed = 0

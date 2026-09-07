@@ -3,12 +3,14 @@
 from datetime import datetime
 import io
 import math
+from pathlib import Path
 from typing import Any
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 from app.core.config import get_settings
+from app.services.cache_service import CacheService
 from app.services.postgres_store import PostgresStore
 
 
@@ -42,11 +44,22 @@ def compute_ftri_score(
 
 
 class EarlyWarningService:
-    def __init__(self, store: PostgresStore | None = None):
-        self.store = store or PostgresStore(get_settings().database_url)
+    def __init__(self, store: PostgresStore | None = None, cache_service: CacheService | None = None):
+        settings = get_settings()
+        self.store = store or PostgresStore(settings.database_url)
+        self.cache_service = cache_service or CacheService(
+            Path(settings.cache_dir),
+            settings.cache_ttl_hours,
+            settings.database_url,
+        )
 
     def get_summary_metrics(self, wilker_bps: str | None = None) -> dict[str, Any]:
         """Ambil metrik agregat makro status kebakaran KPS (bisa difilter per wilker_bps)."""
+        cache_key = f"early_warning_summary_{wilker_bps or 'all'}"
+        cached = self.cache_service.read(cache_key)
+        if cached is not None and isinstance(cached, dict):
+            return cached
+
         with self.store.connection() as conn:
             with conn.cursor() as cur:
                 wilker_clause = " AND p.wilker_bps = %s" if wilker_bps else ""
@@ -128,13 +141,13 @@ class EarlyWarningService:
                     )
                     SELECT
                         COUNT(*) as ew_total_kps,
-                        COUNT(*) FILTER (WHERE h_today > 0) as ew_today_kps,
-                        COUNT(*) FILTER (WHERE h_today = 0 AND h_yesterday > 0) as ew_yesterday_kps,
-                        COUNT(*) FILTER (WHERE h_today = 0 AND h_yesterday = 0 AND h_7d > 0) as ew_7d_kps,
+                        COUNT(*) FILTER (WHERE COALESCE(h_today, 0) > 0) as ew_today_kps,
+                        COUNT(*) FILTER (WHERE COALESCE(h_today, 0) = 0 AND COALESCE(h_yesterday, 0) > 0) as ew_yesterday_kps,
+                        COUNT(*) FILTER (WHERE COALESCE(h_today, 0) = 0 AND COALESCE(h_yesterday, 0) = 0 AND COALESCE(h_7d, 0) > 0) as ew_7d_kps,
                         -- Benar-benar tidak ada hotspot: bukan hari ini, bukan
                         -- 7 hari terakhir, DAN bukan bulan berjalan (sejajar
                         -- dengan burned_padam_total di query burned di atas).
-                        COUNT(*) FILTER (WHERE h_today = 0 AND h_7d = 0 AND h_month = 0) as ew_truly_inactive,
+                        COUNT(*) FILTER (WHERE COALESCE(h_today, 0) = 0 AND COALESCE(h_yesterday, 0) = 0 AND COALESCE(h_7d, 0) = 0 AND COALESCE(h_month, 0) = 0) as ew_truly_inactive,
                         COALESCE(SUM(h_today), 0) as ew_today_hotspots,
                         COALESCE(SUM(h_month), 0) as ew_month_hotspots,
                         COALESCE(SUM(h_total), 0) as ew_year_hotspots
@@ -144,7 +157,7 @@ class EarlyWarningService:
                 )
                 ew_stats = cur.fetchone() or {}
 
-        return {
+        res = {
             "burned_area_stats": {
                 "total_polygons": int(burned_stats.get("total_burned_polygons") or 0),
                 "total_burned_ha": float(burned_stats.get("total_burned_ha") or 0.0),
@@ -170,6 +183,8 @@ class EarlyWarningService:
             "wilker_bps": wilker_bps,
             "updated_at": datetime.now().isoformat(),
         }
+        self.cache_service.write(cache_key, res, ttl_hours=1)
+        return res
 
     def get_kps_analysis_list(
         self,
@@ -182,6 +197,11 @@ class EarlyWarningService:
         limit: int = 1500,
     ) -> list[dict[str, Any]]:
         """Ambil daftar KPS dengan filter provinsi, skema, dan wilker_bps."""
+        cache_key = f"early_warning_list_{category}_{province or 'all'}_{skema or 'all'}_{wilker_bps or 'all'}_{search or 'none'}_{limit}"
+        cached = self.cache_service.read(cache_key)
+        if cached is not None and isinstance(cached, list):
+            return cached
+
         with self.store.connection() as conn:
             with conn.cursor() as cur:
                 is_burned_filter = category in [
@@ -534,6 +554,7 @@ class EarlyWarningService:
                 "ftri_score": ftri,
                 "status_label": status_badge,
             })
+        self.cache_service.write(cache_key, results, ttl_hours=1)
         return results
 
     def build_excel_export(

@@ -10,6 +10,7 @@ import io
 import json
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import openpyxl
@@ -17,6 +18,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from app.core.config import get_settings
+from app.services.cache_service import CacheService
 from app.services.postgres_store import PostgresStore
 
 logger = logging.getLogger("fire_spread.service")
@@ -56,8 +58,18 @@ def distance_to_level(dist_m: int) -> tuple[str, str]:
 
 
 class FireSpreadService:
-    def __init__(self, postgres_store: PostgresStore | None = None) -> None:
-        self.postgres_store = postgres_store or PostgresStore(get_settings().database_url)
+    def __init__(
+        self,
+        postgres_store: PostgresStore | None = None,
+        cache_service: CacheService | None = None,
+    ) -> None:
+        settings = get_settings()
+        self.postgres_store = postgres_store or PostgresStore(settings.database_url)
+        self.cache_service = cache_service or CacheService(
+            Path(settings.cache_dir),
+            settings.cache_ttl_hours,
+            settings.database_url,
+        )
 
     def get_summary(
         self,
@@ -67,6 +79,11 @@ class FireSpreadService:
         regency: str | None = None,
     ) -> dict[str, Any]:
         """Ringkasan statistik KPS yang terancam api di perimeter luar."""
+        cache_key = f"fire_spread_summary_{time_window_hours}_{max_distance_km:.2f}_{province or 'all'}_{regency or 'all'}"
+        cached = self.cache_service.read(cache_key)
+        if cached is not None and isinstance(cached, dict):
+            return cached
+
         if not self.postgres_store.enabled:
             return {
                 "total_kps_threatened": 0,
@@ -123,7 +140,7 @@ class FireSpreadService:
                 cur.execute(sql, params)
                 row = cur.fetchone()
                 if not row:
-                    return {
+                    res: dict[str, Any] = {
                         "total_kps_threatened": 0,
                         "bahaya_count": 0,
                         "waspada_count": 0,
@@ -134,17 +151,20 @@ class FireSpreadService:
                         "time_window_hours": time_window_hours,
                         "max_distance_km": max_distance_km,
                     }
-                return {
-                    "total_kps_threatened": int(row["total_kps"] or 0),
-                    "total_external_hotspots": int(row["total_hotspots"] or 0),
-                    "non_kps_hotspots": int(row["total_non_kps_hotspots"] or 0),
-                    "neighbor_kps_hotspots": int(row["total_neighbor_kps_hotspots"] or 0),
-                    "bahaya_count": int(row["bahaya_count"] or 0),
-                    "waspada_count": int(row["waspada_count"] or 0),
-                    "pantau_count": int(row["pantau_count"] or 0),
-                    "time_window_hours": time_window_hours,
-                    "max_distance_km": max_distance_km,
-                }
+                else:
+                    res = {
+                        "total_kps_threatened": int(row["total_kps"] or 0),
+                        "total_external_hotspots": int(row["total_hotspots"] or 0),
+                        "non_kps_hotspots": int(row["total_non_kps_hotspots"] or 0),
+                        "neighbor_kps_hotspots": int(row["total_neighbor_kps_hotspots"] or 0),
+                        "bahaya_count": int(row["bahaya_count"] or 0),
+                        "waspada_count": int(row["waspada_count"] or 0),
+                        "pantau_count": int(row["pantau_count"] or 0),
+                        "time_window_hours": time_window_hours,
+                        "max_distance_km": max_distance_km,
+                    }
+                self.cache_service.write(cache_key, res, ttl_hours=1)
+                return res
 
     def get_threats(
         self,
@@ -158,6 +178,11 @@ class FireSpreadService:
         offset: int = 0,
     ) -> dict[str, Any]:
         """Daftar KPS yang terancam api luar, diurutkan dari jarak terdekat."""
+        cache_key = f"fire_spread_threats_{time_window_hours}_{max_distance_km:.2f}_{level or 'all'}_{province or 'all'}_{regency or 'all'}_{search or 'none'}_{limit}_{offset}"
+        cached = self.cache_service.read(cache_key)
+        if cached is not None and isinstance(cached, dict):
+            return cached
+
         if not self.postgres_store.enabled:
             return {"items": [], "total": 0, "limit": limit, "offset": offset}
 
@@ -185,7 +210,7 @@ class FireSpreadService:
         where_sql = " AND ".join(where_clauses)
 
         sql = f"""
-            WITH ranked_threats AS (
+            WITH candidate_threats AS (
                 SELECT
                     poly.id AS polygon_id,
                     poly.lembaga,
@@ -198,96 +223,47 @@ class FireSpreadService:
                     poly.no_sk,
                     poly.wilker_bps,
                     poly.luas_final AS luas_ha,
+                    poly.geometry,
                     COUNT(DISTINCT obs.id) AS external_hotspots_count,
                     COUNT(DISTINCT obs.id) FILTER (WHERE obs.layer_key = 'perimeter_threat') AS non_kps_count,
                     COUNT(DISTINCT obs.id) FILTER (WHERE obs.layer_key != 'perimeter_threat') AS neighbor_kps_count,
                     ROUND(MIN(ST_Distance(poly.geometry::geography, obs.geom::geography)))::int AS min_distance_m,
                     ROUND(MAX(COALESCE((obs.raw_payload->>'frp')::float, 0.0))::numeric, 1) AS max_frp,
-                    ROUND(AVG(COALESCE((obs.raw_payload->>'frp')::float, 0.0))::numeric, 1) AS avg_frp,
-                    degrees(ST_Azimuth(ST_Centroid(poly.geometry), (
-                        SELECT obs2.geom
-                        FROM hotspot_observations obs2
-                        WHERE obs2.detected_at >= NOW() - INTERVAL '{int(time_window_hours)} hours'
-                          AND ST_DWithin(poly.geometry, obs2.geom, {max_deg:.6f})
-                          AND NOT ST_Intersects(poly.geometry, obs2.geom)
-                        ORDER BY ST_Distance(poly.geometry::geography, obs2.geom::geography) ASC
-                        LIMIT 1
-                    ))) AS bearing_deg,
-                    (
-                        SELECT ST_AsGeoJSON(ST_ClosestPoint(poly.geometry, obs2.geom))
-                        FROM hotspot_observations obs2
-                        WHERE obs2.detected_at >= NOW() - INTERVAL '{int(time_window_hours)} hours'
-                          AND ST_DWithin(poly.geometry, obs2.geom, {max_deg:.6f})
-                          AND NOT ST_Intersects(poly.geometry, obs2.geom)
-                        ORDER BY ST_Distance(poly.geometry::geography, obs2.geom::geography) ASC
-                        LIMIT 1
-                    ) AS nearest_boundary_point_geojson,
-                    (
-                        SELECT ST_AsGeoJSON(obs2.geom)
-                        FROM hotspot_observations obs2
-                        WHERE obs2.detected_at >= NOW() - INTERVAL '{int(time_window_hours)} hours'
-                          AND ST_DWithin(poly.geometry, obs2.geom, {max_deg:.6f})
-                          AND NOT ST_Intersects(poly.geometry, obs2.geom)
-                        ORDER BY ST_Distance(poly.geometry::geography, obs2.geom::geography) ASC
-                        LIMIT 1
-                    ) AS nearest_hotspot_geojson,
-                    (
-                        SELECT obs2.satellite
-                        FROM hotspot_observations obs2
-                        WHERE obs2.detected_at >= NOW() - INTERVAL '{int(time_window_hours)} hours'
-                          AND ST_DWithin(poly.geometry, obs2.geom, {max_deg:.6f})
-                          AND NOT ST_Intersects(poly.geometry, obs2.geom)
-                        ORDER BY ST_Distance(poly.geometry::geography, obs2.geom::geography) ASC
-                        LIMIT 1
-                    ) AS nearest_satellite,
-                    (
-                        SELECT obs2.confidence
-                        FROM hotspot_observations obs2
-                        WHERE obs2.detected_at >= NOW() - INTERVAL '{int(time_window_hours)} hours'
-                          AND ST_DWithin(poly.geometry, obs2.geom, {max_deg:.6f})
-                          AND NOT ST_Intersects(poly.geometry, obs2.geom)
-                        ORDER BY ST_Distance(poly.geometry::geography, obs2.geom::geography) ASC
-                        LIMIT 1
-                    ) AS nearest_confidence,
-                    (
-                        SELECT obs2.layer_key
-                        FROM hotspot_observations obs2
-                        WHERE obs2.detected_at >= NOW() - INTERVAL '{int(time_window_hours)} hours'
-                          AND ST_DWithin(poly.geometry, obs2.geom, {max_deg:.6f})
-                          AND NOT ST_Intersects(poly.geometry, obs2.geom)
-                        ORDER BY ST_Distance(poly.geometry::geography, obs2.geom::geography) ASC
-                        LIMIT 1
-                    ) AS nearest_layer_key,
-                    (
-                        SELECT obs2.agency_name
-                        FROM hotspot_observations obs2
-                        WHERE obs2.detected_at >= NOW() - INTERVAL '{int(time_window_hours)} hours'
-                          AND ST_DWithin(poly.geometry, obs2.geom, {max_deg:.6f})
-                          AND NOT ST_Intersects(poly.geometry, obs2.geom)
-                        ORDER BY ST_Distance(poly.geometry::geography, obs2.geom::geography) ASC
-                        LIMIT 1
-                    ) AS nearest_agency_name,
-                    (
-                        SELECT to_char(obs2.detected_at, 'YYYY-MM-DD HH24:MI:SS OF')
-                        FROM hotspot_observations obs2
-                        WHERE obs2.detected_at >= NOW() - INTERVAL '{int(time_window_hours)} hours'
-                          AND ST_DWithin(poly.geometry, obs2.geom, {max_deg:.6f})
-                          AND NOT ST_Intersects(poly.geometry, obs2.geom)
-                        ORDER BY ST_Distance(poly.geometry::geography, obs2.geom::geography) ASC
-                        LIMIT 1
-                    ) AS nearest_detected_at
+                    ROUND(AVG(COALESCE((obs.raw_payload->>'frp')::float, 0.0))::numeric, 1) AS avg_frp
                 FROM polygon_metadata poly
                 JOIN hotspot_observations obs ON {where_sql}
                 GROUP BY poly.id
+            ),
+            filtered_threats AS (
+                SELECT *, COUNT(*) OVER() AS full_count
+                FROM candidate_threats
+                WHERE (%s::text IS NULL OR
+                       (%s = 'bahaya' AND min_distance_m < 1000) OR
+                       (%s = 'waspada' AND min_distance_m >= 1000 AND min_distance_m < 3000) OR
+                       (%s = 'pantau' AND min_distance_m >= 3000))
+                ORDER BY min_distance_m ASC, external_hotspots_count DESC
+                LIMIT %s OFFSET %s
             )
-            SELECT *, COUNT(*) OVER() AS full_count
-            FROM ranked_threats
-            WHERE (%s::text IS NULL OR
-                   (%s = 'bahaya' AND min_distance_m < 1000) OR
-                   (%s = 'waspada' AND min_distance_m >= 1000 AND min_distance_m < 3000) OR
-                   (%s = 'pantau' AND min_distance_m >= 3000))
-            ORDER BY min_distance_m ASC, external_hotspots_count DESC
-            LIMIT %s OFFSET %s;
+            SELECT
+                f.*,
+                degrees(ST_Azimuth(ST_Centroid(f.geometry), nearest.geom)) AS bearing_deg,
+                ST_AsGeoJSON(ST_ClosestPoint(f.geometry, nearest.geom)) AS nearest_boundary_point_geojson,
+                ST_AsGeoJSON(nearest.geom) AS nearest_hotspot_geojson,
+                nearest.satellite AS nearest_satellite,
+                nearest.confidence AS nearest_confidence,
+                nearest.layer_key AS nearest_layer_key,
+                nearest.agency_name AS nearest_agency_name,
+                to_char(nearest.detected_at, 'YYYY-MM-DD HH24:MI:SS OF') AS nearest_detected_at
+            FROM filtered_threats f
+            LEFT JOIN LATERAL (
+                SELECT obs2.*
+                FROM hotspot_observations obs2
+                WHERE obs2.detected_at >= NOW() - INTERVAL '{int(time_window_hours)} hours'
+                  AND ST_DWithin(f.geometry, obs2.geom, {max_deg:.6f})
+                  AND NOT ST_Intersects(f.geometry, obs2.geom)
+                ORDER BY ST_Distance(f.geometry::geography, obs2.geom::geography) ASC
+                LIMIT 1
+            ) nearest ON true;
         """
 
         exec_params = list(params) + [level, level, level, level, limit, offset]
@@ -356,7 +332,7 @@ class FireSpreadService:
                         "nearest_boundary_point": near_pt.get("coordinates") if near_pt else None,
                     })
 
-        return {
+        result = {
             "items": items,
             "total": total_count,
             "limit": limit,
@@ -364,6 +340,8 @@ class FireSpreadService:
             "time_window_hours": time_window_hours,
             "max_distance_km": max_distance_km,
         }
+        self.cache_service.write(cache_key, result, ttl_hours=1)
+        return result
 
     def get_threat_detail(
         self,
@@ -372,6 +350,11 @@ class FireSpreadService:
         max_distance_km: float = 5.0,
     ) -> dict[str, Any] | None:
         """Detail satu KPS terancam beserta GeoJSON poligon dan seluruh titik api luar."""
+        cache_key = f"fire_spread_detail_{polygon_id}_{time_window_hours}_{max_distance_km:.2f}"
+        cached = self.cache_service.read(cache_key)
+        if cached is not None and isinstance(cached, dict):
+            return cached
+
         if not self.postgres_store.enabled:
             return None
 
@@ -543,7 +526,7 @@ class FireSpreadService:
                 min_dist = ext_hotspots[0]["distance_m"] if ext_hotspots else 0
                 status_lvl, status_lbl = distance_to_level(min_dist)
 
-                return {
+                res_detail = {
                     "polygon_id": int(poly["id"]),
                     "lembaga": poly.get("lembaga") or "-",
                     "nama_kps": poly.get("nama_kps") or poly.get("lembaga") or "-",
@@ -571,6 +554,8 @@ class FireSpreadService:
                     "time_window_hours": time_window_hours,
                     "max_distance_km": max_distance_km,
                 }
+                self.cache_service.write(cache_key, res_detail, ttl_hours=1)
+                return res_detail
 
     def export_threats_xlsx(
         self,

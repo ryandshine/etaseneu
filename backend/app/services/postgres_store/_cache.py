@@ -6,7 +6,7 @@ from ._base import Json, _safe_json
 
 
 class _CacheMixin:
-    def read_cache_entry(self, key: str) -> list[dict] | None:
+    def read_cache_entry(self, key: str) -> list[dict] | dict | None:
         with self.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -28,11 +28,11 @@ class _CacheMixin:
         if datetime.now(timezone.utc) > expires_at:
             return None
 
-        payload = _safe_json(row.get("payload"), [])
-        return payload if isinstance(payload, list) else None
+        payload = _safe_json(row.get("payload"), None)
+        return payload if isinstance(payload, (list, dict)) else None
 
-    def write_cache_entry(self, key: str, payload: list[dict], ttl_hours: int) -> None:
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=ttl_hours)
+    def write_cache_entry(self, key: str, payload: list[dict] | dict, ttl_hours: float | int = 1) -> None:
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=float(ttl_hours))
         with self.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
