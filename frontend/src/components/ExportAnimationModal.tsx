@@ -35,7 +35,7 @@ export function ExportAnimationModal({
     (activeHotspotCount !== undefined
       ? `${totalFrames} frame • ${activeHotspotCount} titik terpantau`
       : undefined);
-  const [format, setFormat] = useState<"gif" | "webm">("gif");
+  const [format, setFormat] = useState<"gif" | "webm">("webm");
   const [speedMs, setSpeedMs] = useState<number>(300);
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState<{ current: number; total: number; statusText: string }>({
@@ -140,25 +140,25 @@ export function ExportAnimationModal({
                 <div className="export-modal__formats">
                   <button
                     type="button"
+                    className={`export-format-card ${format === "webm" ? "export-format-card--active" : ""}`}
+                    onClick={() => setFormat("webm")}
+                  >
+                    <div className="export-format-card__badge">VIDEO</div>
+                    <div className="export-format-card__info">
+                      <strong>Video (MP4 / WebM)</strong>
+                      <span>Direkomendasikan untuk WhatsApp &amp; ponsel — otomatis diputar</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
                     className={`export-format-card ${format === "gif" ? "export-format-card--active" : ""}`}
                     onClick={() => setFormat("gif")}
                   >
                     <div className="export-format-card__badge">GIF</div>
                     <div className="export-format-card__info">
                       <strong>GIF Animasi (.gif)</strong>
-                      <span>Ideal untuk WhatsApp, PowerPoint (.pptx), dan Word</span>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`export-format-card ${format === "webm" ? "export-format-card--active" : ""}`}
-                    onClick={() => setFormat("webm")}
-                  >
-                    <div className="export-format-card__badge">VIDEO</div>
-                    <div className="export-format-card__info">
-                      <strong>Video WebM (.webm)</strong>
-                      <span>Resolusi tinggi, hemat memori, untuk presentasi digital</span>
+                      <span>Untuk PowerPoint (.pptx) &amp; Word — WhatsApp kadang tidak memutar GIF</span>
                     </div>
                   </button>
                 </div>
@@ -195,6 +195,10 @@ export function ExportAnimationModal({
                 <p>
                   Animasi ini merekam <strong>{totalFrames} frame waktu</strong> dengan overlay otomatis
                   berisi stempel waktu WIB, nama KPS resmi, dan jumlah titik aktif (dalam poligon maupun di zona penyangga luar).
+                </p>
+                <p>
+                  Untuk dibagikan lewat <strong>WhatsApp</strong>, pilih format <strong>Video</strong> —
+                  berkas GIF sering hanya tampil sebagai gambar diam di WhatsApp.
                 </p>
               </div>
             </>

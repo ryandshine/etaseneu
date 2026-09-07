@@ -960,34 +960,10 @@ body {
   font-weight: 600;
 }
 
-/* ---- Export Animation Modal ---- */
-.export-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  animation: modalFadeIn 150ms ease;
-}
-
+/* ---- Export Animation Modal (ExportAnimationModal.tsx) ---- */
 @keyframes modalFadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-
-.export-modal {
-  background: #181b22;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 0.85rem;
-  width: 100%;
-  max-width: 520px;
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  overflow: hidden;
-  animation: modalScaleIn 180ms ease;
 }
 
 @keyframes modalScaleIn {
@@ -995,102 +971,157 @@ body {
   to { transform: scale(1); opacity: 1; }
 }
 
-.export-modal-header {
+/* Lapisan gelap penuh viewport + pemusatan kartu. position:fixed supaya lepas
+   dari `.kps-detail-map` (overflow:hidden) tempat modal dirender. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(5, 6, 8, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: modalFadeIn 150ms ease;
+}
+
+.modal-card {
+  background: #181b22;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0.85rem;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.export-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: min(90vh, 760px);
+  overflow: hidden;
+  animation: modalScaleIn 180ms ease;
+}
+
+.export-modal__header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.25rem;
+  gap: 0.75rem;
+  padding: 0.95rem 1.15rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.02);
 }
 
-.export-modal-title {
+.export-modal__header-title {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  font-size: 1rem;
+  min-width: 0;
+}
+
+.export-modal__header-title h3 {
+  margin: 0;
+  font-size: 0.98rem;
   font-weight: 700;
   color: #f9fafb;
+  line-height: 1.3;
 }
 
-.export-modal-close {
-  display: flex;
+.export-modal__icon {
+  flex-shrink: 0;
+  color: #fb923c;
+}
+
+.export-modal__close-btn {
+  flex-shrink: 0;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 0.35rem;
-  border: 1px solid transparent;
-  background: transparent;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
   color: #9ca3af;
   cursor: pointer;
-  transition: background 150ms, color 150ms;
+  transition: background 150ms, color 150ms, border-color 150ms;
 }
 
-.export-modal-close:hover {
-  background: rgba(255, 255, 255, 0.08);
+.export-modal__close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
   color: #f3f4f6;
 }
 
-.export-modal-close:disabled {
+.export-modal__close-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.export-modal-body {
-  padding: 1.25rem;
+.export-modal__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.1rem 1.15rem;
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  gap: 1.05rem;
 }
 
-.export-modal-meta-banner {
-  padding: 0.75rem 0.9rem;
-  background: rgba(59, 130, 246, 0.08);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+.export-modal__target {
+  padding: 0.7rem 0.85rem;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.2);
   border-radius: 0.5rem;
 }
 
-.export-modal-kps-name {
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: #93c5fd;
-  margin-bottom: 0.2rem;
+.export-modal__target-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #9ca3af;
 }
 
-.export-modal-meta-detail {
+.export-modal__target-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #f3f4f6;
+}
+
+.export-modal__target-sub {
   font-size: 0.75rem;
   color: #9ca3af;
 }
 
-.export-modal-section {
+.export-modal__section {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.5rem;
 }
 
-.export-modal-section-title {
-  font-size: 0.76rem;
+.export-modal__label {
+  font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: #9ca3af;
 }
 
-.export-format-grid {
+.export-modal__formats {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
+  gap: 0.55rem;
 }
 
 .export-format-card {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  padding: 0.85rem;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.75rem 0.8rem;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0.6rem;
+  border-radius: 0.55rem;
   cursor: pointer;
   text-align: left;
   transition: border-color 150ms, background 150ms;
@@ -1098,85 +1129,101 @@ body {
 
 .export-format-card:hover {
   background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
-.export-format-card--selected {
+.export-format-card--active {
   background: rgba(59, 130, 246, 0.12);
   border-color: #3b82f6;
-  box-shadow: 0 0 0 1px #3b82f6;
+  box-shadow: inset 0 0 0 1px #3b82f6;
 }
 
-.export-format-header {
+.export-format-card__badge {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.3rem;
+  background: rgba(59, 130, 246, 0.22);
+  color: #93c5fd;
+}
+
+.export-format-card__info {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  margin-bottom: 0.35rem;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
 }
 
-.export-format-name {
-  font-size: 0.88rem;
+.export-format-card__info strong {
+  font-size: 0.85rem;
   font-weight: 700;
   color: #f3f4f6;
 }
 
-.export-format-badge {
-  font-size: 0.65rem;
-  font-weight: 600;
-  padding: 0.1rem 0.35rem;
-  border-radius: 0.25rem;
-  background: rgba(59, 130, 246, 0.2);
-  color: #93c5fd;
-}
-
-.export-format-desc {
-  font-size: 0.72rem;
+.export-format-card__info span {
+  font-size: 0.73rem;
   color: #9ca3af;
   line-height: 1.35;
 }
 
-.export-speed-options {
+.export-modal__speeds {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.45rem;
 }
 
-.export-speed-btn {
-  flex: 1;
-  padding: 0.45rem 0.6rem;
+.export-modal__info-box {
+  padding: 0.7rem 0.85rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+}
+
+.export-modal__info-box p {
+  margin: 0;
   font-size: 0.75rem;
-  font-weight: 600;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #d1d5db;
-  border-radius: 0.45rem;
-  cursor: pointer;
-  transition: background 150ms, border-color 150ms, color 150ms;
+  line-height: 1.45;
+  color: #9ca3af;
 }
 
-.export-speed-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
+.export-modal__info-box p + p {
+  margin-top: 0.5rem;
 }
 
-.export-speed-btn--selected {
-  background: rgba(59, 130, 246, 0.2);
-  border-color: #3b82f6;
-  color: #93c5fd;
-}
-
-.export-progress-panel {
+.export-modal__progress-box {
   padding: 0.9rem;
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0.6rem;
+  border-radius: 0.55rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.55rem;
 }
 
-.export-progress-bar-track {
+.export-modal__progress-top {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.export-modal__progress-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #d1d5db;
+}
+
+.export-modal__progress-pct {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #60a5fa;
+}
+
+.export-progress-bar {
   width: 100%;
   height: 8px;
   background: rgba(255, 255, 255, 0.1);
@@ -1184,84 +1231,110 @@ body {
   overflow: hidden;
 }
 
-.export-progress-bar-fill {
+.export-progress-bar__fill {
   height: 100%;
   background: linear-gradient(90deg, #3b82f6, #60a5fa);
   border-radius: 4px;
   transition: width 150ms ease;
 }
 
-.export-progress-labels {
+.export-modal__progress-hint {
+  margin: 0;
+  font-size: 0.7rem;
+  color: #6b7280;
+}
+
+.export-modal__done-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  text-align: center;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 0.55rem;
+}
+
+.export-modal__done-box p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #d1fae5;
+}
+
+.export-modal__error-box {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  font-size: 0.74rem;
+  gap: 0.5rem;
+  padding: 0.7rem 0.85rem;
+  font-size: 0.78rem;
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 0.5rem;
 }
 
-.export-progress-status {
-  color: #d1d5db;
-  font-weight: 500;
-}
-
-.export-progress-percent {
-  color: #60a5fa;
-  font-weight: 700;
-}
-
-.export-modal-footer {
+.export-modal__footer {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.65rem;
-  padding: 1rem 1.25rem;
+  gap: 0.6rem;
+  padding: 0.9rem 1.15rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.02);
 }
 
-.export-btn-cancel {
-  padding: 0.45rem 0.9rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  border-radius: 0.45rem;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #d1d5db;
-  cursor: pointer;
-  transition: background 150ms, color 150ms;
-}
-
-.export-btn-cancel:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #ffffff;
-}
-
-.export-btn-submit {
+/* Tombol generik dipakai footer modal ini + beberapa tombol di Detail KPS. */
+.matrix-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
-  padding: 0.45rem 1.1rem;
+  padding: 0.5rem 0.95rem;
   font-size: 0.8rem;
   font-weight: 600;
   border-radius: 0.45rem;
-  background: #2563eb;
-  border: 1px solid #3b82f6;
-  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e5e7eb;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
-  transition: background 150ms, border-color 150ms, box-shadow 150ms;
+  transition: background 150ms, border-color 150ms, color 150ms, box-shadow 150ms;
 }
 
-.export-btn-submit:hover {
+.matrix-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+.matrix-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.matrix-btn--primary {
+  background: #2563eb;
+  border-color: #3b82f6;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+}
+
+.matrix-btn--primary:hover:not(:disabled) {
   background: #1d4ed8;
   border-color: #2563eb;
+  color: #ffffff;
   box-shadow: 0 6px 16px rgba(37, 99, 235, 0.5);
 }
 
-.export-btn-submit:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  box-shadow: none;
+/* Utilitas kecil bergaya Tailwind yang dipakai di beberapa komponen tapi
+   belum pernah didefinisikan (spinner sebelumnya tidak berputar). */
+.animate-spin {
+  animation: spin 1s linear infinite;
 }
+
+.text-orange-500 { color: #f97316; }
+.text-emerald-500 { color: #10b981; }
 
 @media (max-width: 900px) {
   .kps-detail-body {

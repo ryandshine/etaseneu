@@ -24,6 +24,40 @@ export interface AnimationExportOptions {
   signal?: AbortSignal;
 }
 
+/** Bulatkan ke bawah ke bilangan genap. Dimensi ganjil membuat encoder H.264
+ *  (dipakai WhatsApp saat mengonversi GIF/video ke MP4) menghasilkan berkas
+ *  rusak / diam -- ini penyebab umum "GIF tidak jalan di WhatsApp". */
+function evenFloor(n: number): number {
+  return Math.max(2, Math.floor(n)) & ~1;
+}
+
+/** Urutan mimeType video: MP4/H.264 lebih dulu karena itu yang diputar mulus
+ *  di WhatsApp & semua ponsel; WebM sebagai cadangan untuk browser yang belum
+ *  bisa merekam MP4 (mis. Chrome Linux lama). */
+const VIDEO_MIME_CANDIDATES = [
+  "video/mp4;codecs=avc1.42E01E",
+  "video/mp4;codecs=avc1",
+  "video/mp4",
+  "video/webm;codecs=vp9",
+  "video/webm;codecs=vp8",
+  "video/webm",
+];
+
+function pickVideoMimeType(): string {
+  if (typeof MediaRecorder === "undefined") return "video/webm";
+  for (const mime of VIDEO_MIME_CANDIDATES) {
+    if (MediaRecorder.isTypeSupported(mime)) return mime;
+  }
+  return "video/webm";
+}
+
+/** Ekstensi berkas dari tipe blob hasil ekspor. */
+export function extensionForExportBlob(blob: Blob): "gif" | "mp4" | "webm" {
+  if (blob.type.includes("gif")) return "gif";
+  if (blob.type.includes("mp4")) return "mp4";
+  return "webm";
+}
+
 /**
  * Menggambar snapshot elemen Leaflet (tiles dan canvas) beserta
  * overlay kop judul resmi, stempel waktu, dan counter hotspot ke kanvas komposit.
@@ -34,8 +68,8 @@ export function captureMapFrame(
   targetCanvas?: HTMLCanvasElement
 ): HTMLCanvasElement {
   const mapRect = mapContainer.getBoundingClientRect();
-  const width = Math.max(320, Math.round(mapRect.width));
-  const height = Math.max(240, Math.round(mapRect.height));
+  const width = evenFloor(Math.max(320, mapRect.width));
+  const height = evenFloor(Math.max(240, mapRect.height));
 
   const canvas = targetCanvas || document.createElement("canvas");
   if (canvas.width !== width || canvas.height !== height) {
@@ -276,7 +310,11 @@ export async function exportToGif(options: AnimationExportOptions): Promise<Blob
 }
 
 /**
- * Menghasilkan rekaman video WebM / MP4 menggunakan MediaRecorder kanvas
+ * Menghasilkan rekaman video menggunakan MediaRecorder kanvas.
+ * Memilih MP4/H.264 bila browser mendukung (paling kompatibel dengan
+ * WhatsApp & ponsel), jatuh ke WebM VP9/VP8 bila tidak. `blob.type`
+ * mengikuti mimeType yang benar-benar dipakai -- pemanggil menentukan
+ * ekstensi lewat `extensionForExportBlob()`.
  */
 export async function exportToVideo(options: AnimationExportOptions): Promise<Blob> {
   const {
@@ -290,28 +328,31 @@ export async function exportToVideo(options: AnimationExportOptions): Promise<Bl
   } = options;
 
   const mapRect = mapContainer.getBoundingClientRect();
-  const width = Math.max(320, Math.round(mapRect.width));
-  const height = Math.max(240, Math.round(mapRect.height));
+  const width = evenFloor(Math.max(320, mapRect.width));
+  const height = evenFloor(Math.max(240, mapRect.height));
 
   const streamCanvas = document.createElement("canvas");
   streamCanvas.width = width;
   streamCanvas.height = height;
+  // Konteks perlu disentuh sekali supaya track kanvas punya frame awal.
+  streamCanvas.getContext("2d");
 
-  const stream = streamCanvas.captureStream(25);
-  let mimeType = "video/webm;codecs=vp9";
-  if (!MediaRecorder.isTypeSupported(mimeType)) {
-    mimeType = "video/webm";
-  }
+  const fps = 30;
+  const stream = streamCanvas.captureStream(fps);
+  const track = stream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack | undefined;
+
+  const mimeType = pickVideoMimeType();
+  const isMp4 = mimeType.startsWith("video/mp4");
 
   const recordedChunks: Blob[] = [];
-  const recorder = new MediaRecorder(stream, { mimeType });
+  const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 6_000_000 });
   recorder.ondataavailable = (e) => {
     if (e.data && e.data.size > 0) {
       recordedChunks.push(e.data);
     }
   };
 
-  recorder.start();
+  recorder.start(200);
 
   try {
     for (let i = 0; i < totalFrames; i++) {
@@ -329,6 +370,9 @@ export async function exportToVideo(options: AnimationExportOptions): Promise<Bl
 
       const overlay = getOverlayInfo(i);
       captureMapFrame(mapContainer, overlay, streamCanvas);
+      // Paksa track kanvas mengambil frame ini (kalau didukung) supaya
+      // durasi video tidak bergantung pada timing auto-capture browser.
+      track?.requestFrame?.();
 
       // Tahan frame selama durasi yang dipilih
       await new Promise((resolve) => setTimeout(resolve, Math.max(100, delayMs)));
@@ -347,7 +391,7 @@ export async function exportToVideo(options: AnimationExportOptions): Promise<Bl
     recorder.onstop = () => resolve(null);
   });
 
-  return new Blob(recordedChunks, { type: "video/webm" });
+  return new Blob(recordedChunks, { type: isMp4 ? "video/mp4" : "video/webm" });
 }
 
 /**

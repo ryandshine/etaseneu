@@ -15,7 +15,7 @@ import { authFetch, createApiClient } from "../lib/api";
 import { getTodayWIB } from "../lib/date";
 import type { PolygonDetail, SurroundingHotspotItem } from "../types/api";
 import { ExportAnimationModal } from "./ExportAnimationModal";
-import { exportToGif, exportToVideo, downloadBlob } from "../lib/exportAnimation";
+import { exportToGif, exportToVideo, downloadBlob, extensionForExportBlob } from "../lib/exportAnimation";
 import { HotspotPopupContent } from "./HotspotPopupContent";
 import { HotspotTimelineControl } from "./HotspotTimelineControl";
 import { WeatherConditionCard } from "./WeatherConditionCard";
@@ -1055,7 +1055,8 @@ export function KpsDetailView({
 
       const dateStr = getTodayWIB();
       const safeTitle = kpsTitle.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
-      const filename = `Animasi_Hotspot_${safeTitle}_${dateStr}.${format}`;
+      const ext = extensionForExportBlob(blob);
+      const filename = `Animasi_Hotspot_${safeTitle}_${dateStr}.${ext}`;
       downloadBlob(blob, filename);
     } finally {
       timeline.seek(originalPlayhead);

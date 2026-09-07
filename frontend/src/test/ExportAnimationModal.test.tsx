@@ -38,7 +38,7 @@ describe("ExportAnimationModal", () => {
     expect(screen.getByText("01 Sep 2026 s/d 07 Sep 2026 (WIB)")).toBeInTheDocument();
     expect(screen.getByText(/12 frame • 8 titik terpantau/i)).toBeInTheDocument();
     expect(screen.getByText(/GIF Animasi \(\.gif\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/Video WebM \(\.webm\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Video \(MP4 \/ WebM\)/i)).toBeInTheDocument();
   });
 
   it("allows switching format and speed, then triggering onStartExport", async () => {
@@ -55,7 +55,7 @@ describe("ExportAnimationModal", () => {
     );
 
     // Switch format to WebM
-    const webmCard = screen.getByText(/Video WebM \(\.webm\)/i);
+    const webmCard = screen.getByText(/Video \(MP4 \/ WebM\)/i);
     fireEvent.click(webmCard);
 
     // Switch speed to Perlahan (0.50s)
