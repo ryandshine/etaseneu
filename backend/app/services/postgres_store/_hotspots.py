@@ -376,7 +376,13 @@ class _HotspotObservationMixin:
                 obs.brightness,
                 obs.confidence,
                 COALESCE((obs.raw_payload->>'frp')::float, 0.0) AS frp,
-                to_char(obs.detected_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS detected_at,
+                -- Kolom timestamptz mentah: FastAPI menserialisasi lewat
+                -- datetime.isoformat() -> offset "+07:00" (pakai titik dua).
+                -- JANGAN to_char(...'OF'): token OF menghasilkan "+07" tanpa
+                -- menit, dan JavaScript `new Date("...T...+07")` = Invalid Date,
+                -- sehingga timeline & "Unduh Animasi" di Detail KPS mati diam2
+                -- (semua detectedAt gagal di-parse -> 0 bucket).
+                obs.detected_at,
                 obs.layer_key,
                 obs.agency_name,
                 obs.raw_payload,
