@@ -8,7 +8,13 @@ Panduan untuk Claude Code (dan agent lain) saat bekerja di repo ini.
 poligon **Perhutanan Sosial (KPS)** dan **Hutan Adat**. Backend FastAPI + PostgreSQL/PostGIS,
 frontend React/Vite/TypeScript (peta Leaflet). Dipakai untuk memantau kebakaran hutan dan lahan di
 kawasan-kawasan tersebut, dengan data hotspot dari NASA FIRMS dan data luas bekas terbakar dari
-rekap resmi KLHK.
+rekap resmi Kementerian Kehutanan (Kemenhut).
+
+> Catatan penamaan: instansi ini **Kementerian Kehutanan (Kemenhut)** — sebelumnya KLHK. Teks yang
+> tampil ke pengguna (label PDF/XLSX/kartu frontend) sudah memakai "Kementerian Kehutanan". Sebagian
+> identifier kode masih memakai `klhk` (`burned_area_klhk_service.py`, endpoint
+> `/api/burned-area/refresh-klhk`, env `KLHK_BURNED_AREA_DIR` / `HOST_KLHK_BURNED_AREA_DIR`, tabel
+> `klhk_burned_features`, nama test) dan **sengaja dibiarkan** — jangan ikut di-rename.
 
 ## ⚠️ Bahaya #1: TIDAK ADA pemisahan database dev/test/production
 
@@ -88,9 +94,9 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   apakah `spatial_service.py` dan `layer_service.py` punya reimplementasi terpisah yang perlu ikut
   di-update** — pernah ada bug lembaga Hutan Adat tampil sebagai nama layer mentah karena dua
   tempat itu belum ikut dapat alias field yang sama.
-- `burned_area_klhk_service.py` — streaming parse (via `ijson`) file GeoJSON resmi KLHK "Areal
-  Kebakaran Hutan dan Lahan", filter cuma akurasi H/M (L dan data tidak lengkap dibuang sesuai aturan
-  KLHK sendiri), map nama bulan Indonesia → angka bulan.
+- `burned_area_klhk_service.py` — streaming parse (via `ijson`) file GeoJSON resmi Kementerian
+  Kehutanan "Areal Kebakaran Hutan dan Lahan", filter cuma akurasi H/M (L dan data tidak lengkap
+  dibuang sesuai aturan Kementerian Kehutanan sendiri), map nama bulan Indonesia → angka bulan.
 - `export_service.py` — Excel (openpyxl + chart) untuk laporan hotspot/skema/agency.
 - `pdf_export_service.py` — PDF ReportLab (laporan umum, dibatasi 1500 baris tabel detail untuk
   performa — lihat `HOTSPOT_DETAIL_TABLE_MAX_ROWS`); `agency_pdf_service.py` — PDF WeasyPrint/Jinja2
@@ -99,13 +105,13 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   re-raise ke client) karena URL FIRMS menyertakan `MAP_KEY` rahasia di path-nya.
 - `burned_area_service.py` — jalur GEE/MODIS/VIIRS **lama, sudah tidak dipakai** (lihat bahaya #2).
 - `burned_area_s2_service.py` — **analisis MANDIRI** bekas terbakar dari Sentinel-2 L2A dNBR via GEE,
-  supaya tidak perlu menunggu rekap KLHK. Dijalankan **manual lewat skrip**
+  supaya tidak perlu menunggu rekap Kementerian Kehutanan. Dijalankan **manual lewat skrip**
   (`BurnedAreaS2Service().analyze_month(year, month)`), TIDAK ada endpoint admin/tombol UI/scheduler —
-  frekuensinya ikut terbitnya rekap KLHK. Endpoint yang ada cuma `GET /api/burned-area/s2-overlay`
+  frekuensinya ikut terbitnya rekap Kementerian Kehutanan. Endpoint yang ada cuma `GET /api/burned-area/s2-overlay`
   (baca hasil untuk lapisan peta). Menyasar SEMUA poligon aktif
   (`psagustus2026` + `HUTAN_ADAT_APR26`), hotspot = penanda keyakinan bukan filter. Formula
   divalidasi: `dNBR = median(NBR pre) − median(NBR post)` (BUKAN max/min — ekstrem + ambang longgar
-  menghasilkan ~20× KLHK), mask `dNBR≥0.40 AND dNDVI≥0.15 AND NDVI_pre≥0.30 AND MNDWI<−0.05 AND
+  menghasilkan ~20× angka Kementerian Kehutanan), mask `dNBR≥0.40 AND dNDVI≥0.15 AND NDVI_pre≥0.30 AND MNDWI<−0.05 AND
   nobs≥2`, lalu `connectedPixelCount≥25` (~1 ha @ 20 m). Diproses per-provinsi (1 komposit raster per
   bbox provinsi + `reduceRegions` batched). Hasil disimpan di tabel **TERPISAH `s2_burned_area`**
   (mixin `postgres_store/_s2_burned_area.py`), TIDAK dicampur ke `burned_area_summary` — angkanya
@@ -113,7 +119,7 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   Sentinel-2" (oranye putus-putus) di `HotspotMap.tsx` (`useS2BurnedAreaOverlay` →
   `GET /api/burned-area/s2-overlay`), DAN bagian "Estimasi bekas terbakar (Sentinel-2)" di kartu
   Detail KPS (`KpsDetailView.tsx` → `GET /api/burned-area/s2-summary?polygon_ids=...`), terpisah dari
-  angka KLHK di kartu yang sama. Analisis dijalankan `analyze_month()` (butuh env GEE); menampilkan
+  angka Kementerian Kehutanan di kartu yang sama. Analisis dijalankan `analyze_month()` (butuh env GEE); menampilkan
   hasilnya TIDAK butuh env — cuma baca tabel.
 - `land_cover_service.py` — **analisis tutupan lahan per poligon** KPS/Hutan Adat, 2021–2025 (5
   tahun, dipersempit dari 2020–2025 semula), dari
@@ -336,7 +342,7 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   poligon (`ST_ClosestPoint`). Endpoint: `GET /api/fire-spread/summary`, `GET /api/fire-spread/threats`,
   `GET /api/fire-spread/detail`, `GET /api/fire-spread/export.xlsx`.
 
-### Atribusi Fungsi Kawasan Hutan (KWSHUTAN_AR_250K KLHK)
+### Atribusi Fungsi Kawasan Hutan (KWSHUTAN_AR_250K Kementerian Kehutanan)
 
 Tiap hotspot & poligon estimasi bekas terbakar Sentinel-2 tahu masuk **fungsi kawasan hutan** yang
 mana (Hutan Lindung / HP / HPT / HPK / KSA-KPA / APL, dikelompokkan Konservasi/Lindung/Produksi/
@@ -421,17 +427,18 @@ BUKAN lewat migrasi app:
   nginx `/api/layers` cache dipangkas 1 jam+SWR24jam → 120 dtk supaya daftar layer yang dihapus
   tidak nyangkut lama di browser/CDN.
 
-## ⚠️ Bahaya #2: GEE sudah digantikan KLHK untuk luas bekas terbakar
+## ⚠️ Bahaya #2: GEE sudah digantikan data Kementerian Kehutanan untuk luas bekas terbakar
 
 Google Earth Engine (MODIS/VIIRS) BUKAN lagi sumber data luas terbakar. Sumber resmi sekarang: file
-GeoJSON KLHK "Areal Kebakaran Hutan dan Lahan" yang di-SFTP admin ke `KLHK_BURNED_AREA_DIR`, lalu
-di-refresh manual lewat `POST /api/burned-area/refresh-klhk`. `burned_area_scheduler_enabled`
-default **False** karena rekap KLHK terbit tidak dengan jadwal tetap (beda dari citra satelit
+GeoJSON Kementerian Kehutanan "Areal Kebakaran Hutan dan Lahan" yang di-SFTP admin ke
+`KLHK_BURNED_AREA_DIR` (nama env sengaja tidak ikut di-rename), lalu di-refresh manual lewat
+`POST /api/burned-area/refresh-klhk`. `burned_area_scheduler_enabled`
+default **False** karena rekap Kementerian Kehutanan terbit tidak dengan jadwal tetap (beda dari citra satelit
 bulanan). Jangan asumsikan kredensial GEE perlu dikonfigurasi — kode GEE lama masih ada tapi tidak
 dipanggil otomatis.
 
-Konsekuensi teknis: `ijson` (di `requirements.txt`) dipakai untuk streaming-parse file KLHK yang bisa
-ratusan MB tanpa load penuh ke memori. **`ijson` mengembalikan `Decimal` untuk angka** — kalau
+Konsekuensi teknis: `ijson` (di `requirements.txt`) dipakai untuk streaming-parse file Kementerian
+Kehutanan yang bisa ratusan MB tanpa load penuh ke memori. **`ijson` mengembalikan `Decimal` untuk angka** — kalau
 serialize geometry hasil parsingnya ke JSON, wajib `json.dumps(geom, default=float)` (lihat contoh di
 `postgres_store/_burned_area.py`), atau akan error `Object of type Decimal is not JSON serializable`.
 
@@ -651,7 +658,13 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               punya peta utama yang mengasumsikan viewport lebar) diposisikan
               mengambang sendiri di dalam kotak itu, bukan reuse tata letak
               `.map-left-stack`. Mock `CircleMarker` di KpsDetailView.test.tsx
-              WAJIB `forwardRef` juga.
+              WAJIB `forwardRef` juga. Peta detail ini punya peralihan basemap
+              sendiri (state lokal `mapStyle: "dark" | "satellite"`, tombol
+              `.basemap-switcher.kps-detail-basemap-switcher` ditumpuk di
+              bawah kontrol zoom kiri-atas): "satellite" pakai Google Maps
+              hybrid `mt{s}.google.com/vt/lyrs=y` — URL & pola SAMA dengan
+              `HotspotMap.tsx` / `KompleksKebakaranView.tsx` (kalau diganti,
+              ganti di tiga tempat).
               **Tata letak kontrol melayang (desktop, dirombak 2026-09-05)**: kolom
               kiri dulunya 4 elemen `position:absolute` INDEPENDEN (Lokasi,
               Basemap, `.burned-control`, `.map-legend`) yang koordinat

@@ -938,6 +938,7 @@ export function KpsDetailView({
   }, []);
 
   const [timelineOn, setTimelineOn] = useState(false);
+  const [mapStyle, setMapStyle] = useState<"dark" | "satellite">("dark");
   const timelineEnabled = timelineOn && activeHotspots.length > 0;
   const timeline = useHotspotTimeline(activeHotspots, { enabled: timelineEnabled });
 
@@ -1437,6 +1438,28 @@ export function KpsDetailView({
               <span>Timeline</span>
             </button>
           </div>
+          <div
+            className="basemap-switcher kps-detail-basemap-switcher"
+            role="group"
+            aria-label="Gaya peta KPS"
+          >
+            <button
+              type="button"
+              className={mapStyle === "dark" ? "basemap-switcher-btn--active" : ""}
+              onClick={() => setMapStyle("dark")}
+              aria-pressed={mapStyle === "dark"}
+            >
+              Peta
+            </button>
+            <button
+              type="button"
+              className={mapStyle === "satellite" ? "basemap-switcher-btn--active" : ""}
+              onClick={() => setMapStyle("satellite")}
+              aria-pressed={mapStyle === "satellite"}
+            >
+              Satelit
+            </button>
+          </div>
           <MapContainer
             center={[-2.5, 118]}
             zoom={5}
@@ -1445,17 +1468,29 @@ export function KpsDetailView({
             style={{ height: "100%", width: "100%" }}
           >
             <KeepMapSized />
-            <TileLayer
-              attribution="Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors"
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
-              maxZoom={16}
-              crossOrigin="anonymous"
-            />
-            <TileLayer
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
-              maxZoom={16}
-              crossOrigin="anonymous"
-            />
+            {mapStyle === "satellite" ? (
+              <TileLayer
+                attribution="&copy; Google Maps"
+                url="https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+                subdomains={["0", "1", "2", "3"]}
+                maxZoom={20}
+                crossOrigin="anonymous"
+              />
+            ) : (
+              <>
+                <TileLayer
+                  attribution="Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors"
+                  url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+                  maxZoom={16}
+                  crossOrigin="anonymous"
+                />
+                <TileLayer
+                  url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
+                  maxZoom={16}
+                  crossOrigin="anonymous"
+                />
+              </>
+            )}
             {detail ? (
               <>
                 <FitToPolygon geometry={detail.geometry} />

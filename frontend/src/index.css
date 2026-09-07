@@ -807,6 +807,16 @@ body {
   margin: 0;
 }
 
+/* Peralihan basemap peta detail KPS -- ditumpuk di bawah kontrol zoom
+   (kiri-atas) supaya lepas dari .kps-detail-map-actions (kanan-atas) dan
+   pemutar Timeline (melintang di bawah saat aktif). */
+.kps-detail-basemap-switcher {
+  top: 4.75rem;
+  left: 0.6rem;
+  right: auto;
+  bottom: auto;
+}
+
 /* Panel Kontrol Hotspot Sekitar Kawasan (Buffer) */
 .kps-detail-buffer-card {
   margin: 0.85rem 0 0.5rem;
