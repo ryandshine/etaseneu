@@ -375,6 +375,8 @@ def test_read_s2_burned_area_overlay_puts_kawasan_dominan_in_properties(monkeypa
     fake_rows = [
         {
             "polygon_metadata_id": 49463,
+            "year": 2026,
+            "month": 8,
             "area_ha": 20.0,
             "dnbr_mean": 0.51,
             "hotspot_count_month": 1,
@@ -395,7 +397,56 @@ def test_read_s2_burned_area_overlay_puts_kawasan_dominan_in_properties(monkeypa
     result = store.read_s2_burned_area_overlay(2026, 8)
 
     assert result["features"][0]["properties"]["kawasan_dominan"] == "Lindung"
+    assert result["features"][0]["properties"]["month"] == 8
     assert "LEFT JOIN LATERAL" in cursor.executed[-1][0]
+    # year+month diberikan -> query difilter ke satu periode
+    assert "s.year = %s AND s.month = %s" in cursor.executed[-1][0]
+
+
+def test_read_s2_burned_area_overlay_without_period_returns_all(monkeypatch) -> None:
+    fake_rows = [
+        {
+            "polygon_metadata_id": 1,
+            "year": 2026,
+            "month": 8,
+            "area_ha": 10.0,
+            "dnbr_mean": None,
+            "hotspot_count_month": 0,
+            "has_hotspot": False,
+            "computed_at": None,
+            "lembaga": "A",
+            "nama_prov": "P",
+            "nama_kab": "K",
+            "geometry_json": {"type": "MultiPolygon", "coordinates": []},
+            "kawasan_rincian": None,
+            "kawasan_dominan": None,
+        },
+        {
+            "polygon_metadata_id": 1,
+            "year": 2026,
+            "month": 9,
+            "area_ha": 5.0,
+            "dnbr_mean": None,
+            "hotspot_count_month": 0,
+            "has_hotspot": False,
+            "computed_at": None,
+            "lembaga": "A",
+            "nama_prov": "P",
+            "nama_kab": "K",
+            "geometry_json": {"type": "MultiPolygon", "coordinates": []},
+            "kawasan_rincian": None,
+            "kawasan_dominan": None,
+        },
+    ]
+    store, cursor = _store_with_fake_cursor(monkeypatch, fetchall_result=fake_rows)
+
+    result = store.read_s2_burned_area_overlay()
+
+    assert result["meta"]["periods"] == ["2026-08", "2026-09"]
+    assert result["meta"]["year"] is None
+    assert len(result["features"]) == 2
+    # tanpa periode -> tidak ada filter year/month di query
+    assert "s.year = %s" not in cursor.executed[-1][0]
 
 
 def test_read_burned_area_by_kawasan_maps_rows_and_omits_province_filter(monkeypatch) -> None:

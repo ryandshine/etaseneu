@@ -55,6 +55,17 @@ const MONTH_LABELS = [
   "Juli", "Agustus", "September", "Oktober", "November", "Desember"
 ];
 
+// ["2026-08","2026-09"] -> "Agu–Sep 2026"; ["2026-08"] -> "Agustus 2026".
+function formatS2Periods(periods: string[]): string {
+  if (periods.length === 0) return "";
+  const parse = (p: string) => [Number(p.slice(0, 4)), Number(p.slice(5, 7))] as const;
+  const [y0, m0] = parse(periods[0]);
+  if (periods.length === 1) return `${MONTH_LABELS[m0 - 1]} ${y0}`;
+  const [y1, m1] = parse(periods[periods.length - 1]);
+  const left = y0 === y1 ? MONTH_LABELS[m0 - 1].slice(0, 3) : `${MONTH_LABELS[m0 - 1].slice(0, 3)} ${y0}`;
+  return `${left}–${MONTH_LABELS[m1 - 1].slice(0, 3)} ${y1}`;
+}
+
 type HotspotRecord = {
   id: string;
   latitude: number;
@@ -760,7 +771,7 @@ export function HotspotMap({
                 {formatHectares(s2Burned.data.meta.polygons)} KPS · {s2Burned.data.meta.no_hotspot_but_burned} tanpa hotspot
               </p>
               <p className="burned-summary-chip__source">
-                Analisis mandiri Sentinel-2 · estimasi, belum terverifikasi
+                {formatS2Periods(s2Burned.data.meta.periods)} · analisis mandiri Sentinel-2 · estimasi
               </p>
             </div>
           ) : null}
@@ -973,7 +984,7 @@ export function HotspotMap({
         <Pane name="kps-interaktif" style={{ zIndex: 420 }}>
           {showS2Burned && s2Burned.data ? (
             <GeoJSON
-              key={`s2-burned-${s2Burned.data.meta.year}-${s2Burned.data.meta.month}-${s2Burned.data.meta.polygons}`}
+              key={`s2-burned-${s2Burned.data.meta.periods.join("_") || "none"}-${s2Burned.data.meta.polygons}`}
               data={s2Burned.data as never}
               {...fireRendererProp}
               style={{
@@ -996,7 +1007,8 @@ export function HotspotMap({
                      <strong style="color:#b45309">Estimasi Bekas Terbakar</strong>
                      <div style="margin-top:6px;font-weight:600">${props.lembaga ?? "-"}</div>
                      <div style="color:#9ca3af;font-size:11px">${props.nama_kab ?? "-"} · ${props.nama_prov ?? "-"}</div>
-                     <div style="margin-top:6px">Luas estimasi: <strong>${formatNumber(
+                     <div style="margin-top:6px">Periode: <strong>${MONTH_LABELS[props.month - 1]} ${props.year}</strong></div>
+                     <div style="margin-top:4px">Luas estimasi: <strong>${formatNumber(
                        Math.round(props.area_ha * 10) / 10
                      )} Ha</strong></div>
                      ${hotspotNote}

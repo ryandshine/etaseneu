@@ -221,15 +221,10 @@ async def burned_area_s2_overlay(
     month: int | None = None,
 ) -> dict[str, object]:
     """Estimasi bekas terbakar Sentinel-2 (analisis mandiri sistem) sebagai
-    FeatureCollection untuk lapisan peta. Default: periode terbaru yang tersedia."""
+    FeatureCollection untuk lapisan peta. Tanpa `year`+`month` -> SEMUA periode
+    yang tersimpan digabung (Live Map ingin Agustus + September tampil
+    sekaligus, bukan cuma periode terbaru)."""
     store = PostgresStore(get_settings().database_url)
-    if year is None or month is None:
-        latest = store.latest_s2_burned_area_period()
-        if latest:
-            year, month = latest
-        else:
-            now = datetime.now(timezone.utc)
-            year, month = now.year, now.month
     return store.read_s2_burned_area_overlay(year, month)
 
 

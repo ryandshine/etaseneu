@@ -253,13 +253,25 @@ class _S2BurnedAreaMixin:
             return None
         return int(row["year"]), int(row["month"])
 
-    def read_s2_burned_area_overlay(self, year: int, month: int) -> dict[str, object]:
+    def read_s2_burned_area_overlay(
+        self, year: int | None = None, month: int | None = None
+    ) -> dict[str, object]:
+        """Poligon estimasi bekas terbakar Sentinel-2 untuk lapisan peta.
+
+        `year`+`month` keduanya diberikan -> satu periode itu saja. Salah satu
+        (atau keduanya) None -> SEMUA periode yang tersimpan digabung (tiap
+        poligon bisa muncul >1 kali kalau terbakar di beberapa bulan). Live Map
+        memanggil tanpa argumen supaya Agustus + September tampil sekaligus.
+        """
+        single_period = year is not None and month is not None
+        period_filter = "AND s.year = %s AND s.month = %s" if single_period else ""
+        params = (year, month) if single_period else ()
         with self.connection() as conn:
             self._ensure_s2_burned_area_table(conn)
             with conn.cursor() as cur:
                 cur.execute(
-                    """
-                    SELECT s.polygon_metadata_id, s.area_ha, s.dnbr_mean,
+                    f"""
+                    SELECT s.polygon_metadata_id, s.year, s.month, s.area_ha, s.dnbr_mean,
                            s.hotspot_count_month, s.has_hotspot, s.computed_at,
                            pm.lembaga, pm.nama_prov, pm.nama_kab,
                            ST_AsGeoJSON(s.geometry)::json AS geometry_json,
@@ -282,10 +294,10 @@ class _S2BurnedAreaMixin:
                         LEFT JOIN ref_fungsi_kawasan_label lbl ON lbl.kode = bkh.fungsikws
                         WHERE bkh.burned_id = s.id
                     ) khutan ON TRUE
-                    WHERE s.year = %s AND s.month = %s AND s.geometry IS NOT NULL
+                    WHERE s.geometry IS NOT NULL {period_filter}
                     ORDER BY s.area_ha DESC
                     """,
-                    (year, month),
+                    params,
                 )
                 rows = cur.fetchall()
         features = [
@@ -294,6 +306,8 @@ class _S2BurnedAreaMixin:
                 "geometry": r["geometry_json"],
                 "properties": {
                     "polygon_metadata_id": int(r["polygon_metadata_id"]),
+                    "year": int(r["year"]),
+                    "month": int(r["month"]),
                     "lembaga": r.get("lembaga"),
                     "nama_prov": r.get("nama_prov"),
                     "nama_kab": r.get("nama_kab"),
@@ -309,12 +323,14 @@ class _S2BurnedAreaMixin:
             for r in rows
         ]
         total_ha = round(sum(f["properties"]["area_ha"] for f in features), 1)
+        periods = sorted({(f["properties"]["year"], f["properties"]["month"]) for f in features})
         return {
             "type": "FeatureCollection",
             "features": features,
             "meta": {
-                "year": year,
-                "month": month,
+                "year": year if single_period else None,
+                "month": month if single_period else None,
+                "periods": [f"{y:04d}-{m:02d}" for y, m in periods],
                 "polygons": len(features),
                 "total_ha": total_ha,
                 "no_hotspot_but_burned": sum(

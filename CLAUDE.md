@@ -127,6 +127,13 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   (dihapus); sekarang keduanya alias langsung ke state penuh (`s2BurnedRows`/`s2BurnedGeometry`/
   `burnedAreas`/`burnedGeometry`), `burnedAreaStats` selalu pakai `uniqueHa` (ST_Union server).
   Rentang kustom cuma menyaring titik hotspot.
+  **`GET /api/burned-area/s2-overlay` tanpa `year`+`month` sekarang mengembalikan SEMUA periode
+  digabung** (bukan lagi `latest_s2_burned_area_period()` — keputusan user, biar Agustus + September
+  tampil sekaligus di Live Map); satu poligon bisa muncul >1 fitur (satu per bulan). `meta.year`/
+  `meta.month` jadi `null` di mode gabungan, ada `meta.periods` (`["2026-08","2026-09"]`). Feature
+  `properties` kini bawa `year`/`month`. Beri `year`+`month` di query untuk satu periode saja.
+  Toggle overlay di `HotspotMap.tsx` (`showS2Burned`) tetap **default mati** (keputusan user: Live
+  Map manual, tempat lain seperti Detail KPS otomatis).
 - `land_cover_service.py` — **analisis tutupan lahan per poligon** KPS/Hutan Adat, 2021–2025 (5
   tahun, dipersempit dari 2020–2025 semula), dari
   Sentinel-2 L2A via GEE + Random Forest (`ee.Classifier.smileRandomForest`, guru label Google

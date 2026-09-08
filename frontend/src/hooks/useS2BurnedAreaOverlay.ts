@@ -6,6 +6,8 @@ export type S2BurnedAreaFeature = {
   geometry: Record<string, unknown>;
   properties: {
     polygon_metadata_id: number;
+    year: number;
+    month: number;
     lembaga: string | null;
     nama_prov: string | null;
     nama_kab: string | null;
@@ -22,8 +24,11 @@ export type S2BurnedAreaOverlay = {
   type: "FeatureCollection";
   features: S2BurnedAreaFeature[];
   meta: {
-    year: number;
-    month: number;
+    // null saat lapisan menggabung SEMUA periode (Live Map default) -- lihat
+    // `periods` untuk daftar "YYYY-MM" yang benar-benar ada.
+    year: number | null;
+    month: number | null;
+    periods: string[];
     polygons: number;
     total_ha: number;
     no_hotspot_but_burned: number;
