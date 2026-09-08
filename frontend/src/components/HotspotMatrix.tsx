@@ -445,31 +445,32 @@ function buildYearOverYear(hotspots: MatrixHotspot[]) {
 
   const latestYear = years[years.length - 1] ?? parseInt(getTodayWIB().slice(0, 4), 10);
   const selectedYears = [latestYear - 2, latestYear - 1, latestYear];
+  const yearIndexMap = new Map(selectedYears.map((y, idx) => [y, idx]));
 
-  const countSeries: MultiSeries[] = selectedYears.map((year) => ({
+  // 3 years x 12 months buckets
+  const countBuckets = selectedYears.map(() => new Array(12).fill(0));
+  const frpBuckets = selectedYears.map(() => new Array(12).fill(0));
+
+  // Single-pass O(N) accumulation across all hotspots
+  for (const hotspot of hotspots) {
+    const parts = getWibDateParts(hotspot.detectedAt);
+    const yIdx = yearIndexMap.get(parts.year);
+    if (yIdx !== undefined && parts.month >= 0 && parts.month < 12) {
+      countBuckets[yIdx][parts.month] += 1;
+      frpBuckets[yIdx][parts.month] += (hotspot.frp ?? 0);
+    }
+  }
+
+  const countSeries: MultiSeries[] = selectedYears.map((year, idx) => ({
     label: String(year),
     color: year === latestYear ? "#ff4e00" : year === latestYear - 1 ? "#14b8a6" : "#64748b",
-    values: MONTH_LABELS.map((_, monthIndex) =>
-      hotspots.filter((hotspot) => {
-        const parts = getWibDateParts(hotspot.detectedAt);
-        return parts.year === year && parts.month === monthIndex;
-      }).length,
-    )
+    values: countBuckets[idx]
   }));
 
-  const frpSeries: MultiSeries[] = selectedYears.map((year) => ({
+  const frpSeries: MultiSeries[] = selectedYears.map((year, idx) => ({
     label: String(year),
     color: year === latestYear ? "#ff4e00" : year === latestYear - 1 ? "#14b8a6" : "#64748b",
-    values: MONTH_LABELS.map((_, monthIndex) =>
-      Math.round(
-        hotspots
-          .filter((hotspot) => {
-            const parts = getWibDateParts(hotspot.detectedAt);
-            return parts.year === year && parts.month === monthIndex;
-          })
-          .reduce((sum, hotspot) => sum + (hotspot.frp ?? 0), 0) * 10,
-      ) / 10,
-    )
+    values: frpBuckets[idx].map((val) => Math.round(val * 10) / 10)
   }));
 
   return { years: selectedYears, countSeries, frpSeries };
@@ -1068,67 +1069,44 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
   return normalizeWilker(a) === normalizeWilker(b);
 }
 
-  // Cascading filter: Province options only show provinces that have hotspots
-  // matching the current wilkerFilter, confidenceFilter, FRP, and skema.
-  const provinceOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          hotspots
-            .filter((h) => {
-              const wilkerMatch = wilkerFilter ? matchWilker(h.polygonMetadata.WILKER_BPS, wilkerFilter) : true;
-              const frpMatch = activeFrpCategory ? getFrpCategory(h) === activeFrpCategory : true;
-              const skemaMatch = skemaFilter ? getSkema(h) === skemaFilter : true;
-              const confMatch = confidenceFilter ? getConfidenceCategory(h) === confidenceFilter : true;
-              return wilkerMatch && frpMatch && skemaMatch && confMatch;
-            })
-            .map((h) => h.provinceName)
-            .filter((province): province is string => Boolean(province)),
-        ),
-      ).sort(),
-    [hotspots, wilkerFilter, activeFrpCategory, skemaFilter, confidenceFilter],
-  );
+  // Cascading filter options: pre-filter hotspots by common FRP & confidence criteria
+  // then collect available options in a single pass to eliminate redundant iterations.
+  const { provinceOptions, wilkerOptions, skemaOptions } = useMemo(() => {
+    const provSet = new Set<string>();
+    const wilkerSet = new Set<string>();
+    const skemaSet = new Set<string>();
 
-  // Cascading filter: Wilker options only show wilkers that have hotspots
-  // matching the current provinceFilter, confidenceFilter, FRP, and skema.
-  const wilkerOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          hotspots
-            .filter((h) => {
-              const provinceMatch = provinceFilter ? h.provinceName === provinceFilter : true;
-              const frpMatch = activeFrpCategory ? getFrpCategory(h) === activeFrpCategory : true;
-              const skemaMatch = skemaFilter ? getSkema(h) === skemaFilter : true;
-              const confMatch = confidenceFilter ? getConfidenceCategory(h) === confidenceFilter : true;
-              return provinceMatch && frpMatch && skemaMatch && confMatch;
-            })
-            .map((h) => h.polygonMetadata.WILKER_BPS)
-            .filter((value): value is string => Boolean(value && value.trim())),
-        ),
-      ).sort(),
-    [hotspots, provinceFilter, activeFrpCategory, skemaFilter, confidenceFilter],
-  );
+    for (const h of hotspots) {
+      const frpOk = activeFrpCategory ? getFrpCategory(h) === activeFrpCategory : true;
+      const confOk = confidenceFilter ? getConfidenceCategory(h) === confidenceFilter : true;
+      if (!frpOk || !confOk) continue;
 
-  // Opsi skema mengikuti pilihan wilker/provinsi/FRP/confidence yang sedang aktif
-  const skemaOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          hotspots
-            .filter((h) => {
-              const wilkerMatch = wilkerFilter ? matchWilker(h.polygonMetadata.WILKER_BPS, wilkerFilter) : true;
-              const provinceMatch = provinceFilter ? h.provinceName === provinceFilter : true;
-              const frpMatch = activeFrpCategory ? getFrpCategory(h) === activeFrpCategory : true;
-              const confMatch = confidenceFilter ? getConfidenceCategory(h) === confidenceFilter : true;
-              return wilkerMatch && provinceMatch && frpMatch && confMatch;
-            })
-            .map((h) => getSkema(h))
-            .filter((value): value is string => Boolean(value && value.trim())),
-        ),
-      ).sort(),
-    [hotspots, wilkerFilter, provinceFilter, activeFrpCategory, confidenceFilter],
-  );
+      const wilkerOk = wilkerFilter ? matchWilker(h.polygonMetadata.WILKER_BPS, wilkerFilter) : true;
+      const provOk = provinceFilter ? h.provinceName === provinceFilter : true;
+      const skema = getSkema(h);
+      const skemaOk = skemaFilter ? skema === skemaFilter : true;
+
+      // Province option matches wilker and skema
+      if (wilkerOk && skemaOk && h.provinceName) {
+        provSet.add(h.provinceName);
+      }
+      // Wilker option matches province and skema
+      const wilkerVal = h.polygonMetadata.WILKER_BPS;
+      if (provOk && skemaOk && wilkerVal && wilkerVal.trim()) {
+        wilkerSet.add(wilkerVal);
+      }
+      // Skema option matches wilker and province
+      if (wilkerOk && provOk && skema && skema.trim()) {
+        skemaSet.add(skema);
+      }
+    }
+
+    return {
+      provinceOptions: Array.from(provSet).sort(),
+      wilkerOptions: Array.from(wilkerSet).sort(),
+      skemaOptions: Array.from(skemaSet).sort(),
+    };
+  }, [hotspots, wilkerFilter, provinceFilter, activeFrpCategory, skemaFilter, confidenceFilter]);
 
   const latestRegistrySync = useMemo(() => getLatestRegistrySync(geojsonStatus), [geojsonStatus]);
 
@@ -1349,6 +1327,12 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
             <p className="matrix-ledger__subtitle">
               Matriks &amp; Rekapitulasi Data
               <span className="matrix-header-meta"> · {filteredHotspots.length} titik · {groupedRows.length} KPS</span>
+              {wilkerFilter && (
+                <span className="matrix-filter-chip matrix-filter-chip--wilker">
+                  WILKER: {wilkerFilter}
+                  <button type="button" onClick={() => setWilkerFilter("")} aria-label="Hapus filter wilker">×</button>
+                </span>
+              )}
               {activeFrpCategory && (
                 <span className="matrix-filter-chip matrix-filter-chip--frp">
                   FRP: {activeFrpCategory}
@@ -1686,58 +1670,7 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
             <div className="matrix-ledger-summary">
               <span>{filteredHotspots.length} terlihat</span>
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                {wilkerFilter && (
-                  <>
-                    <span style={{ backgroundColor: 'rgba(255, 107, 53, 0.2)', color: '#FF6B35', padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.8rem', fontWeight: '500' }}>
-                      WILKER: {wilkerFilter}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setWilkerFilter("");
-                        setCurrentPage(1);
-                      }}
-                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '0.2rem' }}
-                    >
-                      ✕
-                    </button>
-                  </>
-                )}
-                {skemaFilter && (
-                  <>
-                    <span style={{ backgroundColor: 'rgba(20, 184, 166, 0.2)', color: '#2dd4bf', padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.8rem', fontWeight: '500' }}>
-                      SKEMA: {skemaFilter}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSkemaFilter("");
-                        setCurrentPage(1);
-                      }}
-                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '0.2rem' }}
-                    >
-                      ✕
-                    </button>
-                  </>
-                )}
-                {selectedPeriod && (
-                  <>
-                    <span style={{ backgroundColor: 'rgba(249, 115, 22, 0.2)', color: '#FF8C00', padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.8rem', fontWeight: '500' }}>
-                      PERIODE: {trendGroupBy === 'month' ? selectedPeriod.slice(0, 7) : selectedPeriod.slice(8, 10)} {trendGroupBy === 'day' && selectedPeriod.slice(0, 7)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedPeriod(null);
-                        setCurrentPage(1);
-                      }}
-                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '0.2rem' }}
-                    >
-                      ✕
-                    </button>
-                  </>
-                )}
-                <span>{activeFrpCategory ? `FRP: ${activeFrpCategory}` : "Tidak ada saringan FRP"}</span>
+                {activeFrpCategory && <span>FRP: {activeFrpCategory}</span>}
               </div>
             </div>
           </div>
