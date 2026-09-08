@@ -190,7 +190,7 @@ describe("HotspotMatrix", () => {
     // Klik judul kolom skema menyaring seluruh matriks, bukan cuma tabelnya.
     fireEvent.click(screen.getByTitle("Saring skema PKK"));
 
-    expect(screen.getByText("SKEMA: PKK")).toBeInTheDocument();
+    expect(screen.getAllByText("SKEMA: PKK")[0]).toBeInTheDocument();
     expect(screen.getByText("1 skema · 1 provinsi · 1 titik")).toBeInTheDocument();
 
     // Filter yang aktif ikut terbawa ke ekspor supaya isi file sama dengan

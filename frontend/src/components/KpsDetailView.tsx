@@ -21,9 +21,11 @@ import { HotspotTimelineControl } from "./HotspotTimelineControl";
 import { WeatherConditionCard } from "./WeatherConditionCard";
 import {
   buildComparison,
+  formatConfidence,
   formatMetadataValue,
   formatNumber,
   formatTimestamp,
+  getConfidenceCategory,
   getFrpCategory,
   getStatusLabel,
   mapHotspotRecordToDashboardHotspot,
@@ -471,6 +473,8 @@ export function KpsDetailView({
   const [surroundingData, setSurroundingData] = useState<SurroundingHotspotItem[] | null>(null);
   const [surroundingLoading, setSurroundingLoading] = useState(false);
 
+  const [confidenceFilter, setConfidenceFilter] = useState<string>("");
+
   // Rentang waktu dashboard efektif saat filter tanggal kustom halaman ini tidak aktif
   const dashboardTimeRange = useMemo(() => {
     if (!hotspots || hotspots.length === 0) return { start_at: undefined, end_at: undefined };
@@ -775,6 +779,9 @@ export function KpsDetailView({
     let tinggi = 0;
     let sedang = 0;
     let rendah = 0;
+    let confTinggi = 0;
+    let confSedang = 0;
+    let confRendah = 0;
     let insideCount = 0;
     let outsideCount = 0;
     const satellites = new Set<string>();
@@ -788,6 +795,16 @@ export function KpsDetailView({
       } else {
         rendah += 1;
       }
+
+      const conf = getConfidenceCategory(hotspot);
+      if (conf === "Tinggi") {
+        confTinggi += 1;
+      } else if (conf === "Sedang") {
+        confSedang += 1;
+      } else {
+        confRendah += 1;
+      }
+
       if (hotspot.is_inside === false) {
         outsideCount += 1;
       } else {
@@ -803,22 +820,37 @@ export function KpsDetailView({
       tinggi,
       sedang,
       rendah,
+      confTinggi,
+      confSedang,
+      confRendah,
       satellites: Array.from(satellites)
     };
   }, [activeHotspots]);
+
+  // Saring hotspot aktif berdasarkan filter tingkat keyakinan (Confidence NASA)
+  const displayedHotspots = useMemo(() => {
+    if (!confidenceFilter) return activeHotspots;
+    return activeHotspots.filter((h) => getConfidenceCategory(h) === confidenceFilter);
+  }, [activeHotspots, confidenceFilter]);
 
   // Deteksi yang sedang ditelaah di bawah -- default ke yang paling baru,
   // tapi user bisa ketuk baris lain di "Daftar Deteksi Hotspot".
   const [selectedDetectionId, setSelectedDetectionId] = useState<string | null>(null);
   const [detectionPage, setDetectionPage] = useState(1);
-  const detectionTotalPages = Math.max(1, Math.ceil(activeHotspots.length / DETECTION_PAGE_SIZE));
-  const pagedKpsHotspots = activeHotspots.slice(
+
+  // Reset halaman deteksi saat filter keyakinan berubah
+  useEffect(() => {
+    setDetectionPage(1);
+  }, [confidenceFilter]);
+
+  const detectionTotalPages = Math.max(1, Math.ceil(displayedHotspots.length / DETECTION_PAGE_SIZE));
+  const pagedKpsHotspots = displayedHotspots.slice(
     (detectionPage - 1) * DETECTION_PAGE_SIZE,
     detectionPage * DETECTION_PAGE_SIZE
   );
   const selectedDetection = useMemo(
-    () => activeHotspots.find((hotspot) => hotspot.id === selectedDetectionId) ?? activeHotspots[0] ?? null,
-    [activeHotspots, selectedDetectionId]
+    () => displayedHotspots.find((hotspot) => hotspot.id === selectedDetectionId) ?? displayedHotspots[0] ?? null,
+    [displayedHotspots, selectedDetectionId]
   );
 
   const comparison = useMemo(
@@ -865,9 +897,9 @@ export function KpsDetailView({
         layer.bringToFront();
       }
     });
-  }, [activeHotspots, effectiveBurnedGeometry, effectiveS2Geometry]);
+  }, [displayedHotspots, effectiveBurnedGeometry, effectiveS2Geometry]);
 
-  // ---- Pemutar waktu (timeline animasi) -- atas activeHotspots
+  // ---- Pemutar waktu (timeline animasi) -- atas displayedHotspots
   // (mencakup titik dalam kawasan dan titik di zona penyangga luar).
   const markerRefs = useRef(new Map<string, LCircleMarker>());
   const registerMarker = useCallback((id: string, layer: LCircleMarker | null) => {
@@ -877,8 +909,8 @@ export function KpsDetailView({
 
   const [timelineOn, setTimelineOn] = useState(false);
   const [mapStyle, setMapStyle] = useState<"dark" | "satellite">("dark");
-  const timelineEnabled = timelineOn && activeHotspots.length > 0;
-  const timeline = useHotspotTimeline(activeHotspots, { enabled: timelineEnabled });
+  const timelineEnabled = timelineOn && displayedHotspots.length > 0;
+  const timeline = useHotspotTimeline(displayedHotspots, { enabled: timelineEnabled });
 
   useEffect(() => {
     const refs = markerRefs.current;
@@ -890,7 +922,7 @@ export function KpsDetailView({
       const b = timeline.bucketIndexById.get(id) ?? 0;
       applyMarkerOpacity(layer, opacityForBucket(timeline.playheadIndex, b));
     });
-  }, [timelineEnabled, timeline.playheadIndex, timeline.bucketIndexById, activeHotspots]);
+  }, [timelineEnabled, timeline.playheadIndex, timeline.bucketIndexById, displayedHotspots]);
 
   // ---- Ekspor & Unduh Animasi (GIF / Video)
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1194,6 +1226,47 @@ export function KpsDetailView({
             )}
             {stats.satellites.length > 0 && (
               <p className="help-copy">Satelit: {stats.satellites.join(", ")}</p>
+            )}
+
+            {stats.total > 0 && (
+              <div className="kps-detail-conf-filters">
+                <span className="filter-group-label" style={{ marginBottom: "0.2rem" }}>
+                  Filter Tingkat Keyakinan (NASA)
+                </span>
+                <div className="kps-detail-conf-btn-group" role="group" aria-label="Filter Keyakinan">
+                  <button
+                    type="button"
+                    className={`kps-conf-btn${confidenceFilter === "" ? " kps-conf-btn--active" : ""}`}
+                    onClick={() => setConfidenceFilter("")}
+                  >
+                    Semua ({stats.total})
+                  </button>
+                  <button
+                    type="button"
+                    className={`kps-conf-btn${confidenceFilter === "Tinggi" ? " kps-conf-btn--active" : ""}`}
+                    onClick={() => setConfidenceFilter(confidenceFilter === "Tinggi" ? "" : "Tinggi")}
+                    title="Keyakinan Tinggi (VIIRS high, MODIS > 80%)"
+                  >
+                    <span style={{ color: "#ef4444" }}>●</span> Tinggi ({stats.confTinggi})
+                  </button>
+                  <button
+                    type="button"
+                    className={`kps-conf-btn${confidenceFilter === "Sedang" ? " kps-conf-btn--active" : ""}`}
+                    onClick={() => setConfidenceFilter(confidenceFilter === "Sedang" ? "" : "Sedang")}
+                    title="Keyakinan Sedang (VIIRS nominal, MODIS 30-80%)"
+                  >
+                    <span style={{ color: "#f59e0b" }}>●</span> Sedang ({stats.confSedang})
+                  </button>
+                  <button
+                    type="button"
+                    className={`kps-conf-btn${confidenceFilter === "Rendah" ? " kps-conf-btn--active" : ""}`}
+                    onClick={() => setConfidenceFilter(confidenceFilter === "Rendah" ? "" : "Rendah")}
+                    title="Keyakinan Rendah (VIIRS low, MODIS < 30%)"
+                  >
+                    <span style={{ color: "#3b82f6" }}>●</span> Rendah ({stats.confRendah})
+                  </button>
+                </div>
+              </div>
             )}
 
             {burnedAreaStats && (
@@ -1601,7 +1674,7 @@ export function KpsDetailView({
               )}
               <LayerGroup ref={hotspotLayerGroupRef}>
                 <KpsHotspotMarkersLayer
-                  hotspots={activeHotspots}
+                  hotspots={displayedHotspots}
                   renderer={fireCanvasRenderer}
                   onSelect={setSelectedDetectionId}
                   registerMarker={registerMarker}
@@ -1645,6 +1718,10 @@ export function KpsDetailView({
               <div className="matrix-detail-item">
                 <span>Satelit</span>
                 <strong>{formatMetadataValue(selectedDetection.satellite)}</strong>
+              </div>
+              <div className="matrix-detail-item">
+                <span>Tingkat Keyakinan</span>
+                <strong>{formatConfidence(selectedDetection.confidence)}</strong>
               </div>
               <div className="matrix-detail-item">
                 <span>Siang/Malam</span>
@@ -1727,7 +1804,10 @@ export function KpsDetailView({
 
           <section className="matrix-detail-card">
             <div className="matrix-detail-card__head">
-              <span>Daftar Deteksi Hotspot ({activeHotspots.length} titik)</span>
+              <span>
+                Daftar Deteksi Hotspot ({displayedHotspots.length}
+                {confidenceFilter ? ` / ${activeHotspots.length}` : ""} titik)
+              </span>
               <strong>Ketuk untuk detail</strong>
             </div>
             <div className="detect-list">
@@ -1737,6 +1817,7 @@ export function KpsDetailView({
                     <th scope="col">Tanggal</th>
                     <th scope="col">Satelit</th>
                     <th scope="col">Kelas FRP</th>
+                    <th scope="col">Keyakinan</th>
                     <th scope="col">FRP</th>
                     <th scope="col">Lat/Lon</th>
                   </tr>
@@ -1744,6 +1825,7 @@ export function KpsDetailView({
                 <tbody>
                   {pagedKpsHotspots.map((hotspot) => {
                     const isActive = selectedDetection.id === hotspot.id;
+                    const confCat = getConfidenceCategory(hotspot);
                     return (
                       <tr
                         key={hotspot.id}
@@ -1780,6 +1862,16 @@ export function KpsDetailView({
                             {normalizeFrpCategoryLabel(hotspot)}
                           </span>
                         </td>
+                        <td className="dt-conf">
+                          <span
+                            className={`confidence-pill confidence-pill--${
+                              confCat === "Tinggi" ? "high" : confCat === "Sedang" ? "nominal" : "low"
+                            }`}
+                            title={`NASA Confidence: ${hotspot.confidence ?? "-"}`}
+                          >
+                            {formatConfidence(hotspot.confidence)}
+                          </span>
+                        </td>
                         <td className="dt-frp">{formatNumber(hotspot.frp)} MW</td>
                         <td className="dt-koord" title={`${hotspot.latitude.toFixed(4)}, ${hotspot.longitude.toFixed(4)}`}>
                           {hotspot.latitude.toFixed(3)}, {hotspot.longitude.toFixed(3)}
@@ -1791,7 +1883,9 @@ export function KpsDetailView({
               </table>
             </div>
             <div className="matrix-footer">
-              <span className="matrix-footer__count">{activeHotspots.length} titik</span>
+              <span className="matrix-footer__count">
+                {displayedHotspots.length} titik{confidenceFilter ? ` (filter: ${confidenceFilter})` : ""}
+              </span>
               <div className="matrix-pagination">
                 <button
                   type="button"
@@ -1824,7 +1918,7 @@ export function KpsDetailView({
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
         totalFrames={timeline.buckets.length}
-        activeHotspotCount={activeHotspots.length}
+        activeHotspotCount={displayedHotspots.length}
         kpsName={detail?.lembaga || agency}
         dateRangeLabel={
           isCustomRangeActive && customStartDate && customEndDate

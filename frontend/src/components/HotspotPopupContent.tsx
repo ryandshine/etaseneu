@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { authFetch } from "../lib/api";
 import { Check, ChevronDown, CloudSun, Copy, ExternalLink, FileText } from "lucide-react";
+import { formatConfidence } from "../lib/hotspotDisplay";
 
 // Popup detail titik hotspot -- dipakai bareng oleh HotspotMap (peta utama)
 // dan KpsDetailView (peta di halaman Detail KPS) supaya isi & gaya popup-nya
@@ -102,26 +103,6 @@ export function formatNumber(value: number | null): string {
 
 function formatMetadataValue(value?: string): string {
   return value && value.trim() ? value : "Tidak tersedia";
-}
-
-// Tingkat keyakinan deteksi NASA FIRMS. VIIRS memakai kode huruf (l/n/h),
-// MODIS memakai angka 0-100. Ditampilkan sebagai label Indonesia + nilai asli.
-function formatConfidence(value?: string | null): string {
-  if (value === undefined || value === null || String(value).trim() === "") {
-    return "Tidak tersedia";
-  }
-  const raw = String(value).trim();
-  const key = raw.toLowerCase();
-  if (key === "unknown" || key === "n/a" || key === "na" || key === "-") return "Tidak tersedia";
-  if (key === "l" || key === "low") return "Rendah";
-  if (key === "n" || key === "nominal") return "Nominal";
-  if (key === "h" || key === "high") return "Tinggi";
-  const num = Number(key);
-  if (Number.isFinite(num)) {
-    const band = num >= 80 ? "tinggi" : num >= 30 ? "sedang" : "rendah";
-    return `${num}% (${band})`;
-  }
-  return raw;
 }
 
 // Dipakai di popup hotspot maupun popup lokasi user -- salin koordinat ke

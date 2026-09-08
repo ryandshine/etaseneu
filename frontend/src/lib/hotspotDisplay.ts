@@ -76,12 +76,46 @@ export type HotspotLike = {
   daynight: string;
   brightness: number | null;
   frp: number | null;
+  confidence?: string | null;
   detectedAt: string;
   latitude: number;
   longitude: number;
   agencyName: string;
   polygonMetadata: Record<string, string>;
 };
+
+export function getConfidenceCategory(hotspot: { confidence?: string | null }): "Tinggi" | "Sedang" | "Rendah" {
+  const conf = String(hotspot.confidence ?? "").trim().toLowerCase();
+  if (conf === "h" || conf === "high") return "Tinggi";
+  if (conf === "n" || conf === "nominal" || conf === "medium") return "Sedang";
+  if (conf === "l" || conf === "low") return "Rendah";
+
+  const val = Number.parseInt(conf, 10);
+  if (!Number.isNaN(val)) {
+    if (val > 80) return "Tinggi";
+    if (val >= 30) return "Sedang";
+    return "Rendah";
+  }
+  return "Rendah";
+}
+
+export function formatConfidence(value?: string | null): string {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return "Tidak tersedia";
+  }
+  const raw = String(value).trim();
+  const key = raw.toLowerCase();
+  if (key === "unknown" || key === "n/a" || key === "na" || key === "-") return "Tidak tersedia";
+  if (key === "l" || key === "low") return "Rendah";
+  if (key === "n" || key === "nominal") return "Nominal";
+  if (key === "h" || key === "high") return "Tinggi";
+  const num = Number(key);
+  if (Number.isFinite(num)) {
+    const band = num >= 80 ? "tinggi" : num >= 30 ? "sedang" : "rendah";
+    return `${num}% (${band})`;
+  }
+  return raw;
+}
 
 function parseDateTime(value: string): Date | null {
   if (!value) {

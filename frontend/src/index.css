@@ -715,6 +715,47 @@ body {
   color: rgba(255, 255, 255, 0.8);
 }
 
+.kps-detail-conf-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.kps-detail-conf-btn-group {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.kps-conf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.kps-conf-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.kps-conf-btn--active {
+  border-color: rgba(255, 140, 66, 0.5);
+  background: rgba(255, 140, 66, 0.16);
+  color: #ff8c42;
+  font-weight: 600;
+}
+
 .kps-detail-map {
   position: relative;
   border-radius: 0.625rem;
@@ -6043,8 +6084,8 @@ body {
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
     "waktu   kelas"
-    "satelit frp"
-    "koord   koord";
+    "satelit conf"
+    "koord   frp";
   gap: 0.2rem 0.5rem;
   align-items: center;
   margin: 0.4rem;
@@ -6099,6 +6140,11 @@ body {
 
 .detect-table .dt-kelas {
   grid-area: kelas;
+  justify-self: end;
+}
+
+.detect-table .dt-conf {
+  grid-area: conf;
   justify-self: end;
 }
 
@@ -8350,7 +8396,8 @@ a + a {
       "num balai prov"
       "num waktu koord"
       "num freq  periode"
-      "num frp   satelit";
+      "num frp   conf"
+      "num satelit satelit";
     gap: 0.28rem 0.5rem;
     align-items: center;
     margin-bottom: 0.6rem;
@@ -8460,6 +8507,22 @@ a + a {
     letter-spacing: 0.1em;
   }
 
+  .matrix-ledger .matrix-table .td-conf {
+    grid-area: conf;
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .matrix-ledger .matrix-table .td-conf::before {
+    content: "CONF";
+    color: rgba(209, 213, 219, 0.4);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+  }
+
   .matrix-ledger .matrix-table .td-satelit {
     grid-area: satelit;
     justify-self: end;
@@ -8563,7 +8626,8 @@ a + a {
         "num balai prov"
         "num waktu waktu"
         "num koord koord"
-        "num frp   satelit";
+        "num frp   conf"
+        "num satelit satelit";
     }
 
     .matrix-ledger .matrix-table .td-koord {

@@ -7,15 +7,18 @@ import type {
   BurnFrequencyRecord,
   BurnedAreaKawasanResponse,
   GeoJsonStatusResponse,
+  PolygonDetail,
 } from "../types/api";
 import { formatDateWIB, getTodayWIB } from "../lib/date";
 import { authFetch, createApiClient } from "../lib/api";
 import { TIME_PRESET_OPTIONS, type TimePreset } from "../constants/time-windows";
 import type { TimeRange } from "../hooks/useDashboardData";
 import {
+  formatConfidence,
   formatMetadataValue,
   formatNumber,
   formatTimestamp,
+  getConfidenceCategory,
   getFrpCategory,
   normalizeFrpCategoryLabel
 } from "../lib/hotspotDisplay";
@@ -188,21 +191,6 @@ const CONFIDENCE_CATEGORIES: Array<{
   { label: "Sedang", tone: "nominal", color: "rgba(245, 158, 11, 0.64)", border: "#f59e0b", desc: "30-80% (MODIS) / N (VIIRS)" },
   { label: "Rendah", tone: "low", color: "rgba(59, 130, 246, 0.5)", border: "#3b82f6", desc: "< 30% (MODIS) / L (VIIRS)" }
 ];
-
-function getConfidenceCategory(hotspot: MatrixHotspot) {
-  const conf = (hotspot.confidence || "").trim().toLowerCase();
-  if (conf === "h" || conf === "high") return "Tinggi";
-  if (conf === "n" || conf === "nominal" || conf === "medium") return "Sedang";
-  if (conf === "l" || conf === "low") return "Rendah";
-
-  const val = Number.parseInt(conf, 10);
-  if (!Number.isNaN(val)) {
-    if (val > 80) return "Tinggi";
-    if (val >= 30) return "Sedang";
-    return "Rendah";
-  }
-  return "Rendah";
-}
 
 function buildConfidenceDistribution(hotspots: MatrixHotspot[]): ChartItem[] {
   return CONFIDENCE_CATEGORIES.map((bin) => ({
@@ -978,6 +966,7 @@ export function HotspotMatrix({
   }, [lockedWilker]);
   const [provinceFilter, setProvinceFilter] = useState("");
   const [skemaFilter, setSkemaFilter] = useState("");
+  const [confidenceFilter, setConfidenceFilter] = useState("");
   const [activeFrpCategory, setActiveFrpCategory] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
@@ -1080,8 +1069,7 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
 }
 
   // Cascading filter: Province options only show provinces that have hotspots
-  // matching the current wilkerFilter (and confidence). So picking a Wilker
-  // narrows down which Provinces appear, and vice-versa.
+  // matching the current wilkerFilter, confidenceFilter, FRP, and skema.
   const provinceOptions = useMemo(
     () =>
       Array.from(
@@ -1091,17 +1079,18 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
               const wilkerMatch = wilkerFilter ? matchWilker(h.polygonMetadata.WILKER_BPS, wilkerFilter) : true;
               const frpMatch = activeFrpCategory ? getFrpCategory(h) === activeFrpCategory : true;
               const skemaMatch = skemaFilter ? getSkema(h) === skemaFilter : true;
-              return wilkerMatch && frpMatch && skemaMatch;
+              const confMatch = confidenceFilter ? getConfidenceCategory(h) === confidenceFilter : true;
+              return wilkerMatch && frpMatch && skemaMatch && confMatch;
             })
             .map((h) => h.provinceName)
             .filter((province): province is string => Boolean(province)),
         ),
       ).sort(),
-    [hotspots, wilkerFilter, activeFrpCategory, skemaFilter],
+    [hotspots, wilkerFilter, activeFrpCategory, skemaFilter, confidenceFilter],
   );
 
   // Cascading filter: Wilker options only show wilkers that have hotspots
-  // matching the current provinceFilter (and confidence).
+  // matching the current provinceFilter, confidenceFilter, FRP, and skema.
   const wilkerOptions = useMemo(
     () =>
       Array.from(
@@ -1111,17 +1100,17 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
               const provinceMatch = provinceFilter ? h.provinceName === provinceFilter : true;
               const frpMatch = activeFrpCategory ? getFrpCategory(h) === activeFrpCategory : true;
               const skemaMatch = skemaFilter ? getSkema(h) === skemaFilter : true;
-              return provinceMatch && frpMatch && skemaMatch;
+              const confMatch = confidenceFilter ? getConfidenceCategory(h) === confidenceFilter : true;
+              return provinceMatch && frpMatch && skemaMatch && confMatch;
             })
             .map((h) => h.polygonMetadata.WILKER_BPS)
             .filter((value): value is string => Boolean(value && value.trim())),
         ),
       ).sort(),
-    [hotspots, provinceFilter, activeFrpCategory, skemaFilter],
+    [hotspots, provinceFilter, activeFrpCategory, skemaFilter, confidenceFilter],
   );
 
-  // Opsi skema mengikuti pilihan wilker/provinsi/FRP yang sedang aktif, sama
-  // seperti dua filter bertingkat di atasnya.
+  // Opsi skema mengikuti pilihan wilker/provinsi/FRP/confidence yang sedang aktif
   const skemaOptions = useMemo(
     () =>
       Array.from(
@@ -1131,13 +1120,14 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
               const wilkerMatch = wilkerFilter ? matchWilker(h.polygonMetadata.WILKER_BPS, wilkerFilter) : true;
               const provinceMatch = provinceFilter ? h.provinceName === provinceFilter : true;
               const frpMatch = activeFrpCategory ? getFrpCategory(h) === activeFrpCategory : true;
-              return wilkerMatch && provinceMatch && frpMatch;
+              const confMatch = confidenceFilter ? getConfidenceCategory(h) === confidenceFilter : true;
+              return wilkerMatch && provinceMatch && frpMatch && confMatch;
             })
             .map((h) => getSkema(h))
             .filter((value): value is string => Boolean(value && value.trim())),
         ),
       ).sort(),
-    [hotspots, wilkerFilter, provinceFilter, activeFrpCategory],
+    [hotspots, wilkerFilter, provinceFilter, activeFrpCategory, confidenceFilter],
   );
 
   const latestRegistrySync = useMemo(() => getLatestRegistrySync(geojsonStatus), [geojsonStatus]);
@@ -1165,6 +1155,7 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
         const provinceMatch = provinceFilter ? hotspot.provinceName === provinceFilter : true;
         const frpMatch = activeFrpCategory ? getFrpCategory(hotspot) === activeFrpCategory : true;
         const skemaMatch = skemaFilter ? getSkema(hotspot) === skemaFilter : true;
+        const confidenceMatch = confidenceFilter ? getConfidenceCategory(hotspot) === confidenceFilter : true;
 
         let periodMatch = true;
         if (selectedPeriod) {
@@ -1184,9 +1175,9 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
           searchMatch = kpsValue.includes(query) || balaiPsValue.includes(query) || provinsiValue.includes(query) || kabupatenValue.includes(query);
         }
 
-        return wilkerMatch && provinceMatch && frpMatch && skemaMatch && periodMatch && searchMatch;
+        return wilkerMatch && provinceMatch && frpMatch && skemaMatch && confidenceMatch && periodMatch && searchMatch;
       }),
-    [activeFrpCategory, hotspots, wilkerFilter, provinceFilter, skemaFilter, selectedPeriod, searchQuery, trendGroupBy],
+    [activeFrpCategory, hotspots, wilkerFilter, provinceFilter, skemaFilter, confidenceFilter, selectedPeriod, searchQuery, trendGroupBy],
   );
 
   const groupedRows = useMemo(() => {
@@ -1238,12 +1229,12 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
   // Reset filter periode klik grafik jika rentang waktu atau filter utama berubah
   useEffect(() => {
     setSelectedPeriod(null);
-  }, [timePreset, startDate, endDate, wilkerFilter, provinceFilter, skemaFilter, activeFrpCategory]);
+  }, [timePreset, startDate, endDate, wilkerFilter, provinceFilter, skemaFilter, confidenceFilter, activeFrpCategory]);
 
   // Reset ke halaman 1 setiap kali filter berubah
   useEffect(() => {
     setCurrentPage(1);
-  }, [wilkerFilter, provinceFilter, skemaFilter, activeFrpCategory, groupedRows.length]);
+  }, [wilkerFilter, provinceFilter, skemaFilter, confidenceFilter, activeFrpCategory, groupedRows.length]);
 
   const confidenceDistribution = useMemo(() => buildConfidenceDistribution(filteredHotspots), [filteredHotspots]);
   const frpDistribution = useMemo(() => buildFrpDistribution(filteredHotspots), [filteredHotspots]);
@@ -1261,6 +1252,10 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
   const dailyFrpTrend = useMemo(() => buildDailyFrpTrend(filteredHotspots, trendGroupBy), [filteredHotspots, trendGroupBy]);
   const yoy = useMemo(() => buildYearOverYear(filteredHotspots), [filteredHotspots]);
 
+  const handleSelectConfidenceCategory = (label: string | null) => {
+    setConfidenceFilter((current) => (current === label ? "" : (label || "")));
+  };
+
   const handleSelectFrpCategory = (label: string | null) => {
     setActiveFrpCategory((current) => (current === label ? null : label));
   };
@@ -1274,73 +1269,152 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
       type: "FeatureCollection" as const,
       features: filteredHotspots.map(hotspotToGeoJsonFeature)
     };
-    const rangeLabel = `${formatDateWIB(timeRange.startAt)}_${formatDateWIB(timeRange.endAt)}`;
-    downloadGeoJson(featureCollection, `eta-seuneu-hotspots-${rangeLabel}.geojson`);
+    const parts = ["hotspots-filter"];
+    if (provinceFilter) parts.push(slugifyFilename(provinceFilter));
+    if (wilkerFilter) parts.push(slugifyFilename(wilkerFilter));
+    if (confidenceFilter) parts.push(`conf-${slugifyFilename(confidenceFilter)}`);
+    if (activeFrpCategory) parts.push(`frp-${slugifyFilename(activeFrpCategory)}`);
+    if (startDate) parts.push(startDate);
+    if (endDate) parts.push(endDate);
+    downloadGeoJson(featureCollection, `${parts.join("-")}.geojson`);
   };
 
   const handleDownloadKpsGeojson = async (group: (typeof groupedRows)[number]) => {
     setKpsDownloadError(null);
     setDownloadingKpsKey(group.key);
     try {
-      const features: object[] = group.hotspots.map(hotspotToGeoJsonFeature);
       const polygonId = findLinkedPolygonId(group.hotspots);
-
+      let boundaryFeature: object | null = null;
       if (polygonId !== null) {
-        // Endpoint ekspor khusus admin -- mengirim geometry poligon presisi
-        // penuh (bukan versi kasar yang dilihat non-admin di /api/polygons/{id}).
-        const response = await authFetch(`/api/polygons/${polygonId}/export.geojson`);
-        if (response.ok) {
-          const collection = (await response.json()) as { features?: object[] };
-          if (collection.features?.length) {
-            features.unshift(...collection.features);
+        try {
+          const res = await authFetch(`/api/polygons/${polygonId}`);
+          if (res.ok) {
+            const detail = (await res.json()) as PolygonDetail;
+            boundaryFeature = {
+              type: "Feature",
+              geometry: detail.geometry,
+              properties: {
+                feature_type: "boundary",
+                polygon_id: detail.id,
+                layer_key: detail.layer_key,
+                lembaga: detail.lembaga,
+                nama_prov: detail.nama_prov,
+                nama_kab: detail.nama_kab,
+                nama_kec: detail.nama_kec,
+                nama_desa: detail.nama_desa,
+                skema: detail.skema,
+                no_sk: detail.no_sk,
+                tgl_sk: detail.tgl_sk,
+                status: detail.status,
+                wilker_bps: detail.wilker_bps,
+                ps_id: detail.ps_id,
+                luas_final: detail.luas_final,
+                jml_kk: detail.jml_kk
+              }
+            };
           }
-        }
+        } catch {}
       }
 
-      downloadGeoJson(
-        { type: "FeatureCollection" as const, features },
-        `eta-seuneu-kps-${slugifyFilename(group.key)}.geojson`
-      );
-    } catch {
-      setKpsDownloadError(`Gagal mengunduh GeoJSON untuk ${group.key}.`);
+      const pointFeatures = group.hotspots.map((hotspot) => ({
+        ...hotspotToGeoJsonFeature(hotspot),
+        properties: {
+          feature_type: "hotspot",
+          ...hotspotToGeoJsonFeature(hotspot).properties
+        }
+      }));
+
+      const features = boundaryFeature ? [boundaryFeature, ...pointFeatures] : pointFeatures;
+      const featureCollection = {
+        type: "FeatureCollection" as const,
+        features
+      };
+
+      const filename = `kps-${slugifyFilename(group.key)}-hotspots.geojson`;
+      downloadGeoJson(featureCollection, filename);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Gagal mengunduh GeoJSON";
+      setKpsDownloadError(`Unduh GeoJSON untuk ${group.key} gagal: ${message}`);
     } finally {
       setDownloadingKpsKey(null);
     }
   };
 
   return (
-    <section className="panel--matrix matrix-shell">
-      <div className="matrix-header-bar glass-panel">
-        <div className="matrix-header-copy">
-          <p className="panel-eyebrow">Log Sebaran Hotspot Areal KPS</p>
-          <h2>Matriks &amp; Rekapitulasi Data</h2>
-          <p className="muted-copy">
-            {dateRangeLabel} · {filteredHotspots.length} rekaman · {latestRegistrySync}
-          </p>
+    <div className="matrix-ledger">
+      <div className="matrix-ledger__header">
+        <div className="matrix-header-main">
+          <div className="matrix-header-title-block">
+            <h2 className="matrix-ledger__title">Buku Besar Hotspot</h2>
+            <p className="matrix-ledger__subtitle">
+              Matriks &amp; Rekapitulasi Data
+              <span className="matrix-header-meta"> · {filteredHotspots.length} titik · {groupedRows.length} KPS</span>
+              {activeFrpCategory && (
+                <span className="matrix-filter-chip matrix-filter-chip--frp">
+                  FRP: {activeFrpCategory}
+                  <button type="button" onClick={() => setActiveFrpCategory(null)} aria-label="Hapus filter FRP">×</button>
+                </span>
+              )}
+              {confidenceFilter && (
+                <span className="matrix-filter-chip matrix-filter-chip--conf">
+                  KEYAKINAN: {confidenceFilter}
+                  <button type="button" onClick={() => setConfidenceFilter("")} aria-label="Hapus filter Keyakinan">×</button>
+                </span>
+              )}
+              {skemaFilter && (
+                <span className="matrix-filter-chip matrix-filter-chip--skema">
+                  SKEMA: {skemaFilter}
+                  <button type="button" onClick={() => setSkemaFilter("")} aria-label="Hapus filter skema">×</button>
+                </span>
+              )}
+              {provinceFilter && (
+                <span className="matrix-filter-chip matrix-filter-chip--prov">
+                  PROVINSI: {provinceFilter}
+                  <button type="button" onClick={() => setProvinceFilter("")} aria-label="Hapus filter provinsi">×</button>
+                </span>
+              )}
+              {selectedPeriod && (
+                <span className="matrix-filter-chip matrix-filter-chip--period">
+                  PERIODE: {selectedPeriod}
+                  <button type="button" onClick={() => setSelectedPeriod(null)} aria-label="Hapus filter periode">×</button>
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="matrix-header-stats-row">
+            <div className="matrix-stat-inline">
+              <span className="matrix-stat-inline__label">Total Baris Hotspot</span>
+              <strong className="matrix-stat-inline__value">{filteredHotspots.length}</strong>
+            </div>
+            <div className="matrix-stat-inline">
+              <span className="matrix-stat-inline__label">KPS Terpantau</span>
+              <strong className="matrix-stat-inline__value">{groupedRows.length}</strong>
+            </div>
+            <div className="matrix-stat-inline">
+              <span className="matrix-stat-inline__label">Database Spasial</span>
+              <strong className="matrix-stat-inline__value">{latestRegistrySync}</strong>
+            </div>
+          </div>
         </div>
-
         <div className="matrix-header-actions">
           <button
             type="button"
-            className="matrix-header-action"
-            onClick={() => setShowAnalytics((current) => !current)}
+            className="matrix-toggle-chart-btn glass-panel"
+            onClick={() => setShowAnalytics(!showAnalytics)}
           >
             {showAnalytics ? "Sembunyikan Grafik" : "Tampilkan Grafik"}
           </button>
-
-          {/* Dulu 3 tombol terpisah (Ekspor XLSX/PDF/Unduh GeoJSON) --
-              digabung satu dropdown supaya header tidak melebar percuma. */}
           <div className="matrix-export-menu" ref={exportMenuRef}>
             <button
               type="button"
-              className="matrix-header-action matrix-header-action--ghost"
-              onClick={() => setExportMenuOpen((current) => !current)}
-              aria-haspopup="true"
+              className="matrix-export-btn matrix-export-btn--dropdown glass-panel"
+              onClick={() => setExportMenuOpen((open) => !open)}
+              disabled={isExporting || isExportingPdf}
               aria-expanded={exportMenuOpen}
-              disabled={filteredHotspots.length === 0}
+              aria-haspopup="true"
             >
-              {isExporting || isExportingPdf ? "Mengekspor..." : "Ekspor"}
-              <ChevronDown size={14} />
+              <span>{isExporting || isExportingPdf ? "Mengekspor..." : "Ekspor"}</span>
+              <ChevronDown size={14} className={exportMenuOpen ? "is-open" : ""} />
             </button>
             {exportMenuOpen && (
               <div className="matrix-export-menu__list">
@@ -1352,7 +1426,7 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                     onExport({
                       province: provinceFilter || undefined,
                       wilker: wilkerFilter || undefined,
-                      confidence: activeFrpCategory || undefined,
+                      confidence: confidenceFilter || activeFrpCategory || undefined,
                       skema: skemaFilter || undefined
                     });
                   }}
@@ -1368,7 +1442,7 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                     onExportPdf({
                       province: provinceFilter || undefined,
                       wilker: wilkerFilter || undefined,
-                      confidence: activeFrpCategory || undefined,
+                      confidence: confidenceFilter || activeFrpCategory || undefined,
                       skema: skemaFilter || undefined
                     });
                   }}
@@ -1453,6 +1527,19 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
         </label>
 
         <label className="matrix-field">
+          <span>Keyakinan (Confidence)</span>
+          <select
+            value={confidenceFilter}
+            onChange={(event) => setConfidenceFilter(event.currentTarget.value)}
+          >
+            <option value="">Semua tingkat</option>
+            <option value="Tinggi">Tinggi (&gt;80% / H)</option>
+            <option value="Sedang">Sedang (30-80% / N)</option>
+            <option value="Rendah">Rendah (&lt;30% / L)</option>
+          </select>
+        </label>
+
+        <label className="matrix-field">
           <span>Skema Filter</span>
           <select
             value={skemaFilter}
@@ -1486,7 +1573,7 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
       {showAnalytics ? (
         <div className="matrix-analytics-grid">
           
-          {renderCompactCard("Confidence", confidenceDistribution, filteredHotspots.length)}
+          {renderCompactCard("Confidence", confidenceDistribution, filteredHotspots.length, confidenceFilter || null, handleSelectConfidenceCategory)}
           {renderCompactCard("FRP", frpDistribution, filteredHotspots.length, activeFrpCategory, handleSelectFrpCategory)}
           {renderCompactCard("Titik per Kawasan Hutan", kawasanDistribution, filteredHotspots.length)}
           {renderKawasanBurnedCard(burnedKawasan)}
@@ -1763,6 +1850,7 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                       <th scope="col">Lat / Lon</th>
                       <th scope="col">Provinsi</th>
                       <th scope="col">FRP</th>
+                      <th scope="col">Keyakinan</th>
                       <th scope="col">Satelit</th>
                       <th scope="col">Frekuensi</th>
                       <th scope="col">Periode</th>
@@ -1774,6 +1862,7 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                       const hotspot = group.representativeHotspot;
                       const freq = burnFrequencyByLembaga.get(group.key.trim());
                       const rowNumber = (currentPage - 1) * PAGE_SIZE + index + 1;
+                      const confCat = getConfidenceCategory(hotspot);
 
                       return (
                         <tr
@@ -1815,6 +1904,11 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                           <td className="td-frp" data-label="FRP">
                             <span className={`confidence-pill confidence-pill--${getFrpCategory(hotspot) === 'Tinggi' ? 'high' : getFrpCategory(hotspot) === 'Sedang' ? 'nominal' : 'low'}`}>
                               {normalizeFrpCategoryLabel(hotspot)}
+                            </span>
+                          </td>
+                          <td className="td-conf" data-label="Keyakinan">
+                            <span className={`confidence-pill confidence-pill--${confCat === 'Tinggi' ? 'high' : confCat === 'Sedang' ? 'nominal' : 'low'}`} title={formatConfidence(hotspot.confidence)}>
+                              {confCat}
                             </span>
                           </td>
                           {/* source dan satellite sebelumnya dua elemen tanpa pemisah;
@@ -1924,6 +2018,6 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
         <span>STATUS: READY</span>
         <span>{filteredHotspots.length} RECORDS FOUND</span>
       </div>
-    </section>
+    </div>
   );
 }

@@ -181,6 +181,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
   const [selectedSkema, setSelectedSkema] = useState("");
   const [selectedBps, setSelectedBps] = useState("");
   const [selectedZone, setSelectedZone] = useState("");
+  const [selectedConfidence, setSelectedConfidence] = useState("");
   const [sortBy, setSortBy] = useState<"ftri" | "hs_today" | "distance" | "hs_strict" | "burned_ha" | "hs_7d" | "frp">("ftri");
 
   // Fetch summary
@@ -352,6 +353,18 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
       result = result.filter((i) => i.wilker_bps === selectedBps);
     }
 
+    if (selectedConfidence) {
+      if (selectedConfidence === "tinggi") {
+        result = result.filter((i) => i.frp_max_7d != null && i.frp_max_7d > 30);
+      } else if (selectedConfidence === "sedang") {
+        result = result.filter((i) => i.frp_max_7d != null && i.frp_max_7d >= 10 && i.frp_max_7d <= 30);
+      } else if (selectedConfidence === "rendah") {
+        result = result.filter((i) => i.frp_max_7d != null && i.frp_max_7d < 10);
+      } else if (selectedConfidence === "tinggi_sedang") {
+        result = result.filter((i) => i.frp_max_7d != null && i.frp_max_7d >= 10);
+      }
+    }
+
     result.sort((a, b) => {
       if (sortBy === "ftri") return b.ftri_score - a.ftri_score;
       if (sortBy === "hs_today") return b.hotspots_today - a.hotspots_today;
@@ -364,7 +377,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
     });
 
     return result;
-  }, [items, search, selectedZone, selectedBps, sortBy]);
+  }, [items, search, selectedZone, selectedBps, selectedConfidence, sortBy]);
 
   // Ekspor Excel mengikuti persis data yang sedang dilihat pengguna (displayItems),
   // termasuk status kartu aktif, filter wilayah/skema/zona, pencarian, dan pengurutan (sortBy).
@@ -405,6 +418,17 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
       }
       if (selectedZone && selectedZone !== "all") {
         filterParts.push(`Zona: ${selectedZone}`);
+      }
+      if (selectedConfidence) {
+        const confLabel =
+          selectedConfidence === "tinggi"
+            ? "FRP Tinggi (>30 MW)"
+            : selectedConfidence === "sedang"
+              ? "FRP Sedang (10-30 MW)"
+              : selectedConfidence === "rendah"
+                ? "FRP Rendah (<10 MW)"
+                : "FRP Sedang & Tinggi (≥10 MW)";
+        filterParts.push(`Keyakinan: ${confLabel}`);
       }
       if (search.trim()) {
         filterParts.push(`Pencarian: "${search.trim()}"`);
@@ -739,6 +763,28 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             <option value="strict" style={{ backgroundColor: "#1e293b" }}>🔥 Strict Re-burn (Bara Bekas)</option>
           </select>
         )}
+
+        {/* Filter Keyakinan / Sinyal FRP */}
+        <select
+          value={selectedConfidence}
+          onChange={(e) => setSelectedConfidence(e.target.value)}
+          style={{
+            padding: "0.5rem 0.75rem",
+            backgroundColor: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: "6px",
+            color: "#ffffff",
+            fontSize: "0.82rem",
+            minWidth: "160px"
+          }}
+          title="Saring berdasarkan kekuatan sinyal dan tingkat FRP hotspot"
+        >
+          <option value="">Semua Tingkat Sinyal</option>
+          <option value="tinggi" style={{ backgroundColor: "#1e293b" }}>🔴 FRP Tinggi (&gt;30 MW)</option>
+          <option value="sedang" style={{ backgroundColor: "#1e293b" }}>🟠 FRP Sedang (10-30 MW)</option>
+          <option value="tinggi_sedang" style={{ backgroundColor: "#1e293b" }}>🔥 Sedang & Tinggi (≥10 MW)</option>
+          <option value="rendah" style={{ backgroundColor: "#1e293b" }}>🟡 FRP Rendah (&lt;10 MW)</option>
+        </select>
 
         {/* Sort */}
         <select
