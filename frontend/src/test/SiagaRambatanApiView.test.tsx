@@ -219,4 +219,21 @@ describe("SiagaRambatanApiView", () => {
       expect(apiModule.authFetch).toHaveBeenCalledWith(expect.stringContaining("time_window_hours=24"));
     });
   });
+
+  it("renders Wilker (Balai PS) filter and filters data correctly", async () => {
+    render(<SiagaRambatanApiView />);
+
+    await waitFor(() => {
+      expect(screen.getByText("KPS Rimba Lestari")).toBeInTheDocument();
+      expect(screen.getByText("Semua Balai PS")).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "BPSKL Kalimantan" })).toBeInTheDocument();
+    });
+
+    const wilkerSelect = screen.getByDisplayValue("Semua Balai PS");
+    fireEvent.change(wilkerSelect, { target: { value: "BPSKL Kalimantan" } });
+
+    await waitFor(() => {
+      expect(apiModule.authFetch).toHaveBeenCalledWith(expect.stringContaining("wilker=BPSKL+Kalimantan"));
+    });
+  });
 });

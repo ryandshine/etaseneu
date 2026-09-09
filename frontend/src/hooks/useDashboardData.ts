@@ -277,28 +277,17 @@ export function useDashboardData(
   const persistedFilters = useMemo(() => loadPersistedFilters(), []);
   const cachedDashboard = useMemo(() => loadDashboardCache(), []);
   const hadCacheRef = useRef(cachedDashboard !== null);
-  const restoredPreset: TimePreset = persistedFilters?.timePreset ?? "24h";
-  // Tanggal tersimpan hanya relevan saat preset "custom" -- untuk preset lain,
-  // jendela waktu dihitung relatif hari ini (lihat buildTimeRange), jadi
-  // memulihkan endDate lama malah menampilkan data basi.
-  const restoredCustomDates =
-    restoredPreset === "custom" &&
-    typeof persistedFilters?.startDate === "string" &&
-    typeof persistedFilters?.endDate === "string";
-
+  // Selalu default 24 Jam saat pertama kali buka web/reload (sesuai SOP siaga karhutla).
+  // Pilihan satelit tetap dipulihkan dari localStorage jika ada.
   const [layers, setLayers] = useState<DashboardLayer[]>(() => cachedDashboard?.layers ?? []);
   const [hotspots, setHotspots] = useState<DashboardHotspot[]>(() => cachedDashboard?.hotspots ?? []);
   const [usingCachedData, setUsingCachedData] = useState(hadCacheRef.current);
   const [selectedSatellites, setSelectedSatellites] = useState<string[]>(
     () => persistedFilters?.selectedSatellites ?? [...SATELLITE_OPTIONS.map((option) => option.value)]
   );
-  const [timePreset, setTimePreset] = useState<TimePreset>(restoredPreset);
-  const [startDate, setStartDate] = useState(() =>
-    restoredCustomDates ? (persistedFilters!.startDate as string) : getDefaultCustomStartDate(today)
-  );
-  const [endDate, setEndDate] = useState(() =>
-    restoredCustomDates ? (persistedFilters!.endDate as string) : getDefaultCustomEndDate(today)
-  );
+  const [timePreset, setTimePreset] = useState<TimePreset>("24h");
+  const [startDate, setStartDate] = useState(() => getDefaultCustomStartDate(today));
+  const [endDate, setEndDate] = useState(() => getDefaultCustomEndDate(today));
   const [clockTick, setClockTick] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [remoteStats, setRemoteStats] = useState<RemoteStats>(

@@ -231,6 +231,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
   const [timeWindow, setTimeWindow] = useState<number>(48);
   const [maxDistanceKm, setMaxDistanceKm] = useState<number>(5.0);
   const [selectedLevel, setSelectedLevel] = useState<"bahaya" | "waspada" | "pantau" | "all">("all");
+  const [selectedWilker, setSelectedWilker] = useState<string>("");
   const [selectedProvince, setSelectedProvince] = useState<string>("");
   const [selectedRegency, setSelectedRegency] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -257,6 +258,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
         time_window_hours: String(timeWindow),
         max_distance_km: String(maxDistanceKm)
       });
+      if (selectedWilker) params.append("wilker", selectedWilker);
       if (selectedProvince) params.append("province", selectedProvince);
       if (selectedRegency) params.append("regency", selectedRegency);
 
@@ -288,7 +290,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
 
   useEffect(() => {
     fetchData();
-  }, [timeWindow, maxDistanceKm, selectedLevel, selectedProvince, selectedRegency]);
+  }, [timeWindow, maxDistanceKm, selectedLevel, selectedWilker, selectedProvince, selectedRegency]);
 
   // 2. Fetch Detail satu KPS jika dipilih
   useEffect(() => {
@@ -330,6 +332,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
         max_distance_km: String(maxDistanceKm)
       });
       if (selectedLevel !== "all") params.append("level", selectedLevel);
+      if (selectedWilker) params.append("wilker", selectedWilker);
       if (selectedProvince) params.append("province", selectedProvince);
       if (selectedRegency) params.append("regency", selectedRegency);
       if (searchTerm.trim()) params.append("search", searchTerm.trim());
@@ -345,24 +348,36 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
     }
   };
 
-  // Opsi dropdown provinsi & kabupaten
-  const provinceOptions = useMemo(() => {
+  // Opsi dropdown Wilker (Balai PS), Provinsi & Kabupaten
+  const wilkerOptions = useMemo(() => {
     const s = new Set<string>();
     for (const t of threats) {
-      if (t.nama_prov) s.add(t.nama_prov);
+      if (t.wilker_bps && t.wilker_bps.trim()) s.add(t.wilker_bps.trim());
     }
     return Array.from(s).sort();
   }, [threats]);
 
-  const regencyOptions = useMemo(() => {
+  const provinceOptions = useMemo(() => {
     const s = new Set<string>();
     for (const t of threats) {
-      if (!selectedProvince || t.nama_prov === selectedProvince) {
-        if (t.nama_kab) s.add(t.nama_kab);
+      if (!selectedWilker || t.wilker_bps === selectedWilker) {
+        if (t.nama_prov) s.add(t.nama_prov);
       }
     }
     return Array.from(s).sort();
-  }, [threats, selectedProvince]);
+  }, [threats, selectedWilker]);
+
+  const regencyOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const t of threats) {
+      const matchWilker = !selectedWilker || t.wilker_bps === selectedWilker;
+      const matchProv = !selectedProvince || t.nama_prov === selectedProvince;
+      if (matchWilker && matchProv && t.nama_kab) {
+        s.add(t.nama_kab);
+      }
+    }
+    return Array.from(s).sort();
+  }, [threats, selectedWilker, selectedProvince]);
 
   // Centroid koordinat peta
   const mapCenter: [number, number] = useMemo(() => {
@@ -542,6 +557,30 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
           </select>
         </div>
 
+        {/* Dropdown Wilker (Balai PS) */}
+        {wilkerOptions.length > 0 && (
+          <div className="fs-filter-group">
+            <span className="fs-filter-label">Balai PS:</span>
+            <select
+              value={selectedWilker}
+              onChange={(e) => {
+                setSelectedWilker(e.target.value);
+                setSelectedProvince("");
+                setSelectedRegency("");
+              }}
+              className="fs-filter-select"
+              style={{ maxWidth: "160px" }}
+            >
+              <option value="">Semua Balai PS</option>
+              {wilkerOptions.map((w) => (
+                <option key={w} value={w}>
+                  {w}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Dropdown Provinsi */}
         {provinceOptions.length > 0 && (
           <div className="fs-filter-group">
@@ -667,6 +706,11 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                           {item.skema && (
                             <span style={{ fontSize: "0.72rem", padding: "0.1rem 0.4rem", borderRadius: "4px", backgroundColor: "rgba(255,255,255,0.06)", color: "#d1d5db" }}>
                               {item.skema}
+                            </span>
+                          )}
+                          {item.wilker_bps && (
+                            <span style={{ fontSize: "0.72rem", padding: "0.1rem 0.4rem", borderRadius: "4px", backgroundColor: "rgba(56, 189, 248, 0.12)", color: "#7dd3fc", border: "1px solid rgba(56, 189, 248, 0.25)" }}>
+                              {item.wilker_bps}
                             </span>
                           )}
                         </div>
@@ -841,6 +885,18 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                         </span>
                         {threatDetail.skema && (
                           <span className="fs-drawer-skema-badge">{threatDetail.skema}</span>
+                        )}
+                        {threatDetail.wilker_bps && (
+                          <span
+                            className="fs-drawer-skema-badge"
+                            style={{
+                              backgroundColor: "rgba(56, 189, 248, 0.15)",
+                              color: "#7dd3fc",
+                              borderColor: "rgba(56, 189, 248, 0.3)"
+                            }}
+                          >
+                            {threatDetail.wilker_bps}
+                          </span>
                         )}
                       </div>
                       <button

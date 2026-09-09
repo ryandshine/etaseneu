@@ -16,6 +16,7 @@ async def get_fire_spread_summary(
     max_distance_km: float = Query(default=5.0, ge=0.5, le=20.0),
     province: str | None = None,
     regency: str | None = None,
+    wilker: str | None = None,
 ) -> dict:
     """Ringkasan statistik jumlah KPS yang terancam api di perimeter luar."""
     service = FireSpreadService()
@@ -24,6 +25,7 @@ async def get_fire_spread_summary(
         max_distance_km=max_distance_km,
         province=province,
         regency=regency,
+        wilker=wilker,
     )
 
 
@@ -34,6 +36,7 @@ async def get_fire_spread_threats(
     level: str | None = Query(default=None, pattern="^(bahaya|waspada|pantau)$"),
     province: str | None = None,
     regency: str | None = None,
+    wilker: str | None = None,
     search: str | None = None,
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
@@ -46,6 +49,7 @@ async def get_fire_spread_threats(
         level=level,
         province=province,
         regency=regency,
+        wilker=wilker,
         search=search,
         limit=limit,
         offset=offset,
@@ -77,6 +81,7 @@ async def export_fire_spread_excel(
     level: str | None = None,
     province: str | None = None,
     regency: str | None = None,
+    wilker: str | None = None,
     search: str | None = None,
 ) -> Response:
     """Download laporan KPS terancam api luar dalam format Excel (.xlsx)."""
@@ -87,6 +92,7 @@ async def export_fire_spread_excel(
         level=level,
         province=province,
         regency=regency,
+        wilker=wilker,
         search=search,
     )
     filename = f"Laporan_Siaga_Rambatan_Api_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"

@@ -77,9 +77,10 @@ class FireSpreadService:
         max_distance_km: float = 5.0,
         province: str | None = None,
         regency: str | None = None,
+        wilker: str | None = None,
     ) -> dict[str, Any]:
         """Ringkasan statistik KPS yang terancam api di perimeter luar."""
-        cache_key = f"fire_spread_summary_{time_window_hours}_{max_distance_km:.2f}_{province or 'all'}_{regency or 'all'}"
+        cache_key = f"fire_spread_summary_{time_window_hours}_{max_distance_km:.2f}_{province or 'all'}_{regency or 'all'}_{wilker or 'all'}"
         cached = self.cache_service.read(cache_key)
         if cached is not None and isinstance(cached, dict):
             return cached
@@ -109,6 +110,9 @@ class FireSpreadService:
         if regency:
             where_clauses.append("poly.nama_kab = %s")
             params.append(regency)
+        if wilker:
+            where_clauses.append("poly.wilker_bps = %s")
+            params.append(wilker)
 
         where_sql = " AND ".join(where_clauses)
 
@@ -173,12 +177,13 @@ class FireSpreadService:
         level: str | None = None,
         province: str | None = None,
         regency: str | None = None,
+        wilker: str | None = None,
         search: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> dict[str, Any]:
         """Daftar KPS yang terancam api luar, diurutkan dari jarak terdekat."""
-        cache_key = f"fire_spread_threats_{time_window_hours}_{max_distance_km:.2f}_{level or 'all'}_{province or 'all'}_{regency or 'all'}_{search or 'none'}_{limit}_{offset}"
+        cache_key = f"fire_spread_threats_{time_window_hours}_{max_distance_km:.2f}_{level or 'all'}_{province or 'all'}_{regency or 'all'}_{wilker or 'all'}_{search or 'none'}_{limit}_{offset}"
         cached = self.cache_service.read(cache_key)
         if cached is not None and isinstance(cached, dict):
             return cached
@@ -200,6 +205,9 @@ class FireSpreadService:
         if regency:
             where_clauses.append("poly.nama_kab = %s")
             params.append(regency)
+        if wilker:
+            where_clauses.append("poly.wilker_bps = %s")
+            params.append(wilker)
         if search:
             where_clauses.append(
                 "(poly.lembaga ILIKE %s OR poly.nama_desa ILIKE %s OR poly.nama_kab ILIKE %s)"
@@ -564,6 +572,7 @@ class FireSpreadService:
         level: str | None = None,
         province: str | None = None,
         regency: str | None = None,
+        wilker: str | None = None,
         search: str | None = None,
     ) -> bytes:
         """Menghasilkan file Excel (.xlsx) laporan KPS terancam api luar."""
@@ -573,6 +582,7 @@ class FireSpreadService:
             level=level,
             province=province,
             regency=regency,
+            wilker=wilker,
             search=search,
             limit=5000,
             offset=0,
