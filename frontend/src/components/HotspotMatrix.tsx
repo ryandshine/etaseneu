@@ -1590,7 +1590,7 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
             ) : (
               <div style={{ width: '100%', height: 'clamp(240px, 50vw, 400px)', position: 'relative' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topWilker} layout="horizontal" margin={{ top: 24, right: 20, left: 20, bottom: 8 }} onClick={(state) => {
+                  <BarChart data={topWilker} layout="horizontal" margin={{ top: 24, right: 20, left: 20, bottom: 48 }} onClick={(state) => {
                     if (state && state.activeLabel) {
                       const label = String(state.activeLabel);
                       setWilkerFilter(label === wilkerFilter ? "" : label);
@@ -1598,7 +1598,18 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                     }
                   }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
-                    <XAxis dataKey="label" stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} />
+                    <XAxis
+                      dataKey="label"
+                      stroke="rgba(255,255,255,0.2)"
+                      tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+                      axisLine={false}
+                      tickLine={false}
+                      interval={0}
+                      angle={-35}
+                      textAnchor="end"
+                      height={56}
+                      tickFormatter={(val) => (typeof val === 'string' ? val.replace(/^Balai PS\s+/i, '') : '')}
+                    />
                     <YAxis hide />
                     <ChartTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.01)' }} />
                     <Bar dataKey="value" fill="#FF4E00" radius={[4, 4, 0, 0]} background={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} barSize={16} isAnimationActive={false} style={{ cursor: 'pointer' }}>
