@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from app.core.auth import TokenClaims, get_current_user_claims
 from app.models.query import HotspotQuery
 from app.services.hotspot_service import HotspotService
+from app.services.polygon_fields import PROVINSI_FALLBACK, provinsi_name
 from app.services.stats_service import build_stats
 
 
@@ -85,6 +86,21 @@ def _to_map_hotspot(hotspot: dict[str, object]) -> dict[str, object]:
     """
     metadata = hotspot.get("polygon_metadata") or {}
     wilker = metadata.get("WILKER_BPS") if isinstance(metadata, dict) else None
+    # `hotspot_observations` tidak punya kolom province_name sendiri -- untuk
+    # hotspot yang baru dicocokkan di request ini (spatial_service.py,
+    # in-memory) province_name ada di top-level dict, tapi untuk hotspot yang
+    # lewat _hydrate_polygon_metadata (join DB, read_hotspot_observations)
+    # provinsinya cuma masuk ke polygon_metadata["NAMA_PROV"] -- tanpa
+    # fallback ini popup peta selalu menampilkan "Tidak tersedia" walau
+    # lembaga/KPS-nya sendiri kebetulan sudah benar (agency_name kolom
+    # tersendiri di tabel, jadi tidak kena masalah yang sama). Pakai helper
+    # bersama provinsi_name() (dipakai juga export XLSX/PDF) supaya alias
+    # NAMA_PROV/NAMA_PROVINSI/PROVINSI konsisten satu tempat -- tapi
+    # fallback stringnya ("Tanpa Provinsi") diabaikan di sini, biar peta
+    # tetap tampil "Tidak tersedia" seperti field lain yang genuinely kosong.
+    province_name = provinsi_name(hotspot)
+    if province_name == PROVINSI_FALLBACK:
+        province_name = None
 
     payload: dict[str, object] = {
         "id": hotspot.get("id"),
@@ -97,7 +113,7 @@ def _to_map_hotspot(hotspot: dict[str, object]) -> dict[str, object]:
         "confidence": hotspot.get("confidence"),
         "detected_at": hotspot.get("detected_at"),
         "agency_name": hotspot.get("agency_name"),
-        "province_name": hotspot.get("province_name"),
+        "province_name": province_name,
     }
 
     # Key-nya sama sekali tidak dikirim kalau Wilker tidak diketahui, supaya

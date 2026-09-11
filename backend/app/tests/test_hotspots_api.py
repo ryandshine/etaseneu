@@ -240,3 +240,36 @@ def test_map_view_omits_metadata_when_wilker_missing() -> None:
 
     assert "polygon_metadata" not in _to_map_hotspot({"id": 2})
     assert "polygon_metadata" not in _to_map_hotspot({"id": 3, "polygon_metadata": {"NO_SK": "x"}})
+
+
+def test_map_view_falls_back_to_polygon_metadata_for_province() -> None:
+    """`hotspot_observations` tidak punya kolom province_name sendiri.
+
+    Hotspot yang lewat _hydrate_polygon_metadata (join DB via
+    read_hotspot_observations, dipakai untuk histori/cache) cuma punya
+    provinsinya di polygon_metadata["NAMA_PROV"] -- top-level "province_name"
+    kosong. Tanpa fallback ini popup peta selalu menampilkan "Tidak tersedia"
+    walau lembaga/KPS-nya sendiri sudah benar (dilaporkan user, 2026-09-12).
+    """
+    from app.api.hotspots import _to_map_hotspot
+
+    trimmed = _to_map_hotspot({
+        "id": 4,
+        "agency_name": "LPHD MANGGATANG UTUS SAKA MANGKAHAI",
+        "polygon_metadata": {
+            "WILKER_BPS": "Balai PS Banjarbaru",
+            "NAMA_PROV": "Kalimantan Tengah",
+        },
+    })
+
+    assert trimmed["province_name"] == "Kalimantan Tengah"
+
+
+def test_map_view_province_none_when_truly_unknown() -> None:
+    """Hotspot di luar semua poligon tetap "Tidak tersedia" (bukan malah
+    menampilkan teks fallback internal "Tanpa Provinsi" milik provinsi_name())."""
+    from app.api.hotspots import _to_map_hotspot
+
+    trimmed = _to_map_hotspot({"id": 5})
+
+    assert trimmed["province_name"] is None
