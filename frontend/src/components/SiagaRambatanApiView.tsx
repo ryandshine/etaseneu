@@ -709,7 +709,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                             </span>
                           )}
                           {item.wilker_bps && (
-                            <span style={{ fontSize: "0.72rem", padding: "0.1rem 0.4rem", borderRadius: "4px", backgroundColor: "rgba(56, 189, 248, 0.12)", color: "#7dd3fc", border: "1px solid rgba(56, 189, 248, 0.25)" }}>
+                            <span style={{ fontSize: "0.72rem", padding: "0.1rem 0.4rem", borderRadius: "4px", backgroundColor: "rgba(183, 198, 136, 0.12)", color: "#B7C688", border: "1px solid rgba(183, 198, 136, 0.25)" }}>
                               {item.wilker_bps}
                             </span>
                           )}
@@ -807,7 +807,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
         <div className="fs-map-column">
           <div className="fs-map-header">
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
-              <Layers size={16} color="#38bdf8" />
+              <Layers size={16} color="#B7C688" />
               <span style={{ fontSize: "0.88rem", fontWeight: "700", color: "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {threatDetail ? threatDetail.lembaga : "Peta Perimeter Ancaman KPS"}
               </span>
@@ -842,7 +842,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
           <div className="fs-map-stage">
             {loadingDetail && (
               <div className="fs-map-loading-overlay">
-                <RefreshCw size={18} className="animate-spin" color="#38bdf8" />
+                <RefreshCw size={18} className="animate-spin" color="#B7C688" />
                 <span>Memuat batas poligon KPS &amp; sebaran hotspot...</span>
               </div>
             )}
@@ -890,9 +890,9 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                           <span
                             className="fs-drawer-skema-badge"
                             style={{
-                              backgroundColor: "rgba(56, 189, 248, 0.15)",
-                              color: "#7dd3fc",
-                              borderColor: "rgba(56, 189, 248, 0.3)"
+                              backgroundColor: "rgba(183, 198, 136, 0.15)",
+                              color: "#B7C688",
+                              borderColor: "rgba(183, 198, 136, 0.3)"
                             }}
                           >
                             {threatDetail.wilker_bps}
@@ -942,7 +942,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                           : `${threatDetail.min_distance_km} km`}
                       </div>
                       <div className="fs-drawer-hero-sub">
-                        <Compass size={13} color="#38bdf8" />
+                        <Compass size={13} color="#B7C688" />
                         <span>
                           Arah rambatan: <strong>{threatDetail.closest_vector?.bearing_compass || "-"}</strong>
                         </span>
@@ -1115,7 +1115,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                       className="fs-drawer-btn"
                       title="Fokuskan kembali peta ke poligon KPS dan titik api"
                     >
-                      <Crosshair size={13} color="#38bdf8" />
+                      <Crosshair size={13} color="#B7C688" />
                       Fokus Poligon
                     </button>
 
@@ -1282,17 +1282,17 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                     geometry: threatDetail.geometry
                   } as never}
                   style={{
-                    color: "#00e5ff",
+                    color: "#B92216",
                     weight: 3.5,
                     opacity: 1,
-                    fillColor: "#0284c7",
+                    fillColor: "#B92216",
                     fillOpacity: 0.22,
                     dashArray: "3 2"
                   }}
                 >
                   <Popup>
                     <div style={{ color: "#2b1810", fontSize: "0.82rem", minWidth: "180px" }}>
-                      <div style={{ fontWeight: "700", fontSize: "0.92rem", color: "#0284c7", marginBottom: "0.2rem" }}>
+                      <div style={{ fontWeight: "700", fontSize: "0.92rem", color: "#8A1A10", marginBottom: "0.2rem" }}>
                         {threatDetail.lembaga}
                       </div>
                       <div>Status Ancaman: <strong>{threatDetail.status_label}</strong></div>
@@ -1346,7 +1346,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                   >
                     <Popup>
                       <div style={{ color: "#2b1810", fontSize: "0.8rem" }}>
-                        <strong style={{ color: "#0284c7" }}>📍 Titik Batas KPS Terdekat</strong>
+                        <strong style={{ color: "#8A1A10" }}>📍 Titik Batas KPS Terdekat</strong>
                         <br />
                         Jarak ke api luar: <strong>{threatDetail.closest_vector.distance_m} meter</strong>
                         <br />
@@ -1420,7 +1420,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                 Legenda Peta:
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                <span style={{ width: "14px", height: "3px", backgroundColor: "#00e5ff", border: "1px dashed #0284c7" }} />
+                <span style={{ width: "14px", height: "3px", backgroundColor: "#B92216", border: "1px dashed #8A1A10" }} />
                 <span>Batas Kawasan KPS (Terpilih)</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>

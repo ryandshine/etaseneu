@@ -837,8 +837,17 @@ code {
 
 /* Peralihan basemap peta detail KPS -- ditumpuk di bawah kontrol zoom
    (kiri-atas) supaya lepas dari .kps-detail-map-actions (kanan-atas) dan
-   pemutar Timeline (melintang di bawah saat aktif). */
-.kps-detail-basemap-switcher {
+   pemutar Timeline (melintang di bawah saat aktif).
+   Selector digabung (.basemap-switcher.kps-detail-basemap-switcher, bukan
+   cuma .kps-detail-basemap-switcher) SENGAJA -- keduanya sama-sama satu
+   class selector (spesifisitas 0-0-1-0), dan .basemap-switcher generik
+   (base, top:1rem;left:4.25rem) letaknya lebih jauh ke bawah file ini
+   (dipakai juga oleh HotspotMap.tsx/KompleksKebakaranView.tsx), jadi kalau
+   spesifisitasnya disamakan aturan yang lebih belakang di file yang menang
+   -- basemap switcher Detail KPS ikut ke posisi generik itu dan bertabrakan
+   dengan Timeline/kontrol zoom (dilaporkan user, 2026-09-12). Digabung jadi
+   selector majemuk (0-0-2-0) supaya menang terlepas dari urutan di file. */
+.basemap-switcher.kps-detail-basemap-switcher {
   top: 4.75rem;
   left: 0.6rem;
   right: auto;
@@ -9733,9 +9742,9 @@ a + a {
 }
 
 .kompleks-chip--cluster {
-  background: rgba(59, 130, 246, 0.14);
-  color: #93c5fd;
-  border: 1px solid rgba(147, 197, 253, 0.3);
+  background: rgba(183, 198, 136, 0.14);
+  color: #B7C688;
+  border: 1px solid rgba(183, 198, 136, 0.3);
 }
 
 .kompleks-explain {
