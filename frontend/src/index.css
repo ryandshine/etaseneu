@@ -11840,10 +11840,13 @@ a + a {
 
 /* Reopen Floating Button */
 .fs-drawer-reopen-btn {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 920;
+  /* Dulu position:absolute mengambang di pojok peta -- bertumpuk dengan
+     kluster hotspot padat di baliknya (dilaporkan user "mengganggu",
+     2026-09-12). Sekarang item flex biasa di .fs-map-header, sebaris
+     dengan basemap switcher -- flex-shrink:0 supaya tidak ikut menyusut
+     kalau judul KPS-nya panjang. */
+  flex-shrink: 0;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;

@@ -837,6 +837,33 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                 Jalan
               </button>
             </div>
+
+            {/* Tombol Membuka Kembali Panel jika Ditutup -- dipindah dari
+                mengambang di atas peta (bertumpuk dgn kluster hotspot padat,
+                dilaporkan user 2026-09-12) ke baris header statis ini,
+                seperti basemap switcher di sampingnya. */}
+            {!isDrawerOpen && threatDetail && (
+              <button
+                type="button"
+                onClick={() => setIsDrawerOpen(true)}
+                className="fs-drawer-reopen-btn"
+                title="Buka Panel Detail Metrik KPS"
+              >
+                <ChevronLeft size={16} />
+                <span>Detail KPS</span>
+                <span
+                  className="fs-drawer-reopen-dot"
+                  style={{
+                    backgroundColor:
+                      threatDetail.status_level === "bahaya"
+                        ? "#ef4444"
+                        : threatDetail.status_level === "waspada"
+                        ? "#f97316"
+                        : "#eab308",
+                  }}
+                />
+              </button>
+            )}
           </div>
 
           <div className="fs-map-stage">
@@ -1151,30 +1178,6 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                 </div>
               )}
             </aside>
-
-            {/* Tombol Membuka Kembali Panel jika Ditutup */}
-            {!isDrawerOpen && threatDetail && (
-              <button
-                type="button"
-                onClick={() => setIsDrawerOpen(true)}
-                className="fs-drawer-reopen-btn"
-                title="Buka Panel Detail Metrik KPS"
-              >
-                <ChevronLeft size={16} />
-                <span>Detail KPS</span>
-                <span
-                  className="fs-drawer-reopen-dot"
-                  style={{
-                    backgroundColor:
-                      threatDetail.status_level === "bahaya"
-                        ? "#ef4444"
-                        : threatDetail.status_level === "waspada"
-                        ? "#f97316"
-                        : "#eab308",
-                  }}
-                />
-              </button>
-            )}
 
             <MapContainer
               center={mapCenter}
