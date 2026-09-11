@@ -6,7 +6,7 @@
   background:
     radial-gradient(circle at 15% 15%, rgba(183, 198, 136, 0.16), transparent 22%),
     radial-gradient(circle at 85% 10%, rgba(138, 97, 58, 0.12), transparent 26%),
-    linear-gradient(145deg, #2b1810 0%, #4D2D1B 42%, #1a0f09 100%);
+    linear-gradient(180deg, #2b1810 0%, #4D2D1B 42%, #1a0f09 100%);
   line-height: 1.5;
   font-weight: 400;
   text-rendering: optimizeLegibility;
@@ -52,7 +52,7 @@ body {
      bawah garis lipat selama bilah itu masih tampil. vh tetap ditulis lebih
      dulu sebagai fallback. */
   min-height: 100dvh;
-  background: linear-gradient(145deg, #2b1810 0%, #4D2D1B 42%, #1a0f09 100%);
+  background: linear-gradient(180deg, #2b1810 0%, #4D2D1B 42%, #1a0f09 100%);
 }
 
 code {
