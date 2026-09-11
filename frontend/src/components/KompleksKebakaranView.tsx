@@ -995,7 +995,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                         radius={6}
                         pathOptions={{ color: "#fbbf24", weight: 2, fillColor: "#d97706", fillOpacity: 1 }}
                       >
-                        <Tooltip permanent direction="bottom" className="kompleks-location-label">
+                        <Tooltip permanent direction="bottom" offset={[0, 10]} className="kompleks-location-label--desc">
                           Terdeteksi lebih awal ({new Date(propagation.start.at).toLocaleDateString("id-ID")})
                         </Tooltip>
                       </CircleMarker>
@@ -1004,7 +1004,13 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                         radius={7}
                         pathOptions={{ color: "#ffffff", weight: 2, fillColor: "#ef4444", fillOpacity: 1 }}
                       >
-                        <Tooltip permanent direction="top" className="kompleks-location-label">
+                        {/* offset -10 (bukan default) -- titik ini sering PERSIS di
+                            koordinat episentrum (titik terakhir terdeteksi = titik
+                            FRP terparah); tooltip episentrum di bawah diberi offset
+                            lebih jauh (-30) supaya dua label ini menumpuk RAPI ke
+                            atas alih-alih bertabrakan di baris yang sama
+                            (dilaporkan user, 2026-09-12). */}
+                        <Tooltip permanent direction="top" offset={[0, -10]} className="kompleks-location-label--desc">
                           Terdeteksi lebih akhir &mdash; perkiraan arah {propagation.cardinalDir}
                           {propagation.speedKmPerDay != null
                             ? ` · ~${propagation.speedKmPerDay.toFixed(1)} km/hari`
@@ -1056,7 +1062,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                         fillOpacity: 1
                       }}
                     >
-                      <Tooltip permanent direction="top" className="kompleks-location-label">
+                      <Tooltip permanent direction="top" offset={[0, -30]} className="kompleks-location-label--desc">
                         🔥 Episentrum ({selectedCluster.max_frp ? `${selectedCluster.max_frp.toFixed(0)} MW` : "Peak"})
                       </Tooltip>
                     </CircleMarker>

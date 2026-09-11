@@ -9405,7 +9405,32 @@ a + a {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
-.kompleks-location-label::before {
+/* Label deskriptif (bukan lingkaran nomor lokasi di atas) -- propagasi
+   awal/akhir & episentrum. Titik FRP terparah sering PERSIS titik terakhir
+   terdeteksi juga, jadi tanpa latar solid ketiga teks itu bisa numpuk jadi
+   tidak terbaca sama sekali di titik yang sama (dilaporkan user,
+   2026-09-12). Dikasih pil latar gelap solid seperti .kompleks-wind-badge;
+   offset vertikal berbeda per label (lihat prop `offset` di
+   KompleksKebakaranView.tsx) mencegah tumpang-tindihnya. */
+.kompleks-location-label--desc {
+  min-width: 0;
+  margin: 0 !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-radius: 999px;
+  background: rgba(26, 15, 9, 0.92) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+  color: #fff7cc !important;
+  font-size: 0.62rem;
+  font-weight: 900;
+  line-height: 1.3;
+  padding: 0.15rem 0.5rem;
+  text-align: center;
+  white-space: nowrap;
+  text-shadow: none;
+}
+
+.kompleks-location-label::before,
+.kompleks-location-label--desc::before {
   display: none !important;
 }
 
@@ -9483,7 +9508,7 @@ a + a {
 }
 
 .kompleks-mode-btn--active {
-  background: #ea580c !important;
+  background: #B92216 !important;
   color: #ffffff !important;
   font-weight: 700;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
@@ -9787,11 +9812,29 @@ a + a {
     min-height: auto;
   }
 
+  /* Legenda + mode switcher dipindah keluar dari lapisan mengambang di
+     mobile (dilaporkan user, 2026-09-12) -- sebelumnya keduanya
+     position:absolute MENUTUPI peta 55vh yang sudah pendek, makin parah
+     karena legenda 8-baris + baris tombol mode sekaligus. .kompleks-map
+     dijadikan flex-column: basemap-switcher TETAP mengambang (tidak
+     ditandai user, cukup kecil), tapi legenda & audit-panel jadi
+     position:static -- ikut aliran dokumen di ATAS peta -- dan
+     .leaflet-container diberi flex:1 (bukan height:100% bawaan inline
+     style React) supaya sisa tinggi otomatis jadi milik peta. */
   .kompleks-map {
-    height: 55vh;
-    min-height: 300px;
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 0;
     border-right: none;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .kompleks-map .leaflet-container {
+    flex: 1 1 auto !important;
+    height: 55vh !important;
+    min-height: 260px !important;
+    width: 100% !important;
   }
 
   .kompleks-list {
@@ -9806,16 +9849,35 @@ a + a {
   }
 
   .kompleks-map-legend {
-    left: 3.2rem;
+    /* Tidak perlu `order` eksplisit -- basemap-switcher tetap
+       position:absolute (di luar flow), jadi urutan DOM alami
+       (legend -> audit -> .leaflet-container) sudah pas: legenda & panel
+       audit tampil di ATAS peta, bukan menimpanya. */
+    position: static;
+    left: auto;
     right: auto;
-    bottom: 0.5rem;
-    max-width: calc(100% - 4rem);
+    bottom: auto;
+    max-width: none;
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
   }
 
   .kompleks-map-audit {
-    left: 0.75rem;
-    right: 0.75rem;
+    position: static;
+    top: auto;
+    left: auto;
+    right: auto;
     max-width: none;
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
   }
 }
 
