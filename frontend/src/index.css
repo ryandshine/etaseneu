@@ -2,11 +2,11 @@
 
 :root {
   font-family: "Plus Jakarta Sans", sans-serif;
-  color: #f5efe6;
+  color: #E7E6C2;
   background:
-    radial-gradient(circle at 15% 15%, rgba(255, 177, 107, 0.16), transparent 22%),
+    radial-gradient(circle at 15% 15%, rgba(183, 198, 136, 0.16), transparent 22%),
     radial-gradient(circle at 85% 10%, rgba(138, 97, 58, 0.12), transparent 26%),
-    linear-gradient(145deg, #130d09 0%, #1a120d 42%, #0c0907 100%);
+    linear-gradient(145deg, #2b1810 0%, #4D2D1B 42%, #1a0f09 100%);
   line-height: 1.5;
   font-weight: 400;
   text-rendering: optimizeLegibility;
@@ -55,7 +55,7 @@ body {
   background:
     linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
-    linear-gradient(145deg, #130d09 0%, #1a120d 42%, #0c0907 100%);
+    linear-gradient(145deg, #2b1810 0%, #4D2D1B 42%, #1a0f09 100%);
   background-size: 32px 32px, 32px 32px, auto;
 }
 
@@ -70,15 +70,15 @@ code {
 
 body {
   background:
-    radial-gradient(circle at 15% 15%, rgba(255, 78, 0, 0.12), transparent 22%),
-    radial-gradient(circle at 85% 12%, rgba(255, 185, 120, 0.06), transparent 24%),
-    linear-gradient(145deg, #090b0e 0%, #0f1113 46%, #08090b 100%);
+    radial-gradient(circle at 15% 15%, rgba(185, 34, 22, 0.12), transparent 22%),
+    radial-gradient(circle at 85% 12%, rgba(183, 198, 136, 0.06), transparent 24%),
+    linear-gradient(145deg, #1a0f09 0%, #2b1810 46%, #1a0f09 100%);
 }
 
 .panel {
   border: 1px solid rgba(255, 255, 255, 0.095);
   border-radius: 0.625rem;
-  background: #090b0e;
+  background: #1a0f09;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
 }
 
@@ -154,10 +154,10 @@ body {
   display: grid;
   place-items: center;
   border-radius: 0.5rem;
-  background: linear-gradient(135deg, #ff8a3d 0%, #ff4e00 100%);
-  color: #0b0c10;
+  background: linear-gradient(135deg, #C23A1F 0%, #8A1A10 100%);
+  color: #E7E6C2;
   font-weight: 800;
-  box-shadow: 0 0 16px rgba(255, 78, 0, 0.22);
+  box-shadow: 0 0 16px rgba(185, 34, 22, 0.22);
 }
 
 .side-brand-name {
@@ -238,10 +238,10 @@ body {
 }
 
 .side-nav-link--active {
-  background: rgba(255, 78, 0, 0.15);
-  border-color: rgba(255, 78, 0, 0.3);
-  color: #FF4E00;
-  box-shadow: 0 0 12px rgba(255, 78, 0, 0.15);
+  background: rgba(185, 34, 22, 0.15);
+  border-color: rgba(185, 34, 22, 0.3);
+  color: #8A1A10;
+  box-shadow: 0 0 12px rgba(185, 34, 22, 0.15);
 }
 
 .side-nav-mark {
@@ -348,7 +348,7 @@ body {
 }
 
 .side-footer-value {
-  color: #ff6b00;
+  color: #B92216;
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.7rem;
   font-weight: 700;
@@ -424,7 +424,7 @@ body {
     90deg,
     rgba(255, 181, 120, 0.08),
     rgba(255, 145, 63, 0.92) 45%,
-    rgba(255, 245, 237, 0.9) 100%
+    rgba(231, 230, 194, 0.9) 100%
   );
   box-shadow: 0 0 10px rgba(255, 143, 76, 0.34);
   opacity: 0.92;
@@ -479,7 +479,7 @@ body {
   padding: 0 1rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(19, 21, 26, 0.88);
-  color: rgba(255, 245, 237, 0.9);
+  color: rgba(231, 230, 194, 0.9);
   font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -491,8 +491,8 @@ body {
   width: 0.55rem;
   height: 0.55rem;
   border-radius: 999px;
-  background: #ff7b36;
-  box-shadow: 0 0 14px rgba(255, 123, 54, 0.5);
+  background: #B92216;
+  box-shadow: 0 0 14px rgba(185, 34, 22, 0.5);
 }
 
 .workspace-stage {
@@ -522,7 +522,7 @@ body {
 }
 
 .workspace-stage--map {
-  background: radial-gradient(circle at 50% 20%, rgba(255, 78, 0, 0.06), transparent 26%);
+  background: radial-gradient(circle at 50% 20%, rgba(185, 34, 22, 0.06), transparent 26%);
 }
 
 .workspace-stage--matrix {
@@ -636,13 +636,13 @@ body {
 }
 
 .kps-detail-back:hover {
-  background: rgba(255, 78, 0, 0.16);
+  background: rgba(185, 34, 22, 0.16);
   color: #fff;
 }
 
 .kps-detail-title {
   margin: 0;
-  color: #f5efe6;
+  color: #E7E6C2;
   font-size: 1.25rem;
   font-weight: 700;
 }
@@ -695,7 +695,7 @@ body {
 
 .kps-detail-fields dd {
   margin: 0;
-  color: #f5efe6;
+  color: #E7E6C2;
   font-size: 0.82rem;
   font-weight: 600;
   word-break: break-word;
@@ -750,9 +750,9 @@ body {
 }
 
 .kps-conf-btn--active {
-  border-color: rgba(255, 140, 66, 0.5);
-  background: rgba(255, 140, 66, 0.16);
-  color: #ff8c42;
+  border-color: rgba(185, 34, 22, 0.5);
+  background: rgba(185, 34, 22, 0.16);
+  color: #B92216;
   font-weight: 600;
 }
 
@@ -797,7 +797,7 @@ body {
   border-radius: 0.45rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(19, 21, 26, 0.92);
-  color: #f5efe6;
+  color: #E7E6C2;
   font-size: 0.72rem;
   font-weight: 600;
   backdrop-filter: blur(8px);
@@ -812,8 +812,8 @@ body {
 
 .kps-detail-action-btn:hover,
 .kps-detail-timeline-toggle:hover {
-  background: rgba(255, 78, 0, 0.18);
-  border-color: rgba(255, 140, 66, 0.4);
+  background: rgba(185, 34, 22, 0.18);
+  border-color: rgba(185, 34, 22, 0.4);
 }
 
 .kps-detail-action-btn:disabled,
@@ -880,7 +880,7 @@ body {
   gap: 0.4rem;
   font-size: 0.78rem;
   font-weight: 600;
-  color: #f3f4f6;
+  color: #E7E6C2;
 }
 
 .buffer-toggle-switch {
@@ -916,7 +916,7 @@ body {
   width: 14px;
   left: 2px;
   bottom: 2px;
-  background-color: #f3f4f6;
+  background-color: #E7E6C2;
   transition: 0.2s;
   border-radius: 50%;
 }
@@ -927,7 +927,7 @@ body {
 
 .buffer-toggle-switch input:checked + .buffer-toggle-slider:before {
   transform: translateX(16px);
-  background-color: #111827;
+  background-color: #2b1810;
 }
 
 .kps-detail-buffer-radius-row {
@@ -1103,7 +1103,7 @@ body {
 
 .export-modal__close-btn:hover {
   background: rgba(255, 255, 255, 0.1);
-  color: #f3f4f6;
+  color: #E7E6C2;
 }
 
 .export-modal__close-btn:disabled {
@@ -1137,7 +1137,7 @@ body {
 .export-modal__target-title {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #f3f4f6;
+  color: #E7E6C2;
 }
 
 .export-modal__target-sub {
@@ -1211,7 +1211,7 @@ body {
 .export-format-card__info strong {
   font-size: 0.85rem;
   font-weight: 700;
-  color: #f3f4f6;
+  color: #E7E6C2;
 }
 
 .export-format-card__info span {
@@ -1421,18 +1421,18 @@ body {
 }
 
 .lc-summary-link:hover {
-  background: rgba(255, 142, 66, 0.06);
+  background: rgba(185, 34, 22, 0.06);
 }
 
 .lc-summary-link__label {
   font-size: 0.82rem;
   font-weight: 700;
-  color: #f5efe6;
+  color: #E7E6C2;
 }
 
 .lc-summary-link__status {
   font-size: 0.72rem;
-  color: #ffb173;
+  color: #B7C688;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -1452,7 +1452,7 @@ body {
   font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: #f5efe6;
+  color: #E7E6C2;
 }
 
 .lc-lede,
@@ -1461,12 +1461,12 @@ body {
   margin: 0;
   font-size: 0.7rem;
   line-height: 1.45;
-  color: rgba(245, 239, 230, 0.5);
+  color: rgba(231, 230, 194, 0.5);
 }
 
 .lc-foot {
   font-size: 0.66rem;
-  color: rgba(245, 239, 230, 0.42);
+  color: rgba(231, 230, 194, 0.42);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1481,9 +1481,9 @@ body {
   align-self: flex-start;
   padding: 0.5rem 0.95rem;
   border-radius: 0.45rem;
-  border: 1px solid rgba(255, 142, 66, 0.4);
-  background: linear-gradient(180deg, rgba(255, 142, 66, 0.22), rgba(255, 142, 66, 0.12));
-  color: #ffd9bf;
+  border: 1px solid rgba(185, 34, 22, 0.4);
+  background: linear-gradient(180deg, rgba(185, 34, 22, 0.22), rgba(185, 34, 22, 0.12));
+  color: #E7E6C2;
   font: inherit;
   font-size: 0.78rem;
   font-weight: 600;
@@ -1491,8 +1491,8 @@ body {
   transition: background 150ms ease, border-color 150ms ease, transform 100ms ease;
 }
 .lc-cta:hover {
-  background: linear-gradient(180deg, rgba(255, 142, 66, 0.34), rgba(255, 142, 66, 0.18));
-  border-color: rgba(255, 142, 66, 0.7);
+  background: linear-gradient(180deg, rgba(185, 34, 22, 0.34), rgba(185, 34, 22, 0.18));
+  border-color: rgba(185, 34, 22, 0.7);
 }
 .lc-cta:active {
   transform: translateY(1px);
@@ -1510,7 +1510,7 @@ body {
   border-radius: 0.4rem;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.04);
-  color: rgba(245, 239, 230, 0.75);
+  color: rgba(231, 230, 194, 0.75);
   font: inherit;
   font-size: 0.68rem;
   font-weight: 600;
@@ -1518,7 +1518,7 @@ body {
   transition: background 150ms ease, color 150ms ease;
 }
 .lc-rerun:hover {
-  background: rgba(255, 78, 0, 0.16);
+  background: rgba(185, 34, 22, 0.16);
   color: #fff;
 }
 .lc-rerun--danger {
@@ -1559,16 +1559,16 @@ body {
 .lc-running p {
   margin: 0;
   font-size: 0.78rem;
-  color: #f5efe6;
+  color: #E7E6C2;
 }
 .lc-running__hint {
   font-size: 0.68rem;
-  color: rgba(245, 239, 230, 0.45);
+  color: rgba(231, 230, 194, 0.45);
 }
 .lc-running__bar {
   height: 3px;
   border-radius: 2px;
-  background: linear-gradient(90deg, transparent, #ff8e42, transparent);
+  background: linear-gradient(90deg, transparent, #B92216, transparent);
   background-size: 40% 100%;
   background-repeat: no-repeat;
   animation: lc-sweep 1.4s ease-in-out infinite;
@@ -1631,7 +1631,7 @@ body {
   border-radius: 999px;
   border: none;
   background: transparent;
-  color: rgba(245, 239, 230, 0.55);
+  color: rgba(231, 230, 194, 0.55);
   font: inherit;
   font-size: 0.74rem;
   font-weight: 700;
@@ -1639,11 +1639,11 @@ body {
   transition: background 150ms ease, color 150ms ease;
 }
 .lc-tab:hover {
-  color: rgba(245, 239, 230, 0.85);
+  color: rgba(231, 230, 194, 0.85);
 }
 .lc-tab--active {
-  background: rgba(255, 142, 66, 0.18);
-  color: #ffd9bf;
+  background: rgba(185, 34, 22, 0.18);
+  color: #E7E6C2;
 }
 
 /* (Tata letak tab "Peta Spasial" -- lihat .lc-mapframe di bawah, mengikuti
@@ -1658,7 +1658,7 @@ body {
   padding: 0.45rem 0.6rem;
   font-size: 0.68rem;
   line-height: 1.35;
-  color: rgba(245, 239, 230, 0.7);
+  color: rgba(231, 230, 194, 0.7);
   background: rgba(12, 9, 7, 0.82);
   backdrop-filter: blur(2px);
 }
@@ -1679,7 +1679,7 @@ body {
 .lc-mapframe .leaflet-container {
   width: 100%;
   height: 100%;
-  background: #0c0907;
+  background: #1a0f09;
 }
 /* Tidak ada kontrol Leaflet di sudut kiri-bawah di sini (zoom dipindah ke
    kanan-bawah) -- kolom kiri boleh memakai hampir seluruh tinggi. */
@@ -1695,11 +1695,11 @@ body {
 }
 .lc-mapframe .leaflet-control-zoom a {
   background: rgba(19, 21, 26, 0.92) !important;
-  color: #f5efe6 !important;
+  color: #E7E6C2 !important;
   border: none !important;
 }
 .lc-mapframe .leaflet-control-zoom a:not(.leaflet-disabled):hover {
-  background: rgba(255, 78, 0, 0.18) !important;
+  background: rgba(185, 34, 22, 0.18) !important;
   color: #fff !important;
 }
 
@@ -1752,12 +1752,12 @@ body {
 .lc-chrome__id strong {
   font-size: 0.85rem;
   font-weight: 800;
-  color: #f5efe6;
+  color: #E7E6C2;
   line-height: 1.2;
 }
 .lc-chrome__id span {
   font-size: 0.68rem;
-  color: rgba(245, 239, 230, 0.55);
+  color: rgba(231, 230, 194, 0.55);
 }
 .lc-chrome__actions {
   display: flex;
@@ -1879,11 +1879,11 @@ body {
   white-space: nowrap;
 }
 .lc-legendrow__ha {
-  color: #f5efe6;
+  color: #E7E6C2;
   font-weight: 600;
 }
 .lc-legendrow__pct {
-  color: rgba(245, 239, 230, 0.5);
+  color: rgba(231, 230, 194, 0.5);
 }
 .lc-legendrow--zero {
   opacity: 0.45;
@@ -1927,12 +1927,12 @@ body {
   border-radius: 0.4rem;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.04);
-  color: rgba(245, 239, 230, 0.8);
+  color: rgba(231, 230, 194, 0.8);
   cursor: pointer;
   transition: background 150ms ease, color 150ms ease, opacity 150ms ease;
 }
 .lc-step:hover:not(:disabled) {
-  background: rgba(255, 142, 66, 0.18);
+  background: rgba(185, 34, 22, 0.18);
   color: #fff;
 }
 .lc-step:disabled {
@@ -1965,19 +1965,19 @@ body {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #ff8e42;
-  border: 2px solid #1a120d;
+  background: #B92216;
+  border: 2px solid #4D2D1B;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
 .lc-range::-moz-range-thumb {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #ff8e42;
-  border: 2px solid #1a120d;
+  background: #B92216;
+  border: 2px solid #4D2D1B;
 }
 .lc-range:focus-visible {
-  outline: 2px solid rgba(255, 142, 66, 0.6);
+  outline: 2px solid rgba(185, 34, 22, 0.6);
   outline-offset: 3px;
   border-radius: 4px;
 }
@@ -1989,7 +1989,7 @@ body {
   font-size: 0.9rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: #f5efe6;
+  color: #E7E6C2;
 }
 
 /* LandCoverPanel cuma dirender di panel detail TutupanLahanView (lebar,
@@ -2022,7 +2022,7 @@ body {
   display: block;
   font-size: 0.7rem;
   font-weight: 700;
-  color: #f5efe6;
+  color: #E7E6C2;
   margin-bottom: 0.3rem;
 }
 .lc-tip ul {
@@ -2037,12 +2037,12 @@ body {
   align-items: center;
   gap: 0.35rem;
   font-size: 0.68rem;
-  color: rgba(245, 239, 230, 0.8);
+  color: rgba(231, 230, 194, 0.8);
 }
 .lc-tip li b {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
-  color: #f5efe6;
+  color: #E7E6C2;
 }
 
 .lc-table-wrap {
@@ -2068,13 +2068,13 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: rgba(245, 239, 230, 0.45);
+  color: rgba(231, 230, 194, 0.45);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 .lc-table tbody th {
   text-align: left;
   font-weight: 600;
-  color: #f5efe6;
+  color: #E7E6C2;
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -2087,7 +2087,7 @@ body {
 .lc-table tbody th {
   position: sticky;
   left: 0;
-  background: #1a120d;
+  background: #4D2D1B;
 }
 /* Sel tabel: hektar tebal-terang di atas, persen kecil-redup di bawah --
    sebelumnya inline sebaris ("100 60.0%") yang saling berhimpit. */
@@ -2099,21 +2099,21 @@ body {
 }
 .lc-cell__ha {
   font-weight: 700;
-  color: #f5efe6;
+  color: #E7E6C2;
 }
 .lc-cell__pct {
   font-size: 0.64rem;
-  color: rgba(245, 239, 230, 0.45);
+  color: rgba(231, 230, 194, 0.45);
 }
 .lc-hidden-note {
   margin: 0.4rem 0 0;
   padding: 0 0.55rem;
   font-size: 0.62rem;
-  color: rgba(245, 239, 230, 0.4);
+  color: rgba(231, 230, 194, 0.4);
 }
 .lc-delta {
   font-weight: 600;
-  color: rgba(245, 239, 230, 0.6);
+  color: rgba(231, 230, 194, 0.6);
 }
 .lc-delta--up {
   color: #e8b84b;
@@ -2126,11 +2126,11 @@ body {
   margin: 0;
   font-size: 0.78rem;
   line-height: 1.5;
-  color: #f5efe6;
+  color: #E7E6C2;
   padding: 0.55rem 0.7rem;
   border-radius: 0.4rem;
-  background: rgba(255, 142, 66, 0.08);
-  border: 1px solid rgba(255, 142, 66, 0.16);
+  background: rgba(185, 34, 22, 0.08);
+  border: 1px solid rgba(185, 34, 22, 0.16);
 }
 
 .map-frame {
@@ -2153,13 +2153,13 @@ body {
 
 .map-frame .leaflet-control-zoom a {
   background: rgba(19, 21, 26, 0.92) !important;
-  color: #f5efe6 !important;
+  color: #E7E6C2 !important;
   border: none !important;
   backdrop-filter: blur(8px);
 }
 
 .map-frame .leaflet-control-zoom a:not(.leaflet-disabled):hover {
-  background: rgba(255, 78, 0, 0.18) !important;
+  background: rgba(185, 34, 22, 0.18) !important;
   color: #ffffff !important;
 }
 
@@ -2169,7 +2169,7 @@ body {
 
 .map-frame .leaflet-control-zoom a.leaflet-disabled {
   background: rgba(19, 21, 26, 0.6) !important;
-  color: rgba(245, 239, 230, 0.35) !important;
+  color: rgba(231, 230, 194, 0.35) !important;
 }
 
 /* Kolom kiri peta desktop (2026-09-05): SATU wadah flex bergap otomatis
@@ -2200,7 +2200,7 @@ body {
   overflow-x: hidden;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  scrollbar-color: rgba(245, 239, 230, 0.28) transparent;
+  scrollbar-color: rgba(231, 230, 194, 0.28) transparent;
 }
 
 .map-left-stack::-webkit-scrollbar {
@@ -2208,7 +2208,7 @@ body {
 }
 
 .map-left-stack::-webkit-scrollbar-thumb {
-  background: rgba(245, 239, 230, 0.28);
+  background: rgba(231, 230, 194, 0.28);
   border-radius: 999px;
 }
 
@@ -2248,7 +2248,7 @@ body {
   align-items: center;
   gap: 0.45rem;
   font-size: 0.72rem;
-  color: #f5efe6;
+  color: #E7E6C2;
 }
 
 .map-legend-dot {
@@ -2319,7 +2319,7 @@ body {
   border-radius: 0.6rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(19, 21, 26, 0.96);
-  color: #f5efe6;
+  color: #E7E6C2;
   font-family: inherit;
   font-size: 0.74rem;
   font-weight: 600;
@@ -2402,7 +2402,7 @@ body {
   font-size: 0.7rem;
   font-weight: 500;
   line-height: 1.3;
-  color: rgba(245, 239, 230, 0.78);
+  color: rgba(231, 230, 194, 0.78);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2412,7 +2412,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: rgba(245, 239, 230, 0.5);
+  color: rgba(231, 230, 194, 0.5);
 }
 
 /* Overlay fungsi kawasan hutan: identitas hijau, bukan palet merah bekas-terbakar. */
@@ -2446,7 +2446,7 @@ body {
   font-size: 0.68rem;
   font-weight: 500;
   line-height: 1.2;
-  color: rgba(245, 239, 230, 0.86);
+  color: rgba(231, 230, 194, 0.86);
 }
 
 .kawasan-legend__swatch {
@@ -2474,7 +2474,7 @@ body {
   border-radius: 0.5rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(19, 21, 26, 0.92);
-  color: #f5efe6;
+  color: #E7E6C2;
   backdrop-filter: blur(8px);
   cursor: pointer;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -2482,7 +2482,7 @@ body {
 }
 
 .locate-btn:hover {
-  background: rgba(255, 78, 0, 0.18);
+  background: rgba(185, 34, 22, 0.18);
   color: #fff;
 }
 
@@ -2569,13 +2569,13 @@ body {
 }
 
 .basemap-switcher button:hover {
-  background: rgba(255, 78, 0, 0.18);
+  background: rgba(185, 34, 22, 0.18);
   color: #fff;
 }
 
 .basemap-switcher-btn--active {
-  background: rgba(255, 142, 66, 0.18) !important;
-  color: #ff8c42 !important;
+  background: rgba(185, 34, 22, 0.18) !important;
+  color: #B92216 !important;
 }
 
 .user-location-marker {
@@ -2595,7 +2595,7 @@ body {
 .user-location-core {
   inset: 4px;
   background: #38bdf8;
-  border: 2px solid #0b0c10;
+  border: 2px solid #2b1810;
   box-shadow: 0 0 8px #38bdf8;
 }
 
@@ -2720,7 +2720,7 @@ body {
 }
 
 .stats-panel-close:hover {
-  background: rgba(255, 78, 0, 0.18);
+  background: rgba(185, 34, 22, 0.18);
   color: #fff;
 }
 
@@ -2978,7 +2978,7 @@ body {
 
 .alert-banner-text {
   font-size: 0.88rem;
-  color: #ffecd1;
+  color: #E7E6C2;
 }
 
 .alert-banner-dismiss {
@@ -3922,9 +3922,9 @@ body {
 .account-settings-card {
   margin-bottom: 1.5rem;
   padding: 1.35rem 1.5rem;
-  border: 1px solid rgba(255, 142, 66, 0.22);
+  border: 1px solid rgba(185, 34, 22, 0.22);
   border-radius: 0.75rem;
-  background: linear-gradient(135deg, rgba(255, 78, 0, 0.11), rgba(17, 24, 39, 0.56) 45%, rgba(255, 255, 255, 0.025));
+  background: linear-gradient(135deg, rgba(185, 34, 22, 0.11), rgba(17, 24, 39, 0.56) 45%, rgba(255, 255, 255, 0.025));
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
 }
 
@@ -3938,7 +3938,7 @@ body {
 
 .account-settings-kicker {
   margin: 0 0 0.3rem;
-  color: #ff9a70;
+  color: #B7C688;
   font-size: 0.62rem;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -3961,9 +3961,9 @@ body {
 }
 
 .account-role-badge--admin {
-  border-color: rgba(255, 142, 66, 0.42);
-  background: rgba(255, 78, 0, 0.12);
-  color: #ffc0a8;
+  border-color: rgba(185, 34, 22, 0.42);
+  background: rgba(185, 34, 22, 0.12);
+  color: #B7C688;
 }
 
 .account-role-badge--bps {
@@ -3982,7 +3982,7 @@ body {
 .account-settings-grid > div {
   min-width: 0;
   padding: 0.7rem 0.75rem;
-  border-left: 2px solid rgba(255, 142, 66, 0.42);
+  border-left: 2px solid rgba(185, 34, 22, 0.42);
   background: rgba(0, 0, 0, 0.14);
 }
 
@@ -3998,7 +3998,7 @@ body {
 .account-settings-grid strong {
   display: block;
   overflow: hidden;
-  color: #f5efe6;
+  color: #E7E6C2;
   font-size: 0.8rem;
   line-height: 1.35;
   text-overflow: ellipsis;
@@ -4435,8 +4435,8 @@ body {
   margin-top: 0.4rem;
   padding: 0.5rem 0.5rem;
   border-radius: 0.375rem;
-  background: rgba(255, 142, 66, 0.06);
-  border: 1px solid rgba(255, 142, 66, 0.15);
+  background: rgba(185, 34, 22, 0.06);
+  border: 1px solid rgba(185, 34, 22, 0.15);
   color: rgba(255, 255, 255, 0.7);
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.68rem;
@@ -4446,7 +4446,7 @@ body {
 }
 
 .control-metric strong {
-  color: #ff8c42;
+  color: #B92216;
   font-size: 0.9rem;
   font-weight: 800;
   flex-shrink: 0;
@@ -4577,13 +4577,13 @@ body {
 }
 
 .matrix-header-action--ghost {
-  background: rgba(255, 78, 0, 0.09);
-  border-color: rgba(255, 78, 0, 0.18);
-  color: #ffb86b;
+  background: rgba(185, 34, 22, 0.09);
+  border-color: rgba(185, 34, 22, 0.18);
+  color: #B7C688;
 }
 
 .matrix-header-action--ghost:hover {
-  background: rgba(255, 78, 0, 0.15);
+  background: rgba(185, 34, 22, 0.15);
 }
 
 /* Dropdown "Ekspor" (2026-09-05) -- menggantikan 3 tombol terpisah (XLSX/
@@ -4615,7 +4615,7 @@ body {
   border: none;
   border-radius: 0.25rem;
   background: transparent;
-  color: #f3f4f6;
+  color: #E7E6C2;
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.78rem;
   font-weight: 600;
@@ -4624,8 +4624,8 @@ body {
 }
 
 .matrix-export-menu__item:hover {
-  background: rgba(255, 78, 0, 0.12);
-  color: #ffb86b;
+  background: rgba(185, 34, 22, 0.12);
+  color: #B7C688;
 }
 
 .matrix-export-menu__item:disabled {
@@ -4657,12 +4657,12 @@ body {
   border-radius: 0.25rem;
   border: 1px solid rgba(255, 255, 255, 0.09);
   background: rgba(255, 255, 255, 0.03);
-  color: #ffb86b;
+  color: #B7C688;
   cursor: pointer;
 }
 
 .matrix-row-download:hover {
-  background: rgba(255, 78, 0, 0.15);
+  background: rgba(185, 34, 22, 0.15);
 }
 
 .matrix-row-download:disabled {
@@ -4708,7 +4708,7 @@ body {
 }
 
 .matrix-stat-card strong {
-  color: #ffcf9b;
+  color: #DCD9A9;
   font-size: 1.08rem;
   line-height: 1;
 }
@@ -4761,7 +4761,7 @@ body {
 }
 
 .matrix-filter-label {
-  color: #ffb86b;
+  color: #B7C688;
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.62rem;
   font-weight: 700;
@@ -4785,8 +4785,8 @@ body {
 }
 .matrix-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(255, 78, 0, 0.35);
-  box-shadow: 0 8px 30px rgba(255, 78, 0, 0.08);
+  border-color: rgba(185, 34, 22, 0.35);
+  box-shadow: 0 8px 30px rgba(185, 34, 22, 0.08);
 }
 
 .matrix-registry-row {
@@ -4818,9 +4818,9 @@ body {
   min-height: 1.8rem;
   padding: 0.32rem 0.62rem;
   border-radius: 0.375rem;
-  border: 1px solid rgba(255, 140, 66, 0.22);
-  background: rgba(255, 140, 66, 0.12);
-  color: #ffb86b;
+  border: 1px solid rgba(185, 34, 22, 0.22);
+  background: rgba(185, 34, 22, 0.12);
+  color: #B7C688;
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.64rem;
   font-weight: 700;
@@ -4835,7 +4835,7 @@ body {
 }
 
 .matrix-card-kicker {
-  color: #ff8c42;
+  color: #B92216;
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.67rem;
   font-weight: 700;
@@ -4884,7 +4884,7 @@ body {
 
 .matrix-subcard__header h4 {
   margin: 0;
-  color: #ffcf9b;
+  color: #DCD9A9;
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.66rem;
   font-weight: 700;
@@ -4920,7 +4920,7 @@ body {
 }
 
 .matrix-key-row span {
-  color: rgba(245, 239, 230, 0.54);
+  color: rgba(231, 230, 194, 0.54);
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.64rem;
   letter-spacing: 0.12em;
@@ -4928,7 +4928,7 @@ body {
 }
 
 .matrix-key-row strong {
-  color: rgba(245, 239, 230, 0.9);
+  color: rgba(231, 230, 194, 0.9);
   font-size: 0.82rem;
   line-height: 1.45;
   word-break: break-word;
@@ -4972,7 +4972,7 @@ body {
 }
 
 .matrix-card-meta__group strong {
-  color: rgba(245, 239, 230, 0.92);
+  color: rgba(231, 230, 194, 0.92);
   font-size: 0.84rem;
   line-height: 1.35;
   word-break: break-word;
@@ -4993,15 +4993,15 @@ body {
 }
 
 .matrix-status-pill--accent {
-  color: #120a06;
-  background: rgba(255, 140, 66, 0.15);
-  border-color: rgba(255, 190, 122, 0.45);
+  color: #E7E6C2;
+  background: rgba(185, 34, 22, 0.25);
+  border-color: rgba(183, 198, 136, 0.45);
 }
 
 .matrix-status-pill--warm {
   color: #ffd7a8;
-  background: rgba(255, 140, 66, 0.14);
-  border-color: rgba(255, 140, 66, 0.24);
+  background: rgba(185, 34, 22, 0.14);
+  border-color: rgba(185, 34, 22, 0.24);
 }
 
 .matrix-status-pill--soft {
@@ -5059,7 +5059,7 @@ body {
 
 .matrix-field input:focus,
 .matrix-field select:focus {
-  border-color: rgba(255, 140, 66, 0.5);
+  border-color: rgba(185, 34, 22, 0.5);
 }
 
 .matrix-field input:disabled {
@@ -5081,7 +5081,7 @@ body {
 }
 
 .matrix-summary strong {
-  color: #ff8c42;
+  color: #B92216;
 }
 
 .matrix-summary-row {
@@ -5108,7 +5108,7 @@ body {
 }
 
 .matrix-summary-item strong {
-  color: #fff2e2;
+  color: #E7E6C2;
   font-size: 0.78rem;
   line-height: 1.25;
   word-break: break-word;
@@ -5240,11 +5240,11 @@ body {
 }
 
 .skema-matrix__more-btn {
-  border: 1px solid rgba(255, 107, 53, 0.38);
+  border: 1px solid rgba(185, 34, 22, 0.38);
   border-radius: 999px;
   padding: 0.32rem 0.7rem;
-  background: rgba(255, 107, 53, 0.08);
-  color: #ff9a70;
+  background: rgba(185, 34, 22, 0.08);
+  color: #B7C688;
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -5253,9 +5253,9 @@ body {
 
 .skema-matrix__more-btn:hover,
 .skema-matrix__more-btn:focus-visible {
-  border-color: rgba(255, 107, 53, 0.7);
-  background: rgba(255, 107, 53, 0.16);
-  color: #ffc0a8;
+  border-color: rgba(185, 34, 22, 0.7);
+  background: rgba(185, 34, 22, 0.16);
+  color: #B7C688;
   outline: none;
 }
 
@@ -5294,7 +5294,7 @@ body {
   background: rgba(19, 21, 26, 0.96);
   text-align: left;
   font-weight: 600;
-  color: #f3f4f6;
+  color: #E7E6C2;
 }
 
 .skema-matrix thead th:first-child {
@@ -5308,7 +5308,7 @@ body {
 
 .skema-matrix tbody tr.is-active th,
 .skema-matrix tbody tr.is-active td {
-  box-shadow: inset 0 -1px 0 rgba(255, 107, 53, 0.65);
+  box-shadow: inset 0 -1px 0 rgba(185, 34, 22, 0.65);
 }
 
 .skema-matrix__zero {
@@ -5323,7 +5323,7 @@ body {
 
 .skema-matrix tfoot td,
 .skema-matrix tfoot th {
-  border-top: 1px solid rgba(255, 107, 53, 0.45);
+  border-top: 1px solid rgba(185, 34, 22, 0.45);
   border-bottom: none;
   font-weight: 700;
   color: #fff;
@@ -5345,11 +5345,11 @@ body {
 
 .skema-matrix__head-btn:hover,
 .skema-matrix__head-btn:focus-visible {
-  color: #ff6b35;
+  color: #B92216;
 }
 
 .skema-matrix__head-btn.is-active {
-  color: #ff6b35;
+  color: #B92216;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -5393,8 +5393,8 @@ body {
 }
 
 .matrix-toggle--active {
-  background: rgba(255, 140, 66, 0.15);
-  color: #120a06;
+  background: rgba(185, 34, 22, 0.25);
+  color: #E7E6C2;
 }
 
 .matrix-bar-list {
@@ -5418,13 +5418,13 @@ body {
 }
 
 .matrix-bar-row--selectable:hover {
-  border-color: rgba(255, 140, 66, 0.22);
+  border-color: rgba(185, 34, 22, 0.22);
   background: rgba(255, 255, 255, 0.04);
 }
 
 .matrix-bar-row--active {
-  border-color: rgba(255, 140, 66, 0.32);
-  box-shadow: 0 0 0 1px rgba(255, 140, 66, 0.16) inset;
+  border-color: rgba(185, 34, 22, 0.32);
+  box-shadow: 0 0 0 1px rgba(185, 34, 22, 0.16) inset;
 }
 
 .matrix-bar-row__head {
@@ -5435,7 +5435,7 @@ body {
 }
 
 .matrix-bar-row__label {
-  color: rgba(245, 239, 230, 0.82);
+  color: rgba(231, 230, 194, 0.82);
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.62rem;
   letter-spacing: 0.14em;
@@ -5443,7 +5443,7 @@ body {
 }
 
 .matrix-bar-row strong {
-  color: #ffcf9b;
+  color: #DCD9A9;
   font-size: 0.8rem;
 }
 
@@ -5585,12 +5585,12 @@ body {
 
 .matrix-row-card:hover {
   transform: translateY(-1px);
-  border-color: rgba(255, 140, 66, 0.18);
+  border-color: rgba(185, 34, 22, 0.18);
 }
 
 .matrix-row-card--selected {
-  border-color: rgba(255, 140, 66, 0.28);
-  box-shadow: 0 0 0 1px rgba(255, 140, 66, 0.14) inset, 0 18px 48px rgba(0, 0, 0, 0.22);
+  border-color: rgba(185, 34, 22, 0.28);
+  box-shadow: 0 0 0 1px rgba(185, 34, 22, 0.14) inset, 0 18px 48px rgba(0, 0, 0, 0.22);
 }
 
 .matrix-detail-card {
@@ -5611,7 +5611,7 @@ body {
 }
 
 .matrix-detail-card__head span {
-  color: #ffb86b;
+  color: #B7C688;
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.62rem;
   letter-spacing: 0.14em;
@@ -5654,7 +5654,7 @@ body {
 }
 
 .matrix-detail-item strong {
-  color: rgba(245, 239, 230, 0.94);
+  color: rgba(231, 230, 194, 0.94);
   font-size: 0.8rem;
   line-height: 1.35;
   word-break: break-word;
@@ -5677,7 +5677,7 @@ body {
 }
 
 .matrix-code-block strong {
-  color: #ffcf9b;
+  color: #DCD9A9;
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.74rem;
   letter-spacing: 0.08em;
@@ -5702,7 +5702,7 @@ body {
 }
 
 .matrix-comparison-head strong {
-  color: #ffcf9b;
+  color: #DCD9A9;
 }
 
 .matrix-comparison-list {
@@ -5726,7 +5726,7 @@ body {
 }
 
 .matrix-comparison-row strong {
-  color: rgba(245, 239, 230, 0.9);
+  color: rgba(231, 230, 194, 0.9);
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.68rem;
 }
@@ -5756,7 +5756,7 @@ body {
 }
 
 .ledger-search:focus-within {
-  border-color: rgba(255, 140, 66, 0.5);
+  border-color: rgba(185, 34, 22, 0.5);
 }
 
 .ledger-search__icon {
@@ -5770,7 +5770,7 @@ body {
   padding: 0.35rem 0;
   border: none;
   background: transparent;
-  color: #f3f4f6;
+  color: #E7E6C2;
   font-family: inherit;
   font-size: 0.85rem;
   outline: none;
@@ -5803,15 +5803,15 @@ body {
 
 .ledger-search__clear:hover {
   background: rgba(255, 255, 255, 0.12);
-  color: #f3f4f6;
+  color: #E7E6C2;
 }
 
 .ledger-search__submit {
   min-height: 1.9rem;
   padding: 0 0.9rem;
-  border: 1px solid rgba(255, 140, 66, 0.42);
-  background: rgba(255, 140, 66, 0.14);
-  color: #ffb86b;
+  border: 1px solid rgba(185, 34, 22, 0.42);
+  background: rgba(185, 34, 22, 0.14);
+  color: #B7C688;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -5819,8 +5819,8 @@ body {
 }
 
 .ledger-search__submit:hover {
-  background: rgba(255, 140, 66, 0.24);
-  border-color: rgba(255, 140, 66, 0.7);
+  background: rgba(185, 34, 22, 0.24);
+  border-color: rgba(185, 34, 22, 0.7);
 }
 
 .matrix-table-wrap {
@@ -5879,9 +5879,9 @@ body {
 }
 
 .matrix-page-btn:hover:not(:disabled) {
-  background: rgba(255, 140, 66, 0.15);
-  border-color: rgba(255, 140, 66, 0.4);
-  color: #ffb86b;
+  background: rgba(185, 34, 22, 0.15);
+  border-color: rgba(185, 34, 22, 0.4);
+  color: #B7C688;
 }
 
 .matrix-page-btn:disabled {
@@ -5997,7 +5997,7 @@ body {
 .matrix-table tbody td {
   padding: 0.75rem 0.9rem;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
-  color: rgba(245, 239, 230, 0.84);
+  color: rgba(231, 230, 194, 0.84);
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.8rem;
   vertical-align: top;
@@ -6048,7 +6048,7 @@ body {
 }
 
 .matrix-ledger .matrix-table tbody tr:focus-visible {
-  outline: 2px solid rgba(255, 140, 66, 0.7);
+  outline: 2px solid rgba(185, 34, 22, 0.7);
   outline-offset: -2px;
 }
 
@@ -6114,7 +6114,7 @@ body {
 }
 
 .detect-row:focus-visible {
-  outline: 2px solid rgba(255, 140, 66, 0.7);
+  outline: 2px solid rgba(185, 34, 22, 0.7);
   outline-offset: 2px;
 }
 
@@ -6122,19 +6122,19 @@ body {
    sebagai `.detect-row--active` saja (0,1,0) aturan ini kalah dan penanda
    baris terpilih tidak pernah muncul. */
 .detect-table tbody tr.detect-row--active {
-  border-color: rgba(255, 140, 66, 0.55);
-  background: rgba(255, 140, 66, 0.12);
+  border-color: rgba(185, 34, 22, 0.55);
+  background: rgba(185, 34, 22, 0.12);
 }
 
 .detect-table .dt-waktu {
   grid-area: waktu;
   font-size: 0.74rem;
   font-weight: 600;
-  color: rgba(245, 239, 230, 0.94);
+  color: rgba(231, 230, 194, 0.94);
 }
 
 .detect-row--active .dt-waktu {
-  color: #ff8c42;
+  color: #B92216;
   font-weight: 700;
 }
 
@@ -6179,7 +6179,7 @@ body {
 }
 
 .matrix-row-selected {
-  background: rgba(255, 140, 66, 0.08);
+  background: rgba(185, 34, 22, 0.08);
 }
 
 .matrix-empty {
@@ -6192,7 +6192,7 @@ body {
 }
 
 .matrix-emphasis {
-  color: #ffb088 !important;
+  color: #B7C688 !important;
 }
 
 .matrix-satellite {
@@ -6225,9 +6225,9 @@ body {
 
 .confidence-pill--high,
 .confidence-pill--h {
-  color: #ff8c42;
-  border-color: rgba(255, 140, 66, 0.2);
-  background: rgba(255, 140, 66, 0.12);
+  color: #B92216;
+  border-color: rgba(185, 34, 22, 0.2);
+  background: rgba(185, 34, 22, 0.12);
 }
 
 .confidence-pill--nominal,
@@ -6290,7 +6290,7 @@ body {
 
 .eyebrow {
   margin: 0 0 0.7rem;
-  color: #ffb86b;
+  color: #B7C688;
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -6300,7 +6300,7 @@ body {
 .lede {
   width: min(52rem, 100%);
   margin: 0.85rem 0 0;
-  color: rgba(245, 239, 230, 0.8);
+  color: rgba(231, 230, 194, 0.8);
   font-size: 1rem;
 }
 
@@ -6327,14 +6327,14 @@ body {
 }
 
 .status-chip {
-  color: rgba(245, 239, 230, 0.9);
+  color: rgba(231, 230, 194, 0.9);
   background: rgba(255, 255, 255, 0.04);
 }
 
 .status-chip--accent {
-  color: #120a06;
-  background: rgba(255, 140, 66, 0.15);
-  border-color: rgba(255, 190, 122, 0.45);
+  color: #E7E6C2;
+  background: rgba(185, 34, 22, 0.25);
+  border-color: rgba(183, 198, 136, 0.45);
 }
 
 .status-dot {
@@ -6346,16 +6346,16 @@ body {
 }
 
 .status-dot--soft {
-  background: #ffd7a8;
-  box-shadow: 0 0 0 4px rgba(255, 215, 168, 0.12);
+  background: #B7C688;
+  box-shadow: 0 0 0 4px rgba(183, 198, 136, 0.12);
 }
 
 .primary-action {
   border: 0;
   cursor: pointer;
-  color: #120a06;
-  background: linear-gradient(135deg, #ffb25f 0%, #ff8c42 100%);
-  box-shadow: 0 12px 30px rgba(255, 140, 66, 0.24);
+  color: #E7E6C2;
+  background: linear-gradient(135deg, #C23A1F 0%, #8A1A10 100%);
+  box-shadow: 0 12px 30px rgba(185, 34, 22, 0.24);
   transition: transform 120ms ease, filter 120ms ease, opacity 120ms ease;
 }
 
@@ -6372,7 +6372,7 @@ body {
 .secondary-action {
   width: 100%;
   cursor: pointer;
-  color: rgba(245, 239, 230, 0.92);
+  color: rgba(231, 230, 194, 0.92);
   background: rgba(255, 255, 255, 0.05);
   transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
 }
@@ -6397,7 +6397,7 @@ body {
 
 .panel-eyebrow {
   margin: 0 0 0.35rem;
-  color: #ffb86b;
+  color: #B7C688;
   font-size: 0.76rem;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -6409,7 +6409,7 @@ body {
   padding: 0.42rem 0.75rem;
   border-radius: 0.125rem;
   background: rgba(255, 255, 255, 0.06);
-  color: rgba(245, 239, 230, 0.88);
+  color: rgba(231, 230, 194, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 0.84rem;
   font-weight: 600;
@@ -6447,7 +6447,7 @@ body {
 }
 
 .sync-status-value {
-  color: #ff6b00;
+  color: #B92216;
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.72rem;
   font-weight: 700;
@@ -6457,7 +6457,7 @@ body {
 
 .sync-status-copy {
   margin: 0;
-  color: rgba(245, 239, 230, 0.66);
+  color: rgba(231, 230, 194, 0.66);
   font-size: 0.82rem;
   line-height: 1.45;
 }
@@ -6517,7 +6517,7 @@ body {
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #ff8c42;
+  color: #B92216;
 }
 
 .filter-panel-badge {
@@ -6584,10 +6584,10 @@ body {
 }
 
 .filter-preset-btn.chip--active {
-  border-color: rgba(255, 142, 66, 0.5);
-  background: rgba(255, 142, 66, 0.18);
-  color: #ff8c42;
-  box-shadow: 0 0 12px rgba(255, 142, 66, 0.15);
+  border-color: rgba(185, 34, 22, 0.5);
+  background: rgba(185, 34, 22, 0.18);
+  color: #B92216;
+  box-shadow: 0 0 12px rgba(185, 34, 22, 0.15);
 }
 
 .filter-select-input {
@@ -6613,18 +6613,18 @@ body {
 .filter-select-input:focus {
   outline: none;
   background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 142, 66, 0.4);
-  box-shadow: 0 0 10px rgba(255, 142, 66, 0.1);
+  border-color: rgba(185, 34, 22, 0.4);
+  box-shadow: 0 0 10px rgba(185, 34, 22, 0.1);
 }
 
 .filter-select-input option {
   background: #1a1f2e;
-  color: #f3f4f6;
+  color: #E7E6C2;
   padding: 0.5rem;
 }
 
 .filter-select-input option:checked {
-  background: rgba(255, 142, 66, 0.25);
+  background: rgba(185, 34, 22, 0.25);
   color: #ffffff;
 }
 
@@ -6646,7 +6646,7 @@ body {
   min-height: 18px;
   flex-shrink: 0;
   cursor: pointer;
-  accent-color: #ff8c42;
+  accent-color: #B92216;
 }
 
 .filter-date-input {
@@ -6657,7 +6657,7 @@ body {
   border-radius: 0.375rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.03);
-  color: #f3f4f6;
+  color: #E7E6C2;
   font: inherit;
   font-size: 0.72rem;
   transition: all 150ms ease;
@@ -6671,8 +6671,8 @@ body {
 .filter-date-input:focus {
   outline: none;
   background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 142, 66, 0.4);
-  box-shadow: 0 0 10px rgba(255, 142, 66, 0.1);
+  border-color: rgba(185, 34, 22, 0.4);
+  box-shadow: 0 0 10px rgba(185, 34, 22, 0.1);
 }
 
 .filter-date-input:disabled {
@@ -6737,7 +6737,7 @@ body {
   border-radius: 0.375rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.03);
-  color: #f3f4f6;
+  color: #E7E6C2;
   padding: 0.5rem 0.5rem;
   font: inherit;
   font-size: 0.72rem;
@@ -6754,8 +6754,8 @@ body {
 .panel--filters input[type="date"]:focus {
   outline: none;
   background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 142, 66, 0.4);
-  box-shadow: 0 0 10px rgba(255, 142, 66, 0.1);
+  border-color: rgba(185, 34, 22, 0.4);
+  box-shadow: 0 0 10px rgba(185, 34, 22, 0.1);
 }
 
 .chip-list {
@@ -6798,10 +6798,10 @@ body {
 }
 
 .chip--active {
-  border-color: rgba(255, 142, 66, 0.5);
-  background: rgba(255, 142, 66, 0.16);
-  color: #ff8c42;
-  box-shadow: 0 0 0 1px rgba(255, 142, 66, 0.12) inset, 0 0 12px rgba(255, 142, 66, 0.1);
+  border-color: rgba(185, 34, 22, 0.5);
+  background: rgba(185, 34, 22, 0.16);
+  color: #B92216;
+  box-shadow: 0 0 0 1px rgba(185, 34, 22, 0.12) inset, 0 0 12px rgba(185, 34, 22, 0.1);
 }
 
 .chip input {
@@ -6824,7 +6824,7 @@ body {
   letter-spacing: 0.05em;
   background: rgba(255, 255, 255, 0.02);
   border-radius: 0.25rem;
-  border-left: 2px solid rgba(255, 142, 66, 0.3);
+  border-left: 2px solid rgba(185, 34, 22, 0.3);
 }
 
 .layer-list {
@@ -6845,7 +6845,7 @@ body {
 }
 
 .layer-row input {
-  accent-color: #ff9d4d;
+  accent-color: #B92216;
 }
 
 .layer-swatch {
@@ -6866,7 +6866,7 @@ body {
 
 .layer-count,
 .muted-copy {
-  color: rgba(245, 239, 230, 0.65);
+  color: rgba(231, 230, 194, 0.65);
   font-size: 0.86rem;
 }
 
@@ -6896,7 +6896,7 @@ body {
 
 .metric-label {
   margin: 0 0 0.35rem;
-  color: rgba(245, 239, 230, 0.7);
+  color: rgba(231, 230, 194, 0.7);
   font-size: 0.84rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -6951,8 +6951,8 @@ body {
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background: #fff1df;
-  color: #1b0f0a;
+  background: #E7E6C2;
+  color: #4D2D1B;
 }
 
 .hotspot-pulse-marker {
@@ -7000,7 +7000,7 @@ body {
 
 .layer-tooltip {
   background: rgba(15, 9, 6, 0.9);
-  color: #fff7ef;
+  color: #E7E6C2;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0.125rem;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.2);
@@ -7033,7 +7033,7 @@ body {
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.66rem;
   padding-bottom: 0.25rem;
-  border-bottom: 1px solid rgba(27, 15, 10, 0.08);
+  border-bottom: 1px solid rgba(77, 45, 27, 0.08);
 }
 
 .popup-head-main {
@@ -7047,11 +7047,11 @@ body {
 
 .popup-head-main strong {
   font-size: 0.72rem;
-  color: #ff6b00;
+  color: #B92216;
 }
 
 .popup-head-main span {
-  color: rgba(27, 15, 10, 0.65);
+  color: rgba(77, 45, 27, 0.65);
   font-size: 0.65rem;
 }
 
@@ -7101,7 +7101,7 @@ body {
 }
 
 .popup-grid dt {
-  color: rgba(27, 15, 10, 0.55);
+  color: rgba(77, 45, 27, 0.55);
   font-size: 0.58rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -7112,7 +7112,7 @@ body {
   margin: 0;
   font-weight: 600;
   font-size: 0.72rem;
-  color: #1b0f0a;
+  color: #4D2D1B;
 }
 
 .popup-kps-link {
@@ -7141,7 +7141,7 @@ body {
   gap: 0.35rem;
   margin-top: 0.35rem;
   padding-top: 0.35rem;
-  border-top: 1px solid rgba(27, 15, 10, 0.08);
+  border-top: 1px solid rgba(77, 45, 27, 0.08);
 }
 
 .popup-action-btn {
@@ -7152,9 +7152,9 @@ body {
   flex: 1;
   padding: 0.28rem 0.45rem;
   border-radius: 0.3rem;
-  border: 1px solid rgba(27, 15, 10, 0.15);
-  background: rgba(27, 15, 10, 0.04);
-  color: #1b0f0a;
+  border: 1px solid rgba(77, 45, 27, 0.15);
+  background: rgba(77, 45, 27, 0.04);
+  color: #4D2D1B;
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.64rem;
   font-weight: 600;
@@ -7165,21 +7165,21 @@ body {
 }
 
 .popup-action-btn:hover {
-  background: rgba(255, 107, 0, 0.12);
-  border-color: rgba(255, 107, 0, 0.35);
+  background: rgba(185, 34, 22, 0.12);
+  border-color: rgba(185, 34, 22, 0.35);
   color: #b94800;
 }
 
 .popup-action-btn--primary {
-  background: rgba(255, 107, 0, 0.12);
-  border-color: rgba(255, 107, 0, 0.4);
+  background: rgba(185, 34, 22, 0.12);
+  border-color: rgba(185, 34, 22, 0.4);
   color: #c2410c;
   font-weight: 700;
 }
 
 .popup-action-btn--primary:hover {
-  background: rgba(255, 107, 0, 0.22);
-  border-color: rgba(255, 107, 0, 0.6);
+  background: rgba(185, 34, 22, 0.22);
+  border-color: rgba(185, 34, 22, 0.6);
   color: #9a3412;
 }
 
@@ -7194,9 +7194,9 @@ body {
   width: 100%;
   padding: 0.24rem 0.4rem;
   border-radius: 0.3rem;
-  border: 1px dashed rgba(27, 15, 10, 0.18);
-  background: rgba(27, 15, 10, 0.02);
-  color: rgba(27, 15, 10, 0.75);
+  border: 1px dashed rgba(77, 45, 27, 0.18);
+  background: rgba(77, 45, 27, 0.02);
+  color: rgba(77, 45, 27, 0.75);
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.62rem;
   font-weight: 600;
@@ -7205,9 +7205,9 @@ body {
 }
 
 .popup-weather-toggle-btn:hover {
-  background: rgba(27, 15, 10, 0.06);
-  color: #1b0f0a;
-  border-color: rgba(27, 15, 10, 0.3);
+  background: rgba(77, 45, 27, 0.06);
+  color: #4D2D1B;
+  border-color: rgba(77, 45, 27, 0.3);
 }
 
 .panel--legend {
@@ -7231,7 +7231,7 @@ body {
 
 .legend-title {
   margin: 0 0 0.4rem;
-  color: #ffcf9b;
+  color: #DCD9A9;
   font-size: 0.8rem;
   font-weight: 700;
 }
@@ -7277,12 +7277,12 @@ body {
 
 .status-line {
   margin: 0;
-  color: rgba(245, 239, 230, 0.78);
+  color: rgba(231, 230, 194, 0.78);
 }
 
 .status-error {
   margin: 0;
-  color: #ff9d86;
+  color: #B7C688;
 }
 
 .loading-strip {
@@ -7295,7 +7295,7 @@ body {
   width: 0.55rem;
   height: 0.55rem;
   border-radius: 0.125rem;
-  background: #ffb86b;
+  background: #B7C688;
   opacity: 0.4;
   animation: pulse 1.1s ease-in-out infinite;
 }
@@ -7428,7 +7428,7 @@ body {
 
 .burned-top-row__name {
   font-size: 0.76rem;
-  color: #f5efe6;
+  color: #E7E6C2;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -7531,11 +7531,11 @@ body {
   display: grid;
   place-items: center;
   border-radius: 0.75rem;
-  background: linear-gradient(135deg, #ff8a3d 0%, #ff4e00 100%);
-  color: #0b0c10;
+  background: linear-gradient(135deg, #C23A1F 0%, #8A1A10 100%);
+  color: #E7E6C2;
   font-weight: 800;
   font-size: 1.25rem;
-  box-shadow: 0 0 24px rgba(255, 78, 0, 0.4);
+  box-shadow: 0 0 24px rgba(185, 34, 22, 0.4);
 }
 
 .loading-error-title {
@@ -7553,8 +7553,8 @@ body {
 }
 
 .loading-retry-button {
-  background: linear-gradient(135deg, #ff8a3d 0%, #ff4e00 100%);
-  color: #0b0c10;
+  background: linear-gradient(135deg, #C23A1F 0%, #8A1A10 100%);
+  color: #E7E6C2;
   border: none;
   font-family: "Plus Jakarta Sans", sans-serif;
   font-weight: 700;
@@ -7588,7 +7588,7 @@ body {
 
 .password-gate-title {
   margin: 0;
-  color: #f5efe6;
+  color: #E7E6C2;
   font-size: 0.9rem;
   font-weight: 600;
   line-height: 1.4;
@@ -7601,15 +7601,15 @@ body {
   border-radius: 0.5rem;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.04);
-  color: #f5efe6;
+  color: #E7E6C2;
   font-size: 0.9rem;
   font-family: "Plus Jakarta Sans", sans-serif;
 }
 
 .password-gate-input:focus {
   outline: none;
-  border-color: rgba(255, 142, 66, 0.6);
-  box-shadow: 0 0 0 3px rgba(255, 142, 66, 0.15);
+  border-color: rgba(185, 34, 22, 0.6);
+  box-shadow: 0 0 0 3px rgba(185, 34, 22, 0.15);
 }
 
 .password-gate-error {
@@ -7639,13 +7639,13 @@ body {
 .password-gate-cancel {
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.04);
-  color: #f5efe6;
+  color: #E7E6C2;
 }
 
 .password-gate-confirm {
-  border: 1px solid rgba(255, 78, 0, 0.4);
-  background: linear-gradient(135deg, #ff8a3d 0%, #ff4e00 100%);
-  color: #0b0c10;
+  border: 1px solid rgba(185, 34, 22, 0.4);
+  background: linear-gradient(135deg, #C23A1F 0%, #8A1A10 100%);
+  color: #E7E6C2;
 }
 
 .password-gate-cancel:hover,
@@ -7661,7 +7661,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: radial-gradient(circle at 30% 20%, rgba(255, 78, 0, 0.08), transparent 55%), #050607;
+  background: radial-gradient(circle at 30% 20%, rgba(185, 34, 22, 0.08), transparent 55%), #150c07;
 }
 
 .login-card {
@@ -7686,14 +7686,14 @@ body {
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 0.6rem;
-  background: linear-gradient(135deg, #ff8a3d 0%, #ff4e00 100%);
-  color: #0b0c10;
+  background: linear-gradient(135deg, #C23A1F 0%, #8A1A10 100%);
+  color: #E7E6C2;
   flex-shrink: 0;
 }
 
 .login-brand-title {
   margin: 0;
-  color: #f5efe6;
+  color: #E7E6C2;
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -7701,7 +7701,7 @@ body {
 
 .login-brand-subtitle {
   margin: 0;
-  color: rgba(245, 239, 230, 0.55);
+  color: rgba(231, 230, 194, 0.55);
   font-size: 0.72rem;
 }
 
@@ -7709,7 +7709,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  color: rgba(245, 239, 230, 0.7);
+  color: rgba(231, 230, 194, 0.7);
   font-size: 0.78rem;
   font-weight: 600;
 }
@@ -7721,15 +7721,15 @@ body {
   border-radius: 0.5rem;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.04);
-  color: #f5efe6;
+  color: #E7E6C2;
   font-size: 0.9rem;
   font-family: "Plus Jakarta Sans", sans-serif;
 }
 
 .login-input:focus {
   outline: none;
-  border-color: rgba(255, 142, 66, 0.6);
-  box-shadow: 0 0 0 3px rgba(255, 142, 66, 0.15);
+  border-color: rgba(185, 34, 22, 0.6);
+  box-shadow: 0 0 0 3px rgba(185, 34, 22, 0.15);
 }
 
 .login-turnstile {
@@ -7748,9 +7748,9 @@ body {
   min-height: 44px;
   margin-top: 0.25rem;
   border-radius: 0.5rem;
-  border: 1px solid rgba(255, 78, 0, 0.4);
-  background: linear-gradient(135deg, #ff8a3d 0%, #ff4e00 100%);
-  color: #0b0c10;
+  border: 1px solid rgba(185, 34, 22, 0.4);
+  background: linear-gradient(135deg, #C23A1F 0%, #8A1A10 100%);
+  color: #E7E6C2;
   font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 0.85rem;
   font-weight: 700;
@@ -7906,7 +7906,7 @@ a + a {
     background: rgba(255, 255, 255, 0.05) !important;
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
     border-radius: 0.5rem !important;
-    color: #f3f4f6 !important;
+    color: #E7E6C2 !important;
     transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease !important;
   }
 
@@ -8084,7 +8084,7 @@ a + a {
     cursor: pointer;
     /* Di atas drawer supaya tombol X tetap terjangkau saat menu terbuka. */
     z-index: 1400;
-    color: #f3f4f6;
+    color: #E7E6C2;
     transition: all 0.2s ease;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   }
@@ -8408,7 +8408,7 @@ a + a {
   }
 
   .matrix-ledger .matrix-table tbody tr:focus-visible {
-    outline: 2px solid rgba(255, 140, 66, 0.7);
+    outline: 2px solid rgba(185, 34, 22, 0.7);
     outline-offset: 2px;
   }
 
@@ -8447,7 +8447,7 @@ a + a {
     font-size: 0.86rem;
     font-weight: 700;
     line-height: 1.25;
-    color: rgba(245, 239, 230, 0.96);
+    color: rgba(231, 230, 194, 0.96);
     overflow-wrap: break-word;
   }
 
@@ -8862,7 +8862,7 @@ a + a {
 
 .loading-retry-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(255, 78, 0, 0.35);
+  box-shadow: 0 4px 14px rgba(185, 34, 22, 0.35);
 }
 
 .loading-retry-button:active {
@@ -8892,16 +8892,16 @@ a + a {
 
 .pm-drop:hover,
 .pm-drop--active {
-  border-color: rgba(255, 78, 0, 0.55);
-  background: rgba(255, 78, 0, 0.06);
-  color: #f5efe6;
+  border-color: rgba(185, 34, 22, 0.55);
+  background: rgba(185, 34, 22, 0.06);
+  color: #E7E6C2;
 }
 
 .pm-drop__title {
   margin: 0;
   font-size: 0.92rem;
   font-weight: 600;
-  color: #f5efe6;
+  color: #E7E6C2;
 }
 
 .pm-drop__hint {
@@ -8944,7 +8944,7 @@ a + a {
 .pm-card {
   padding: 0.9rem 1rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-top: 2px solid rgba(255, 78, 0, 0.5);
+  border-top: 2px solid rgba(185, 34, 22, 0.5);
   border-radius: 0.3rem;
   background: rgba(255, 255, 255, 0.02);
 }
@@ -8967,7 +8967,7 @@ a + a {
   margin-top: 0.3rem;
   font-size: 1.7rem;
   font-weight: 700;
-  color: #f5efe6;
+  color: #E7E6C2;
 }
 
 .pm-card--alert .pm-card__value {
@@ -8987,7 +8987,7 @@ a + a {
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: #f5efe6;
+  color: #E7E6C2;
 }
 
 .pm-rank__table {
@@ -9019,13 +9019,13 @@ a + a {
   display: block;
   height: 6px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(255, 78, 0, 0.85), rgba(245, 158, 11, 0.85));
+  background: linear-gradient(90deg, rgba(185, 34, 22, 0.85), rgba(245, 158, 11, 0.85));
 }
 
 .pm-rank__count {
   text-align: right;
   font-weight: 700;
-  color: #f5efe6;
+  color: #E7E6C2;
   white-space: nowrap;
 }
 
@@ -9092,7 +9092,7 @@ a + a {
   inset: 0;
   display: flex;
   flex-direction: column;
-  color: #f4f5f7;
+  color: #E7E6C2;
 }
 
 /* Header padat: satu baris judul + kontrol, lalu satu baris ringkasan.
@@ -9134,8 +9134,8 @@ a + a {
   width: 0.95rem;
   height: 0.95rem;
   border-radius: 50%;
-  border: 1px solid rgba(244, 245, 247, 0.32);
-  color: rgba(244, 245, 247, 0.6);
+  border: 1px solid rgba(231, 230, 194, 0.32);
+  color: rgba(231, 230, 194, 0.6);
   font-size: 0.58rem;
   font-weight: 700;
   font-style: normal;
@@ -9146,8 +9146,8 @@ a + a {
 
 .info-dot:hover,
 .info-dot:focus-visible {
-  border-color: rgba(255, 142, 66, 0.6);
-  color: #ffb173;
+  border-color: rgba(185, 34, 22, 0.6);
+  color: #B7C688;
   outline: none;
 }
 
@@ -9174,7 +9174,7 @@ a + a {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(244, 245, 247, 0.5);
+  color: rgba(231, 230, 194, 0.5);
   white-space: nowrap;
 }
 
@@ -9195,10 +9195,10 @@ a + a {
   gap: 0.35rem;
   min-height: 32px;
   padding: 0 0.7rem;
-  border: 1px solid rgba(255, 142, 66, 0.42);
+  border: 1px solid rgba(185, 34, 22, 0.42);
   border-radius: 6px;
-  background: rgba(255, 142, 66, 0.1);
-  color: #ffb173;
+  background: rgba(185, 34, 22, 0.1);
+  color: #B7C688;
   font: inherit;
   font-size: 0.72rem;
   font-weight: 800;
@@ -9208,9 +9208,9 @@ a + a {
 
 .kompleks-copy-btn:hover:not(:disabled),
 .kompleks-copy-btn:focus-visible:not(:disabled) {
-  background: rgba(255, 142, 66, 0.2);
-  border-color: rgba(255, 142, 66, 0.7);
-  color: #ffd0a8;
+  background: rgba(185, 34, 22, 0.2);
+  border-color: rgba(185, 34, 22, 0.7);
+  color: #E7E6C2;
   outline: none;
 }
 
@@ -9235,7 +9235,7 @@ a + a {
   align-items: baseline;
   gap: 0.2rem 0.55rem;
   font-size: 0.75rem;
-  color: rgba(244, 245, 247, 0.6);
+  color: rgba(231, 230, 194, 0.6);
 }
 
 .kompleks-summary > span {
@@ -9247,14 +9247,14 @@ a + a {
 .kompleks-summary > span:not(:last-child)::after {
   content: "·";
   margin-left: 0.35rem;
-  color: rgba(244, 245, 247, 0.28);
+  color: rgba(231, 230, 194, 0.28);
 }
 
 .kompleks-summary strong {
   font-size: 0.95rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  color: #f4f5f7;
+  color: #E7E6C2;
 }
 
 .kompleks-summary .crit strong {
@@ -9304,13 +9304,13 @@ a + a {
   height: 32px;
   line-height: 32px;
   background: rgba(19, 21, 26, 0.92) !important;
-  color: #f5efe6 !important;
+  color: #E7E6C2 !important;
   border: none !important;
   backdrop-filter: blur(8px);
 }
 
 .kompleks-map .leaflet-control-zoom a:not(.leaflet-disabled):hover {
-  background: rgba(255, 78, 0, 0.18) !important;
+  background: rgba(185, 34, 22, 0.18) !important;
   color: #ffffff !important;
 }
 
@@ -9410,7 +9410,7 @@ a + a {
 .kompleks-map-legend__line {
   width: 0.75rem;
   height: 0;
-  border-top: 2px dashed #ff8c42;
+  border-top: 2px dashed #B92216;
 }
 
 .kompleks-map-legend__radius {
@@ -9617,8 +9617,8 @@ a + a {
 }
 
 .kompleks-row--active {
-  background: rgba(255, 78, 0, 0.14);
-  border-color: rgba(255, 78, 0, 0.35);
+  background: rgba(185, 34, 22, 0.14);
+  border-color: rgba(185, 34, 22, 0.35);
 }
 
 .kompleks-row-rank {
@@ -9675,7 +9675,7 @@ a + a {
 }
 
 .kompleks-row-meta b {
-  color: #f4f5f7;
+  color: #E7E6C2;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
 }
@@ -9699,9 +9699,9 @@ a + a {
   margin-top: 0.1rem;
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 142, 66, 0.35);
-  background: rgba(255, 142, 66, 0.1);
-  color: #ff8c42;
+  border: 1px solid rgba(185, 34, 22, 0.35);
+  background: rgba(185, 34, 22, 0.1);
+  color: #B92216;
   font-size: 0.64rem;
   font-weight: 700;
   cursor: pointer;
@@ -9710,8 +9710,8 @@ a + a {
 
 .kompleks-row-detail-btn:hover,
 .kompleks-row-detail-btn:focus-visible {
-  background: rgba(255, 142, 66, 0.2);
-  border-color: rgba(255, 142, 66, 0.55);
+  background: rgba(185, 34, 22, 0.2);
+  border-color: rgba(185, 34, 22, 0.55);
   outline: none;
 }
 
@@ -9762,7 +9762,7 @@ a + a {
 }
 
 .kompleks-explain b {
-  color: #f4f5f7;
+  color: #E7E6C2;
 }
 
 @media (max-width: 900px) {
@@ -9829,7 +9829,7 @@ a + a {
   inset: 0;
   display: flex;
   flex-direction: column;
-  color: #f4f5f7;
+  color: #E7E6C2;
 }
 
 .tl-topbar {
@@ -9857,20 +9857,20 @@ a + a {
 
 .tl-summary {
   font-size: 0.78rem;
-  color: rgba(244, 245, 247, 0.65);
+  color: rgba(231, 230, 194, 0.65);
 }
 
 .tl-summary strong {
   font-size: 0.95rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  color: #f4f5f7;
+  color: #E7E6C2;
 }
 
 .tl-lede {
   margin: 0;
   font-size: 0.74rem;
-  color: rgba(244, 245, 247, 0.5);
+  color: rgba(231, 230, 194, 0.5);
   max-width: 62rem;
 }
 
@@ -9929,7 +9929,7 @@ a + a {
   font-weight: 800;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: rgba(244, 245, 247, 0.45);
+  color: rgba(231, 230, 194, 0.45);
 }
 .tl-filter-field select {
   width: 100%;
@@ -9947,7 +9947,7 @@ a + a {
   text-overflow: ellipsis;
 }
 .tl-filter-field select:focus {
-  border-color: rgba(255, 142, 66, 0.5);
+  border-color: rgba(185, 34, 22, 0.5);
 }
 .tl-filter-reset {
   grid-column: 1 / -1;
@@ -9955,7 +9955,7 @@ a + a {
   padding: 0.1rem 0;
   border: none;
   background: none;
-  color: #ff8c42;
+  color: #B92216;
   font: inherit;
   font-size: 0.64rem;
   font-weight: 700;
@@ -9966,7 +9966,7 @@ a + a {
 .tl-filter-count {
   margin: 0;
   font-size: 0.64rem;
-  color: rgba(244, 245, 247, 0.5);
+  color: rgba(231, 230, 194, 0.5);
 }
 
 /* Hemat ruang kolom daftar -- pencarian & baris lebih ringkas (scoped ke
@@ -10022,8 +10022,8 @@ a + a {
 }
 
 .tl-row--active {
-  background: rgba(255, 78, 0, 0.14);
-  border-color: rgba(255, 78, 0, 0.35);
+  background: rgba(185, 34, 22, 0.14);
+  border-color: rgba(185, 34, 22, 0.35);
 }
 
 .tl-row-name {
@@ -10050,7 +10050,7 @@ a + a {
   font-weight: 800;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #ffb173;
+  color: #B7C688;
 }
 
 /* Titik warna + teks redup, bukan chip warna solid -- "tenang &
@@ -10129,8 +10129,8 @@ a + a {
 }
 
 .tl-back-btn:hover {
-  border-color: rgba(255, 142, 66, 0.5);
-  color: #ffb173;
+  border-color: rgba(185, 34, 22, 0.5);
+  color: #B7C688;
 }
 
 .tl-detail-head {
@@ -10157,9 +10157,9 @@ a + a {
   flex-shrink: 0;
   padding: 0.3rem 0.65rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 142, 66, 0.35);
-  background: rgba(255, 142, 66, 0.1);
-  color: #ff8c42;
+  border: 1px solid rgba(185, 34, 22, 0.35);
+  background: rgba(185, 34, 22, 0.1);
+  color: #B92216;
   font-size: 0.7rem;
   font-weight: 700;
   cursor: pointer;
@@ -10167,8 +10167,8 @@ a + a {
 }
 
 .tl-detail-link:hover {
-  background: rgba(255, 142, 66, 0.2);
-  border-color: rgba(255, 142, 66, 0.55);
+  background: rgba(185, 34, 22, 0.2);
+  border-color: rgba(185, 34, 22, 0.55);
 }
 
 @media (max-width: 900px) {
@@ -10197,11 +10197,11 @@ a + a {
 }
 
 .map-frame .leaflet-control-scale-line {
-  border: 1px solid rgba(245, 239, 230, 0.55);
+  border: 1px solid rgba(231, 230, 194, 0.55);
   border-top: none;
   background: rgba(19, 21, 26, 0.72);
   backdrop-filter: blur(6px);
-  color: #f5efe6;
+  color: #E7E6C2;
   font-size: 0.62rem;
   line-height: 1.35;
   padding: 1px 6px;
@@ -10209,7 +10209,7 @@ a + a {
 }
 
 .map-frame .leaflet-control-scale-line:not(:first-child) {
-  border-top: 1px solid rgba(245, 239, 230, 0.55);
+  border-top: 1px solid rgba(231, 230, 194, 0.55);
   border-bottom: none;
   margin-top: -1px;
 }
@@ -10283,14 +10283,14 @@ a + a {
     justify-content: center;
     border: none;
     background: rgba(19, 21, 26, 0.92);
-    color: #f5efe6;
+    color: #E7E6C2;
     backdrop-filter: blur(8px);
     cursor: pointer;
     transition: background 150ms ease, color 150ms ease;
   }
 
   .map-fab__btn:active {
-    background: rgba(255, 78, 0, 0.18);
+    background: rgba(185, 34, 22, 0.18);
   }
 
   .map-fab__btn--solo {
@@ -10365,7 +10365,7 @@ a + a {
     padding: 0.5rem 1rem 0.55rem;
     background: none;
     border: none;
-    color: #f5efe6;
+    color: #E7E6C2;
     font: inherit;
     cursor: pointer;
     touch-action: none;
@@ -10383,7 +10383,7 @@ a + a {
     align-items: center;
     gap: 0.35rem;
     font-size: 0.8rem;
-    color: rgba(245, 239, 230, 0.9);
+    color: rgba(231, 230, 194, 0.9);
   }
 
   .map-sheet__peekline strong {
@@ -10393,7 +10393,7 @@ a + a {
 
   .map-sheet__peekline em {
     font-style: normal;
-    color: rgba(245, 239, 230, 0.5);
+    color: rgba(231, 230, 194, 0.5);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -10461,7 +10461,7 @@ a + a {
     padding: 0.7rem 0.8rem;
     background: none;
     border: none;
-    color: #f5efe6;
+    color: #E7E6C2;
     font: inherit;
     text-align: left;
     cursor: pointer;
@@ -10470,7 +10470,7 @@ a + a {
   .map-sheet__rowicon {
     flex: 0 0 auto;
     display: flex;
-    color: rgba(245, 239, 230, 0.7);
+    color: rgba(231, 230, 194, 0.7);
   }
 
   .map-sheet__row.is-active .map-sheet__rowicon {
@@ -10492,7 +10492,7 @@ a + a {
 
   .map-sheet__rowhint {
     font-size: 0.64rem;
-    color: rgba(245, 239, 230, 0.45);
+    color: rgba(231, 230, 194, 0.45);
   }
 
   .map-sheet__switch {
@@ -10513,7 +10513,7 @@ a + a {
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: #f5efe6;
+    background: #E7E6C2;
     transition: transform 160ms ease;
   }
 
@@ -10536,7 +10536,7 @@ a + a {
     margin: 0;
     padding: 0 0.8rem 0.7rem 2.85rem;
     font-size: 0.7rem;
-    color: rgba(245, 239, 230, 0.7);
+    color: rgba(231, 230, 194, 0.7);
   }
 
   .map-sheet__stat span:first-child {
@@ -10564,7 +10564,7 @@ a + a {
     align-items: center;
     gap: 0.35rem;
     font-size: 0.68rem;
-    color: rgba(245, 239, 230, 0.8);
+    color: rgba(231, 230, 194, 0.8);
   }
 
   .map-sheet__legend li > span {
@@ -10597,7 +10597,7 @@ a + a {
     border-radius: 0.6rem;
     border: 1px solid rgba(255, 255, 255, 0.12);
     background: rgba(255, 255, 255, 0.03);
-    color: rgba(245, 239, 230, 0.7);
+    color: rgba(231, 230, 194, 0.7);
     font: inherit;
     font-size: 0.78rem;
     font-weight: 600;
@@ -10605,9 +10605,9 @@ a + a {
   }
 
   .map-sheet__segmented button.is-active {
-    border-color: rgba(255, 142, 66, 0.5);
-    background: rgba(255, 142, 66, 0.16);
-    color: #ff8c42;
+    border-color: rgba(185, 34, 22, 0.5);
+    background: rgba(185, 34, 22, 0.16);
+    color: #B92216;
   }
 
   .map-sheet__conf {
@@ -10615,7 +10615,7 @@ a + a {
     flex-direction: column;
     gap: 0.25rem;
     font-size: 0.75rem;
-    color: rgba(245, 239, 230, 0.85);
+    color: rgba(231, 230, 194, 0.85);
   }
 
   .map-sheet__conf span {
@@ -10638,7 +10638,7 @@ a + a {
 
   .map-sheet__conf em {
     font-style: normal;
-    color: rgba(245, 239, 230, 0.4);
+    color: rgba(231, 230, 194, 0.4);
     min-width: 3.4em;
     text-align: right;
   }
@@ -10648,7 +10648,7 @@ a + a {
     border-collapse: collapse;
     margin-top: 0.5rem;
     font-size: 0.72rem;
-    color: #f5efe6;
+    color: #E7E6C2;
   }
 
   .map-sheet__sat th,
@@ -10658,7 +10658,7 @@ a + a {
   }
 
   .map-sheet__sat th {
-    color: rgba(245, 239, 230, 0.45);
+    color: rgba(231, 230, 194, 0.45);
     font-weight: 600;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
@@ -10674,7 +10674,7 @@ a + a {
 
   .map-sheet__empty {
     font-size: 0.75rem;
-    color: rgba(245, 239, 230, 0.5);
+    color: rgba(231, 230, 194, 0.5);
     margin: 0.2rem 0;
   }
 
@@ -10723,7 +10723,7 @@ a + a {
   border-radius: 0.6rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(19, 21, 26, 0.96);
-  color: #f5efe6;
+  color: #E7E6C2;
   backdrop-filter: blur(8px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
@@ -10741,7 +10741,7 @@ a + a {
   border-radius: 0.45rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(12, 13, 17, 0.9);
-  color: #f5efe6;
+  color: #E7E6C2;
   font: inherit;
   font-size: 0.75rem;
   font-weight: 700;
@@ -10749,7 +10749,7 @@ a + a {
 }
 .timeline-control__play:hover,
 .timeline-control__speed:hover {
-  border-color: rgba(255, 140, 66, 0.6);
+  border-color: rgba(185, 34, 22, 0.6);
 }
 .timeline-control__download {
   gap: 0.35rem;
@@ -10767,10 +10767,10 @@ a + a {
 .timeline-control__close {
   border: none;
   background: transparent;
-  color: rgba(245, 239, 230, 0.6);
+  color: rgba(231, 230, 194, 0.6);
 }
 .timeline-control__close:hover {
-  color: #f5efe6;
+  color: #E7E6C2;
 }
 .timeline-control__scrub {
   position: relative;
@@ -10788,15 +10788,15 @@ a + a {
 .timeline-control__bar {
   flex: 1 1 0;
   min-height: 2px;
-  background: rgba(245, 239, 230, 0.18);
+  background: rgba(231, 230, 194, 0.18);
   border-radius: 1px 1px 0 0;
   transition: background 120ms ease;
 }
 .timeline-control__bar--past {
-  background: rgba(255, 140, 66, 0.55);
+  background: rgba(185, 34, 22, 0.55);
 }
 .timeline-control__bar--now {
-  background: #ff8c42;
+  background: #B92216;
 }
 .timeline-control__range {
   position: absolute;
@@ -10807,7 +10807,7 @@ a + a {
   height: 100%;
   margin: 0;
   background: transparent;
-  accent-color: #ff8c42;
+  accent-color: #B92216;
   cursor: pointer;
 }
 .timeline-control__label {
@@ -10821,11 +10821,11 @@ a + a {
 }
 .timeline-control__label-time {
   font-size: 0.72rem;
-  color: rgba(245, 239, 230, 0.9);
+  color: rgba(231, 230, 194, 0.9);
 }
 .timeline-control__label-count {
   font-size: 0.64rem;
-  color: rgba(245, 239, 230, 0.55);
+  color: rgba(231, 230, 194, 0.55);
 }
 @media (prefers-reduced-motion: reduce) {
   .timeline-control__bar {
@@ -10904,7 +10904,7 @@ a + a {
   margin: 0 auto;
   padding: 1.25rem 1.5rem 3.5rem;
   box-sizing: border-box;
-  color: #f3f4f6;
+  color: #E7E6C2;
 }
 
 .fs-header {
