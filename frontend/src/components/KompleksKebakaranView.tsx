@@ -820,10 +820,10 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                         const label = featureLabel(feature);
                         const highlighted = selectedAgencies.has(label);
                         return {
-                          color: highlighted ? "#ff8c42" : layer.color,
+                          color: highlighted ? "#B92216" : layer.color,
                           weight: highlighted ? 2.4 : 1,
                           opacity: highlighted ? 1 : 0.55,
-                          fillColor: highlighted ? "#ff8c42" : layer.color,
+                          fillColor: highlighted ? "#B92216" : layer.color,
                           fillOpacity: highlighted ? 0.12 : 0.025,
                           dashArray: highlighted ? "6 4" : "3 5",
                         };
@@ -861,7 +861,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                         title.style.marginTop = "3px";
                         title.style.fontWeight = "700";
                         title.style.fontSize = "13px";
-                        title.style.color = "#111827";
+                        title.style.color = "#2b1810";
                         title.textContent = label;
                         container.appendChild(title);
 

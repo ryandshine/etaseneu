@@ -1179,7 +1179,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
             <MapContainer
               center={mapCenter}
               zoom={11}
-              style={{ width: "100%", height: "100%", background: "#0b1120" }}
+              style={{ width: "100%", height: "100%", background: "#1a0f09" }}
               attributionControl={false}
             >
               <TileLayer
@@ -1224,7 +1224,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                   }}
                 >
                   <Popup>
-                    <div style={{ color: "#111827", fontSize: "0.82rem", minWidth: "190px" }}>
+                    <div style={{ color: "#2b1810", fontSize: "0.82rem", minWidth: "190px" }}>
                       <div style={{ display: "inline-block", fontSize: "0.7rem", fontWeight: "700", color: "#6366f1", backgroundColor: "rgba(99,102,241,0.12)", padding: "1px 6px", borderRadius: "4px", marginBottom: "0.25rem" }}>
                         KPS Bersebelahan / Sekitar
                       </div>
@@ -1291,7 +1291,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                   }}
                 >
                   <Popup>
-                    <div style={{ color: "#111827", fontSize: "0.82rem", minWidth: "180px" }}>
+                    <div style={{ color: "#2b1810", fontSize: "0.82rem", minWidth: "180px" }}>
                       <div style={{ fontWeight: "700", fontSize: "0.92rem", color: "#0284c7", marginBottom: "0.2rem" }}>
                         {threatDetail.lembaga}
                       </div>
@@ -1322,7 +1322,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                     }}
                   >
                     <Popup>
-                      <div style={{ color: "#111827", fontSize: "0.8rem" }}>
+                      <div style={{ color: "#2b1810", fontSize: "0.8rem" }}>
                         <strong style={{ color: "#ef4444" }}>⚡ Vektor Rambatan Terdekat</strong>
                         <br />
                         Jarak ke batas: <strong>{threatDetail.closest_vector.distance_m < 1000 ? `${threatDetail.closest_vector.distance_m} m` : `${(threatDetail.closest_vector.distance_m / 1000).toFixed(2)} km`}</strong>
@@ -1345,7 +1345,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                     }}
                   >
                     <Popup>
-                      <div style={{ color: "#111827", fontSize: "0.8rem" }}>
+                      <div style={{ color: "#2b1810", fontSize: "0.8rem" }}>
                         <strong style={{ color: "#0284c7" }}>📍 Titik Batas KPS Terdekat</strong>
                         <br />
                         Jarak ke api luar: <strong>{threatDetail.closest_vector.distance_m} meter</strong>
@@ -1383,7 +1383,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                     }}
                   >
                     <Popup>
-                      <div style={{ color: "#111827", fontSize: "0.8rem", minWidth: "180px" }}>
+                      <div style={{ color: "#2b1810", fontSize: "0.8rem", minWidth: "180px" }}>
                         <div style={{ fontWeight: "700", color: pColor, marginBottom: "0.2rem" }}>
                           {isInside ? "🚨 Hotspot di DALAM Kawasan (Aktif)" : `🔥 Hotspot Luar (${h.status_label})`}
                         </div>

@@ -463,13 +463,13 @@ function buildYearOverYear(hotspots: MatrixHotspot[]) {
 
   const countSeries: MultiSeries[] = selectedYears.map((year, idx) => ({
     label: String(year),
-    color: year === latestYear ? "#ff4e00" : year === latestYear - 1 ? "#14b8a6" : "#64748b",
+    color: year === latestYear ? "#8A1A10" : year === latestYear - 1 ? "#14b8a6" : "#64748b",
     values: countBuckets[idx]
   }));
 
   const frpSeries: MultiSeries[] = selectedYears.map((year, idx) => ({
     label: String(year),
-    color: year === latestYear ? "#ff4e00" : year === latestYear - 1 ? "#14b8a6" : "#64748b",
+    color: year === latestYear ? "#8A1A10" : year === latestYear - 1 ? "#14b8a6" : "#64748b",
     values: frpBuckets[idx].map((val) => Math.round(val * 10) / 10)
   }));
 
@@ -815,7 +815,7 @@ function renderCompactCard(title: string, data: any[], total: number, activeLabe
           const barWidth = Math.max((item.value / maxVal) * 100, 2);
           const isSelected = activeLabel === item.label;
           const opacity = activeLabel && !isSelected ? 0.3 : 1;
-          const fill = isSelected ? '#FF4E00' : (item.color || '#374151');
+          const fill = isSelected ? '#8A1A10' : (item.color || '#374151');
           
           return (
             <div 
@@ -923,8 +923,8 @@ export function HotspotMatrix({
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div style={{ backgroundColor: '#13151A', border: '1px solid #1A1D21', padding: '12px', borderRadius: '2px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)', fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '10px', textTransform: 'uppercase', color: 'white', zIndex: 50 }}>
-          <p style={{ fontWeight: 'bold', color: '#FF4E00', borderBottom: '1px solid #1A1D21', paddingBottom: '4px', marginBottom: '4px' }}>{data.label}</p>
+        <div style={{ backgroundColor: '#1a0f09', border: '1px solid #2b1810', padding: '12px', borderRadius: '2px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)', fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '10px', textTransform: 'uppercase', color: 'white', zIndex: 50 }}>
+          <p style={{ fontWeight: 'bold', color: '#DCD9A9', borderBottom: '1px solid #2b1810', paddingBottom: '4px', marginBottom: '4px' }}>{data.label}</p>
           <p><span style={{ color: '#9ca3af', marginRight: '4px' }}>COUNT:</span> <span style={{ fontWeight: 'bold' }}>{data.value} FIRES</span></p>
         </div>
       );
@@ -936,8 +936,8 @@ export function HotspotMatrix({
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div style={{ backgroundColor: '#13151A', border: '1px solid #1A1D21', padding: '12px', borderRadius: '2px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)', fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '10px', textTransform: 'uppercase', color: 'white', zIndex: 50 }}>
-          <p style={{ fontWeight: 'bold', color: '#f97316', borderBottom: '1px solid #1A1D21', paddingBottom: '4px', marginBottom: '4px' }}>{data.label}</p>
+        <div style={{ backgroundColor: '#1a0f09', border: '1px solid #2b1810', padding: '12px', borderRadius: '2px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)', fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '10px', textTransform: 'uppercase', color: 'white', zIndex: 50 }}>
+          <p style={{ fontWeight: 'bold', color: '#DCD9A9', borderBottom: '1px solid #2b1810', paddingBottom: '4px', marginBottom: '4px' }}>{data.label}</p>
           <p style={{ fontWeight: 'bold' }}><span style={{ color: '#9ca3af', marginRight: '4px' }}>INCIDENTS:</span> {data.value} FIRES</p>
         </div>
       );
@@ -949,8 +949,8 @@ export function HotspotMatrix({
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div style={{ backgroundColor: '#13151A', border: '1px solid #1A1D21', padding: '12px', borderRadius: '2px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)', fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '10px', textTransform: 'uppercase', color: 'white', zIndex: 50 }}>
-          <p style={{ fontWeight: 'bold', color: '#f59e0b', borderBottom: '1px solid #1A1D21', paddingBottom: '4px', marginBottom: '4px' }}>{data.label}</p>
+        <div style={{ backgroundColor: '#1a0f09', border: '1px solid #2b1810', padding: '12px', borderRadius: '2px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)', fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '10px', textTransform: 'uppercase', color: 'white', zIndex: 50 }}>
+          <p style={{ fontWeight: 'bold', color: '#f59e0b', borderBottom: '1px solid #2b1810', paddingBottom: '4px', marginBottom: '4px' }}>{data.label}</p>
           <p style={{ fontWeight: 'bold' }}><span style={{ color: '#9ca3af', marginRight: '4px' }}>TOTAL FRP:</span> {data.value.toLocaleString()} MW</p>
         </div>
       );
@@ -1588,38 +1588,46 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
             {topWilker.length === 0 ? (
               <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Data hotspot tidak tersedia</div>
             ) : (
-              <div style={{ width: '100%', height: 'clamp(240px, 50vw, 400px)', position: 'relative' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topWilker} layout="horizontal" margin={{ top: 24, right: 20, left: 20, bottom: 48 }} onClick={(state) => {
-                    if (state && state.activeLabel) {
-                      const label = String(state.activeLabel);
-                      setWilkerFilter(label === wilkerFilter ? "" : label);
-                      setCurrentPage(1);
-                    }
-                  }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
-                    <XAxis
-                      dataKey="label"
-                      stroke="rgba(255,255,255,0.2)"
-                      tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }}
-                      axisLine={false}
-                      tickLine={false}
-                      interval={0}
-                      angle={-35}
-                      textAnchor="end"
-                      height={56}
-                      tickFormatter={(val) => (typeof val === 'string' ? val.replace(/^Balai PS\s+/i, '') : '')}
-                    />
-                    <YAxis hide />
-                    <ChartTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.01)' }} />
-                    <Bar dataKey="value" fill="#FF4E00" radius={[4, 4, 0, 0]} background={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} barSize={16} isAnimationActive={false} style={{ cursor: 'pointer' }}>
-                      <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
-                      {topWilker.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={wilkerFilter === entry.label ? '#FF6B35' : (entry.color || '#FF4E00')} opacity={wilkerFilter === entry.label ? 1 : 0.85} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              /* overflowX: auto -- dengan interval={0} SEMUA label WILKER dipaksa tampil
+                 miring -35deg; kalau kartu dipepetkan ke lebar layar mobile, label
+                 paling kanan (mis. "Gowa") kehabisan ruang dan kepotong tepi layar.
+                 min-width proporsional ke jumlah kategori + scroll horizontal di
+                 dalam kartu sendiri menjaga tiap bar tetap dapat slot cukup lebar,
+                 alih-alih dipepetkan sampai labelnya bertabrakan/terpotong. */
+              <div style={{ width: '100%', overflowX: 'auto' }}>
+                <div style={{ width: `max(100%, ${topWilker.length * 64}px)`, height: 'clamp(240px, 50vw, 400px)', position: 'relative' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={topWilker} layout="horizontal" margin={{ top: 24, right: 28, left: 20, bottom: 48 }} onClick={(state) => {
+                      if (state && state.activeLabel) {
+                        const label = String(state.activeLabel);
+                        setWilkerFilter(label === wilkerFilter ? "" : label);
+                        setCurrentPage(1);
+                      }
+                    }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        stroke="rgba(255,255,255,0.2)"
+                        tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+                        axisLine={false}
+                        tickLine={false}
+                        interval={0}
+                        angle={-35}
+                        textAnchor="end"
+                        height={56}
+                        tickFormatter={(val) => (typeof val === 'string' ? val.replace(/^Balai PS\s+/i, '') : '')}
+                      />
+                      <YAxis hide />
+                      <ChartTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.01)' }} />
+                      <Bar dataKey="value" fill="#B92216" radius={[4, 4, 0, 0]} background={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} barSize={16} isAnimationActive={false} style={{ cursor: 'pointer' }}>
+                        <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
+                        {topWilker.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={wilkerFilter === entry.label ? '#C23A1F' : (entry.color || '#B92216')} opacity={wilkerFilter === entry.label ? 1 : 0.85} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             )}
           </section>
@@ -1651,15 +1659,15 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                     }}>
                       <defs>
                         <linearGradient id="dailyTrendGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={selectedPeriod ? "rgba(249, 115, 22, 0.2)" : "rgba(249, 115, 22, 0.4)"}/>
-                          <stop offset="95%" stopColor="#f97316" stopOpacity={0.0}/>
+                          <stop offset="5%" stopColor={selectedPeriod ? "rgba(185, 34, 22, 0.2)" : "rgba(185, 34, 22, 0.4)"}/>
+                          <stop offset="95%" stopColor="#B92216" stopOpacity={0.0}/>
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
                       <XAxis dataKey="label" stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} tickFormatter={(val) => { if (typeof val !== 'string') return ''; return trendGroupBy === 'month' ? val.slice(0, 7) : val.slice(8, 10); }} />
                       <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} allowDecimals={false} />
                       <ChartTooltip content={<DailyTrendTooltip />} />
-                      <Area type="monotone" dataKey="value" stroke={selectedPeriod ? "#FF6B35" : "#f97316"} strokeWidth={selectedPeriod ? 3 : 2} fill="url(#dailyTrendGradient)" isAnimationActive={false} style={{ cursor: 'pointer' }}>
+                      <Area type="monotone" dataKey="value" stroke={selectedPeriod ? "#C23A1F" : "#B92216"} strokeWidth={selectedPeriod ? 3 : 2} fill="url(#dailyTrendGradient)" isAnimationActive={false} style={{ cursor: 'pointer' }}>
                         <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
                       </Area>
                     </AreaChart>
@@ -1694,7 +1702,7 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
               {searchQuery && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', flexDirection: 'column' }}>
                   <p style={{ fontSize: '0.9rem', color: '#9ca3af', margin: 0 }}>
-                    Tidak ada hasil untuk "<strong style={{ color: '#f3f4f6' }}>{searchQuery}</strong>"
+                    Tidak ada hasil untuk "<strong style={{ color: '#E7E6C2' }}>{searchQuery}</strong>"
                   </p>
                   <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                     <button
@@ -1710,7 +1718,7 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                         fontSize: '0.85rem',
                         background: 'rgba(255, 107, 53, 0.2)',
                         border: '1px solid rgba(255, 107, 53, 0.5)',
-                        color: '#FF6B35',
+                        color: '#C23A1F',
                         borderRadius: '0.25rem',
                         cursor: 'pointer',
                         fontWeight: '500',

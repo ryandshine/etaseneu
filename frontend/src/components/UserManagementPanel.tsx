@@ -342,9 +342,9 @@ export function UserManagementPanel({ token, currentUsername }: UserManagementPa
             type="submit"
             disabled={creating}
             style={{
-              background: "#ff4e00",
-              border: "1px solid #ff4e00",
-              color: "#0b0c10",
+              background: "#8A1A10",
+              border: "1px solid #8A1A10",
+              color: "#2b1810",
               padding: "0.6rem 1.1rem",
               borderRadius: "6px",
               fontSize: "0.8rem",

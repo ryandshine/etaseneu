@@ -145,7 +145,7 @@ export function SidebarNav({
       <div className="side-footer" style={{ padding: '0.75rem', fontSize: '0.75rem', overflowX: 'hidden' }}>
         <div className="side-footer-block" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.6rem', marginBottom: '0.6rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
-            <span className="side-footer-label" style={{ fontWeight: '700', letterSpacing: '0.03em', textTransform: 'uppercase', fontSize: '0.68rem', color: '#f5efe6', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+            <span className="side-footer-label" style={{ fontWeight: '700', letterSpacing: '0.03em', textTransform: 'uppercase', fontSize: '0.68rem', color: '#E7E6C2', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
               Sinkronisasi NASA
               <span
                 title="Info Sinkronisasi NASA&#10;&#10;Tidak adanya hotspot baru tidak selalu berarti sinkronisasi gagal.&#10;&#10;Periksa:&#10;- Last Sync&#10;- Next Sync&#10;- Hotspot Terbaru&#10;- Status Scheduler"
@@ -172,27 +172,27 @@ export function SidebarNav({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', marginBottom: '0.6rem' }}>
             <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '6px', padding: '0.5rem 0.6rem' }}>
               <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.2rem' }}>Last Sync</div>
-              <div style={{ color: '#f5efe6', fontSize: '0.72rem', fontWeight: 600, wordBreak: 'break-word', lineHeight: 1.3 }}>{lastSyncLabel}</div>
+              <div style={{ color: '#E7E6C2', fontSize: '0.72rem', fontWeight: 600, wordBreak: 'break-word', lineHeight: 1.3 }}>{lastSyncLabel}</div>
             </div>
             <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '6px', padding: '0.5rem 0.6rem' }}>
               <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.2rem' }}>Next Sync</div>
-              <div style={{ color: '#f5efe6', fontSize: '0.72rem', fontWeight: 600, wordBreak: 'break-word', lineHeight: 1.3 }}>{nextScheduledSyncLabel}</div>
+              <div style={{ color: '#E7E6C2', fontSize: '0.72rem', fontWeight: 600, wordBreak: 'break-word', lineHeight: 1.3 }}>{nextScheduledSyncLabel}</div>
             </div>
             <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '6px', padding: '0.5rem 0.6rem' }}>
               <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.2rem' }}>Hotspot Terbaru</div>
-              <div style={{ color: '#f5efe6', fontSize: '0.72rem', fontWeight: 600, wordBreak: 'break-word', lineHeight: 1.3 }}>{latestHotspotTimeLabel}</div>
+              <div style={{ color: '#E7E6C2', fontSize: '0.72rem', fontWeight: 600, wordBreak: 'break-word', lineHeight: 1.3 }}>{latestHotspotTimeLabel}</div>
             </div>
             <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '6px', padding: '0.5rem 0.6rem' }}>
               <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.2rem' }}>Usia Data</div>
-              <div style={{ color: hasLatestHotspot ? '#f5efe6' : 'rgba(255,255,255,0.4)', fontSize: '0.72rem', fontWeight: 600, wordBreak: 'break-word', lineHeight: 1.3 }}>{dataAgeLabel}</div>
+              <div style={{ color: hasLatestHotspot ? '#E7E6C2' : 'rgba(255,255,255,0.4)', fontSize: '0.72rem', fontWeight: 600, wordBreak: 'break-word', lineHeight: 1.3 }}>{dataAgeLabel}</div>
             </div>
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', rowGap: '0.25rem', columnGap: '0.7rem', fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)' }}>
             <span>Scheduler: <strong style={{ color: schedulerStatusColor, backgroundColor: schedulerStatusBg, padding: '0.05rem 0.3rem', borderRadius: '3px' }}>{schedulerStatusLabel}</strong></span>
-            <span>Sync hari ini: <strong style={{ color: '#f5efe6' }}>{syncTodayRatio}</strong></span>
-            <span>Interval: <strong style={{ color: '#f5efe6' }}>{syncInterval}</strong></span>
-            <span>Database: <strong style={{ color: '#f5efe6' }}>{syncLabel}</strong></span>
+            <span>Sync hari ini: <strong style={{ color: '#E7E6C2' }}>{syncTodayRatio}</strong></span>
+            <span>Interval: <strong style={{ color: '#E7E6C2' }}>{syncInterval}</strong></span>
+            <span>Database: <strong style={{ color: '#E7E6C2' }}>{syncLabel}</strong></span>
           </div>
         </div>
 

@@ -148,12 +148,12 @@ function LandCoverSummaryLink({
 
 function sourceColor(source: string): string {
   if (source === "MODIS") {
-    return "#ff8c42";
+    return "#B92216";
   }
   if (source.startsWith("VIIRS")) {
     return "#facc15";
   }
-  return "#ffd7a8";
+  return "#B7C688";
 }
 
 // Batas hari kalender WIB (UTC+7) untuk tanggal "YYYY-MM-DD" dari <input
@@ -1208,7 +1208,7 @@ export function KpsDetailView({
             </div>
             {includeSurrounding && stats.outsideCount > 0 && (
               <div style={{ fontSize: "0.76rem", color: "#9ca3af", margin: "0.2rem 0 0.4rem" }}>
-                Dalam kawasan: <strong style={{ color: "#f5efe6" }}>{stats.insideCount}</strong> &bull; Luar kawasan: <strong style={{ color: "#f59e0b" }}>{stats.outsideCount}</strong>
+                Dalam kawasan: <strong style={{ color: "#E7E6C2" }}>{stats.insideCount}</strong> &bull; Luar kawasan: <strong style={{ color: "#f59e0b" }}>{stats.outsideCount}</strong>
               </div>
             )}
             {stats.total > 0 && (
@@ -1499,9 +1499,9 @@ export function KpsDetailView({
                   // yang menang, lalu kliknya dibuang tanpa jejak. Titik jadi
                   // terlihat mati padahal penanganya ada.
                   style={{
-                    color: "#ff8c42",
+                    color: "#B92216",
                     weight: 3,
-                    fillColor: "#ff8c42",
+                    fillColor: "#B92216",
                     fillOpacity: 0.14,
                     interactive: false
                   }}

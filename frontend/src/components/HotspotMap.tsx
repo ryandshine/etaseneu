@@ -126,14 +126,14 @@ function isRenderableGeojson(geojson: unknown): boolean {
 
 function sourceColor(source: string) {
   if (source === "MODIS") {
-    return "#ff8c42";
+    return "#B92216";
   }
 
   if (source.startsWith("VIIRS")) {
     return "#facc15";
   }
 
-  return "#ffd7a8";
+  return "#B7C688";
 }
 
 const PROVINCE_BOUNDS: Record<string, [[number, number], [number, number]]> = {
@@ -831,7 +831,7 @@ export function HotspotMap({
 
       <div className="map-legend">
         <span className="map-legend-title">Legenda</span>
-        <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#ff8c42" }} />MODIS</div>
+        <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#B92216" }} />MODIS</div>
         <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#facc15" }} />VIIRS</div>
         <div className="map-legend-row"><span className="map-legend-dot map-legend-dot--pulse" />FRP tinggi (&gt;30MW)</div>
         {showBurnedArea && burnedArea.data ? (

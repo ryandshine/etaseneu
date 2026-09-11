@@ -301,7 +301,7 @@ export function MapSheet({
             <h3 className="map-sheet__title">Legenda Titik</h3>
             <ul className="map-sheet__legend map-sheet__legend--flush">
               <li>
-                <span style={{ background: "#ff8c42" }} />
+                <span style={{ background: "#B92216" }} />
                 MODIS
               </li>
               <li>

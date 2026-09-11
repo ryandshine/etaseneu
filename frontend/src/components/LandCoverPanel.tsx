@@ -580,7 +580,7 @@ export function LandCoverPanel({
                 key={`outline-${polygonId}`}
                 data={{ type: "Feature", geometry: outline } as never}
                 style={() => ({
-                  color: "#f5efe6",
+                  color: "#E7E6C2",
                   weight: 1.5,
                   dashArray: "4 4",
                   fill: false,

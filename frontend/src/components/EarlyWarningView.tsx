@@ -457,7 +457,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
   };
 
   return (
-    <div style={{ padding: "1.25rem", color: "#f3f4f6", height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: "1.25rem", color: "#E7E6C2", height: "100%", overflowY: "auto" }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem", flexWrap: "wrap", gap: "1rem" }}>
         <div>
@@ -685,7 +685,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
         >
           <option value="">Semua Provinsi</option>
           {provinces.map((p) => (
-            <option key={p} value={p} style={{ backgroundColor: "#1e293b" }}>
+            <option key={p} value={p} style={{ backgroundColor: "#4D2D1B" }}>
               {p}
             </option>
           ))}
@@ -707,7 +707,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
         >
           <option value="">Semua Skema</option>
           {skemas.map((s) => (
-            <option key={s} value={s} style={{ backgroundColor: "#1e293b" }}>
+            <option key={s} value={s} style={{ backgroundColor: "#4D2D1B" }}>
               {s}
             </option>
           ))}
@@ -731,7 +731,7 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
           >
             <option value="">Semua Balai PS</option>
             {wilkers.map((w) => (
-              <option key={w} value={w} style={{ backgroundColor: "#1e293b" }}>
+              <option key={w} value={w} style={{ backgroundColor: "#4D2D1B" }}>
                 {w}
               </option>
             ))}
@@ -756,11 +756,11 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             }}
           >
             <option value="">Semua Zona Perambatan</option>
-            <option value="zone1" style={{ backgroundColor: "#1e293b" }}>🔴 Zona 1: Merambat Langsung (≤1 km)</option>
-            <option value="zone2" style={{ backgroundColor: "#1e293b" }}>🟠 Zona 2: Loncatan Bara (1-3 km)</option>
-            <option value="zone3" style={{ backgroundColor: "#1e293b" }}>🟡 Zona 3: Titik Bakar Mandiri (&gt;3 km)</option>
-            <option value="combo" style={{ backgroundColor: "#1e293b" }}>🔴 Kombinasi Bara & Merambat</option>
-            <option value="strict" style={{ backgroundColor: "#1e293b" }}>🔥 Strict Re-burn (Bara Bekas)</option>
+            <option value="zone1" style={{ backgroundColor: "#4D2D1B" }}>🔴 Zona 1: Merambat Langsung (≤1 km)</option>
+            <option value="zone2" style={{ backgroundColor: "#4D2D1B" }}>🟠 Zona 2: Loncatan Bara (1-3 km)</option>
+            <option value="zone3" style={{ backgroundColor: "#4D2D1B" }}>🟡 Zona 3: Titik Bakar Mandiri (&gt;3 km)</option>
+            <option value="combo" style={{ backgroundColor: "#4D2D1B" }}>🔴 Kombinasi Bara & Merambat</option>
+            <option value="strict" style={{ backgroundColor: "#4D2D1B" }}>🔥 Strict Re-burn (Bara Bekas)</option>
           </select>
         )}
 
@@ -780,10 +780,10 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
           title="Saring berdasarkan kekuatan sinyal dan tingkat FRP hotspot"
         >
           <option value="">Semua Tingkat Sinyal</option>
-          <option value="tinggi" style={{ backgroundColor: "#1e293b" }}>🔴 FRP Tinggi (&gt;30 MW)</option>
-          <option value="sedang" style={{ backgroundColor: "#1e293b" }}>🟠 FRP Sedang (10-30 MW)</option>
-          <option value="tinggi_sedang" style={{ backgroundColor: "#1e293b" }}>🔥 Sedang & Tinggi (≥10 MW)</option>
-          <option value="rendah" style={{ backgroundColor: "#1e293b" }}>🟡 FRP Rendah (&lt;10 MW)</option>
+          <option value="tinggi" style={{ backgroundColor: "#4D2D1B" }}>🔴 FRP Tinggi (&gt;30 MW)</option>
+          <option value="sedang" style={{ backgroundColor: "#4D2D1B" }}>🟠 FRP Sedang (10-30 MW)</option>
+          <option value="tinggi_sedang" style={{ backgroundColor: "#4D2D1B" }}>🔥 Sedang & Tinggi (≥10 MW)</option>
+          <option value="rendah" style={{ backgroundColor: "#4D2D1B" }}>🟡 FRP Rendah (&lt;10 MW)</option>
         </select>
 
         {/* Sort */}
@@ -799,13 +799,13 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             fontSize: "0.82rem"
           }}
         >
-          <option value="ftri" style={{ backgroundColor: "#1e293b" }}>Urut: Skor FTRI Tertinggi</option>
-          <option value="hs_today" style={{ backgroundColor: "#1e293b" }}>Urut: Hotspot Hari Ini (Total)</option>
-          <option value="distance" style={{ backgroundColor: "#1e293b" }}>Urut: Jarak Perambatan Terjauh (KM)</option>
-          <option value="hs_strict" style={{ backgroundColor: "#1e293b" }}>Urut: Strict Re-burn (Bekas Terbakar)</option>
-          <option value="hs_7d" style={{ backgroundColor: "#1e293b" }}>Urut: Hotspot 7 Hari</option>
-          <option value="frp" style={{ backgroundColor: "#1e293b" }}>Urut: FRP Tertinggi (7 Hari)</option>
-          <option value="burned_ha" style={{ backgroundColor: "#1e293b" }}>Urut: Luas Terbakar (ha)</option>
+          <option value="ftri" style={{ backgroundColor: "#4D2D1B" }}>Urut: Skor FTRI Tertinggi</option>
+          <option value="hs_today" style={{ backgroundColor: "#4D2D1B" }}>Urut: Hotspot Hari Ini (Total)</option>
+          <option value="distance" style={{ backgroundColor: "#4D2D1B" }}>Urut: Jarak Perambatan Terjauh (KM)</option>
+          <option value="hs_strict" style={{ backgroundColor: "#4D2D1B" }}>Urut: Strict Re-burn (Bekas Terbakar)</option>
+          <option value="hs_7d" style={{ backgroundColor: "#4D2D1B" }}>Urut: Hotspot 7 Hari</option>
+          <option value="frp" style={{ backgroundColor: "#4D2D1B" }}>Urut: FRP Tertinggi (7 Hari)</option>
+          <option value="burned_ha" style={{ backgroundColor: "#4D2D1B" }}>Urut: Luas Terbakar (ha)</option>
         </select>
 
         <div style={{ fontSize: "0.78rem", color: "#9ca3af", marginLeft: "auto" }}>
