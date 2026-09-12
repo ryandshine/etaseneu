@@ -823,13 +823,33 @@ function renderCompactCard(title: string, data: any[], total: number, activeLabe
               style={{ display: 'flex', alignItems: 'center', opacity, cursor: onClick ? 'pointer' : 'default', fontSize: '0.85rem' }}
               onClick={() => onClick && onClick(item.label)}
             >
-              <div style={{ width: '60px', color: '#d1d5db', fontWeight: '500' }}>{item.label}</div>
+              {/* width tetap 60px dulu cukup buat label pendek (Tinggi/Sedang/Rendah)
+                  tapi kartu ini dipakai juga utk "Titik per Kawasan Hutan" yang
+                  labelnya gabungan kata (HP Terbatas, Konservasi Laut, dst) --
+                  numpuk jadi 2 baris pas ketemu label panjang, tinggi tiap
+                  baris beda-beda jadi baris chart jadi tidak sejajar/berantakan
+                  (dilaporkan user, 2026-09-12). Dilebarkan + dikunci satu baris
+                  (ellipsis jaga-jaga kalau ada label lebih panjang lagi nanti). */}
+              <div
+                title={item.label}
+                style={{
+                  width: '5.5rem',
+                  flexShrink: 0,
+                  color: '#d1d5db',
+                  fontWeight: '500',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}
+              >
+                {item.label}
+              </div>
               <div style={{ flex: 1, height: '12px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden', margin: '0 12px', display: 'flex' }}>
                 {item.value > 0 && (
                   <div style={{ width: `${barWidth}%`, backgroundColor: fill, height: '100%', transition: 'width 0.3s ease' }} />
                 )}
               </div>
-              <div style={{ width: '70px', textAlign: 'right', color: '#fff' }}>
+              <div style={{ width: '5.5rem', flexShrink: 0, textAlign: 'right', color: '#fff', whiteSpace: 'nowrap' }}>
                 {item.value} <span style={{ color: '#9ca3af', fontSize: '0.75rem' }}>({pct}%)</span>
               </div>
             </div>
@@ -877,11 +897,28 @@ function renderKawasanBurnedCard(data: BurnedAreaKawasanResponse | null) {
             const barWidth = Math.max((row.luas_ha / maxVal) * 100, 2);
             return (
               <div key={row.fungsi} style={{ display: 'flex', alignItems: 'center', fontSize: '0.85rem' }}>
-                <div style={{ width: '92px', color: '#d1d5db', fontWeight: '500' }}>{shortKawasanLabel(row.fungsi)}</div>
+                {/* width 92px kadang masih kependekan buat "Konservasi Laut"/
+                    "HP Terbatas" -- numpuk 2 baris, baris chart jadi tidak
+                    sejajar (pola sama seperti renderCompactCard di atas,
+                    dilaporkan user 2026-09-12). */}
+                <div
+                  title={shortKawasanLabel(row.fungsi)}
+                  style={{
+                    width: '6.5rem',
+                    flexShrink: 0,
+                    color: '#d1d5db',
+                    fontWeight: '500',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
+                >
+                  {shortKawasanLabel(row.fungsi)}
+                </div>
                 <div style={{ flex: 1, height: '12px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden', margin: '0 12px' }}>
                   <div style={{ width: `${barWidth}%`, backgroundColor: '#9B2C2C', height: '100%', transition: 'width 0.3s ease' }} />
                 </div>
-                <div style={{ width: '104px', textAlign: 'right', color: '#fff' }}>
+                <div style={{ width: '6.5rem', flexShrink: 0, textAlign: 'right', color: '#fff', whiteSpace: 'nowrap' }}>
                   {formatHa(row.luas_ha)} <span style={{ color: '#9ca3af', fontSize: '0.75rem' }}>({pct}%)</span>
                 </div>
               </div>
