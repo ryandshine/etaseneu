@@ -1060,7 +1060,7 @@ export function KpsDetailView({
         </div>
       </header>
 
-      <section className="panel kps-detail-info" style={{ marginBottom: "1rem" }}>
+      <section className="panel kps-detail-time-filter" style={{ marginBottom: "1rem" }}>
         <p className="filter-group-label">Filter Waktu Halaman Ini</p>
         <div className="filter-preset-grid" style={{ marginBottom: "0.65rem" }}>
           {HOTSPOT_DAY_PRESETS.map((preset) => (

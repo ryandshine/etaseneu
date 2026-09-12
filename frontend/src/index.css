@@ -664,6 +664,17 @@ code {
   overflow-y: auto;
 }
 
+/* Kartu "Filter Waktu Halaman Ini" -- dulu numpang class .kps-detail-info
+   yang sama persis dengan panel metadata di sidebar (aside di bawah),
+   sekadar kebetulan sama-sama butuh padding:1rem. Begitu .kps-detail-info
+   dijadikan position:sticky untuk sidebar (2d9c01c), kartu filter ini IKUT
+   sticky juga padahal section terpisah di ATAS .kps-detail-body (bukan
+   bagian grid dua kolom) -- makanya "ikut" pas discroll, dilaporkan user
+   2026-09-12. Dipisah jadi class sendiri, TANPA sticky. */
+.kps-detail-time-filter {
+  padding: 1rem;
+}
+
 .kps-detail-title-row {
   display: flex;
   align-items: center;
