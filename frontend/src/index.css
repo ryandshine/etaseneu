@@ -649,19 +649,134 @@ code {
    dicapai lewat LEBAR, bukan tinggi (lihat .kps-detail-map: tinggi
    dibatasi wajar, bukan mengikuti viewport penuh -- dilaporkan user
    "jangan panjang ke bawah", 2026-09-12). */
+/* Redesain "peta full-bleed + panel info mengambang, bisa ditutup" --
+   diskusi user 2026-09-12, meniru pola Apple Maps Directions (kartu
+   translucent/blur di atas peta, BUKAN kolom grid terpisah, dan BISA
+   ditutup total supaya peta dapat seluruh ruang). Sengaja tetap
+   collapsible (bukan overlay permanen) -- sepanjang sesi ini elemen
+   overlay permanen (legenda, mode-switcher) justru berkali-kali jadi
+   sumber "menutupi peta"; kartu info di sini beda karena user sendiri
+   yang mengontrol kapan dia tampil.
+   .kps-detail-body jadi container relatif tunggal: peta mengisi
+   penuh (position:absolute inset:0), panel info + tombol buka-kembali
+   sama-sama position:absolute mengambang DI ATASNYA. */
 .kps-detail-body {
-  display: grid;
-  grid-template-columns: 17rem minmax(0, 1fr);
-  gap: 1rem;
-  align-items: start;
+  position: relative;
+  min-height: min(34rem, calc(100vh - 7rem));
 }
 
 .kps-detail-info {
-  padding: 1rem;
-  position: sticky;
+  position: absolute;
   top: 1rem;
-  max-height: min(34rem, calc(100vh - 7rem));
+  left: 1rem;
+  /* Skala kecil (10/20/30/50) ala rekomendasi umum tidak dipakai literal --
+     seluruh kontrol mengambang di codebase ini (basemap switcher, tombol
+     ekspor/timeline, dst) sudah lama konsisten pakai kisaran ~900-1000;
+     memaksakan skala 10-50 di SATU tempat baru cuma bikin dua sistem
+     z-index berbeda hidup berdampingan. Panel info = lapisan chrome
+     PALING atas di peta ini, jadi disamakan lebih tinggi dari kisaran itu. */
+  z-index: 1010;
+  width: 17rem;
+  max-width: calc(100% - 2rem);
+  max-height: calc(100% - 2rem);
+  padding: 0;
   overflow-y: auto;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(26, 15, 9, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
+.kps-detail-info > :not(.kps-detail-info-header) {
+  /* Konten asli .kps-detail-info dulu punya padding:1rem di elemen ini
+     sendiri; sekarang padding pindah ke wrapper konten supaya header
+     (baris judul+tutup) bisa mepet ke tepi kartu dengan divider sendiri. */
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.kps-detail-info > :last-child {
+  padding-bottom: 1rem;
+}
+
+.kps-detail-info-header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.7rem 0.85rem;
+  background: rgba(26, 15, 9, 0.94);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 1;
+}
+
+.kps-detail-info-header__label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(231, 230, 194, 0.62);
+}
+
+.kps-detail-info-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.kps-detail-info-close:hover {
+  background: rgba(185, 34, 22, 0.18);
+  border-color: rgba(185, 34, 22, 0.4);
+  color: #ffffff;
+}
+
+/* Tombol buka-kembali, tampil sendirian saat panel info ditutup -- pola
+   visual sama persis .fs-drawer-reopen-btn (Siaga Rambatan Api) supaya
+   afordansi "buka lagi panel yang ditutup" konsisten di seluruh app. */
+.kps-detail-info-reopen {
+  position: absolute;
+  /* BUKAN top:1rem (slot lama panel info) -- itu persis tempat kontrol
+     zoom Leaflet default duduk (top:10px, ~4-5rem total tinggi 2 tombol),
+     dan .basemap-switcher.kps-detail-basemap-switcher sudah menumpuk di
+     bawahnya (top:6rem). Ditumpuk lagi di bawah keduanya (9rem) --
+     pelajaran dari beberapa kali tabrakan kontrol peta sepanjang sesi ini:
+     ukur clearance eksplisit per elemen, jangan asumsikan pojok kosong. */
+  top: 9rem;
+  left: 0.6rem;
+  z-index: 1010;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: rgba(26, 15, 9, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(185, 34, 22, 0.4);
+  color: #E7E6C2;
+  padding: 0.5rem 0.9rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  transition: all 0.15s ease;
+}
+
+.kps-detail-info-reopen:hover {
+  background: rgba(185, 34, 22, 0.25);
+  border-color: #B92216;
+  color: #ffffff;
 }
 
 /* Kartu "Filter Waktu Halaman Ini" -- dulu numpang class .kps-detail-info
@@ -768,23 +883,20 @@ code {
 
 .kps-conf-btn--active {
   border-color: rgba(185, 34, 22, 0.5);
-  background: rgba(185, 34, 22, 0.16);
-  color: #B92216;
+  background: rgba(185, 34, 22, 0.28);
+  color: #E7E6C2;
   font-weight: 600;
 }
 
 .kps-detail-map {
-  position: sticky;
-  top: 1rem;
+  /* Full-bleed: mengisi seluruh .kps-detail-body (position:relative),
+     panel info mengambang di atasnya sebagai lapisan terpisah -- bukan
+     lagi kolom grid yang berbagi lebar dengannya. */
+  position: absolute;
+  inset: 0;
   border-radius: 0.625rem;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.095);
-  /* Dulu calc(100vh - 7rem) -- di layar tinggi jadi kolom raksasa memanjang
-     ke bawah. min(34rem, ...) mengunci ke bentuk lebih persegi/melebar
-     (selaras .kps-detail-info di sampingnya), tetap menyusut di viewport
-     pendek lewat sisi calc()-nya. */
-  height: min(34rem, calc(100vh - 7rem));
-  min-height: 20rem;
 }
 
 .kps-detail-map .leaflet-container {
@@ -1426,26 +1538,20 @@ code {
 .text-emerald-500 { color: #10b981; }
 
 @media (max-width: 900px) {
+  /* Pola full-bleed+panel-mengambang di atas SEKARANG dipakai di mobile
+     juga (bukan cuma desktop) -- ini justru yang paling langsung menjawab
+     keluhan lama "peta kekecilan di mobile": panel bisa ditutup total,
+     peta jadi penuh layar. Cukup sesuaikan ukuran: panel melebar hampir
+     penuh lebar (bukan lebar tetap 17rem yang dirancang untuk desktop),
+     dan tinggi kolom disesuaikan viewport mobile. */
   .kps-detail-body {
-    grid-template-columns: 1fr;
+    min-height: 24rem;
+    height: calc(100vh - 9rem);
   }
 
-  /* Satu kolom di mobile -- sticky+tinggi viewport dua-duanya (info & peta)
-     cuma masuk akal saat berdampingan (desktop). Ditumpuk normal di sini:
-     tanpa reset ini info akan nempel-scroll sendiri DI ATAS peta yang juga
-     nempel, dua perilaku "mengambang" bertumpuk dalam satu kolom sempit --
-     balik ke alur satu halaman biasa seperti sebelumnya. */
   .kps-detail-info {
-    position: static;
-    max-height: none;
-    overflow-y: visible;
-  }
-
-  .kps-detail-map {
-    position: relative;
-    top: auto;
-    height: auto;
-    min-height: 22rem;
+    width: auto;
+    right: 1rem;
   }
 }
 

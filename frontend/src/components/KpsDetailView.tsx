@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Clock, Download, Film, ShieldAlert } from "lucide-react";
+import { ArrowLeft, ChevronLeft, Clock, Download, Film, ShieldAlert, X } from "lucide-react";
 import { CircleMarker, GeoJSON, LayerGroup, MapContainer, Pane, Popup, TileLayer, useMap } from "react-leaflet";
 import { canvas as buildLeafletCanvas, circleMarker as buildLeafletCircleMarker, geoJSON as buildLeafletGeoJSON } from "leaflet";
 import type { CircleMarker as LCircleMarker, LayerGroup as LLayerGroup } from "leaflet";
@@ -909,6 +909,11 @@ export function KpsDetailView({
 
   const [timelineOn, setTimelineOn] = useState(false);
   const [mapStyle, setMapStyle] = useState<"dark" | "satellite">("dark");
+  // Panel info kiri sekarang mengambang DI ATAS peta full-bleed, bukan
+  // kolom grid terpisah (redesign ala Apple Maps Directions, diskusi user
+  // 2026-09-12) -- bisa ditutup total supaya peta dapat seluruh lebar/
+  // tinggi kalau user mau fokus ke peta.
+  const [isInfoOpen, setIsInfoOpen] = useState(true);
   const timelineEnabled = timelineOn && displayedHotspots.length > 0;
   const timeline = useHotspotTimeline(displayedHotspots, { enabled: timelineEnabled });
 
@@ -1123,7 +1128,20 @@ export function KpsDetailView({
       {error ? <p className="toast-error toast-error--inline">{error}</p> : null}
 
       <div className="kps-detail-body">
+        {isInfoOpen ? (
         <aside className="kps-detail-info panel">
+          <div className="kps-detail-info-header">
+            <span className="kps-detail-info-header__label">Info KPS</span>
+            <button
+              type="button"
+              className="kps-detail-info-close"
+              onClick={() => setIsInfoOpen(false)}
+              title="Tutup panel info -- lihat peta penuh"
+              aria-label="Tutup panel info"
+            >
+              <X size={15} />
+            </button>
+          </div>
           {loading ? (
             <p className="help-copy">Memuat informasi KPS...</p>
           ) : detail ? (
@@ -1405,6 +1423,17 @@ export function KpsDetailView({
             )}
           </div>
         </aside>
+        ) : (
+          <button
+            type="button"
+            className="kps-detail-info-reopen"
+            onClick={() => setIsInfoOpen(true)}
+            title="Buka panel info KPS"
+          >
+            <ChevronLeft size={16} />
+            <span>Info KPS</span>
+          </button>
+        )}
 
         <div className="kps-detail-map" ref={mapContainerRef}>
           <div className="kps-detail-map-actions">
