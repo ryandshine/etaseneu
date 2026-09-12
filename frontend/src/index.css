@@ -634,15 +634,29 @@ code {
   font-weight: 700;
 }
 
+/* Desktop: pola "peta tidak membesar tak terbatas, info kiri scroll
+   sendiri" (dipola dari referensi Google Maps/Gemini yang ditunjukkan
+   user, 2026-09-12) -- sebelumnya grid biasa (align-items default:
+   stretch) membuat TINGGI PETA ikut tinggi kolom info di sebelahnya;
+   kalau field metadata KPS-nya banyak, peta jadi raksasa mengikuti.
+   align-items:start melepas keduanya dari saling menstretch, lalu
+   masing-masing dibatasi tinggi sendiri lewat viewport (lihat
+   .kps-detail-info & .kps-detail-map di bawah). Reuse pola yang SUDAH
+   terbukti jalan di SiagaRambatanApiView (.fs-map-column sticky +
+   .fs-list-column scroll) -- bukan pattern baru yang belum teruji. */
 .kps-detail-body {
   display: grid;
   grid-template-columns: 20rem minmax(0, 1fr);
   gap: 1rem;
-  min-height: 24rem;
+  align-items: start;
 }
 
 .kps-detail-info {
   padding: 1rem;
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 7rem);
+  overflow-y: auto;
 }
 
 .kps-detail-title-row {
@@ -744,10 +758,12 @@ code {
 }
 
 .kps-detail-map {
-  position: relative;
+  position: sticky;
+  top: 1rem;
   border-radius: 0.625rem;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.095);
+  height: calc(100vh - 7rem);
   min-height: 20rem;
 }
 
@@ -1394,7 +1410,21 @@ code {
     grid-template-columns: 1fr;
   }
 
+  /* Satu kolom di mobile -- sticky+tinggi viewport dua-duanya (info & peta)
+     cuma masuk akal saat berdampingan (desktop). Ditumpuk normal di sini:
+     tanpa reset ini info akan nempel-scroll sendiri DI ATAS peta yang juga
+     nempel, dua perilaku "mengambang" bertumpuk dalam satu kolom sempit --
+     balik ke alur satu halaman biasa seperti sebelumnya. */
+  .kps-detail-info {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+
   .kps-detail-map {
+    position: relative;
+    top: auto;
+    height: auto;
     min-height: 22rem;
   }
 }
