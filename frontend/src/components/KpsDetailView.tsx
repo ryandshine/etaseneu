@@ -195,10 +195,18 @@ function geometryCenter(geometry: { type: string; coordinates: unknown }): { lat
   };
 }
 
-// Preset "24 Jam/48 Jam/dst" dari dashboard (constants/time-windows.ts), tanpa
-// "Custom" -- di halaman ini field Dari/Ke sendiri SUDAH jadi jalur custom-nya,
-// jadi tidak perlu tombol "Custom" terpisah.
+// Preset "24 Jam/48 Jam/dst" dari dashboard (constants/time-windows.ts).
+// "Custom" dipisah -- preset lain punya `hours` numerik yang tinggal dipakai
+// applyTimePreset(), sedangkan "Custom" (hours:0) tidak punya rentang tetap
+// untuk di-apply (definisinya justru "apa pun selain preset di atas").
+// Dulu makanya dibuang total (lihat riwayat commit) dengan alasan "field
+// Dari/Ke sendiri sudah jadi jalur custom" -- tapi itu bikin baris preset di
+// sini beda dari Live Map/Matriks Data yang selalu punya chip "Custom"
+// (dilaporkan user 2026-09-12, "kurang" dibanding menu lain). Sekarang
+// ditampilkan lagi sebagai chip status (bukan trigger applyTimePreset) --
+// lihat penggunaannya di JSX.
 const HOTSPOT_DAY_PRESETS = TIME_PRESET_OPTIONS.filter((preset) => preset.value !== "custom");
+const CUSTOM_TIME_PRESET = TIME_PRESET_OPTIONS.find((preset) => preset.value === "custom")!;
 
 // Tanggal "YYYY-MM-DD" mundur `days` hari kalender dari tanggal acuan --
 // aritmetika tanggal murni (bukan waktu presisi jam), jadi aman dari isu
@@ -931,6 +939,7 @@ export function KpsDetailView({
 
   // ---- Ekspor & Unduh Animasi (GIF / Video)
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const customStartInputRef = useRef<HTMLInputElement | null>(null);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const handleStartExport = async (
@@ -1080,11 +1089,30 @@ export function KpsDetailView({
               <span>{preset.label}</span>
             </button>
           ))}
+          {/* "Custom" di sini BUKAN trigger applyTimePreset (tidak ada rentang
+              tetap untuk "custom" -- lihat komentar HOTSPOT_DAY_PRESETS di
+              atas) -- ini chip STATUS: aktif kalau tanggal Dari/Ke terisi
+              tapi TIDAK cocok rentang preset mana pun. Klik memfokuskan
+              input "Dari" supaya tetap terasa seperti tombol yang berguna,
+              bukan sekadar label mati. */}
+          <button
+            key={CUSTOM_TIME_PRESET.value}
+            type="button"
+            className={`chip chip--button filter-preset-btn${
+              isCustomRangeActive && !HOTSPOT_DAY_PRESETS.some((preset) => isTimePresetActive(preset.hours))
+                ? " chip--active"
+                : ""
+            }`}
+            onClick={() => customStartInputRef.current?.focus()}
+          >
+            <span>{CUSTOM_TIME_PRESET.label}</span>
+          </button>
         </div>
         <div className="filter-date-grid">
           <label className="field">
             <span>Dari</span>
             <input
+              ref={customStartInputRef}
               type="date"
               className="filter-date-input"
               value={customStartDate}
