@@ -644,9 +644,14 @@ code {
    .kps-detail-info & .kps-detail-map di bawah). Reuse pola yang SUDAH
    terbukti jalan di SiagaRambatanApiView (.fs-map-column sticky +
    .fs-list-column scroll) -- bukan pattern baru yang belum teruji. */
+/* Lebar kolom info dipangkas 20rem->17rem supaya peta (kolom 1fr di
+   sebelahnya) dapat jatah lebar lebih besar -- "lebih besar" di sini
+   dicapai lewat LEBAR, bukan tinggi (lihat .kps-detail-map: tinggi
+   dibatasi wajar, bukan mengikuti viewport penuh -- dilaporkan user
+   "jangan panjang ke bawah", 2026-09-12). */
 .kps-detail-body {
   display: grid;
-  grid-template-columns: 20rem minmax(0, 1fr);
+  grid-template-columns: 17rem minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
 }
@@ -655,7 +660,7 @@ code {
   padding: 1rem;
   position: sticky;
   top: 1rem;
-  max-height: calc(100vh - 7rem);
+  max-height: min(34rem, calc(100vh - 7rem));
   overflow-y: auto;
 }
 
@@ -763,7 +768,11 @@ code {
   border-radius: 0.625rem;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.095);
-  height: calc(100vh - 7rem);
+  /* Dulu calc(100vh - 7rem) -- di layar tinggi jadi kolom raksasa memanjang
+     ke bawah. min(34rem, ...) mengunci ke bentuk lebih persegi/melebar
+     (selaras .kps-detail-info di sampingnya), tetap menyusut di viewport
+     pendek lewat sisi calc()-nya. */
+  height: min(34rem, calc(100vh - 7rem));
   min-height: 20rem;
 }
 
