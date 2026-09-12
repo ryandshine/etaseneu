@@ -2615,8 +2615,13 @@ code {
 }
 
 .basemap-switcher-btn--active {
-  background: rgba(185, 34, 22, 0.18) !important;
-  color: #B92216 !important;
+  /* Dulu color:#B92216 (merah gelap) di atas background merah tipis --
+     kontras rendah, hampir tak terbaca ("Peta" aktif kelihatan pudar di
+     screenshot user, 2026-09-12). Teks dibikin terang seperti pola tombol
+     aktif lain (.matrix-toggle--active dkk). */
+  background: rgba(185, 34, 22, 0.28) !important;
+  color: #E7E6C2 !important;
+  font-weight: 700;
 }
 
 .user-location-marker {
