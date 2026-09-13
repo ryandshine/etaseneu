@@ -2251,223 +2251,340 @@ code {
 }
 
 /* ============================================================================
-   FULL-BLEED STAGE -- 2026-09-06: peta/panel mengisi SELURUH kolom detail,
-   semua chrome (identitas poligon, aksi, tab, kontrol tahun/basemap/legenda)
-   MENGAMBANG di atasnya -- pola persis Live Map (App.tsx `.workspace-stage--map`).
-   Full-bleed cuma di >=901px (di situ `.tl-body` grid 2 kolom kasih `.tl-detail`
-   tinggi nyata); <=900px `.tl-body` jadi block -> stage kembali aliran normal.
+   TUTUPAN LAHAN STAGE & PANEL
+   Layout bersih berhierarki: header terpadu (non-overlapping), tab switcher
+   terintegrasi, kanvas peta dengan kontrol rapi dan view tren yang independen.
    ========================================================================= */
 
-/* Default (semua lebar / <=900px): aliran block aman -- peta kotak, chrome
-   di atasnya sebagai block biasa. */
 .land-cover-panel--stage {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+  background: var(--color-bg-base);
+  overflow: hidden;
 }
-.lc-mapframe--fill {
-  height: min(68vh, 640px);
-}
-.lc-trend--fill {
-  /* di block flow tetap seperti .lc-trend biasa */
-}
-.lc-chrome {
+
+/* Header bar detail poligon */
+.lc-header-bar {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem 0.65rem;
+  background: rgba(18, 14, 11, 0.96);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  z-index: 1100;
+  flex-shrink: 0;
+}
+
+.lc-header-bar__main {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 0.6rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
 }
-.lc-chrome__back {
-  padding: 0.3rem 0.7rem;
+
+.lc-header-bar__info {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.lc-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.8rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(26, 15, 9, 0.92);
-  color: #d1d5db;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-cream);
   font: inherit;
   font-size: 0.72rem;
   font-weight: 700;
   cursor: pointer;
   flex-shrink: 0;
+  transition: background 150ms ease, border-color 150ms ease;
 }
-.lc-chrome__id {
+
+.lc-back-btn:hover {
+  background: rgba(185, 34, 22, 0.2);
+  border-color: rgba(185, 34, 22, 0.5);
+  color: #fff;
+}
+
+.lc-header-bar__titles {
   display: flex;
   flex-direction: column;
-  gap: 0.05rem;
+  gap: 0.15rem;
   min-width: 0;
 }
-.lc-chrome__id strong {
-  font-size: 0.85rem;
-  font-weight: 800;
-  color: var(--color-cream);
-  line-height: 1.2;
-}
-.lc-chrome__id span {
-  font-size: 0.68rem;
-  color: rgba(231, 230, 194, 0.55);
-}
-.lc-chrome__actions {
+
+.lc-header-bar__title-line {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.lc-header-bar__title {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: var(--color-cream);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.lc-header-bar__sublabel {
+  font-size: 0.7rem;
+  color: rgba(231, 230, 194, 0.6);
+  line-height: 1.2;
+}
+
+.lc-formula-old {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  background: rgba(250, 204, 21, 0.12);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  color: #fde047;
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: help;
+  white-space: nowrap;
+}
+
+.lc-header-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+
+.lc-header-bar__tabs-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 0.15rem;
+}
+
+/* Map frame & full-bleed canvas */
+.lc-mapframe--fill {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.lc-mapframe__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.lc-mapframe__canvas .leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg-deep);
+}
+
+/* Basemap switcher rapi di pojok kanan atas peta */
+.basemap-switcher--topright {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 1000;
+  background: rgba(26, 15, 9, 0.92);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* Kolom kiri kontrol peta (slider tahun + legenda luas) */
+.lc-mapframe .map-left-stack {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 1000;
+  max-height: calc(100% - 1.5rem);
+  max-width: 16.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* State Center (Idle / Running / Error) */
 .lc-state-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.25rem;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.lc-state-card {
+  max-width: 28rem;
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(26, 15, 9, 0.88);
+  backdrop-filter: blur(12px);
+  padding: 2.2rem 1.8rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+}
+
+.lc-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: rgba(185, 34, 22, 0.14);
+  border: 1px solid rgba(185, 34, 22, 0.35);
+  color: var(--color-cream);
+  margin-bottom: 0.25rem;
+}
+
+.lc-state-icon--error {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+}
+
+.lc-state-spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--color-red);
+  animation: spin 900ms linear infinite;
+  margin-bottom: 0.25rem;
+}
+
+.lc-state-card .lc-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--color-cream);
+}
+
+.lc-state-card .lc-lede {
+  margin: 0;
+  font-size: 0.78rem;
+  color: rgba(231, 230, 194, 0.65);
+  line-height: 1.45;
+}
+
+.lc-state-actions {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.6rem;
-  text-align: center;
-  padding: 2rem 0;
+  width: 100%;
+  margin-top: 0.5rem;
 }
 
-@media (min-width: 901px) {
-  .land-cover-panel--stage {
-    position: absolute;
-    inset: 0;
-    margin: 0;
-    padding: 0;
-    border: none;
-    gap: 0;
-    overflow: hidden;
-  }
-  .lc-mapframe--fill {
-    position: absolute;
-    inset: 0;
-    height: auto;
-    min-height: 0;
-    border: none;
-    border-radius: 0;
-  }
-  .lc-trend--fill {
-    position: absolute;
-    inset: 0;
-    height: auto;
-    min-height: 0;
-    border: none;
-    border-radius: 0;
-    overflow-y: auto;
-    padding: 4rem 1.25rem 1.5rem;
-    background: #12100e;
-  }
-  /* identitas kiri-atas, aksi kanan-atas -- klik tembus di celah tengah. */
-  .lc-chrome {
-    position: absolute;
-    z-index: 1100;
-    top: 0.7rem;
-    left: 0.9rem;
-    right: 0.9rem;
-    pointer-events: none;
-  }
-  .lc-chrome > * {
-    pointer-events: auto;
-  }
-  .lc-chrome__back {
-    background: rgba(26, 15, 9, 0.92);
-    backdrop-filter: blur(8px);
-  }
-  .lc-chrome__id {
-    background: rgba(26, 15, 9, 0.92);
-    backdrop-filter: blur(8px);
-    padding: 0.4rem 0.7rem;
-    border-radius: 0.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    max-width: 24rem;
-  }
-  /* tab switcher mengambang di tengah-atas (pola tombol "Peta/Satelit"). */
-  .lc-tabs--float {
-    position: absolute;
-    z-index: 1100;
-    top: 3.5rem;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(26, 15, 9, 0.92);
-    backdrop-filter: blur(8px);
-  }
-  /* left stack digeser turun supaya tidak ketiban chrome + tab. */
-  .land-cover-panel--stage .map-left-stack {
-    top: 6.2rem;
-    max-height: calc(100% - 7.2rem);
-  }
-  .lc-state-center {
-    position: absolute;
-    inset: 3.5rem 1rem 1rem;
-    justify-content: center;
-    padding: 0;
-  }
-}
-
-/* Kartu "Tahun" -- pakai kotak .map-legend, isinya baris slider + angka. */
-.lc-yearcard__row {
+/* Tab Tren Historis */
+.lc-trend--fill {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1rem 1.25rem 2.5rem;
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.lc-yearcard .lc-range {
-  flex: 1;
-  min-width: 0;
-}
-.lc-yearcard .lc-year {
-  min-width: 2.6ch;
-  text-align: right;
+  flex-direction: column;
+  gap: 1rem;
 }
 
-/* Kartu legenda + luas per kelas -- baris .map-legend-row dengan nilai
-   ha/% di kanan. */
-.lc-legendcard .lc-legendrow {
-  justify-content: flex-start;
-  gap: 0.4rem;
+.lc-trend-card,
+.lc-table-card {
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(26, 15, 9, 0.75);
+  backdrop-filter: blur(8px);
+  padding: 0.85rem 1rem 1rem;
 }
-.lc-legendrow__label {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+
+.lc-trend-header {
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
 }
-.lc-legendrow__value {
-  font-variant-numeric: tabular-nums;
-  font-size: 0.68rem;
-  white-space: nowrap;
-}
-.lc-legendrow__ha {
+
+.lc-trend-header h4 {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
   color: var(--color-cream);
-  font-weight: 600;
 }
-.lc-legendrow__pct {
+
+.lc-trend-sub {
+  font-size: 0.68rem;
   color: rgba(231, 230, 194, 0.5);
 }
-.lc-legendrow--zero {
-  opacity: 0.45;
-}
 
-/* Mobile (<=639px, sama ambang useIsMobile): kontrol turun jadi blok biasa
-   di bawah peta, peta lebih pendek -- pola sama seperti Live Map yang
-   mengganti kontrol mengambang dengan MapSheet di lebar ini. */
-.lc-mapframe--mobile {
-  height: 56vh;
-  min-height: 340px;
-}
-.lc-mobilecontrols {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin-top: 0.6rem;
-}
-.lc-mobilecontrols .basemap-switcher {
-  position: static;
-  align-self: flex-start;
-}
-.lc-mobilecontrols .map-legend {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: none;
-}
+/* Responsif Tutupan Lahan (<=900px) */
+@media (max-width: 900px) {
+  .land-cover-panel--stage {
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
 
-.lc-trend {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
+  .lc-mapframe--mobile {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 0;
+    flex: none;
+    overflow: visible;
+  }
+
+  .lc-mapframe--mobile .lc-mapframe__canvas {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: min(48vh, 380px);
+    min-height: 280px;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .lc-mobilecontrols {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-top: 0.75rem;
+    padding: 0 0.25rem 1.5rem;
+  }
+
+  .lc-mobilecontrols .map-legend {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: none;
+  }
 }
 
 .lc-step {
@@ -9572,19 +9689,58 @@ textarea {
   min-height: 0;
   overflow-y: auto;
   padding: 1rem 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Saat LandCoverPanel dirender (poligon terpilih): di desktop jadi wadah
-   `position:relative` tanpa padding/scroll sendiri supaya
-   `.land-cover-panel--stage` bisa `position:absolute; inset:0` (peta
-   full-bleed, chrome mengambang -- pola Live Map). <=900px `.tl-body` block
-   -> biarkan `.tl-detail` default (auto height, scroll). */
-@media (min-width: 901px) {
-  .tl-detail--stage {
-    position: relative;
-    overflow: hidden;
-    padding: 0;
-  }
+.tl-detail--stage {
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.tl-empty--stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1.5rem;
+}
+
+.tl-empty-card {
+  max-width: 28rem;
+  border-radius: 0.75rem;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 2.5rem 1.75rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.tl-empty-icon {
+  color: rgba(231, 230, 194, 0.35);
+  margin-bottom: 0.25rem;
+}
+
+.tl-empty-card h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-cream);
+}
+
+.tl-empty-card p {
+  margin: 0;
+  font-size: 0.76rem;
+  color: rgba(231, 230, 194, 0.5);
+  line-height: 1.45;
 }
 
 .tl-back-btn {
@@ -9644,17 +9800,26 @@ textarea {
 
 @media (max-width: 900px) {
   .tl-body {
-    display: block;
-    flex: none;
-    min-height: auto;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
   }
 
   .tl-list {
     border-right: none;
+    flex: 1;
+    min-height: 0;
   }
 
   .tl-detail {
-    padding: 0.85rem 1rem 1.5rem;
+    padding: 0.5rem;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .tl-detail--stage {
+    padding: 0;
   }
 }
 

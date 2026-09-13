@@ -88,6 +88,24 @@ function formatComputedAt(iso: string | null): string {
   return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+function useIsCompactLayout(): boolean {
+  const [isCompact, setIsCompact] = useState<boolean>(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+    return window.matchMedia("(max-width: 900px)").matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mql = window.matchMedia("(max-width: 900px)");
+    const onChange = (e: MediaQueryListEvent) => setIsCompact(e.matches);
+    setIsCompact(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+
+  return isCompact;
+}
+
 export function TutupanLahanView({
   initialPolygonId = null,
   onOpenKpsDetail,
@@ -103,7 +121,7 @@ export function TutupanLahanView({
   const [wilkerFilter, setWilkerFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("");
   const [selectedId, setSelectedId] = useState<number | null>(initialPolygonId);
-  const isMobile = useIsMobile();
+  const isCompact = useIsCompactLayout();
 
   useEffect(() => {
     let cancelled = false;
@@ -194,11 +212,11 @@ export function TutupanLahanView({
   );
 
 
-  // Mobile: daftar dan detail bergantian tampil (bukan ditumpuk) supaya
-  // sekali pilih poligon tidak perlu menggulir lewat ratusan baris untuk
-  // sampai ke panel tutupan lahan. Desktop selalu menampilkan keduanya.
-  const showList = !isMobile || selectedId === null;
-  const showDetail = !isMobile || selectedId !== null;
+  // Responsive: pada layar ringkas (<=900px), daftar dan detail bergantian tampil
+  // agar user tidak perlu menggulir melewati daftar poligon untuk melihat peta.
+  // Pada desktop (>900px), kedua kolom tampil berdampingan.
+  const showList = !isCompact || selectedId === null;
+  const showDetail = !isCompact || selectedId !== null;
 
   return (
     <section className="tl-shell" aria-label="Tutupan Lahan">
@@ -424,20 +442,31 @@ export function TutupanLahanView({
             }`}
           >
             {selectedId === null ? (
-              <p className="tl-empty tl-empty--detail">
-                Pilih satu poligon di daftar untuk melihat atau menjalankan analisis tutupan
-                lahannya.
-              </p>
+              <div className="tl-empty tl-empty--stage">
+                <div className="tl-empty-card">
+                  <div className="tl-empty-icon" aria-hidden="true">
+                    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4">
+                      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                      <polyline points="2 17 12 22 22 17" />
+                      <polyline points="2 12 12 17 22 12" />
+                    </svg>
+                  </div>
+                  <h3>Pilih Poligon KPS / Hutan Adat</h3>
+                  <p>
+                    Pilih salah satu poligon dari daftar di sebelah kiri untuk melihat rona peta tutupan
+                    lahan Sentinel-2, grafik tren 2021–2025, atau menjalankan komputasi satelit.
+                  </p>
+                </div>
+              </div>
             ) : loading ? (
-              <p className="tl-empty tl-empty--detail">Memuat…</p>
+              <div className="tl-empty tl-empty--detail">
+                <p>Memuat…</p>
+              </div>
             ) : !selectedRow ? (
-              <p className="tl-empty tl-empty--detail">
-                Poligon tidak ditemukan atau sudah tidak aktif.
-              </p>
+              <div className="tl-empty tl-empty--detail">
+                <p>Poligon tidak ditemukan atau sudah tidak aktif.</p>
+              </div>
             ) : (
-              // Header & aksi tidak lagi block di sini -- diteruskan ke
-              // LandCoverPanel yang merendernya sebagai chrome mengambang di
-              // atas peta full-bleed (pola Live Map).
               <LandCoverPanel
                 polygonId={selectedRow.polygon_metadata_id}
                 isAdmin={isAdmin}
@@ -450,7 +479,7 @@ export function TutupanLahanView({
                     ? () => onOpenKpsDetail(selectedRow.lembaga as string, selectedRow.polygon_metadata_id)
                     : undefined
                 }
-                onBack={isMobile ? () => setSelectedId(null) : undefined}
+                onBack={isCompact ? () => setSelectedId(null) : undefined}
               />
             )}
           </div>
