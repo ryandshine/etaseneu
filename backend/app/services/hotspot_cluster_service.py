@@ -409,7 +409,9 @@ class HotspotClusterService:
         if cached is not None and isinstance(cached, dict):
             return cached
 
-        points = self.postgres_store.get_hotspots_in_range(start_at, end_at)
+        raw_points = self.postgres_store.get_hotspots_in_range(start_at, end_at)
+        # HANYA titik yang berada di dalam poligon KPS / Hutan Adat
+        points = [p for p in raw_points if p.get("polygon_metadata_id") is not None]
         if not points:
             empty_res = {
                 "count": 0,
@@ -424,10 +426,14 @@ class HotspotClusterService:
             self.cache_service.write(cache_key, empty_res, ttl_hours=1)
             return empty_res
 
-        edges = self.postgres_store.find_proximity_edges(
-            start_at=start_at, end_at=end_at, eps_km=eps_km, eps_hours=eps_hours
-        )
         point_ids = [p["id"] for p in points]
+        edges = self.postgres_store.find_proximity_edges(
+            start_at=start_at,
+            end_at=end_at,
+            eps_km=eps_km,
+            eps_hours=eps_hours,
+            point_ids=point_ids,
+        )
         labels = _graph_cluster(point_ids, edges, min_samples)
         core_point_ids = _core_point_ids(point_ids, edges, min_samples)
         result = _summarize(points, labels, core_point_ids, eps_km, location_eps_km)

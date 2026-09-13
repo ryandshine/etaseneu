@@ -171,6 +171,45 @@ def test_summarize_returns_empty_result_when_no_clusters() -> None:
     assert result["stats"]["unclustered_hotspots"] == 1
 
 
+def test_compute_clusters_excludes_points_outside_polygon() -> None:
+    t = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    mock_store = type("MockStore", (), {
+        "get_hotspots_in_range": lambda self, s, e: [
+            {**_point(1, -1.0, 110.0, t, "LPHD A"), "polygon_metadata_id": 101},
+            {**_point(2, -1.01, 110.01, t, "LPHD A"), "polygon_metadata_id": 101},
+            {**_point(3, -1.02, 110.02, t, "LPHD A"), "polygon_metadata_id": 101},
+            {**_point(4, -1.03, 110.03, t, "LPHD A"), "polygon_metadata_id": 101},
+            # Titik di luar polygon (polygon_metadata_id is None)
+            {**_point(5, -1.04, 110.04, t, "Luar"), "polygon_metadata_id": None},
+        ],
+        "find_proximity_edges": lambda self, start_at, end_at, eps_km, eps_hours, point_ids=None: [
+            (1, 2), (2, 3), (3, 4), (1, 3), (1, 4), (2, 4)
+        ],
+    })()
+    mock_cache = type("MockCache", (), {
+        "read": lambda self, k: None,
+        "write": lambda self, k, v, ttl_hours=1: None,
+    })()
+
+    service = HotspotClusterService(postgres_store=mock_store, cache_service=mock_cache)
+    res = service.compute_clusters(
+        start_at=t,
+        end_at=t,
+        eps_km=2.0,
+        eps_hours=48.0,
+        min_samples=4,
+        location_eps_km=1.0,
+    )
+
+    # Titik 5 (di luar polygon) tidak boleh masuk ke total maupun klaster
+    assert res["stats"]["total_hotspots_in_range"] == 4
+    assert res["stats"]["clustered_hotspots"] == 4
+    assert res["stats"]["unclustered_hotspots"] == 0
+    assert len(res["points"]) == 4
+    assert all(p["id"] != 5 for p in res["points"])
+    assert res["clusters"][0]["hotspot_count"] == 4
+
+
 def test_hotspot_clusters_endpoint_returns_service_result(monkeypatch) -> None:
     from app.core.config import get_settings
     from app.main import create_app

@@ -266,9 +266,8 @@ class _HotspotObservationMixin:
         return payloads
 
     def get_hotspots_in_range(self, start_at: datetime, end_at: datetime) -> list[dict]:
-        """Titik hotspot mentah dalam rentang waktu -- dipakai HotspotClusterService
-        untuk menyusun ringkasan kompleks kebakaran (lihat find_proximity_edges
-        untuk daftar pasangan tetangganya)."""
+        """Titik hotspot dalam rentang waktu yang berada DI DALAM poligon KPS / Hutan Adat
+        aktif (ST_Covers). Titik di luar poligon tidak diikutsertakan."""
         with self.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -290,7 +289,7 @@ class _HotspotObservationMixin:
                         poly.wilker_bps,
                         poly.nama_prov AS province_name
                     FROM hotspot_observations obs
-                    LEFT JOIN LATERAL (
+                    JOIN LATERAL (
                         SELECT
                             p.id AS polygon_metadata_id,
                             p.lembaga AS polygon_agency_name,
@@ -317,24 +316,29 @@ class _HotspotObservationMixin:
         end_at: datetime,
         eps_km: float,
         eps_hours: float,
+        point_ids: Sequence[int] | None = None,
     ) -> list[tuple[int, int]]:
         """Pasangan id hotspot yang "bertetangga" -- dekat secara ruang DAN waktu
         sekaligus -- dasar untuk pengelompokan graph-expansion (ST-DBSCAN) di
         HotspotClusterService.
 
-        Threshold jarak dikonversi ke DERAJAT, bukan ST_DWithin(...::geography, ...):
-        cast geography per-baris pada self-join sebesar ini bisa menggagalkan
-        pemakaian index GIST yang sudah ada di kolom geom (geometry, SRID 4326).
-        Konversi kasar 1 derajat ~= 111.32km cukup akurat untuk threshold
-        skala kilometer-tunggal di rentang lintang Indonesia (-11 s.d. 6 derajat) --
-        distorsi longitude akibat proyeksi di lintang ini di bawah 2%.
+        Hanya menghubungkan titik yang berada di dalam poligon (jika point_ids diberikan).
         """
         eps_degrees = eps_km / 111.32
         eps_seconds = eps_hours * 3600
+        point_id_filter = ""
+        params: list[object] = [eps_degrees, eps_seconds, start_at, end_at, start_at, end_at]
+        if point_ids is not None:
+            point_ids_list = list(point_ids)
+            if not point_ids_list:
+                return []
+            point_id_filter = " AND a.id = ANY(%s) AND b.id = ANY(%s)"
+            params.extend([point_ids_list, point_ids_list])
+
         with self.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    """
+                    f"""
                     SELECT a.id AS id_a, b.id AS id_b
                     FROM hotspot_observations a
                     JOIN hotspot_observations b
@@ -343,8 +347,9 @@ class _HotspotObservationMixin:
                      AND abs(extract(epoch FROM a.detected_at - b.detected_at)) <= %s
                     WHERE a.detected_at >= %s::timestamptz AND a.detected_at <= %s::timestamptz
                       AND b.detected_at >= %s::timestamptz AND b.detected_at <= %s::timestamptz
+                      {point_id_filter}
                     """,
-                    (eps_degrees, eps_seconds, start_at, end_at, start_at, end_at),
+                    tuple(params),
                 )
                 rows = cur.fetchall()
         return [(row["id_a"], row["id_b"]) for row in rows]
