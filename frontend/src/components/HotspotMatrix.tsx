@@ -1330,128 +1330,128 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
       >
         {showAnalytics ? (
           <div className="matrix-analytics-grid">
-          
-          {renderCompactCard("Confidence", confidenceDistribution, filteredHotspots.length, confidenceFilter || null, handleSelectConfidenceCategory)}
-          {renderCompactCard("FRP", frpDistribution, filteredHotspots.length, activeFrpCategory, handleSelectFrpCategory)}
-          {renderCompactCard("Titik per Kawasan Hutan", kawasanDistribution, filteredHotspots.length)}
-          {renderKawasanBurnedCard(burnedKawasan)}
-
-          <SkemaProvinsiCard
-            matrix={skemaProvinsiMatrix}
-            activeSkema={skemaFilter}
-            activeProvince={provinceFilter}
-            onSelectSkema={(label) => setSkemaFilter((current) => (current === label ? "" : label))}
-            onSelectProvince={(label) => setProvinceFilter((current) => (current === label ? "" : label))}
-          />
-
-          <BurnedAreaCard
-            provinceFilter={provinceFilter}
-            skemaFilter={skemaFilter}
-            wilkerFilter={wilkerFilter}
-            onSelectSkema={(label) => setSkemaFilter((current) => (current === label ? "" : label))}
-          />
-
-          <section className="matrix-chart-card matrix-chart-card--wide glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>
-            <div className="matrix-chart-card__header">
-              <div>
-                <p className="panel-eyebrow">Peringkat WILKER</p>
-                <h3>Hotspot per WILKER</h3>
-              </div>
+            {/* ROW 1: 4 KPI CARDS ROW */}
+            <div className="matrix-kpi-row">
+              {renderCompactCard("Confidence", confidenceDistribution, filteredHotspots.length, confidenceFilter || null, handleSelectConfidenceCategory)}
+              {renderCompactCard("FRP", frpDistribution, filteredHotspots.length, activeFrpCategory, handleSelectFrpCategory)}
+              {renderCompactCard("Titik per Kawasan Hutan", kawasanDistribution, filteredHotspots.length)}
+              {renderKawasanBurnedCard(burnedKawasan)}
             </div>
 
-            {topWilker.length === 0 ? (
-              <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Data hotspot tidak tersedia</div>
-            ) : (
-              /* overflowX: auto -- dengan interval={0} SEMUA label WILKER dipaksa tampil
-                 miring -35deg; kalau kartu dipepetkan ke lebar layar mobile, label
-                 paling kanan (mis. "Gowa") kehabisan ruang dan kepotong tepi layar.
-                 min-width proporsional ke jumlah kategori + scroll horizontal di
-                 dalam kartu sendiri menjaga tiap bar tetap dapat slot cukup lebar,
-                 alih-alih dipepetkan sampai labelnya bertabrakan/terpotong. */
-              <div style={{ width: '100%', overflowX: 'auto' }}>
-                <div style={{ width: `max(100%, ${topWilker.length * 64}px)`, height: 'clamp(240px, 50vw, 400px)', position: 'relative' }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={topWilker} layout="horizontal" margin={{ top: 24, right: 28, left: 20, bottom: 48 }} onClick={(state) => {
-                      if (state && state.activeLabel) {
-                        const label = String(state.activeLabel);
-                        setWilkerFilter(label === wilkerFilter ? "" : label);
-                        setCurrentPage(1);
-                      }
-                    }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
-                      <XAxis
-                        dataKey="label"
-                        stroke="rgba(255,255,255,0.2)"
-                        tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }}
-                        axisLine={false}
-                        tickLine={false}
-                        interval={0}
-                        angle={-35}
-                        textAnchor="end"
-                        height={56}
-                        tickFormatter={(val) => (typeof val === 'string' ? val.replace(/^Balai PS\s+/i, '') : '')}
-                      />
-                      <YAxis hide />
-                      <ChartTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.01)' }} />
-                      <Bar dataKey="value" fill="#B92216" radius={[4, 4, 0, 0]} background={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} barSize={16} isAnimationActive={false} style={{ cursor: 'pointer' }}>
-                        <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
-                        {topWilker.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={wilkerFilter === entry.label ? '#C23A1F' : (entry.color || '#B92216')} opacity={wilkerFilter === entry.label ? 1 : 0.85} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-          </section>
+            {/* ROW 2: MATRIX CROSS-TAB & BURNED AREA */}
+            <SkemaProvinsiCard
+              matrix={skemaProvinsiMatrix}
+              activeSkema={skemaFilter}
+              activeProvince={provinceFilter}
+              onSelectSkema={(label) => setSkemaFilter((current) => (current === label ? "" : label))}
+              onSelectProvince={(label) => setProvinceFilter((current) => (current === label ? "" : label))}
+            />
 
-          <section className="matrix-chart-card matrix-chart-card--wide glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>
-            <div className="matrix-chart-card__header">
-              <div>
-                <p className="panel-eyebrow">Analitik Tren</p>
-                <h3>{trendGroupBy === 'month' ? 'Tren Volume Bulanan' : 'Tren Volume Harian'}</h3>
-              </div>
-            </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <p className="matrix-spark-title" style={{ flexShrink: 0, marginBottom: '12px' }}>
-                {trendGroupBy === 'month' ? 'Volume Insiden Bulanan' : 'Volume Insiden Harian'}
-              </p>
-              {dailyTrend.length === 0 ? (
-                <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '240px', color: '#9ca3af' }}>
-                  Belum tersedia data untuk rentang waktu yang dipilih.
+            <BurnedAreaCard
+              provinceFilter={provinceFilter}
+              skemaFilter={skemaFilter}
+              wilkerFilter={wilkerFilter}
+              onSelectSkema={(label) => setSkemaFilter((current) => (current === label ? "" : label))}
+            />
+
+            {/* ROW 3: SIDE-BY-SIDE ANALYTICS CHARTS (Wilker & Tren Volume) */}
+            <div className="matrix-charts-row">
+              <section className="matrix-chart-card glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+                <div className="matrix-chart-card__header">
+                  <div>
+                    <p className="panel-eyebrow">Peringkat WILKER</p>
+                    <h3>Hotspot per WILKER</h3>
+                  </div>
                 </div>
-              ) : (
-                <div style={{ width: '100%', height: 'clamp(200px, 45vw, 350px)', position: 'relative' }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={dailyTrend} margin={{ top: 20, right: 30, left: 10, bottom: 8 }} onClick={(state) => {
-                      if (state && state.activeLabel) {
-                        const label = String(state.activeLabel);
-                        setSelectedPeriod(label === selectedPeriod ? null : label);
-                        setCurrentPage(1);
-                      }
-                    }}>
-                      <defs>
-                        <linearGradient id="dailyTrendGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={selectedPeriod ? "rgba(185, 34, 22, 0.2)" : "rgba(185, 34, 22, 0.4)"}/>
-                          <stop offset="95%" stopColor="#B92216" stopOpacity={0.0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
-                      <XAxis dataKey="label" stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} tickFormatter={(val) => { if (typeof val !== 'string') return ''; return trendGroupBy === 'month' ? val.slice(0, 7) : val.slice(8, 10); }} />
-                      <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                      <ChartTooltip content={<DailyTrendTooltip />} />
-                      <Area type="monotone" dataKey="value" stroke={selectedPeriod ? "#C23A1F" : "#B92216"} strokeWidth={selectedPeriod ? 3 : 2} fill="url(#dailyTrendGradient)" isAnimationActive={false} style={{ cursor: 'pointer' }}>
-                        <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
-                      </Area>
-                    </AreaChart>
-                  </ResponsiveContainer>
+
+                {topWilker.length === 0 ? (
+                  <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Data hotspot tidak tersedia</div>
+                ) : (
+                  <div style={{ width: '100%', overflowX: 'auto' }}>
+                    <div style={{ width: `max(100%, ${topWilker.length * 64}px)`, height: 'clamp(240px, 50vw, 380px)', position: 'relative' }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={topWilker} layout="horizontal" margin={{ top: 24, right: 28, left: 20, bottom: 48 }} onClick={(state) => {
+                          if (state && state.activeLabel) {
+                            const label = String(state.activeLabel);
+                            setWilkerFilter(label === wilkerFilter ? "" : label);
+                            setCurrentPage(1);
+                          }
+                        }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
+                          <XAxis
+                            dataKey="label"
+                            stroke="rgba(255,255,255,0.2)"
+                            tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+                            axisLine={false}
+                            tickLine={false}
+                            interval={0}
+                            angle={-35}
+                            textAnchor="end"
+                            height={56}
+                            tickFormatter={(val) => (typeof val === 'string' ? val.replace(/^Balai PS\s+/i, '') : '')}
+                          />
+                          <YAxis hide />
+                          <ChartTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.01)' }} />
+                          <Bar dataKey="value" fill="#B92216" radius={[4, 4, 0, 0]} background={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} barSize={16} isAnimationActive={false} style={{ cursor: 'pointer' }}>
+                            <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
+                            {topWilker.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={wilkerFilter === entry.label ? '#C23A1F' : (entry.color || '#B92216')} opacity={wilkerFilter === entry.label ? 1 : 0.85} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              <section className="matrix-chart-card glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+                <div className="matrix-chart-card__header">
+                  <div>
+                    <p className="panel-eyebrow">Analitik Tren</p>
+                    <h3>{trendGroupBy === 'month' ? 'Tren Volume Bulanan' : 'Tren Volume Harian'}</h3>
+                  </div>
                 </div>
-              )}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                  <p className="matrix-spark-title" style={{ flexShrink: 0, marginBottom: '12px' }}>
+                    {trendGroupBy === 'month' ? 'Volume Insiden Bulanan' : 'Volume Insiden Harian'}
+                  </p>
+                  {dailyTrend.length === 0 ? (
+                    <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '240px', color: '#9ca3af' }}>
+                      Belum tersedia data untuk rentang waktu yang dipilih.
+                    </div>
+                  ) : (
+                    <div style={{ width: '100%', height: 'clamp(200px, 45vw, 380px)', position: 'relative' }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={dailyTrend} margin={{ top: 20, right: 30, left: 10, bottom: 8 }} onClick={(state) => {
+                          if (state && state.activeLabel) {
+                            const label = String(state.activeLabel);
+                            setSelectedPeriod(label === selectedPeriod ? null : label);
+                            setCurrentPage(1);
+                          }
+                        }}>
+                          <defs>
+                            <linearGradient id="dailyTrendGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor={selectedPeriod ? "rgba(185, 34, 22, 0.2)" : "rgba(185, 34, 22, 0.4)"}/>
+                              <stop offset="95%" stopColor="#B92216" stopOpacity={0.0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
+                          <XAxis dataKey="label" stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} tickFormatter={(val) => { if (typeof val !== 'string') return ''; return trendGroupBy === 'month' ? val.slice(0, 7) : val.slice(8, 10); }} />
+                          <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                          <ChartTooltip content={<DailyTrendTooltip />} />
+                          <Area type="monotone" dataKey="value" stroke={selectedPeriod ? "#C23A1F" : "#B92216"} strokeWidth={selectedPeriod ? 3 : 2} fill="url(#dailyTrendGradient)" isAnimationActive={false} style={{ cursor: 'pointer' }}>
+                            <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
+                          </Area>
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </div>
+              </section>
             </div>
-          </section>
-        </div>
-      ) : null}
+          </div>
+        ) : null}
       </div>
 
       {/* PANE 1: BUKU BESAR & TABEL DATA */}
