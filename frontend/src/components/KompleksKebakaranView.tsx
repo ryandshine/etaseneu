@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import L from "leaflet";
-import { Check, Copy } from "lucide-react";
+import { Check, ChevronDown, Copy } from "lucide-react";
 import {
   Circle,
   CircleMarker,
@@ -403,6 +403,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
   const [showCoreRadii, setShowCoreRadii] = useState(false);
   const [showIndividualPoints, setShowIndividualPoints] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copying" | "copied" | "error">("idle");
+  const [isLegendOpen, setIsLegendOpen] = useState(false);
   const [copiedCoord, setCopiedCoord] = useState<string | null>(null);
 
   const handleCopyCoord = async (lat: number, lon: number) => {
@@ -690,7 +691,26 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                   Satelit
                 </button>
               </div>
-              <div className="kompleks-map-legend" aria-label="Legenda peta kompleks">
+              <div
+                className={`kompleks-map-legend ${isLegendOpen ? "kompleks-map-legend--open" : ""}`}
+                aria-label="Legenda peta kompleks"
+              >
+                <button
+                  type="button"
+                  className="kompleks-map-legend__toggle"
+                  onClick={() => setIsLegendOpen((open) => !open)}
+                  aria-expanded={isLegendOpen}
+                >
+                  <span className="kompleks-map-legend__toggle-label">
+                    <span className="kompleks-map-legend__toggle-title">Legenda Peta</span>
+                    <span className="kompleks-map-legend__toggle-sub">8 simbol</span>
+                  </span>
+                  <ChevronDown
+                    size={14}
+                    className={`kompleks-map-legend__chevron ${isLegendOpen ? "kompleks-map-legend__chevron--open" : ""}`}
+                    aria-hidden="true"
+                  />
+                </button>
                 <span className="kompleks-map-legend__title">Legenda Peta</span>
                 <div className="kompleks-map-legend__grid">
                   <span className="kompleks-map-legend__item"><i className="kompleks-map-legend__dot" /> Titik anggota kompleks</span>
@@ -712,7 +732,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                     aria-pressed={!showIndividualPoints}
                     title="Hanya tampilkan titik sentroid & episentrum terparah tanpa titik-titik kecil yang menumpuk"
                   >
-                    🎯 Mode Sentroid Bersih
+                    🎯 <span className="kompleks-mode-btn__text--long">Mode Sentroid Bersih</span><span className="kompleks-mode-btn__text--short">Sentroid</span>
                   </button>
                   <button
                     type="button"
@@ -721,7 +741,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                     aria-pressed={showIndividualPoints}
                     title="Tampilkan seluruh titik hotspot satelit individu"
                   >
-                    🔵 Semua Titik Satelit
+                    🔵 <span className="kompleks-mode-btn__text--long">Semua Titik Satelit</span><span className="kompleks-mode-btn__text--short">Semua Titik</span>
                   </button>
                 </div>
                 <button
@@ -733,7 +753,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                 >
                   {showCoreRadii ? "Sembunyikan ring ε" : "Tampilkan semua ring ε"}
                 </button>
-                <span>
+                <span className="kompleks-map-audit__status">
                   {selectedCluster
                     ? `${selectedCorePoints.length.toLocaleString("id-ID")} titik inti · ε ${sensitivityParameters.epsKm} km`
                     : "Pilih kompleks untuk melihat selubung & koordinat"}
