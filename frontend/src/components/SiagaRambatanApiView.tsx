@@ -17,7 +17,8 @@ import {
   Check,
   X,
   ChevronLeft,
-  ChevronUp
+  ChevronUp,
+  ChevronDown
 } from "lucide-react";
 import { CircleMarker, GeoJSON, MapContainer, Polyline, Popup, TileLayer, ZoomControl, useMap } from "react-leaflet";
 import L from "leaflet";
@@ -256,6 +257,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
     }
     return true;
   });
+  const [isLegendOpen, setIsLegendOpen] = useState<boolean>(false);
 
   // 1. Fetch summary & threats
   const fetchData = async () => {
@@ -1446,91 +1448,62 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
               })}
             </MapContainer>
 
-            {/* Floating Peek Card di Mobile saat Drawer Ditutup */}
-            {!isDrawerOpen && threatDetail && (
-              <div
-                className="fs-mobile-peek-card"
-                onClick={() => setIsDrawerOpen(true)}
-                role="button"
-                tabIndex={0}
-                aria-label="Buka ringkasan detail KPS"
+            {/* Legenda Peta Ringkas (Collapsible di Mobile) */}
+            <div className={`fs-map-legend ${isLegendOpen ? "fs-map-legend--open" : ""}`} aria-label="Legenda peta rambatan api">
+              <button
+                type="button"
+                className="fs-map-legend__toggle"
+                onClick={() => setIsLegendOpen((open) => !open)}
+                aria-expanded={isLegendOpen}
               >
-                <div className="fs-mobile-peek-info">
-                  <span
-                    className="fs-mobile-peek-badge"
-                    style={{
-                      backgroundColor:
-                        threatDetail.status_level === "bahaya"
-                          ? "rgba(239, 68, 68, 0.25)"
-                          : threatDetail.status_level === "waspada"
-                          ? "rgba(249, 115, 22, 0.25)"
-                          : "rgba(234, 179, 8, 0.25)",
-                      color:
-                        threatDetail.status_level === "bahaya"
-                          ? "#f87171"
-                          : threatDetail.status_level === "waspada"
-                          ? "#fb923c"
-                          : "#fde047",
-                      borderColor:
-                        threatDetail.status_level === "bahaya"
-                          ? "#ef4444"
-                          : threatDetail.status_level === "waspada"
-                          ? "#f97316"
-                          : "#eab308",
-                    }}
-                  >
-                    {threatDetail.status_label}
-                  </span>
-                  <div className="fs-mobile-peek-text">
-                    <span className="fs-mobile-peek-title">{threatDetail.lembaga}</span>
-                    <span className="fs-mobile-peek-sub">
-                      Jarak: {threatDetail.min_distance_m < 1000 ? `${threatDetail.min_distance_m} m` : `${threatDetail.min_distance_km} km`} • {threatDetail.closest_vector?.bearing_compass || "-"}
-                    </span>
-                  </div>
-                </div>
-                <button type="button" className="fs-mobile-peek-btn">
-                  <span>Detail</span>
-                  <ChevronUp size={14} />
-                </button>
-              </div>
-            )}
+                <span className="fs-map-legend__toggle-label">
+                  <span className="fs-map-legend__toggle-title">Legenda Peta</span>
+                  <span className="fs-map-legend__toggle-sub">8 simbol</span>
+                </span>
+                <ChevronDown
+                  size={14}
+                  className={`fs-map-legend__chevron ${isLegendOpen ? "fs-map-legend__chevron--open" : ""}`}
+                  aria-hidden="true"
+                />
+              </button>
 
-            {/* Legenda Peta Overlay Ringkas */}
-            <div className="fs-map-legend">
               <div className="fs-map-legend-title">
                 Legenda Peta:
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                <span style={{ width: "14px", height: "3px", backgroundColor: "#B92216", border: "1px dashed #8A1A10" }} />
-                <span>Batas Kawasan KPS (Terpilih)</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                <span style={{ width: "14px", height: "3px", backgroundColor: "#818cf8", border: "1px dashed #6366f1" }} />
-                <span>Batas KPS Bersebelahan / Sekitar</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: "#f43f5e", border: "2px solid #fff" }} />
-                <span style={{ color: "#fda4af", fontWeight: "600" }}>Hotspot di DALAM Kawasan</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#ef4444", border: "1.5px solid #fff" }} />
-                <span>Hotspot Luar &lt; 1 km (Kritis)</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#f97316", border: "1.5px solid #fff" }} />
-                <span>Hotspot Luar 1–3 km (Waspada)</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#eab308", border: "1.5px solid #fff" }} />
-                <span>Hotspot Luar 3–5 km (Pantau)</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                <span style={{ width: "14px", height: "2px", borderTop: "2px dashed #ef4444" }} />
-                <span>Vektor Rambatan Terdekat</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#00f0ff", border: "1.5px solid #fff" }} />
-                <span>Titik Masuk Batas Terdekat</span>
+
+              <div className="fs-map-legend__grid">
+                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                  <span style={{ width: "14px", height: "3px", backgroundColor: "#B92216", border: "1px dashed #8A1A10" }} />
+                  <span>Batas Kawasan KPS (Terpilih)</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                  <span style={{ width: "14px", height: "3px", backgroundColor: "#818cf8", border: "1px dashed #6366f1" }} />
+                  <span>Batas KPS Bersebelahan / Sekitar</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                  <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: "#f43f5e", border: "2px solid #fff" }} />
+                  <span style={{ color: "#fda4af", fontWeight: "600" }}>Hotspot di DALAM Kawasan</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                  <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#ef4444", border: "1.5px solid #fff" }} />
+                  <span>Hotspot Luar &lt; 1 km (Kritis)</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                  <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#f97316", border: "1.5px solid #fff" }} />
+                  <span>Hotspot Luar 1–3 km (Waspada)</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                  <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#eab308", border: "1.5px solid #fff" }} />
+                  <span>Hotspot Luar 3–5 km (Pantau)</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                  <span style={{ width: "14px", height: "2px", borderTop: "2px dashed #ef4444" }} />
+                  <span>Vektor Rambatan Terdekat</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#00f0ff", border: "1.5px solid #fff" }} />
+                  <span>Titik Masuk Batas Terdekat</span>
+                </div>
               </div>
             </div>
           </div>
