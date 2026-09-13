@@ -16,7 +16,7 @@
 
 import { SATELLITE_OPTIONS } from "../constants/satellites";
 import { TIME_PRESET_OPTIONS, type TimePreset } from "../constants/time-windows";
-import type { DashboardHotspot, DashboardLayer } from "../hooks/useDashboardData";
+import type { DashboardHotspot, DashboardLayer } from "../types/api";
 
 const FILTERS_KEY = "etaseneu.dashboard.filters.v1";
 // v2: v1 pernah menyimpan layer dengan geojson dikosongkan ({}) di jalur

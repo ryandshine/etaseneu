@@ -195,22 +195,28 @@ class FakeUserStore:
     def list_users(self) -> list[dict]:
         return list(self._users)
 
-    def create_user(self, *, username: str, password_hash: str, role: str) -> dict:
+    def create_user(
+        self, *, username: str, password_hash: str, role: str, wilker_bps: str | None = None
+    ) -> dict:
         row = {
             "id": self._next_id,
             "username": username,
             "password_hash": password_hash,
             "role": role,
+            "wilker_bps": wilker_bps,
             "created_at": "2026-01-01T00:00:00+00:00",
         }
         self._users.append(row)
         self._next_id += 1
         return row
 
-    def update_user_role(self, user_id: int, role: str) -> dict | None:
+    def update_user_role(
+        self, user_id: int, role: str, wilker_bps: str | None = None
+    ) -> dict | None:
         user = self.get_user_by_id(user_id)
         if user:
             user["role"] = role
+            user["wilker_bps"] = wilker_bps
         return user
 
     def update_user_password(self, user_id: int, password_hash: str) -> bool:

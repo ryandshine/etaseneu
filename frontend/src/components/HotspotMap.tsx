@@ -48,7 +48,7 @@ import { KAWASAN_HUTAN_LEGEND } from "../constants/kawasanHutan";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { MapSheet } from "./MapSheet";
 import { MapControls } from "./MapControls";
-import type { LayerBounds } from "../types/api";
+import type { DashboardHotspot, DashboardLayer, LayerBounds } from "../types/api";
 
 const MONTH_LABELS = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -66,36 +66,8 @@ function formatS2Periods(periods: string[]): string {
   return `${left}–${MONTH_LABELS[m1 - 1].slice(0, 3)} ${y1}`;
 }
 
-type HotspotRecord = {
-  id: string;
-  latitude: number;
-  longitude: number;
-  source: string;
-  satellite: string;
-  layerName: string;
-  agencyName: string;
-  provinceName: string;
-  polygonMetadata?: Record<string, string>;
-  brightness: number | null;
-  frp?: number | null;
-  confidence: string;
-  daynight?: string;
-  detectedAt: string;
-  fungsiKawasan?: string;
-  namaKawasan?: string;
-  kelompokKawasan?: string;
-};
-
-type LayerRecord = {
-  id: string;
-  name: string;
-  label: string;
-  active: boolean;
-  color: string;
-  bounds: LayerBounds;
-  geojson: Record<string, unknown>;
-  geojson_mode?: "preview" | "full";
-};
+type HotspotRecord = DashboardHotspot;
+type LayerRecord = DashboardLayer;
 
 type HotspotMapProps = {
   hotspots: HotspotRecord[];

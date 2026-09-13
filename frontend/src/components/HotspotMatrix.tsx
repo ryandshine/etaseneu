@@ -6,6 +6,7 @@ import { BurnedAreaCard } from "./BurnedAreaCard";
 import type {
   BurnFrequencyRecord,
   BurnedAreaKawasanResponse,
+  DashboardHotspot,
   GeoJsonStatusResponse,
   PolygonDetail,
 } from "../types/api";
@@ -36,82 +37,14 @@ function formatPeriodeSingkat(iso: string | null): string {
   return `${BULAN_PENDEK[m] ?? month} ${year}`;
 }
 
-type MatrixHotspot = {
-  id: string;
-  detectedAt: string;
-  latitude: number;
-  longitude: number;
-  layerName: string;
-  agencyName: string;
-  provinceName: string;
-  polygonMetadata: Record<string, string>;
-  source: string;
-  satellite: string;
-  brightness: number | null;
-  frp: number | null;
-  confidence: string;
-  daynight: string;
-  fungsiKawasan?: string;
-  kelompokKawasan?: string;
-};
+import {
+  downloadGeoJson,
+  findLinkedPolygonId,
+  hotspotToGeoJsonFeature,
+  slugifyFilename,
+} from "../lib/matrixGeoJson";
 
-function hotspotToGeoJsonFeature(hotspot: MatrixHotspot) {
-  return {
-    type: "Feature" as const,
-    geometry: {
-      type: "Point" as const,
-      coordinates: [hotspot.longitude, hotspot.latitude]
-    },
-    properties: {
-      id: hotspot.id,
-      detected_at: hotspot.detectedAt,
-      layer_name: hotspot.layerName,
-      agency_name: hotspot.agencyName,
-      province_name: hotspot.provinceName,
-      source: hotspot.source,
-      satellite: hotspot.satellite,
-      brightness: hotspot.brightness,
-      frp: hotspot.frp,
-      confidence: hotspot.confidence,
-      daynight: hotspot.daynight,
-      ...hotspot.polygonMetadata
-    }
-  };
-}
-
-// polygon_metadata_id bisa saja belum ke-link ke sebagian titik dalam satu
-// grup KPS (spatial join belum lengkap) -- cari dari titik manapun yang
-// sudah punya ID valid, bukan cuma yang pertama, biar boundary polygon tetap
-// bisa disertakan selama ADA satu titik yang tertaut.
-function findLinkedPolygonId(hotspots: MatrixHotspot[]): number | null {
-  for (const hotspot of hotspots) {
-    const raw = hotspot.polygonMetadata.polygon_metadata_id;
-    const parsed = raw ? Number(raw) : NaN;
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-  return null;
-}
-
-function downloadGeoJson(featureCollection: object, filename: string) {
-  const blob = new Blob([JSON.stringify(featureCollection, null, 2)], {
-    type: "application/geo+json"
-  });
-  const objectUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-
-  anchor.href = objectUrl;
-  anchor.download = filename;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(objectUrl), 100);
-}
-
-function slugifyFilename(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-}
+type MatrixHotspot = DashboardHotspot;
 
 type HotspotMatrixProps = {
   hotspots: MatrixHotspot[];
@@ -149,332 +82,36 @@ type HotspotMatrixProps = {
   isAdmin?: boolean;
 };
 
-type ChartItem = {
-  label: string;
-  value: number;
-  color: string;
-  tone?: string;
-  subtitle?: string;
-};
-
-type SeriesPoint = {
-  label: string;
-  value: number;
-};
-
-type MultiSeries = {
-  label: string;
-  color: string;
-  values: number[];
-};
-
-const FRP_CATEGORIES: Array<{
-  label: string;
-  tone: string;
-  color: string;
-  border: string;
-  desc: string;
-}> = [
-  { label: "Tinggi", tone: "high", color: "rgba(220, 38, 38, 0.74)", border: "#ef4444", desc: "> 30 MW" },
-  { label: "Sedang", tone: "nominal", color: "rgba(234, 88, 12, 0.64)", border: "#f59e0b", desc: "10 - 30 MW" },
-  { label: "Rendah", tone: "low", color: "rgba(34, 197, 94, 0.5)", border: "#22c55e", desc: "< 10 MW" }
-];
-
-const CONFIDENCE_CATEGORIES: Array<{
-  label: string;
-  tone: string;
-  color: string;
-  border: string;
-  desc: string;
-}> = [
-  { label: "Tinggi", tone: "high", color: "rgba(220, 38, 38, 0.74)", border: "#ef4444", desc: "> 80% (MODIS) / H (VIIRS)" },
-  { label: "Sedang", tone: "nominal", color: "rgba(245, 158, 11, 0.64)", border: "#f59e0b", desc: "30-80% (MODIS) / N (VIIRS)" },
-  { label: "Rendah", tone: "low", color: "rgba(59, 130, 246, 0.5)", border: "#3b82f6", desc: "< 30% (MODIS) / L (VIIRS)" }
-];
-
-function buildConfidenceDistribution(hotspots: MatrixHotspot[]): ChartItem[] {
-  return CONFIDENCE_CATEGORIES.map((bin) => ({
-    ...bin,
-    value: hotspots.filter((hotspot) => getConfidenceCategory(hotspot) === bin.label).length,
-  }));
-}
-
-
-const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-function parseDateTime(value: string) {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function getWibDateParts(value: string) {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return { year: 0, month: 0, date: 0, dateStr: "", yearMonthStr: "" };
-  }
-  const wibTime = new Date(parsed.getTime() + 7 * 60 * 60 * 1000);
-  const year = wibTime.getUTCFullYear();
-  const month = wibTime.getUTCMonth(); // 0-indexed
-  const date = wibTime.getUTCDate();
-  const monthStr = String(month + 1).padStart(2, '0');
-  const dayStr = String(date).padStart(2, '0');
-  return {
-    year,
-    month,
-    date,
-    dateStr: `${year}-${monthStr}-${dayStr}`,
-    yearMonthStr: `${year}-${monthStr}`
-  };
-}
-
-function formatDateLabel(value: string) {
-  const parsed = parseDateTime(value);
-  if (!parsed) {
-    return "-";
-  }
-
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Jakarta",
-    day: "2-digit",
-    month: "short"
-  }).format(parsed);
-}
-
-function formatJakartaTimestamp(value?: string | null) {
-  if (!value) {
-    return "Tidak Pernah";
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return "Tidak Pernah";
-  }
-
-  const formatter = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Jakarta",
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-  const parts = formatter.formatToParts(parsed);
-  const day = parts.find((part) => part.type === "day")?.value ?? "--";
-  const month = parts.find((part) => part.type === "month")?.value ?? "---";
-  const hour = parts.find((part) => part.type === "hour")?.value ?? "--";
-  const minute = parts.find((part) => part.type === "minute")?.value ?? "--";
-  return `${day} ${month} ${hour}:${minute} WIB`;
-}
-
-function getLatestRegistrySync(status: GeoJsonStatusResponse | null): string {
-  if (!status?.files.length) {
-    return "Tidak Pernah";
-  }
-
-  const timestamps = status.files
-    .map((file) => file.last_synced_at)
-    .filter((value): value is string => Boolean(value));
-
-  if (!timestamps.length) {
-    return "Tidak Pernah";
-  }
-
-  timestamps.sort();
-  return formatJakartaTimestamp(timestamps[timestamps.length - 1]);
-}
-
-function buildFrpDistribution(hotspots: MatrixHotspot[]): ChartItem[] {
-  return FRP_CATEGORIES.map((bin) => ({
-    ...bin,
-    value: hotspots.filter((hotspot) => getFrpCategory(hotspot) === bin.label).length,
-  }));
-}
-
-// Jumlah titik panas per fungsi kawasan hutan (atribusi Fase 4: tiap hotspot
-// membawa `kawasanHutan`). Diurutkan terbanyak dulu; titik di luar semua
-// kawasan hutan dikumpulkan di label sendiri supaya total = jumlah hotspot.
-const KAWASAN_LUAR_LABEL = "Di luar kawasan";
-const KAWASAN_BAR_COLOR = "#2f855a";
-
-function shortKawasanLabel(fungsi: string): string {
-  return fungsi
-    .replace(/Hutan Produksi yang dapat Dikonversi/i, "HP Konversi")
-    .replace(/Hutan Produksi Terbatas/i, "HP Terbatas")
-    .replace(/Hutan Produksi Tetap/i, "HP Tetap")
-    .replace(/Kawasan Konservasi Laut/i, "Konservasi Laut")
-    .replace(/Kawasan Konservasi.*/i, "Konservasi")
-    .replace(/Areal Penggunaan Lain/i, "APL");
-}
-
-function buildKawasanDistribution(hotspots: MatrixHotspot[]): ChartItem[] {
-  const counts = new Map<string, number>();
-  for (const hotspot of hotspots) {
-    const label = (hotspot.fungsiKawasan || "").trim() || KAWASAN_LUAR_LABEL;
-    counts.set(label, (counts.get(label) ?? 0) + 1);
-  }
-  return [...counts.entries()]
-    .map(([label, value]) => ({
-      label: label === KAWASAN_LUAR_LABEL ? label : shortKawasanLabel(label),
-      value,
-      color: label === KAWASAN_LUAR_LABEL ? "#4b5563" : KAWASAN_BAR_COLOR,
-    }))
-    .sort((a, b) => b.value - a.value);
-}
-
-const SKEMA_FALLBACK = "Tanpa Skema";
-const MATRIX_PREVIEW_ROW_LIMIT = 10;
-
-// Sebagian polygon di sumber belum mengisi SKEMA; titiknya tetap dihitung lewat
-// label SKEMA_FALLBACK supaya total tabel silang sama dengan jumlah rekaman
-// yang tampil di buku besar. Label ini sengaja sama dengan yang dipakai ekspor
-// XLSX/PDF (backend: polygon_fields.skema_name).
-function getSkema(hotspot: MatrixHotspot) {
-  return (hotspot.polygonMetadata.SKEMA || "").trim() || SKEMA_FALLBACK;
-}
-
-function getProvinsi(hotspot: MatrixHotspot) {
-  return (hotspot.provinceName || hotspot.polygonMetadata.NAMA_PROV || "").trim() || "Tanpa Provinsi";
-}
-
-type SkemaProvinsiRow = {
-  provinsi: string;
-  counts: number[];
-  total: number;
-};
-
-type SkemaProvinsiMatrix = {
-  skema: string[];
-  rows: SkemaProvinsiRow[];
-  totals: number[];
-  grandTotal: number;
-  maxCell: number;
-};
-
-function buildSkemaProvinsiMatrix(hotspots: MatrixHotspot[]): SkemaProvinsiMatrix {
-  const pairCounts = new Map<string, number>();
-  const skemaTotals = new Map<string, number>();
-  const provinsiTotals = new Map<string, number>();
-
-  hotspots.forEach((hotspot) => {
-    const skema = getSkema(hotspot);
-    const provinsi = getProvinsi(hotspot);
-    const pairKey = `${provinsi} ${skema}`;
-    pairCounts.set(pairKey, (pairCounts.get(pairKey) ?? 0) + 1);
-    skemaTotals.set(skema, (skemaTotals.get(skema) ?? 0) + 1);
-    provinsiTotals.set(provinsi, (provinsiTotals.get(provinsi) ?? 0) + 1);
-  });
-
-  // Kolom & baris diurutkan dari yang terbanyak: tabelnya bisa selebar delapan
-  // kolom dan pembaca hampir selalu berhenti di beberapa kolom pertama.
-  const byCountDesc = (a: [string, number], b: [string, number]) =>
-    b[1] - a[1] || a[0].localeCompare(b[0]);
-
-  const skema = Array.from(skemaTotals.entries()).sort(byCountDesc).map(([label]) => label);
-  const rows = Array.from(provinsiTotals.entries())
-    .sort(byCountDesc)
-    .map(([provinsi, total]) => ({
-      provinsi,
-      counts: skema.map((label) => pairCounts.get(`${provinsi} ${label}`) ?? 0),
-      total,
-    }));
-  const totals = skema.map((label) => skemaTotals.get(label) ?? 0);
-
-  return {
-    skema,
-    rows,
-    totals,
-    grandTotal: hotspots.length,
-    maxCell: Math.max(0, ...Array.from(pairCounts.values())),
-  };
-}
-
-function buildTopWilker(hotspots: MatrixHotspot[]) {
-  const counts = new Map<string, number>();
-  hotspots.forEach((hotspot) => {
-    const name = hotspot.polygonMetadata.WILKER_BPS || "Belum Ditugaskan";
-    counts.set(name, (counts.get(name) ?? 0) + 1);
-  });
-
-  return Array.from(counts.entries())
-    .map(([label, value]) => ({ label, value, color: "#14b8a6" }))
-    .sort((a, b) => b.value - a.value);
-}
-
-function buildDailyTrend(hotspots: MatrixHotspot[], groupBy: 'day' | 'month' = 'day') {
-  const counts = new Map<string, number>();
-  hotspots.forEach((hotspot) => {
-    const parts = getWibDateParts(hotspot.detectedAt);
-    const key = groupBy === 'month' ? parts.yearMonthStr : parts.dateStr;
-    if (key) {
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-  });
-
-  return Array.from(counts.entries())
-    .map(([label, value]) => ({ label, value }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-}
-
-function buildDailyFrpTrend(hotspots: MatrixHotspot[], groupBy: 'day' | 'month' = 'day') {
-  const sums = new Map<string, number>();
-  hotspots.forEach((hotspot) => {
-    const parts = getWibDateParts(hotspot.detectedAt);
-    const key = groupBy === 'month' ? parts.yearMonthStr : parts.dateStr;
-    if (key) {
-      const value = hotspot.frp ?? 0;
-      sums.set(key, (sums.get(key) ?? 0) + value);
-    }
-  });
-
-  return Array.from(sums.entries())
-    .map(([label, value]) => ({ label, value: Math.round(value * 10) / 10 }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-}
-
-function buildYearOverYear(hotspots: MatrixHotspot[]) {
-  const years = Array.from(
-    new Set(
-      hotspots
-        .map((hotspot) => getWibDateParts(hotspot.detectedAt).year)
-        .filter((value): value is number => Boolean(value)),
-    ),
-  ).sort((a, b) => a - b);
-
-  const latestYear = years[years.length - 1] ?? parseInt(getTodayWIB().slice(0, 4), 10);
-  const selectedYears = [latestYear - 2, latestYear - 1, latestYear];
-  const yearIndexMap = new Map(selectedYears.map((y, idx) => [y, idx]));
-
-  // 3 years x 12 months buckets
-  const countBuckets = selectedYears.map(() => new Array(12).fill(0));
-  const frpBuckets = selectedYears.map(() => new Array(12).fill(0));
-
-  // Single-pass O(N) accumulation across all hotspots
-  for (const hotspot of hotspots) {
-    const parts = getWibDateParts(hotspot.detectedAt);
-    const yIdx = yearIndexMap.get(parts.year);
-    if (yIdx !== undefined && parts.month >= 0 && parts.month < 12) {
-      countBuckets[yIdx][parts.month] += 1;
-      frpBuckets[yIdx][parts.month] += (hotspot.frp ?? 0);
-    }
-  }
-
-  const countSeries: MultiSeries[] = selectedYears.map((year, idx) => ({
-    label: String(year),
-    color: year === latestYear ? "#8A1A10" : year === latestYear - 1 ? "#14b8a6" : "#64748b",
-    values: countBuckets[idx]
-  }));
-
-  const frpSeries: MultiSeries[] = selectedYears.map((year, idx) => ({
-    label: String(year),
-    color: year === latestYear ? "#8A1A10" : year === latestYear - 1 ? "#14b8a6" : "#64748b",
-    values: frpBuckets[idx].map((val) => Math.round(val * 10) / 10)
-  }));
-
-  return { years: selectedYears, countSeries, frpSeries };
-}
+import {
+  CONFIDENCE_CATEGORIES,
+  FRP_CATEGORIES,
+  KAWASAN_BAR_COLOR,
+  KAWASAN_LUAR_LABEL,
+  MATRIX_PREVIEW_ROW_LIMIT,
+  MONTH_LABELS,
+  SKEMA_FALLBACK,
+  type ChartItem,
+  type MultiSeries,
+  type SeriesPoint,
+  type SkemaProvinsiMatrix,
+  type SkemaProvinsiRow,
+  buildConfidenceDistribution,
+  buildDailyFrpTrend,
+  buildDailyTrend,
+  buildFrpDistribution,
+  buildKawasanDistribution,
+  buildSkemaProvinsiMatrix,
+  buildTopWilker,
+  buildYearOverYear,
+  formatDateLabel,
+  formatJakartaTimestamp,
+  getLatestRegistrySync,
+  getProvinsi,
+  getSkema,
+  getWibDateParts,
+  parseDateTime,
+  shortKawasanLabel,
+} from "../lib/matrixAggregations";
 
 function MatrixField({
   label,

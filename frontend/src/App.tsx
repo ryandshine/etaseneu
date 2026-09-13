@@ -1,4 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Maximize, Minimize, Menu, X } from "lucide-react";
 
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FilterPanel } from "./components/FilterPanel";
@@ -188,7 +189,6 @@ function ViewLoader({ label }: { label: string }) {
     </div>
   );
 }
-import { Maximize, Minimize, Menu, X } from "lucide-react";
 
 export default function App() {
   const [selectedProvince, setSelectedProvince] = useState<string>("");
@@ -955,24 +955,7 @@ export default function App() {
           <section aria-label="Matrix workspace" className="workspace-stage workspace-stage--matrix">
             <Suspense fallback={<ViewLoader label="Memuat matriks data..." />}>
               <HotspotMatrix
-                hotspots={(session?.role === "bps" ? visibleHotspots : hotspots).map((hotspot) => ({
-                  id: hotspot.id,
-                  detectedAt: hotspot.detectedAt,
-                  latitude: hotspot.latitude,
-                  longitude: hotspot.longitude,
-                  layerName: hotspot.layerName,
-                  agencyName: hotspot.agencyName,
-                  provinceName: hotspot.provinceName,
-                  polygonMetadata: hotspot.polygonMetadata,
-                  source: hotspot.source,
-                  satellite: hotspot.satellite,
-                  brightness: hotspot.brightness,
-                  frp: hotspot.frp,
-                  confidence: hotspot.confidence,
-                  daynight: hotspot.daynight,
-                  fungsiKawasan: hotspot.fungsiKawasan,
-                  kelompokKawasan: hotspot.kelompokKawasan
-                }))}
+                hotspots={session?.role === "bps" ? visibleHotspots : hotspots}
                 geojsonStatus={geojsonStatus}
                 onExport={(filters) => void exportDashboard(filters)}
                 isExporting={isExporting}

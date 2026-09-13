@@ -13,6 +13,10 @@ from app.core.config import get_settings
 router = APIRouter()
 
 
+def _get_store() -> PostgresStore:
+    return PostgresStore(get_settings().database_url)
+
+
 @router.get("/burned-area/summary")
 async def burned_area_summary(
     year: int | None = None,
@@ -22,8 +26,8 @@ async def burned_area_summary(
     # terpaksa mengunduh SELURUH tabel lalu menyaring di klien -- pada cakupan
     # penuh (7313 polygon x 12 bulan) itu ~16 MB per kali buka halaman.
     polygon_ids: list[int] = Query(default=[]),
+    store: PostgresStore = Depends(_get_store),
 ) -> dict[str, object]:
-    store = PostgresStore(get_settings().database_url)
     rows = store.read_burned_area_summary(
         polygon_ids=polygon_ids or None,
         layer_keys=layer_ids or None,
@@ -52,11 +56,11 @@ async def burned_area_by_skema(
     year: int | None = None,
     month: int | None = None,
     layer_ids: list[str] = Query(default=[]),
+    store: PostgresStore = Depends(_get_store),
 ) -> dict[str, object]:
     """Rekap luas terbakar unik per skema perhutanan sosial (PPHD, PPHKm,
     dst) -- digabung per poligon (union geometry) dulu sebelum dijumlah per
     skema, supaya lahan yang terbakar berulang tidak dobel-hitung."""
-    store = PostgresStore(get_settings().database_url)
     rows = store.burned_area_by_skema(year=year, month=month, layer_keys=layer_ids or None)
     return {
         "rows": rows,
@@ -65,12 +69,13 @@ async def burned_area_by_skema(
 
 
 @router.get("/burned-area/frequency")
-async def burned_area_frequency() -> dict[str, object]:
+async def burned_area_frequency(
+    store: PostgresStore = Depends(_get_store),
+) -> dict[str, object]:
     """Berapa periode (bulan) terpisah tiap KPS pernah tercatat terbakar
     resmi Kementerian Kehutanan -- dipakai kolom "Frekuensi" di Buku Besar
     (Matriks Data). Tidak terikat filter waktu dashboard, dipanggil sekali
     saat halaman dibuka."""
-    store = PostgresStore(get_settings().database_url)
     rows = store.burn_frequency_by_lembaga()
     return {"rows": rows}
 
@@ -78,34 +83,39 @@ async def burned_area_frequency() -> dict[str, object]:
 @router.post("/burned-area/refresh-kawasan")
 async def burned_area_refresh_kawasan(
     _: None = Depends(require_admin_key),
+    store: PostgresStore = Depends(_get_store),
 ) -> dict[str, object]:
     """Segarkan atribusi fungsi kawasan hutan: atribusi hotspot baru
     (inkremental) + rebuild luas terbakar per fungsi kawasan (Sentinel-2 &
     Kementerian Kehutanan). ~20 dtk. Dipakai tombol Pengaturan; juga dipanggil
     otomatis setelah refresh file Kementerian Kehutanan. Cron harian 04:15
     tetap jalan sebagai jaring pengaman."""
-    store = PostgresStore(get_settings().database_url)
     result = store.refresh_kawasan_attribution()
     return {"status": "ok", **result}
 
 
 @router.get("/burned-area/kawasan-at")
-async def burned_area_kawasan_at(lat: float, lon: float) -> dict[str, object]:
+async def burned_area_kawasan_at(
+    lat: float,
+    lon: float,
+    store: PostgresStore = Depends(_get_store),
+) -> dict[str, object]:
     """Fungsi kawasan hutan di satu koordinat (dipakai popup klik peta).
     Mengembalikan `{kawasan: {...}}` atau `{kawasan: null}` bila titik di luar
     semua kawasan hutan."""
-    store = PostgresStore(get_settings().database_url)
     return {"kawasan": store.read_kawasan_at_point(lat, lon)}
 
 
 @router.get("/burned-area/kawasan-summary")
-async def burned_area_kawasan_summary(province: str | None = None) -> dict[str, object]:
+async def burned_area_kawasan_summary(
+    province: str | None = None,
+    store: PostgresStore = Depends(_get_store),
+) -> dict[str, object]:
     """Rekap luas terbakar resmi Kementerian Kehutanan per FUNGSI kawasan
     hutan (Hutan Lindung / HP / HPT / HPK / Konservasi / APL). Union geometry
     per KPS lintas bulan lalu diiris dengan fungsi kawasan hutan, jadi
     jumlah pecahannya = total luas terbakar. Filter provinsi opsional untuk
     Matriks Data. Data resmi tersedia Januari-Juli 2026."""
-    store = PostgresStore(get_settings().database_url)
     rows = store.read_burned_area_by_kawasan(province or None)
     return {
         "rows": rows,
@@ -120,12 +130,12 @@ async def burned_area_geometry(
     polygon_ids: list[int] = Query(default=[]),
     year: int | None = None,
     month: int | None = None,
+    store: PostgresStore = Depends(_get_store),
 ) -> dict[str, object]:
     """Jejak area terbakar sebagai FeatureCollection, untuk lapisan peta."""
     if not polygon_ids:
         return {"type": "FeatureCollection", "features": []}
 
-    store = PostgresStore(get_settings().database_url)
     rows = store.read_burned_area_geometries(polygon_ids, year=year, month=month)
     return {
         "type": "FeatureCollection",
@@ -150,6 +160,7 @@ async def burned_area_geometry(
 async def burned_area_map_overlay(
     year: int | None = None,
     layer_ids: list[str] = Query(default=[]),
+    store: PostgresStore = Depends(_get_store),
 ) -> dict[str, object]:
     """Lapisan "kawasan terdampak kebakaran" untuk peta utama.
 
@@ -157,7 +168,6 @@ async def burned_area_map_overlay(
     peta menjawab "KPS mana yang terdampak" tanpa menumpuk bentuk yang sama
     berkali-kali untuk kawasan yang terbakar berulang.
     """
-    store = PostgresStore(get_settings().database_url)
     rows = store.read_burned_area_map_overlay(year=year, layer_keys=layer_ids or None)
 
     def _period_label(raw: object) -> str | None:
@@ -219,25 +229,25 @@ async def burned_area_refresh(
 async def burned_area_s2_overlay(
     year: int | None = None,
     month: int | None = None,
+    store: PostgresStore = Depends(_get_store),
 ) -> dict[str, object]:
     """Estimasi bekas terbakar Sentinel-2 (analisis mandiri sistem) sebagai
     FeatureCollection untuk lapisan peta. Tanpa `year`+`month` -> SEMUA periode
     yang tersimpan digabung (Live Map ingin Agustus + September tampil
     sekaligus, bukan cuma periode terbaru)."""
-    store = PostgresStore(get_settings().database_url)
     return store.read_s2_burned_area_overlay(year, month)
 
 
 @router.get("/burned-area/s2-summary")
 async def burned_area_s2_summary(
     polygon_ids: list[int] = Query(default=[]),
+    store: PostgresStore = Depends(_get_store),
 ) -> dict[str, object]:
     """Estimasi bekas terbakar Sentinel-2 untuk satu/beberapa KPS (semua
     bulan) + geometri poligonnya, untuk kartu Detail KPS. Terpisah dari
     `/burned-area/summary` (rekap resmi KLHK)."""
     if not polygon_ids:
         return {"rows": [], "geometry": {"type": "FeatureCollection", "features": []}}
-    store = PostgresStore(get_settings().database_url)
     rows = store.read_s2_burned_area_for_polygons(polygon_ids)
     features = [
         {
@@ -296,9 +306,7 @@ async def burned_area_refresh_klhk(
     try:
         result = {
             **result,
-            "kawasan_attribution": PostgresStore(
-                get_settings().database_url
-            ).refresh_kawasan_attribution(),
+            "kawasan_attribution": _get_store().refresh_kawasan_attribution(),
         }
     except Exception:
         pass

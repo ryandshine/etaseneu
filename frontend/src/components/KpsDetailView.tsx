@@ -7,13 +7,12 @@ import type { CircleMarker as LCircleMarker, LayerGroup as LLayerGroup } from "l
 import { SATELLITE_OPTIONS } from "../constants/satellites";
 import { TIME_PRESET_OPTIONS } from "../constants/time-windows";
 import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
-import type { DashboardHotspot } from "../hooks/useDashboardData";
 import { useHotspotTimeline } from "../hooks/useHotspotTimeline";
 import { bucketLabelWIB, opacityForBucket } from "../lib/hotspotTimeline";
 import { applyMarkerOpacity } from "../lib/leafletMarkerOpacity";
 import { authFetch, createApiClient } from "../lib/api";
 import { getTodayWIB } from "../lib/date";
-import type { PolygonDetail, SurroundingHotspotItem } from "../types/api";
+import type { DashboardHotspot, PolygonDetail, SurroundingHotspotItem } from "../types/api";
 import { ExportAnimationModal } from "./ExportAnimationModal";
 import { exportToGif, exportToVideo, downloadBlob, extensionForExportBlob } from "../lib/exportAnimation";
 import { HotspotPopupContent } from "./HotspotPopupContent";

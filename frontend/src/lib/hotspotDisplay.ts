@@ -2,7 +2,7 @@
 // (tabel Buku Besar) dan KpsDetailView (halaman detail KPS) -- dipisah ke
 // sini supaya kedua tempat itu tidak punya salinan logika yang bisa mencar.
 
-import type { HotspotRecord } from "../types/api";
+import type { DashboardHotspot, HotspotRecord } from "../types/api";
 
 export function normalizeLembagaName(name: string): string {
   if (!name) return name;
@@ -10,29 +10,7 @@ export function normalizeLembagaName(name: string): string {
   return name;
 }
 
-// Bentuk hasil transformasi ini sengaja tidak diimpor dari useDashboardData.ts
-// (akan bikin import siklik) -- KpsDetailView & useDashboardData sama-sama
-// punya `DashboardHotspot` yang cocok dengan tipe balik fungsi ini secara
-// struktural.
-export type MappedDashboardHotspot = {
-  id: string;
-  latitude: number;
-  longitude: number;
-  source: string;
-  satellite: string;
-  layerName: string;
-  agencyName: string;
-  provinceName: string;
-  brightness: number | null;
-  frp: number | null;
-  confidence: string;
-  daynight: string;
-  detectedAt: string;
-  polygonMetadata: Record<string, string>;
-  fungsiKawasan: string;
-  namaKawasan: string;
-  kelompokKawasan: string;
-};
+export type MappedDashboardHotspot = DashboardHotspot;
 
 export function mapHotspotRecordToDashboardHotspot(
   hotspot: HotspotRecord,

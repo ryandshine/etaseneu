@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -12,6 +13,8 @@ from app.services.nasa_client import NasaFirmsClient
 from app.services.postgres_store import PostgresStore
 from app.services.spatial_service import filter_hotspots_by_layers
 from app.services.stats_service import build_stats
+
+logger = logging.getLogger("hotspot.service")
 
 
 DATASET_BY_SATELLITE = {
@@ -86,8 +89,7 @@ class HotspotService:
                         hydrated_hotspots = db_hotspots
                         cache_hit = True
                 except Exception as e:
-                    import logging
-                    logging.getLogger("hotspot.service").warning("DB query error: %s", e)
+                    logger.warning("DB query error: %s", e)
 
         if not cache_hit:
             yearly_hotspots: list[dict] = []
@@ -104,8 +106,7 @@ class HotspotService:
                             )
                         )
                     except Exception as e:
-                        import logging
-                        logging.getLogger("hotspot.service").warning(
+                        logger.warning(
                             "NASA fetch failed for %s %s–%s: %s", layer.name, year_start, year_end, e
                         )
 
@@ -195,7 +196,7 @@ class HotspotService:
             f"Latest Hotspot (WIB):          {latest_wib}\n"
             f"------------------------------------\n"
         )
-        print(debug_log, flush=True)
+        logger.debug("%s", debug_log)
 
         return {"count": len(hydrated_hotspots), "hotspots": hydrated_hotspots, "stats": stats}
 

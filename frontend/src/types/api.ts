@@ -44,6 +44,37 @@ export interface LayerFeature {
   agencies?: string[];
 }
 
+export type DashboardLayer = Pick<
+  LayerFeature,
+  "id" | "name" | "label" | "active" | "color" | "bounds" | "geojson" | "geojson_mode" | "feature_count" | "agencies"
+>;
+
+export type DashboardHotspot = {
+  id: string;
+  latitude: number;
+  longitude: number;
+  source: string;
+  satellite: string;
+  layerName: string;
+  agencyName: string;
+  provinceName: string;
+  brightness: number | null;
+  frp: number | null;
+  confidence: string;
+  daynight: string;
+  detectedAt: string;
+  polygonMetadata: Record<string, string>;
+  fungsiKawasan?: string;
+  namaKawasan?: string;
+  kelompokKawasan?: string;
+  is_inside?: boolean;
+  distance_m?: number;
+  distance_km?: number;
+  bearing_compass?: string;
+  threat_origin?: "internal" | "non_kps" | "neighbor_kps";
+  threat_origin_label?: string;
+};
+
 export interface LayerListResponse {
   count: number;
   layers: LayerFeature[];

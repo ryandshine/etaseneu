@@ -9,20 +9,28 @@ sama di seluruh laporan.
 import re
 
 
+from typing import Any
+
 _WHITESPACE = re.compile(r"\s+")
 
 PROVINSI_FALLBACK = "Tanpa Provinsi"
 SKEMA_FALLBACK = "Tanpa Skema"
 
 
-def polygon_field(hotspot: dict, *keys: str) -> str:
-    """Ambil field pertama yang terisi dari polygon_metadata."""
-    metadata = hotspot.get("polygon_metadata") or {}
+def extract_property_value(properties: dict[str, Any] | None, *keys: str) -> str | None:
+    """Ambil nilai properti pertama yang terisi (tidak None atau string kosong)."""
+    if not properties:
+        return None
     for key in keys:
-        value = metadata.get(key)
+        value = properties.get(key)
         if value not in (None, ""):
             return str(value)
-    return ""
+    return None
+
+
+def polygon_field(hotspot: dict, *keys: str) -> str:
+    """Ambil field pertama yang terisi dari polygon_metadata."""
+    return extract_property_value(hotspot.get("polygon_metadata"), *keys) or ""
 
 
 def sk_number(hotspot: dict) -> str:

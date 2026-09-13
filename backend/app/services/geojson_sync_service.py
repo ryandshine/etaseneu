@@ -3,6 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 import hashlib
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,10 @@ from pyproj import CRS, Transformer
 from shapely.geometry import MultiPolygon, Polygon, mapping, shape
 from shapely.ops import transform
 
+from app.services.polygon_fields import extract_property_value
 from app.services.postgres_store import PostgresStore
+
+logger = logging.getLogger("hotspot.geojson_sync")
 
 
 def _extract_crs_name(payload: dict) -> str:
@@ -194,8 +198,7 @@ class GeoJsonSyncService:
                 try:
                     self.postgres_store.intersect_hotspots_for_layer(layer_key)
                 except Exception as e:
-                    import logging
-                    logging.getLogger("hotspot.geojson_sync").error(
+                    logger.error(
                         "GEOJSON SYNC: Gagal melakukan intersect hotspot untuk layer %s — %s", layer_key, e
                     )
         else:
@@ -280,13 +283,7 @@ def _feature_key(layer_key: str, feature: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def _field_value(properties: dict[str, Any], *keys: str) -> str | None:
-    for key in keys:
-        value = properties.get(key)
-        if value is None or value == "":
-            continue
-        return str(value)
-    return None
+_field_value = extract_property_value
 
 
 def _normalize_geometry(geometry: dict[str, Any]) -> dict[str, Any]:

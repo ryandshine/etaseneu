@@ -62,22 +62,21 @@ def test_run_burned_area_cycle_skips_when_gee_not_configured() -> None:
 
 def test_run_burned_area_cycle_calls_refresh_for_each_lookback_month() -> None:
     import asyncio
-    from app.services.burned_area_scheduler import run_burned_area_cycle
+    from datetime import datetime, timezone
+    from app.services.burned_area_scheduler import _lookback_periods, run_burned_area_cycle
 
-    service = _FakeBurnedAreaService(
-        enabled=True,
-        outcomes={
-            (2026, 7): {"year": 2026, "month": 7, "polygons_checked": 10, "computed": 10},
-            (2026, 6): {"year": 2026, "month": 6, "polygons_checked": 10, "computed": 10},
-            (2026, 5): {"year": 2026, "month": 5, "polygons_checked": 10, "computed": 10},
-        },
-    )
+    expected_periods = _lookback_periods(datetime.now(timezone.utc), 3)
+    outcomes = {
+        (y, m): {"year": y, "month": m, "polygons_checked": 10, "computed": 10}
+        for y, m in expected_periods
+    }
+    service = _FakeBurnedAreaService(enabled=True, outcomes=outcomes)
 
     result = asyncio.run(run_burned_area_cycle(service, 3))
 
     assert result["success"] is True
     assert len(result["months"]) == 3
-    assert {(m["year"], m["month"]) for m in result["months"]} == {(2026, 7), (2026, 6), (2026, 5)}
+    assert {(m["year"], m["month"]) for m in result["months"]} == set(expected_periods)
     assert len(service.calls) == 3
 
 
@@ -85,22 +84,24 @@ def test_run_burned_area_cycle_continues_after_one_month_fails() -> None:
     """Satu bulan gagal (mis. error jaringan sesaat ke Earth Engine) tidak
     boleh menggagalkan bulan lain -- tiap bulan harus tetap dicoba."""
     import asyncio
-    from app.services.burned_area_scheduler import run_burned_area_cycle
+    from datetime import datetime, timezone
+    from app.services.burned_area_scheduler import _lookback_periods, run_burned_area_cycle
 
-    service = _FakeBurnedAreaService(
-        enabled=True,
-        outcomes={
-            (2026, 7): RuntimeError("EE timeout"),
-            (2026, 6): {"year": 2026, "month": 6, "polygons_checked": 10, "computed": 10},
-            (2026, 5): {"year": 2026, "month": 5, "polygons_checked": 10, "computed": 10},
-        },
-    )
+    expected_periods = _lookback_periods(datetime.now(timezone.utc), 3)
+    fail_year, fail_month = expected_periods[0]
+    outcomes = {
+        (y, m): {"year": y, "month": m, "polygons_checked": 10, "computed": 10}
+        for y, m in expected_periods
+    }
+    outcomes[(fail_year, fail_month)] = RuntimeError("EE timeout")
+
+    service = _FakeBurnedAreaService(enabled=True, outcomes=outcomes)
 
     result = asyncio.run(run_burned_area_cycle(service, 3))
 
     assert result["success"] is False
     assert len(service.calls) == 3, "bulan lain harus tetap dicoba walau satu bulan gagal"
-    failed = next(m for m in result["months"] if m["year"] == 2026 and m["month"] == 7)
+    failed = next(m for m in result["months"] if m["year"] == fail_year and m["month"] == fail_month)
     assert "EE timeout" in failed["error"]
     succeeded = [m for m in result["months"] if "error" not in m]
     assert len(succeeded) == 2
