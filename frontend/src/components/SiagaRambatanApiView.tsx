@@ -16,11 +16,13 @@ import {
   Copy,
   Check,
   X,
-  ChevronLeft
+  ChevronLeft,
+  ChevronUp
 } from "lucide-react";
-import { CircleMarker, GeoJSON, MapContainer, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
+import { CircleMarker, GeoJSON, MapContainer, Polyline, Popup, TileLayer, ZoomControl, useMap } from "react-leaflet";
 import L from "leaflet";
 import { authFetch, downloadWithAuth } from "../lib/api";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 interface SummaryData {
   total_kps_threatened: number;
@@ -53,21 +55,19 @@ interface ThreatItem {
   external_hotspots_count: number;
   non_kps_hotspots_count?: number;
   neighbor_kps_hotspots_count?: number;
-  threat_origin?: "non_kps" | "neighbor_kps";
-  threat_origin_label?: string;
   max_frp: number;
   avg_frp: number;
-  bearing_deg: number | null;
+  bearing_deg: number;
   bearing_compass: string;
   rekomendasi: string;
+  threat_origin?: "non_kps" | "neighbor_kps";
+  threat_origin_label?: string;
   nearest_hotspot: {
-    coordinates: [number, number] | null;
-    satellite: string | null;
-    confidence: string | null;
-    detected_at: string | null;
-    layer_key?: string | null;
-    agency_name?: string | null;
-  };
+    coordinates: [number, number];
+    satellite: string;
+    confidence: string;
+    detected_at: string;
+  } | null;
   nearest_boundary_point: [number, number] | null;
 }
 
@@ -75,35 +75,42 @@ interface ThreatDetailHotspot {
   id: number;
   latitude: number;
   longitude: number;
-  satellite: string | null;
-  confidence: string | null;
-  brightness: number | null;
+  satellite: string;
+  confidence: string;
+  brightness: number;
   frp: number;
-  detected_at: string | null;
-  is_inside?: boolean;
+  detected_at: string;
+  is_inside: boolean;
   distance_m: number;
   distance_km: number;
-  status_level: "bahaya" | "waspada" | "pantau" | "internal";
+  status_level: "internal" | "bahaya" | "waspada" | "pantau";
   status_label: string;
-  threat_origin?: "internal" | "non_kps" | "neighbor_kps";
-  threat_origin_label?: string;
   bearing_deg: number | null;
-  bearing_compass: string;
+  bearing_compass: string | null;
+  threat_origin?: "non_kps" | "neighbor_kps";
+  threat_origin_label?: string;
   closest_kps_point: [number, number] | null;
 }
 
-interface ThreatNeighbor {
+interface ThreatDetailNeighbor {
   id: number;
   lembaga: string;
-  nama_desa: string | null;
-  nama_kec: string | null;
-  nama_kab: string | null;
-  skema: string | null;
-  luas_ha: number | null;
+  nama_desa: string;
+  nama_kec: string;
+  nama_kab: string;
+  skema: string;
+  luas_ha: number;
   distance_m: number;
   distance_km: number;
   hotspot_count: number;
   geometry: any;
+}
+
+interface ThreatDetailClosestVector {
+  hotspot_coords: [number, number];
+  kps_boundary_coords: [number, number];
+  distance_m: number;
+  bearing_compass: string;
 }
 
 interface ThreatDetail {
@@ -120,20 +127,15 @@ interface ThreatDetail {
   luas_ha: number | null;
   geometry: any;
   centroid: [number, number] | null;
-  status_level: "bahaya" | "waspada" | "pantau" | "internal";
+  status_level: "bahaya" | "waspada" | "pantau";
   status_label: string;
   min_distance_m: number;
   min_distance_km: number;
   total_external_hotspots: number;
   total_internal_hotspots?: number;
   hotspots: ThreatDetailHotspot[];
-  neighbors?: ThreatNeighbor[];
-  closest_vector: {
-    hotspot_coords: [number, number];
-    kps_boundary_coords: [number, number];
-    distance_m: number;
-    bearing_compass: string;
-  } | null;
+  neighbors?: ThreatDetailNeighbor[];
+  closest_vector?: ThreatDetailClosestVector | null;
   time_window_hours: number;
   max_distance_km: number;
 }
@@ -141,32 +143,32 @@ interface ThreatDetail {
 const BASEMAP_CONFIGS = {
   hybrid: {
     key: "hybrid",
-    name: "Satelit + Label",
-    url: "https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
-    subdomains: ["0", "1", "2", "3"] as readonly string[],
-    maxZoom: 20,
+    name: "Satelit (Esri Hybrid)",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    subdomains: ["server"],
+    maxZoom: 19
   },
   dark: {
     key: "dark",
-    name: "Mode Gelap",
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-    subdomains: ["a", "b", "c"] as readonly string[],
-    maxZoom: 16,
+    name: "Gelap (CartoDB Dark)",
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    subdomains: ["a", "b", "c", "d"],
+    maxZoom: 19
   },
   street: {
     key: "street",
-    name: "Peta Jalan",
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
-    subdomains: ["a", "b", "c"] as readonly string[],
-    maxZoom: 19,
-  },
+    name: "Peta Jalan (OSM)",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    subdomains: ["a", "b", "c"],
+    maxZoom: 19
+  }
 } as const;
 
 type BasemapKey = keyof typeof BASEMAP_CONFIGS;
 
 /**
- * Pengontrol Viewport Peta: Otomatis Zoom & Fit ke Poligon KPS + Hotspot
- * Mendukung auto-panning ke kiri saat Sliding Right Panel dibuka
+ * Komponen pembantu untuk memusatkan peta otomatis ke poligon KPS target & titik api terdekatnya.
+ * Memperhitungkan posisi laci samping (pada desktop) vs bottom sheet (pada mobile).
  */
 function MapViewportController({
   polygonId,
@@ -200,15 +202,14 @@ function MapViewportController({
 
       if (bounds.isValid()) {
         const containerWidth = typeof map?.getSize === "function" ? map.getSize().x : (typeof window !== "undefined" ? window.innerWidth : 1200);
-        // Lebar sliding drawer panel adalah ~390px.
-        // Dengan paddingBottomRight x = drawerOffset + 45, Leaflet secara otomatis
-        // melakukan panning kanvas ke kiri sebesar drawerOffset / 2,
-        // sehingga seluruh poligon KPS dan titik api berada tepat di tengah sisa area kanvas yang bebas.
-        const drawerOffset = isDrawerOpen ? Math.min(410, Math.floor(containerWidth * 0.52)) : 0;
+        const isDesktop = containerWidth > 1080;
+        // Pada desktop: lebar sliding drawer panel ~390px, geser canvas sebesar drawerOffset / 2.
+        // Pada mobile: drawer berbentuk bottom sheet, padding horizontal tetap seimbang.
+        const drawerOffset = (isDesktop && isDrawerOpen) ? Math.min(410, Math.floor(containerWidth * 0.52)) : 0;
 
         const options: L.FitBoundsOptions = {
-          paddingTopLeft: [45, 45],
-          paddingBottomRight: [drawerOffset + 45, 45],
+          paddingTopLeft: isDesktop ? [45, 45] : [24, 24],
+          paddingBottomRight: isDesktop ? [drawerOffset + 45, 45] : [24, 24],
           maxZoom: 15,
           duration: 0.6,
         };
@@ -228,6 +229,7 @@ function MapViewportController({
 }
 
 export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (kpsName: string) => void }) {
+  const isMobile = useIsMobile();
   const [timeWindow, setTimeWindow] = useState<number>(48);
   const [maxDistanceKm, setMaxDistanceKm] = useState<number>(5.0);
   const [selectedLevel, setSelectedLevel] = useState<"bahaya" | "waspada" | "pantau" | "all">("all");
@@ -248,7 +250,12 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
   const [basemap, setBasemap] = useState<BasemapKey>("hybrid");
   const [focusTrigger, setFocusTrigger] = useState<number>(0);
   const [copiedCoords, setCopiedCoords] = useState<boolean>(false);
-  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(true);
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth > 1080;
+    }
+    return true;
+  });
 
   // 1. Fetch summary & threats
   const fetchData = async () => {
@@ -806,64 +813,63 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
         {/* Right Column: Sticky Interactive Map */}
         <div className="fs-map-column">
           <div className="fs-map-header">
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
-              <Layers size={16} color="#B7C688" />
-              <span style={{ fontSize: "0.88rem", fontWeight: "700", color: "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0, flex: "1 1 auto" }}>
+              <Layers size={16} color="#B7C688" style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: "0.86rem", fontWeight: "700", color: "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {threatDetail ? threatDetail.lembaga : "Peta Perimeter Ancaman KPS"}
               </span>
             </div>
 
-            {/* Pilihan Basemap */}
-            <div className="fs-basemap-group">
-              <button
-                type="button"
-                className={`fs-basemap-btn ${basemap === "hybrid" ? "fs-basemap-btn--active" : ""}`}
-                onClick={() => setBasemap("hybrid")}
-              >
-                Satelit
-              </button>
-              <button
-                type="button"
-                className={`fs-basemap-btn ${basemap === "dark" ? "fs-basemap-btn--active" : ""}`}
-                onClick={() => setBasemap("dark")}
-              >
-                Gelap
-              </button>
-              <button
-                type="button"
-                className={`fs-basemap-btn ${basemap === "street" ? "fs-basemap-btn--active" : ""}`}
-                onClick={() => setBasemap("street")}
-              >
-                Jalan
-              </button>
-            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexShrink: 0 }}>
+              {/* Pilihan Basemap */}
+              <div className="fs-basemap-group">
+                <button
+                  type="button"
+                  className={`fs-basemap-btn ${basemap === "hybrid" ? "fs-basemap-btn--active" : ""}`}
+                  onClick={() => setBasemap("hybrid")}
+                >
+                  Satelit
+                </button>
+                <button
+                  type="button"
+                  className={`fs-basemap-btn ${basemap === "dark" ? "fs-basemap-btn--active" : ""}`}
+                  onClick={() => setBasemap("dark")}
+                >
+                  Gelap
+                </button>
+                <button
+                  type="button"
+                  className={`fs-basemap-btn ${basemap === "street" ? "fs-basemap-btn--active" : ""}`}
+                  onClick={() => setBasemap("street")}
+                >
+                  Jalan
+                </button>
+              </div>
 
-            {/* Tombol Membuka Kembali Panel jika Ditutup -- dipindah dari
-                mengambang di atas peta (bertumpuk dgn kluster hotspot padat,
-                dilaporkan user 2026-09-12) ke baris header statis ini,
-                seperti basemap switcher di sampingnya. */}
-            {!isDrawerOpen && threatDetail && (
-              <button
-                type="button"
-                onClick={() => setIsDrawerOpen(true)}
-                className="fs-drawer-reopen-btn"
-                title="Buka Panel Detail Metrik KPS"
-              >
-                <ChevronLeft size={16} />
-                <span>Detail KPS</span>
-                <span
-                  className="fs-drawer-reopen-dot"
-                  style={{
-                    backgroundColor:
-                      threatDetail.status_level === "bahaya"
-                        ? "#ef4444"
-                        : threatDetail.status_level === "waspada"
-                        ? "#f97316"
-                        : "#eab308",
-                  }}
-                />
-              </button>
-            )}
+              {/* Tombol Buka Panel Detail KPS jika Tertutup */}
+              {!isDrawerOpen && threatDetail && (
+                <button
+                  type="button"
+                  onClick={() => setIsDrawerOpen(true)}
+                  className="fs-drawer-reopen-btn"
+                  title="Buka Panel Detail Metrik KPS"
+                >
+                  <ChevronLeft size={16} />
+                  <span>Detail KPS</span>
+                  <span
+                    className="fs-drawer-reopen-dot"
+                    style={{
+                      backgroundColor:
+                        threatDetail.status_level === "bahaya"
+                          ? "#ef4444"
+                          : threatDetail.status_level === "waspada"
+                          ? "#f97316"
+                          : "#eab308",
+                    }}
+                  />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="fs-map-stage">
@@ -874,7 +880,14 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
               </div>
             )}
 
-            {/* Sliding Right Drawer Panel */}
+            {/* Backdrop Mobile untuk Bottom Sheet */}
+            <div
+              className={`fs-drawer-backdrop ${isDrawerOpen && threatDetail ? "fs-drawer-backdrop--open" : ""}`}
+              onClick={() => setIsDrawerOpen(false)}
+              aria-hidden="true"
+            />
+
+            {/* Sliding Drawer / Mobile Bottom Sheet Panel */}
             <aside
               className={`fs-drawer ${isDrawerOpen && threatDetail ? "fs-drawer--open" : ""}`}
               aria-label="Panel Detail KPS Terancam"
@@ -883,6 +896,13 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                 <div className="fs-drawer-content">
                   {/* Drawer Header */}
                   <div className="fs-drawer-header">
+                    <div
+                      className="fs-drawer-drag-handle"
+                      onClick={() => setIsDrawerOpen(false)}
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Tutup panel"
+                    />
                     <div className="fs-drawer-header-top">
                       <div className="fs-drawer-badges">
                         <span
@@ -1136,32 +1156,39 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
 
                   {/* Drawer Footer Actions */}
                   <div className="fs-drawer-footer">
-                    <button
-                      type="button"
-                      onClick={() => setFocusTrigger((t) => t + 1)}
-                      className="fs-drawer-btn"
-                      title="Fokuskan kembali peta ke poligon KPS dan titik api"
-                    >
-                      <Crosshair size={13} color="#B7C688" />
-                      Fokus Poligon
-                    </button>
-
-                    {threatDetail.hotspots.length > 0 && (
+                    <div className="fs-drawer-footer-row">
                       <button
                         type="button"
                         onClick={() => {
-                          const h = threatDetail.hotspots[0];
-                          navigator.clipboard.writeText(`${h.latitude.toFixed(6)}, ${h.longitude.toFixed(6)}`);
-                          setCopiedCoords(true);
-                          setTimeout(() => setCopiedCoords(false), 2000);
+                          setFocusTrigger((t) => t + 1);
+                          if (typeof window !== "undefined" && window.innerWidth <= 1080) {
+                            setIsDrawerOpen(false);
+                          }
                         }}
                         className="fs-drawer-btn"
-                        title="Salin koordinat hotspot terdekat"
+                        title="Fokuskan kembali peta ke poligon KPS dan titik api"
                       >
-                        {copiedCoords ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
-                        {copiedCoords ? "Tersalin!" : "Salin Titik Api"}
+                        <Crosshair size={13} color="#B7C688" />
+                        Fokus Peta
                       </button>
-                    )}
+
+                      {threatDetail.hotspots.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const h = threatDetail.hotspots[0];
+                            navigator.clipboard.writeText(`${h.latitude.toFixed(6)}, ${h.longitude.toFixed(6)}`);
+                            setCopiedCoords(true);
+                            setTimeout(() => setCopiedCoords(false), 2000);
+                          }}
+                          className="fs-drawer-btn"
+                          title="Salin koordinat hotspot terdekat"
+                        >
+                          {copiedCoords ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
+                          {copiedCoords ? "Tersalin!" : "Salin Titik Api"}
+                        </button>
+                      )}
+                    </div>
 
                     {onOpenKpsDetail && (
                       <button
@@ -1184,7 +1211,9 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
               zoom={11}
               style={{ width: "100%", height: "100%", background: "#1a0f09" }}
               attributionControl={false}
+              zoomControl={false}
             >
+              {!isMobile && <ZoomControl position="bottomright" />}
               <TileLayer
                 key={activeBasemap.key}
                 url={activeBasemap.url}
@@ -1417,9 +1446,58 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
               })}
             </MapContainer>
 
+            {/* Floating Peek Card di Mobile saat Drawer Ditutup */}
+            {!isDrawerOpen && threatDetail && (
+              <div
+                className="fs-mobile-peek-card"
+                onClick={() => setIsDrawerOpen(true)}
+                role="button"
+                tabIndex={0}
+                aria-label="Buka ringkasan detail KPS"
+              >
+                <div className="fs-mobile-peek-info">
+                  <span
+                    className="fs-mobile-peek-badge"
+                    style={{
+                      backgroundColor:
+                        threatDetail.status_level === "bahaya"
+                          ? "rgba(239, 68, 68, 0.25)"
+                          : threatDetail.status_level === "waspada"
+                          ? "rgba(249, 115, 22, 0.25)"
+                          : "rgba(234, 179, 8, 0.25)",
+                      color:
+                        threatDetail.status_level === "bahaya"
+                          ? "#f87171"
+                          : threatDetail.status_level === "waspada"
+                          ? "#fb923c"
+                          : "#fde047",
+                      borderColor:
+                        threatDetail.status_level === "bahaya"
+                          ? "#ef4444"
+                          : threatDetail.status_level === "waspada"
+                          ? "#f97316"
+                          : "#eab308",
+                    }}
+                  >
+                    {threatDetail.status_label}
+                  </span>
+                  <div className="fs-mobile-peek-text">
+                    <span className="fs-mobile-peek-title">{threatDetail.lembaga}</span>
+                    <span className="fs-mobile-peek-sub">
+                      Jarak: {threatDetail.min_distance_m < 1000 ? `${threatDetail.min_distance_m} m` : `${threatDetail.min_distance_km} km`} • {threatDetail.closest_vector?.bearing_compass || "-"}
+                    </span>
+                  </div>
+                </div>
+                <button type="button" className="fs-mobile-peek-btn">
+                  <span>Detail</span>
+                  <ChevronUp size={14} />
+                </button>
+              </div>
+            )}
+
             {/* Legenda Peta Overlay Ringkas */}
             <div className="fs-map-legend">
-              <div style={{ fontWeight: "700", marginBottom: "0.15rem", color: "#ffffff", fontSize: "0.74rem" }}>
+              <div className="fs-map-legend-title">
                 Legenda Peta:
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
