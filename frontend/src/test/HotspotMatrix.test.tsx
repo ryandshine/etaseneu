@@ -348,4 +348,25 @@ describe("HotspotMatrix", () => {
     expect(screen.getByRole("columnheader", { name: "Aksi" })).toBeInTheDocument();
     expect(screen.getByTitle(/Unduh GeoJSON untuk/)).toBeInTheDocument();
   });
+
+  it("supports switching between Buku Besar tab and Visualisasi tab", async () => {
+    render(<HotspotMatrix {...baseProps} />);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    const tableTabBtn = screen.getByRole("tab", { name: /Buku Besar & Tabel Data/i });
+    const analyticsTabBtn = screen.getByRole("tab", { name: /Visualisasi & Analitik/i });
+
+    expect(tableTabBtn).toBeInTheDocument();
+    expect(analyticsTabBtn).toBeInTheDocument();
+    expect(tableTabBtn).toHaveClass("is-active");
+
+    fireEvent.click(analyticsTabBtn);
+    expect(analyticsTabBtn).toHaveClass("is-active");
+    expect(tableTabBtn).not.toHaveClass("is-active");
+
+    fireEvent.click(tableTabBtn);
+    expect(tableTabBtn).toHaveClass("is-active");
+  });
 });
+

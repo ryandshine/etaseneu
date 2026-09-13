@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer, AreaChart, Area, Cell, LabelList } from "recharts";
-import { ChevronDown, Download } from "lucide-react";
+import { BarChart2, ChevronDown, Download, Table } from "lucide-react";
 
 import { BurnedAreaCard } from "./BurnedAreaCard";
 import type {
@@ -647,6 +647,7 @@ export function HotspotMatrix({
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showAnalytics, setShowAnalytics] = useState(true);
+  const [activeTab, setActiveTab] = useState<"table" | "analytics">("table");
   const [yoyMetric, setYoyMetric] = useState<"count" | "frp">("count");
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 20;
@@ -1037,6 +1038,23 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                   <button type="button" onClick={() => setSelectedPeriod(null)} aria-label="Hapus filter periode">×</button>
                 </span>
               )}
+              {Boolean(wilkerFilter || activeFrpCategory || confidenceFilter || skemaFilter || provinceFilter || selectedPeriod) && (
+                <button
+                  type="button"
+                  className="matrix-filter-chip matrix-filter-chip--reset"
+                  onClick={() => {
+                    setWilkerFilter("");
+                    setActiveFrpCategory(null);
+                    setConfidenceFilter("");
+                    setSkemaFilter("");
+                    setProvinceFilter("");
+                    setSelectedPeriod(null);
+                  }}
+                  title="Bersihkan semua saringan filter yang aktif"
+                >
+                  Reset Semua ✕
+                </button>
+              )}
             </p>
           </div>
           <div className="matrix-header-stats-row">
@@ -1058,9 +1076,13 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
           <button
             type="button"
             className="matrix-toggle-chart-btn glass-panel"
-            onClick={() => setShowAnalytics(!showAnalytics)}
+            onClick={() => {
+              const nextTab = activeTab === "table" ? "analytics" : "table";
+              setActiveTab(nextTab);
+              setShowAnalytics(nextTab === "analytics");
+            }}
           >
-            {showAnalytics ? "Sembunyikan Grafik" : "Tampilkan Grafik"}
+            {activeTab === "analytics" ? "Buka Buku Besar (Tabel)" : "Tampilkan Grafik (Analitik)"}
           </button>
           <div className="matrix-export-menu" ref={exportMenuRef}>
             <button
@@ -1126,6 +1148,40 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
         </div>
       </div>
       {kpsDownloadError && <p className="matrix-download-error">{kpsDownloadError}</p>}
+
+      {/* TAB NAVIGATION: Memisahkan Buku Besar & Pencarian dengan Visualisasi & Analitik */}
+      <div className="matrix-tabs-bar">
+        <div className="matrix-tabs-nav" role="tablist" aria-label="Pilihan Tampilan Matriks">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "table"}
+            className={`matrix-tab-btn ${activeTab === "table" ? "is-active" : ""}`}
+            onClick={() => {
+              setActiveTab("table");
+              setCurrentPage(1);
+            }}
+          >
+            <Table size={16} />
+            <span className="matrix-tab-text">Buku Besar &amp; Tabel Data</span>
+            <span className="matrix-tab-badge">{filteredHotspots.length} baris</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "analytics"}
+            className={`matrix-tab-btn ${activeTab === "analytics" ? "is-active" : ""}`}
+            onClick={() => {
+              setActiveTab("analytics");
+              setShowAnalytics(true);
+            }}
+          >
+            <BarChart2 size={16} />
+            <span className="matrix-tab-text">Visualisasi &amp; Analitik</span>
+            <span className="matrix-tab-badge">8 Modul Grafik</span>
+          </button>
+        </div>
+      </div>
 
       <div className="matrix-toolbar glass-panel">
         <label className="matrix-field">
@@ -1228,8 +1284,12 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
         </label>
       </div>
 
-      {showAnalytics ? (
-        <div className="matrix-analytics-grid">
+      {/* PANE 2: VISUALISASI & ANALITIK */}
+      <div
+        className={`matrix-tab-pane ${activeTab === "analytics" ? "is-active" : "is-hidden"}`}
+      >
+        {showAnalytics ? (
+          <div className="matrix-analytics-grid">
           
           {renderCompactCard("Confidence", confidenceDistribution, filteredHotspots.length, confidenceFilter || null, handleSelectConfidenceCategory)}
           {renderCompactCard("FRP", frpDistribution, filteredHotspots.length, activeFrpCategory, handleSelectFrpCategory)}
@@ -1352,8 +1412,13 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
           </section>
         </div>
       ) : null}
+      </div>
 
-      <div className="matrix-workbench">
+      {/* PANE 1: BUKU BESAR & TABEL DATA */}
+      <div
+        className={`matrix-tab-pane ${activeTab === "table" ? "is-active" : "is-hidden"}`}
+      >
+        <div className="matrix-workbench">
         <section className="matrix-ledger glass-panel">
           <div className="matrix-ledger-head">
             <div>
@@ -1638,6 +1703,7 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
             detail KPS (lihat KpsDetailView.tsx) -- dulu di sini sebagai
             drawer sempit dengan scroll bertingkat (drawer di dalam halaman
             yang sudah scroll sendiri). */}
+      </div>
       </div>
 
       <div className="matrix-footer">
