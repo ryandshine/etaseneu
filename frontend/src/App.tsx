@@ -63,6 +63,18 @@ function isSchedulerFailureStatus(status?: string | null): boolean {
 
 type AppView = "map" | "matrix" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "firespread" | "settings" | "kps";
 
+const VIEW_TITLES: Record<AppView, string> = {
+  map: "Live Map",
+  matrix: "Matriks Data",
+  pointmatch: "Cek Titik ke KPS",
+  kompleks: "Kompleks Kebakaran",
+  landcover: "Tutupan Lahan",
+  earlywarning: "Peringatan Dini",
+  firespread: "Siaga Rambatan Api",
+  kps: "Detail KPS",
+  settings: "Pengaturan Akun"
+};
+
 const PERSISTED_SESSION_KEY = "etaseneu.session.v1";
 
 function readPersistedSession(): AppSession | null {
@@ -729,14 +741,19 @@ export default function App() {
 
   return (
     <div className="app-frame grid-lines">
-      {/* Mobile Hamburger Button */}
-      <button
-        className="mobile-hamburger"
-        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        aria-label="Toggle navigation menu"
-      >
-        {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-      </button>
+      {/* Mobile Hamburger Floating Button:
+          Hanya muncul jika drawer navigasi terbuka (tombol 'X' untuk menutup),
+          atau saat berada di kanvas Live Map (full-screen canvas tanpa top bar). */}
+      {(mobileMenuOpen || activeView === "map") && (
+        <button
+          type="button"
+          className="mobile-hamburger"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label={mobileMenuOpen ? "Tutup menu navigasi" : "Toggle navigation menu"}
+        >
+          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      )}
 
       {/* Mobile Overlay */}
       <div
@@ -798,6 +815,39 @@ export default function App() {
       />
 
       <main className="workspace">
+      {/* Mobile Top Navigation Bar:
+          Khusus layar mobile (< 640px) pada tampilan dokumen / tabel / analitik yang digulir.
+          Mencegah tombol hamburger mengambang di atas konten saat pengguna menggulir halaman. */}
+      {activeView !== "map" && (
+        <header className="mobile-app-header">
+          <div className="mobile-app-header__left">
+            <button
+              type="button"
+              className="mobile-app-header__hamburger"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Toggle navigation menu"
+            >
+              <Menu size={20} />
+            </button>
+            <div className="mobile-app-header__title">
+              <span className="mobile-app-header__brand">ETASENEU</span>
+              <span className="mobile-app-header__sep">/</span>
+              <span className="mobile-app-header__view">
+                {VIEW_TITLES[activeView] || "Matriks Data"}
+              </span>
+            </div>
+          </div>
+          <div className="mobile-app-header__right">
+            <span
+              className={`mobile-app-header__status-badge ${healthStatus === "normal" ? "is-ok" : "is-warn"}`}
+              title={healthLabel}
+            >
+              <span className="mobile-app-header__status-dot" />
+              {healthStatus === "normal" ? "Siaga" : "Cek"}
+            </span>
+          </div>
+        </header>
+      )}
       {usingCachedData && (
         <div className="cached-data-banner" role="status">
           <span className="cached-data-banner__dot" />

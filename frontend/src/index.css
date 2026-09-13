@@ -6559,6 +6559,10 @@ textarea {
   border-radius: 0.25rem;
 }
 
+.mobile-app-header {
+  display: none;
+}
+
 /* ============================================
    RESPONSIVE LAYOUT - Mobile First
    ============================================ */
@@ -6815,6 +6819,121 @@ textarea {
     border-color: rgba(245, 158, 11, 0.3);
     box-shadow: 0 4px 16px rgba(245, 158, 11, 0.2);
     transform: scale(0.95);
+  }
+
+  /* Mobile App Header (Top Bar): Menahan tombol menu tetap teratur di bar atas
+     dan tidak menutupi isi tabel/kartu yang digulir di bawahnya */
+  .mobile-app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 50px;
+    min-height: 50px;
+    padding: 0 0.85rem;
+    background: rgba(20, 12, 8, 0.98);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    z-index: 1250;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  }
+
+  .mobile-app-header__left {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+  }
+
+  .mobile-app-header__hamburger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 0.4rem;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--color-cream);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+  }
+
+  .mobile-app-header__hamburger:active {
+    background: rgba(245, 158, 11, 0.2);
+    border-color: rgba(245, 158, 11, 0.4);
+    transform: scale(0.95);
+  }
+
+  .mobile-app-header__title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .mobile-app-header__brand {
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    color: #ff9b73;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  .mobile-app-header__sep {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.25);
+    flex-shrink: 0;
+  }
+
+  .mobile-app-header__view {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-app-header__right {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+
+  .mobile-app-header__status-badge {
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 0.2rem 0.45rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+  }
+
+  .mobile-app-header__status-badge.is-ok {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .mobile-app-header__status-badge.is-warn {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .mobile-app-header__status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
   }
 
   .mobile-overlay {
@@ -7082,8 +7201,12 @@ textarea {
     gap: 0.2rem;
   }
 
+  .workspace-stage--matrix {
+    padding: 0.65rem 0.5rem 2rem 0.5rem;
+  }
+
   .matrix-ledger {
-    padding: 0.8rem;
+    padding: 0;
   }
 
   /* Toolbar tetap satu kolom. Dua kolom sempat dicoba untuk memangkas tinggi,
@@ -7475,8 +7598,9 @@ textarea {
    max-width: 639px, sehingga kekhususannya sama tapi urutannya menang --
    akibatnya tombol hamburger tidak pernah muncul di layar kecil sama sekali. */
 @media (min-width: 640px) {
-  .mobile-hamburger {
-    display: none;
+  .mobile-hamburger,
+  .mobile-app-header {
+    display: none !important;
   }
 
   /* Di layar lebar panel statistik sudah tampil permanen di kanan atas,
@@ -11454,6 +11578,25 @@ textarea {
 
   .matrix-tab-badge {
     display: none;
+  }
+
+  .matrix-header-stats-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.45rem;
+    width: 100%;
+  }
+
+  .matrix-stat-inline {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+    padding: 0.4rem 0.6rem;
+  }
+
+  .matrix-stat-inline:last-child {
+    grid-column: 1 / -1;
   }
 }
 
