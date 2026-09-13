@@ -6,6 +6,7 @@ import {
   Download,
   Search,
   RefreshCw,
+  RotateCcw,
   ChevronRight,
   TrendingUp,
   Wind,
@@ -379,6 +380,35 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
     return result;
   }, [items, search, selectedZone, selectedBps, selectedConfidence, sortBy]);
 
+  const hasActiveFilters = Boolean(
+    search ||
+    selectedProvince ||
+    selectedSkema ||
+    selectedBps ||
+    selectedZone ||
+    selectedConfidence ||
+    sortBy !== "ftri"
+  );
+
+  const handleResetFilters = () => {
+    setSearch("");
+    setSelectedProvince("");
+    setSelectedSkema("");
+    setSelectedBps("");
+    setSelectedZone("");
+    setSelectedConfidence("");
+    setSortBy("ftri");
+  };
+
+  const visibleSelectCount =
+    2 +
+    (session?.role !== "bps" ? 1 : 0) +
+    (bucket === "today" ? 1 : 0) +
+    1 +
+    1;
+
+  const isOddSelects = visibleSelectCount % 2 !== 0;
+
   // Ekspor Excel mengikuti persis data yang sedang dilihat pengguna (displayItems),
   // termasuk status kartu aktif, filter wilayah/skema/zona, pencarian, dan pengurutan (sortBy).
   const handleDownloadExcel = async () => {
@@ -648,168 +678,135 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
       )}
 
       {/* Search & Filter Bar */}
-      <div style={{ display: "flex", gap: "0.6rem", marginBottom: "0.85rem", flexWrap: "wrap", alignItems: "center" }}>
+      <div className="ew-toolbar">
         {/* Search */}
-        <div style={{ position: "relative", flex: "1 1 220px" }}>
-          <Search size={15} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "#6b7280" }} />
+        <div className="ew-search-wrap">
+          <Search size={15} className="ew-search-icon" />
           <input
             type="text"
             placeholder="Cari KPS, desa, kecamatan, kabupaten..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "0.5rem 0.75rem 0.5rem 2.2rem",
-              backgroundColor: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              borderRadius: "6px",
-              color: "#ffffff",
-              fontSize: "0.82rem"
-            }}
+            className="ew-search-input"
           />
         </div>
 
-        {/* Province Filter */}
-        <select
-          value={selectedProvince}
-          onChange={(e) => setSelectedProvince(e.target.value)}
-          style={{
-            padding: "0.5rem 0.75rem",
-            backgroundColor: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.12)",
-            borderRadius: "6px",
-            color: "#ffffff",
-            fontSize: "0.82rem",
-            minWidth: "150px"
-          }}
-        >
-          <option value="">Semua Provinsi</option>
-          {provinces.map((p) => (
-            <option key={p} value={p} style={{ backgroundColor: "#4D2D1B" }}>
-              {p}
-            </option>
-          ))}
-        </select>
-
-        {/* Skema Filter */}
-        <select
-          value={selectedSkema}
-          onChange={(e) => setSelectedSkema(e.target.value)}
-          style={{
-            padding: "0.5rem 0.75rem",
-            backgroundColor: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.12)",
-            borderRadius: "6px",
-            color: "#ffffff",
-            fontSize: "0.82rem",
-            minWidth: "130px"
-          }}
-        >
-          <option value="">Semua Skema</option>
-          {skemas.map((s) => (
-            <option key={s} value={s} style={{ backgroundColor: "#4D2D1B" }}>
-              {s}
-            </option>
-          ))}
-        </select>
-
-        {/* Balai PS Filter -- disembunyikan untuk role "bps" (tampilannya
-            sudah dikunci ke satu wilker via activeWilkerBps). */}
-        {session?.role !== "bps" && (
+        {/* Dropdown Filters Grid */}
+        <div className="ew-filter-grid">
+          {/* Province Filter */}
           <select
-            value={selectedBps}
-            onChange={(e) => setSelectedBps(e.target.value)}
-            style={{
-              padding: "0.5rem 0.75rem",
-              backgroundColor: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              borderRadius: "6px",
-              color: "#ffffff",
-              fontSize: "0.82rem",
-              minWidth: "160px"
-            }}
+            value={selectedProvince}
+            onChange={(e) => setSelectedProvince(e.target.value)}
+            className="ew-filter-select"
+            aria-label="Saring berdasarkan provinsi"
           >
-            <option value="">Semua Balai PS</option>
-            {wilkers.map((w) => (
-              <option key={w} value={w} style={{ backgroundColor: "#4D2D1B" }}>
-                {w}
+            <option value="">Semua Provinsi</option>
+            {provinces.map((p) => (
+              <option key={p} value={p}>
+                {p}
               </option>
             ))}
           </select>
-        )}
 
-        {/* Zona Perambatan Filter -- cuma relevan buat KPS ber-rekap yang
-            aktif hari ini (zone_code KPS belum-rekap selalu "new_2026",
-            tidak match opsi manapun di bawah). */}
-        {bucket === "today" && (
+          {/* Skema Filter */}
           <select
-            value={selectedZone}
-            onChange={(e) => setSelectedZone(e.target.value)}
-            style={{
-              padding: "0.5rem 0.75rem",
-              backgroundColor: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              borderRadius: "6px",
-              color: "#ffffff",
-              fontSize: "0.82rem",
-              minWidth: "160px"
-            }}
+            value={selectedSkema}
+            onChange={(e) => setSelectedSkema(e.target.value)}
+            className="ew-filter-select"
+            aria-label="Saring berdasarkan skema"
           >
-            <option value="">Semua Zona Perambatan</option>
-            <option value="zone1" style={{ backgroundColor: "#4D2D1B" }}>🔴 Zona 1: Merambat Langsung (≤1 km)</option>
-            <option value="zone2" style={{ backgroundColor: "#4D2D1B" }}>🟠 Zona 2: Loncatan Bara (1-3 km)</option>
-            <option value="zone3" style={{ backgroundColor: "#4D2D1B" }}>🟡 Zona 3: Titik Bakar Mandiri (&gt;3 km)</option>
-            <option value="combo" style={{ backgroundColor: "#4D2D1B" }}>🔴 Kombinasi Bara & Merambat</option>
-            <option value="strict" style={{ backgroundColor: "#4D2D1B" }}>🔥 Strict Re-burn (Bara Bekas)</option>
+            <option value="">Semua Skema</option>
+            {skemas.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
           </select>
-        )}
 
-        {/* Filter Keyakinan / Sinyal FRP */}
-        <select
-          value={selectedConfidence}
-          onChange={(e) => setSelectedConfidence(e.target.value)}
-          style={{
-            padding: "0.5rem 0.75rem",
-            backgroundColor: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.12)",
-            borderRadius: "6px",
-            color: "#ffffff",
-            fontSize: "0.82rem",
-            minWidth: "160px"
-          }}
-          title="Saring berdasarkan kekuatan sinyal dan tingkat FRP hotspot"
-        >
-          <option value="">Semua Tingkat Sinyal</option>
-          <option value="tinggi" style={{ backgroundColor: "#4D2D1B" }}>🔴 FRP Tinggi (&gt;30 MW)</option>
-          <option value="sedang" style={{ backgroundColor: "#4D2D1B" }}>🟠 FRP Sedang (10-30 MW)</option>
-          <option value="tinggi_sedang" style={{ backgroundColor: "#4D2D1B" }}>🔥 Sedang & Tinggi (≥10 MW)</option>
-          <option value="rendah" style={{ backgroundColor: "#4D2D1B" }}>🟡 FRP Rendah (&lt;10 MW)</option>
-        </select>
+          {/* Balai PS Filter -- disembunyikan untuk role "bps" */}
+          {session?.role !== "bps" && (
+            <select
+              value={selectedBps}
+              onChange={(e) => setSelectedBps(e.target.value)}
+              className="ew-filter-select"
+              aria-label="Saring berdasarkan Balai PS"
+            >
+              <option value="">Semua Balai PS</option>
+              {wilkers.map((w) => (
+                <option key={w} value={w}>
+                  {w}
+                </option>
+              ))}
+            </select>
+          )}
 
-        {/* Sort */}
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as any)}
-          style={{
-            padding: "0.5rem 0.75rem",
-            backgroundColor: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.12)",
-            borderRadius: "6px",
-            color: "#ffffff",
-            fontSize: "0.82rem"
-          }}
-        >
-          <option value="ftri" style={{ backgroundColor: "#4D2D1B" }}>Urut: Skor FTRI Tertinggi</option>
-          <option value="hs_today" style={{ backgroundColor: "#4D2D1B" }}>Urut: Hotspot Hari Ini (Total)</option>
-          <option value="distance" style={{ backgroundColor: "#4D2D1B" }}>Urut: Jarak Perambatan Terjauh (KM)</option>
-          <option value="hs_strict" style={{ backgroundColor: "#4D2D1B" }}>Urut: Strict Re-burn (Bekas Terbakar)</option>
-          <option value="hs_7d" style={{ backgroundColor: "#4D2D1B" }}>Urut: Hotspot 7 Hari</option>
-          <option value="frp" style={{ backgroundColor: "#4D2D1B" }}>Urut: FRP Tertinggi (7 Hari)</option>
-          <option value="burned_ha" style={{ backgroundColor: "#4D2D1B" }}>Urut: Luas Terbakar (ha)</option>
-        </select>
+          {/* Zona Perambatan Filter -- cuma relevan buat KPS ber-rekap yang aktif hari ini */}
+          {bucket === "today" && (
+            <select
+              value={selectedZone}
+              onChange={(e) => setSelectedZone(e.target.value)}
+              className="ew-filter-select"
+              aria-label="Saring berdasarkan zona perambatan"
+            >
+              <option value="">Semua Zona Perambatan</option>
+              <option value="zone1">🔴 Zona 1: Merambat Langsung (≤1 km)</option>
+              <option value="zone2">🟠 Zona 2: Loncatan Bara (1-3 km)</option>
+              <option value="zone3">🟡 Zona 3: Titik Bakar Mandiri (&gt;3 km)</option>
+              <option value="combo">🔴 Kombinasi Bara &amp; Merambat</option>
+              <option value="strict">🔥 Strict Re-burn (Bara Bekas)</option>
+            </select>
+          )}
 
-        <div style={{ fontSize: "0.78rem", color: "#9ca3af", marginLeft: "auto" }}>
-          Menampilkan <strong>{displayItems.length}</strong> KPS
+          {/* Filter Keyakinan / Sinyal FRP */}
+          <select
+            value={selectedConfidence}
+            onChange={(e) => setSelectedConfidence(e.target.value)}
+            className="ew-filter-select"
+            aria-label="Saring berdasarkan kekuatan sinyal dan FRP"
+            title="Saring berdasarkan kekuatan sinyal dan tingkat FRP hotspot"
+          >
+            <option value="">Semua Tingkat Sinyal</option>
+            <option value="tinggi">🔴 FRP Tinggi (&gt;30 MW)</option>
+            <option value="sedang">🟠 FRP Sedang (10-30 MW)</option>
+            <option value="tinggi_sedang">🔥 Sedang &amp; Tinggi (≥10 MW)</option>
+            <option value="rendah">🟡 FRP Rendah (&lt;10 MW)</option>
+          </select>
+
+          {/* Sort */}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as any)}
+            className={`ew-filter-select${isOddSelects ? " ew-filter-select--span-mobile" : ""}`}
+            aria-label="Urutan tampilan daftar KPS"
+          >
+            <option value="ftri">Urut: Skor FTRI Tertinggi</option>
+            <option value="hs_today">Urut: Hotspot Hari Ini (Total)</option>
+            <option value="distance">Urut: Jarak Perambatan Terjauh (KM)</option>
+            <option value="hs_strict">Urut: Strict Re-burn (Bekas Terbakar)</option>
+            <option value="hs_7d">Urut: Hotspot 7 Hari</option>
+            <option value="frp">Urut: FRP Tertinggi (7 Hari)</option>
+            <option value="burned_ha">Urut: Luas Terbakar (ha)</option>
+          </select>
+        </div>
+
+        {/* Toolbar Footer */}
+        <div className="ew-toolbar-footer">
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              className="ew-reset-filters-btn"
+              onClick={handleResetFilters}
+              title="Reset semua filter pencarian"
+            >
+              <RotateCcw size={12} />
+              <span>Reset Filter</span>
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="ew-count-badge">
+            Menampilkan <strong>{displayItems.length}</strong> KPS
+          </div>
         </div>
       </div>
 
