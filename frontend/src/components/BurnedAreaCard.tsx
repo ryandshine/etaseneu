@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { authFetch } from "../lib/api";
-import { Bar, BarChart, Cell, LabelList, ResponsiveContainer, XAxis, YAxis } from "recharts";
 
 import type { BurnedAreaOverlayFeature } from "../hooks/useBurnedAreaOverlay";
 
@@ -115,7 +114,6 @@ export function BurnedAreaCard({ provinceFilter, skemaFilter, wilkerFilter, onSe
     [scoped]
   );
 
-  const chartHeight = Math.max(120, bySkema.length * 46 + 30);
 
   return (
     <section
@@ -149,58 +147,69 @@ export function BurnedAreaCard({ provinceFilter, skemaFilter, wilkerFilter, onSe
             {bySkema[0]?.kps} KPS). Klik batang untuk menyaring matriks per skema.
           </p>
 
-          <div style={{ width: "100%", height: chartHeight, position: "relative" }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={bySkema}
-                layout="vertical"
-                margin={{ top: 4, right: 88, left: 0, bottom: 4 }}
-                onClick={(state) => {
-                  if (state && state.activeLabel) {
-                    onSelectSkema(String(state.activeLabel));
-                  }
-                }}
-              >
-                <XAxis
-                  type="number"
-                  domain={[0, (dataMax: number) => (dataMax > 0 ? Math.ceil(dataMax * 1.35) : 100)]}
-                  hide
-                />
-                <YAxis
-                  type="category"
-                  dataKey="label"
-                  width={66}
-                  stroke="rgba(255,255,255,0.2)"
-                  tick={{ fill: "rgba(255,255,255,0.7)", fontSize: 11, fontFamily: "Plus Jakarta Sans, sans-serif" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Bar
-                  dataKey="value"
-                  radius={[0, 4, 4, 0]}
-                  barSize={16}
-                  background={{ fill: "rgba(255,255,255,0.03)", radius: 4 }}
-                  style={{ cursor: "pointer" }}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', margin: '0.6rem 0 1.25rem' }}>
+            {bySkema.map((entry) => {
+              const pct = totalHa > 0 ? Math.round((entry.value / totalHa) * 100) : 0;
+              const maxVal = bySkema[0]?.value || 1;
+              const barWidth = Math.max((entry.value / maxVal) * 100, 2);
+              const color = SKEMA_COLORS[entry.label] ?? FALLBACK_COLOR;
+              const isSelected = skemaFilter === entry.label;
+              const isDimmed = skemaFilter && !isSelected;
+
+              return (
+                <div
+                  key={entry.label}
+                  onClick={() => onSelectSkema(entry.label)}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.35rem',
+                    padding: '0.35rem 0.5rem',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    backgroundColor: isSelected ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+                    border: isSelected ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid transparent',
+                    opacity: isDimmed ? 0.45 : 1,
+                    transition: 'all 150ms ease'
+                  }}
+                  title={`Saring skema ${entry.label}`}
                 >
-                  <LabelList
-                    dataKey="value"
-                    position="right"
-                    formatter={(value: unknown) => `${formatHa(Number(value) || 0)} Ha`}
-                    fill="rgba(255,255,255,0.85)"
-                    fontSize={10}
-                    fontFamily="Plus Jakarta Sans, sans-serif"
-                    offset={8}
-                  />
-                  {bySkema.map((entry) => (
-                    <Cell
-                      key={entry.label}
-                      fill={SKEMA_COLORS[entry.label] ?? FALLBACK_COLOR}
-                      opacity={skemaFilter && skemaFilter !== entry.label ? 0.45 : 1}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.84rem' }}>
+                    <span style={{ color: '#e5e7eb', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: color, flexShrink: 0 }} />
+                      <span>{entry.label}</span>
+                      <span style={{ color: '#9ca3af', fontWeight: '400', fontSize: '0.74rem' }}>({entry.kps} KPS)</span>
+                    </span>
+                    <span style={{ color: '#ffffff', fontWeight: '700', fontSize: '0.82rem', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                      {formatHa(entry.value)} Ha{" "}
+                      <span style={{ color: '#9ca3af', fontWeight: '400', fontSize: '0.74rem' }}>
+                        ({pct}%)
+                      </span>
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '8px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.07)',
+                      borderRadius: '999px',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${barWidth}%`,
+                        maxWidth: '100%',
+                        backgroundColor: color,
+                        height: '100%',
+                        borderRadius: '999px',
+                        transition: 'width 0.3s ease'
+                      }}
                     />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           <div className="burned-top-list">

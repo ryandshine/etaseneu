@@ -339,6 +339,9 @@ function SkemaProvinsiCard({
             Konsentrasi terbesar pada skema <strong>{dominant}</strong> ({matrix.totals[0]} titik ·{" "}
             {dominantShare}%). Klik nama skema atau provinsi untuk menyaring seluruh matriks.
           </p>
+          <div className="skema-matrix__scroll-hint">
+            <span>⇄ Geser tabel horizontal untuk melihat skema &amp; total</span>
+          </div>
           <div className="skema-matrix__scroll">
             <table className="skema-matrix">
               <thead>
@@ -644,9 +647,9 @@ export function HotspotMatrix({
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div style={{ backgroundColor: '#1a0f09', border: '1px solid #2b1810', padding: '12px', borderRadius: '2px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)', fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '10px', textTransform: 'uppercase', color: 'white', zIndex: 50 }}>
-          <p style={{ fontWeight: 'bold', color: '#DCD9A9', borderBottom: '1px solid #2b1810', paddingBottom: '4px', marginBottom: '4px' }}>{data.label}</p>
-          <p><span style={{ color: '#9ca3af', marginRight: '4px' }}>COUNT:</span> <span style={{ fontWeight: 'bold' }}>{data.value} FIRES</span></p>
+        <div style={{ backgroundColor: '#180e09', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '8px 10px', borderRadius: '4px', boxShadow: '0 10px 25px rgba(0, 0, 0, 0.6)', fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '10px', textTransform: 'uppercase', color: 'white', pointerEvents: 'none', maxWidth: '200px' }}>
+          <p style={{ fontWeight: 'bold', color: '#DCD9A9', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '3px', marginBottom: '3px', whiteSpace: 'normal', wordBreak: 'break-word' }}>{data.label}</p>
+          <p style={{ margin: 0 }}><span style={{ color: '#9ca3af', marginRight: '4px' }}>TITIK:</span> <span style={{ fontWeight: 'bold', color: '#ef4444' }}>{data.value}</span></p>
         </div>
       );
     }
@@ -657,9 +660,9 @@ export function HotspotMatrix({
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div style={{ backgroundColor: '#1a0f09', border: '1px solid #2b1810', padding: '12px', borderRadius: '2px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)', fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '10px', textTransform: 'uppercase', color: 'white', zIndex: 50 }}>
-          <p style={{ fontWeight: 'bold', color: '#DCD9A9', borderBottom: '1px solid #2b1810', paddingBottom: '4px', marginBottom: '4px' }}>{data.label}</p>
-          <p style={{ fontWeight: 'bold' }}><span style={{ color: '#9ca3af', marginRight: '4px' }}>INCIDENTS:</span> {data.value} FIRES</p>
+        <div style={{ backgroundColor: '#180e09', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '8px 10px', borderRadius: '4px', boxShadow: '0 10px 25px rgba(0, 0, 0, 0.6)', fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '10px', textTransform: 'uppercase', color: 'white', pointerEvents: 'none', maxWidth: '200px' }}>
+          <p style={{ fontWeight: 'bold', color: '#DCD9A9', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '3px', marginBottom: '3px' }}>{data.label}</p>
+          <p style={{ margin: 0, fontWeight: 'bold' }}><span style={{ color: '#9ca3af', marginRight: '4px' }}>INSIDEN:</span> <span style={{ color: '#f97316' }}>{data.value} TITIK</span></p>
         </div>
       );
     }
@@ -1416,7 +1419,7 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                 ) : (
                   <div style={{ width: '100%', height: 'clamp(240px, 50vw, 360px)', position: 'relative' }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={topWilker} layout="horizontal" margin={{ top: 28, right: 16, left: 16, bottom: 58 }} onClick={(state) => {
+                      <BarChart data={topWilker} layout="horizontal" margin={{ top: 28, right: 32, left: 16, bottom: 58 }} onClick={(state) => {
                         if (state && state.activeLabel) {
                           const label = String(state.activeLabel);
                           setWilkerFilter(label === wilkerFilter ? "" : label);
@@ -1437,16 +1440,16 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                           tickFormatter={(val) => (typeof val === 'string' ? val.replace(/^Balai PS\s+/i, '') : '')}
                         />
                         <YAxis hide />
-                          <ChartTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.01)' }} />
-                          <Bar dataKey="value" fill="#B92216" radius={[4, 4, 0, 0]} background={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} barSize={16} isAnimationActive={false} style={{ cursor: 'pointer' }}>
-                            <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
-                            {topWilker.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={wilkerFilter === entry.label ? '#C23A1F' : (entry.color || '#B92216')} opacity={wilkerFilter === entry.label ? 1 : 0.85} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
+                        <ChartTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.01)' }} wrapperStyle={{ zIndex: 100, pointerEvents: 'none' }} allowEscapeViewBox={{ x: false, y: false }} />
+                        <Bar dataKey="value" fill="#B92216" radius={[4, 4, 0, 0]} background={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} barSize={16} isAnimationActive={false} style={{ cursor: 'pointer' }}>
+                          <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
+                          {topWilker.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={wilkerFilter === entry.label ? '#C23A1F' : (entry.color || '#B92216')} opacity={wilkerFilter === entry.label ? 1 : 0.85} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 )}
               </section>
 
@@ -1468,7 +1471,7 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                   ) : (
                     <div style={{ width: '100%', height: 'clamp(200px, 45vw, 380px)', position: 'relative' }}>
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={dailyTrend} margin={{ top: 20, right: 30, left: 10, bottom: 8 }} onClick={(state) => {
+                        <AreaChart data={dailyTrend} margin={{ top: 24, right: 38, left: 4, bottom: 8 }} onClick={(state) => {
                           if (state && state.activeLabel) {
                             const label = String(state.activeLabel);
                             setSelectedPeriod(label === selectedPeriod ? null : label);
@@ -1483,8 +1486,8 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                           </defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
                           <XAxis dataKey="label" stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} tickFormatter={(val) => { if (typeof val !== 'string') return ''; return trendGroupBy === 'month' ? val.slice(0, 7) : val.slice(8, 10); }} />
-                          <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                          <ChartTooltip content={<DailyTrendTooltip />} />
+                          <YAxis width={36} stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                          <ChartTooltip content={<DailyTrendTooltip />} wrapperStyle={{ zIndex: 100, pointerEvents: 'none' }} allowEscapeViewBox={{ x: false, y: false }} />
                           <Area type="monotone" dataKey="value" stroke={selectedPeriod ? "#C23A1F" : "#B92216"} strokeWidth={selectedPeriod ? 3 : 2} fill="url(#dailyTrendGradient)" isAnimationActive={false} style={{ cursor: 'pointer' }}>
                             <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
                           </Area>
