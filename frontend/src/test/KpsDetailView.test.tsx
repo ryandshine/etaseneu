@@ -20,6 +20,7 @@ vi.mock("react-leaflet", () => ({
   Pane: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Popup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   TileLayer: () => <div data-testid="tile-layer" />,
+  ZoomControl: () => <div data-testid="zoom-control" />,
   useMap: () => ({ fitBounds: vi.fn(), invalidateSize: vi.fn(), getContainer: () => document.createElement("div") })
 }));
 

@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ChevronLeft, Clock, Download, Film, ShieldAlert, X } from "lucide-react";
-import { CircleMarker, GeoJSON, LayerGroup, MapContainer, Pane, Popup, TileLayer, useMap } from "react-leaflet";
+import { ArrowLeft, ChevronLeft, Clock, Download, Film, Info, ShieldAlert, X } from "lucide-react";
+import { CircleMarker, GeoJSON, LayerGroup, MapContainer, Pane, Popup, TileLayer, ZoomControl, useMap } from "react-leaflet";
 import { canvas as buildLeafletCanvas, circleMarker as buildLeafletCircleMarker, geoJSON as buildLeafletGeoJSON } from "leaflet";
 import type { CircleMarker as LCircleMarker, LayerGroup as LLayerGroup } from "leaflet";
 
@@ -8,6 +8,7 @@ import { SATELLITE_OPTIONS } from "../constants/satellites";
 import { TIME_PRESET_OPTIONS } from "../constants/time-windows";
 import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
 import { useHotspotTimeline } from "../hooks/useHotspotTimeline";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { bucketLabelWIB, opacityForBucket } from "../lib/hotspotTimeline";
 import { applyMarkerOpacity } from "../lib/leafletMarkerOpacity";
 import { authFetch, createApiClient } from "../lib/api";
@@ -398,6 +399,8 @@ export function KpsDetailView({
   initialPolygonId,
   onOpenTutupanLahan
 }: KpsDetailViewProps) {
+  const isMobile = useIsMobile();
+
   // Filter waktu independen, khusus halaman ini -- kosong (default) berarti
   // "ikuti apa pun rentang dashboard yang aktif" (perilaku lama, tidak
   // berubah). Begitu keduanya terisi, `customHotspots` menggantikan `hotspots`
@@ -1456,70 +1459,76 @@ export function KpsDetailView({
             className="kps-detail-info-reopen"
             onClick={() => setIsInfoOpen(true)}
             title="Buka panel info KPS"
+            aria-label="Buka panel info KPS"
           >
-            <ChevronLeft size={16} />
+            <Info size={14} />
             <span>Info KPS</span>
           </button>
         )}
 
         <div className="kps-detail-map" ref={mapContainerRef}>
-          <div className="kps-detail-map-actions">
-            <button
-              type="button"
-              className="kps-detail-action-btn kps-detail-export-btn"
-              onClick={() => setIsExportModalOpen(true)}
-              disabled={activeHotspots.length === 0}
-              title="Unduh animasi pergerakan titik panas (GIF / Video WebM)"
+          <div className="kps-detail-top-actions">
+            <div
+              className="basemap-switcher basemap-switcher--stacked kps-detail-basemap-switcher"
+              role="group"
+              aria-label="Gaya peta KPS"
             >
-              <Film size={14} />
-              <span>Unduh Animasi</span>
-            </button>
-            <button
-              type="button"
-              className={`kps-detail-timeline-toggle${timelineOn ? " kps-detail-timeline-toggle--active" : ""}`}
-              onClick={() => setTimelineOn((current) => !current)}
-              disabled={activeHotspots.length === 0}
-              title={
-                timelineOn
-                  ? "Tutup pemutar waktu hotspot"
-                  : "Putar sebaran titik panas dari awal ke akhir rentang waktu terpilih"
-              }
-              aria-pressed={timelineOn}
-            >
-              <Clock size={14} />
-              <span>Timeline</span>
-            </button>
-          </div>
-          <div
-            className="basemap-switcher kps-detail-basemap-switcher"
-            role="group"
-            aria-label="Gaya peta KPS"
-          >
-            <button
-              type="button"
-              className={mapStyle === "dark" ? "basemap-switcher-btn--active" : ""}
-              onClick={() => setMapStyle("dark")}
-              aria-pressed={mapStyle === "dark"}
-            >
-              Peta
-            </button>
-            <button
-              type="button"
-              className={mapStyle === "satellite" ? "basemap-switcher-btn--active" : ""}
-              onClick={() => setMapStyle("satellite")}
-              aria-pressed={mapStyle === "satellite"}
-            >
-              Satelit
-            </button>
+              <button
+                type="button"
+                className={mapStyle === "dark" ? "basemap-switcher-btn--active" : ""}
+                onClick={() => setMapStyle("dark")}
+                aria-pressed={mapStyle === "dark"}
+              >
+                Peta
+              </button>
+              <button
+                type="button"
+                className={mapStyle === "satellite" ? "basemap-switcher-btn--active" : ""}
+                onClick={() => setMapStyle("satellite")}
+                aria-pressed={mapStyle === "satellite"}
+              >
+                Satelit
+              </button>
+            </div>
+
+            <div className="kps-detail-map-actions">
+              <button
+                type="button"
+                className="kps-detail-action-btn kps-detail-export-btn"
+                onClick={() => setIsExportModalOpen(true)}
+                disabled={activeHotspots.length === 0}
+                title="Unduh animasi pergerakan titik panas (GIF / Video WebM)"
+              >
+                <Film size={14} />
+                <span><span className="kps-btn-long-text">Unduh </span>Animasi</span>
+              </button>
+              <button
+                type="button"
+                className={`kps-detail-timeline-toggle${timelineOn ? " kps-detail-timeline-toggle--active" : ""}`}
+                onClick={() => setTimelineOn((current) => !current)}
+                disabled={activeHotspots.length === 0}
+                title={
+                  timelineOn
+                    ? "Tutup pemutar waktu hotspot"
+                    : "Putar sebaran titik panas dari awal ke akhir rentang waktu terpilih"
+                }
+                aria-pressed={timelineOn}
+              >
+                <Clock size={14} />
+                <span>Timeline</span>
+              </button>
+            </div>
           </div>
           <MapContainer
             center={[-2.5, 118]}
             zoom={5}
             preferCanvas
+            zoomControl={false}
             {...SMOOTH_ZOOM_MAP_PROPS}
             style={{ height: "100%", width: "100%" }}
           >
             <KeepMapSized />
+            {!isMobile && !timelineOn ? <ZoomControl position="bottomright" /> : null}
             {mapStyle === "satellite" ? (
               <TileLayer
                 attribution="&copy; Google Maps"
