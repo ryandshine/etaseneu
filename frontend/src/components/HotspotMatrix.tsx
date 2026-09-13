@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer, AreaChart, Area, Cell, LabelList } from "recharts";
-import { BarChart2, ChevronDown, Download, Table } from "lucide-react";
+import { BarChart2, ChevronDown, Download, SlidersHorizontal, Table } from "lucide-react";
 
 import { BurnedAreaCard } from "./BurnedAreaCard";
 import type {
@@ -648,6 +648,11 @@ export function HotspotMatrix({
   const [searchQuery, setSearchQuery] = useState("");
   const [showAnalytics, setShowAnalytics] = useState(true);
   const [activeTab, setActiveTab] = useState<"table" | "analytics">("table");
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+
+  const activeSecondaryFilterCount = useMemo(() => {
+    return [wilkerFilter, confidenceFilter, skemaFilter, provinceFilter].filter(Boolean).length;
+  }, [wilkerFilter, confidenceFilter, skemaFilter, provinceFilter]);
   const [yoyMetric, setYoyMetric] = useState<"count" | "frp">("count");
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 20;
@@ -1183,105 +1188,140 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
         </div>
       </div>
 
-      <div className="matrix-toolbar glass-panel">
-        <label className="matrix-field">
-          <span>Filter Waktu</span>
-          <select
-            value={timePreset}
-            onChange={(event) => onTimePresetChange(event.currentTarget.value as TimePreset)}
-          >
-            {TIME_PRESET_OPTIONS.map((preset) => (
-              <option key={preset.value} value={preset.value}>
-                {preset.label}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="matrix-toolbar-container">
+        <div className="matrix-toolbar glass-panel">
+          <div className="matrix-toolbar__primary">
+            <div className="matrix-toolbar__left">
+              <label className="matrix-field matrix-field--inline">
+                <span className="matrix-field__label">Filter Waktu</span>
+                <select
+                  className="matrix-select-compact"
+                  value={timePreset}
+                  onChange={(event) => onTimePresetChange(event.currentTarget.value as TimePreset)}
+                >
+                  {TIME_PRESET_OPTIONS.map((preset) => (
+                    <option key={preset.value} value={preset.value}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-        <label className="matrix-field">
-          <span>Dari</span>
-          <input
-            type="date"
-            value={startDate}
-            disabled={timePreset !== "custom"}
-            onChange={(event) => onDateChange("startDate", event.currentTarget.value)}
-          />
-        </label>
+              {/* Input Tanggal Kustom (hanya jika Custom dipilih atau di DOM) */}
+              <div className={`matrix-date-range-group ${timePreset === "custom" ? "is-visible" : "is-collapsed"}`}>
+                <label className="matrix-field matrix-field--inline">
+                  <span className="matrix-field__label">Dari</span>
+                  <input
+                    type="date"
+                    className="matrix-date-input"
+                    value={startDate}
+                    disabled={timePreset !== "custom"}
+                    onChange={(event) => onDateChange("startDate", event.currentTarget.value)}
+                  />
+                </label>
 
-        <label className="matrix-field">
-          <span>Ke</span>
-          <input
-            type="date"
-            value={endDate}
-            disabled={timePreset !== "custom"}
-            onChange={(event) => onDateChange("endDate", event.currentTarget.value)}
-          />
-        </label>
+                <label className="matrix-field matrix-field--inline">
+                  <span className="matrix-field__label">Ke</span>
+                  <input
+                    type="date"
+                    className="matrix-date-input"
+                    value={endDate}
+                    disabled={timePreset !== "custom"}
+                    onChange={(event) => onDateChange("endDate", event.currentTarget.value)}
+                  />
+                </label>
+              </div>
+            </div>
 
-        <label className="matrix-field">
-          <span>Wilker Filter</span>
-          <select
-            value={wilkerFilter}
-            disabled={Boolean(lockedWilker)}
-            onChange={(event) => setWilkerFilter(event.currentTarget.value)}
-          >
-            {lockedWilker ? (
-              <option value={lockedWilker}>{lockedWilker}</option>
-            ) : (
-              <>
-                <option value="">Semua wilker</option>
-                {wilkerOptions.map((wilker) => (
-                  <option key={wilker} value={wilker}>
-                    {wilker}
-                  </option>
-                ))}
-              </>
-            )}
-          </select>
-        </label>
+            <div className="matrix-toolbar__right">
+              <button
+                type="button"
+                className={`matrix-filter-trigger-btn ${filtersExpanded ? "is-expanded" : ""} ${activeSecondaryFilterCount > 0 ? "has-active" : ""}`}
+                onClick={() => setFiltersExpanded(!filtersExpanded)}
+                aria-expanded={filtersExpanded}
+                title="Buka filter Wilker, Skema, Provinsi, dan Keyakinan"
+              >
+                <SlidersHorizontal size={14} />
+                <span>Filter Lanjutan</span>
+                {activeSecondaryFilterCount > 0 ? (
+                  <span className="matrix-filter-count-badge">{activeSecondaryFilterCount}</span>
+                ) : (
+                  <ChevronDown size={13} className={`matrix-chevron ${filtersExpanded ? "is-rotated" : ""}`} />
+                )}
+              </button>
+            </div>
+          </div>
 
-        <label className="matrix-field">
-          <span>Keyakinan (Confidence)</span>
-          <select
-            value={confidenceFilter}
-            onChange={(event) => setConfidenceFilter(event.currentTarget.value)}
-          >
-            <option value="">Semua tingkat</option>
-            <option value="Tinggi">Tinggi (&gt;80% / H)</option>
-            <option value="Sedang">Sedang (30-80% / N)</option>
-            <option value="Rendah">Rendah (&lt;30% / L)</option>
-          </select>
-        </label>
+          {/* POPOVER / EXPANDABLE FILTER GRID */}
+          <div className={`matrix-toolbar__secondary ${filtersExpanded ? "is-open" : "is-closed"}`}>
+            <div className="matrix-secondary-grid">
+              <label className="matrix-field">
+                <span>Wilker Filter</span>
+                <select
+                  value={wilkerFilter}
+                  disabled={Boolean(lockedWilker)}
+                  onChange={(event) => setWilkerFilter(event.currentTarget.value)}
+                >
+                  {lockedWilker ? (
+                    <option value={lockedWilker}>{lockedWilker}</option>
+                  ) : (
+                    <>
+                      <option value="">Semua wilker</option>
+                      {wilkerOptions.map((wilker) => (
+                        <option key={wilker} value={wilker}>
+                          {wilker}
+                        </option>
+                      ))}
+                    </>
+                  )}
+                </select>
+              </label>
 
-        <label className="matrix-field">
-          <span>Skema Filter</span>
-          <select
-            value={skemaFilter}
-            onChange={(event) => setSkemaFilter(event.currentTarget.value)}
-          >
-            <option value="">Semua skema</option>
-            {skemaOptions.map((skema) => (
-              <option key={skema} value={skema}>
-                {skema}
-              </option>
-            ))}
-          </select>
-        </label>
+              <label className="matrix-field">
+                <span>Provinsi Filter</span>
+                <select
+                  value={provinceFilter}
+                  onChange={(event) => setProvinceFilter(event.currentTarget.value)}
+                >
+                  <option value="">Semua provinsi</option>
+                  {provinceOptions.map((province) => (
+                    <option key={province} value={province}>
+                      {province}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-        <label className="matrix-field">
-          <span>Provinsi Filter</span>
-          <select
-            value={provinceFilter}
-            onChange={(event) => setProvinceFilter(event.currentTarget.value)}
-          >
-            <option value="">Semua provinsi</option>
-            {provinceOptions.map((province) => (
-              <option key={province} value={province}>
-                {province}
-              </option>
-            ))}
-          </select>
-        </label>
+              <label className="matrix-field">
+                <span>Skema Filter</span>
+                <select
+                  value={skemaFilter}
+                  onChange={(event) => setSkemaFilter(event.currentTarget.value)}
+                >
+                  <option value="">Semua skema</option>
+                  {skemaOptions.map((skema) => (
+                    <option key={skema} value={skema}>
+                      {skema}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="matrix-field">
+                <span>Keyakinan (Confidence)</span>
+                <select
+                  value={confidenceFilter}
+                  onChange={(event) => setConfidenceFilter(event.currentTarget.value)}
+                >
+                  <option value="">Semua tingkat</option>
+                  <option value="Tinggi">Tinggi (&gt;80% / H)</option>
+                  <option value="Sedang">Sedang (30-80% / N)</option>
+                  <option value="Rendah">Rendah (&lt;30% / L)</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* PANE 2: VISUALISASI & ANALITIK */}

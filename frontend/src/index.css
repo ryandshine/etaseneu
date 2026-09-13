@@ -11457,3 +11457,219 @@ textarea {
   }
 }
 
+/* ============================================================================
+   Compact Toolbar & Popover / Expandable Secondary Filters
+   ============================================================================ */
+.matrix-toolbar-container {
+  width: 100%;
+  min-width: 0;
+}
+
+.matrix-toolbar {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.65rem !important;
+  padding: 0.65rem 0.9rem !important;
+  border-radius: 0.5rem !important;
+  background: rgba(20, 11, 6, 0.88) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.matrix-toolbar__primary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.matrix-toolbar__left {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.matrix-toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.matrix-field--inline {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+}
+
+.matrix-field--inline .matrix-field__label {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: rgba(209, 213, 219, 0.7);
+  white-space: nowrap;
+}
+
+.matrix-select-compact,
+.matrix-date-input {
+  min-height: 2.15rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 0.8rem;
+  font-weight: 500;
+  outline: none;
+  transition: border-color 140ms ease;
+}
+
+.matrix-select-compact:focus,
+.matrix-date-input:focus {
+  border-color: rgba(255, 107, 53, 0.6);
+}
+
+.matrix-date-range-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  transition: opacity 150ms ease;
+}
+
+.matrix-date-range-group.is-collapsed {
+  display: none !important;
+}
+
+.matrix-filter-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.85rem;
+  min-height: 2.15rem;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(209, 213, 219, 0.85);
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 140ms ease;
+  white-space: nowrap;
+}
+
+.matrix-filter-trigger-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.matrix-filter-trigger-btn.is-expanded {
+  background: rgba(185, 34, 22, 0.2);
+  border-color: rgba(255, 107, 53, 0.5);
+  color: #ff9b73;
+}
+
+.matrix-filter-trigger-btn.has-active {
+  border-color: rgba(255, 107, 53, 0.55);
+  background: rgba(185, 34, 22, 0.25);
+  color: #ff9b73;
+}
+
+.matrix-filter-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.1rem 0.45rem;
+  border-radius: 9999px;
+  background: #B92216;
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 700;
+  margin-left: 0.15rem;
+}
+
+.matrix-chevron {
+  transition: transform 150ms ease;
+}
+
+.matrix-chevron.is-rotated {
+  transform: rotate(180deg);
+}
+
+.matrix-toolbar__secondary {
+  width: 100%;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.matrix-toolbar__secondary.is-closed {
+  display: none !important;
+}
+
+.matrix-secondary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.matrix-secondary-grid .matrix-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.matrix-secondary-grid .matrix-field span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(209, 213, 219, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.matrix-secondary-grid .matrix-field select {
+  min-height: 2.15rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.matrix-secondary-grid .matrix-field select:focus {
+  border-color: rgba(255, 107, 53, 0.6);
+}
+
+@media (max-width: 639px) {
+  .matrix-toolbar__primary {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+  }
+
+  .matrix-toolbar__left {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .matrix-toolbar__left .matrix-field--inline {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .matrix-date-range-group {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .matrix-filter-trigger-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
