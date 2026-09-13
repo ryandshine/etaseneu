@@ -154,27 +154,31 @@ export function BurnedAreaCard({ provinceFilter, skemaFilter, wilkerFilter, onSe
               <BarChart
                 data={bySkema}
                 layout="vertical"
-                margin={{ top: 4, right: 64, left: 4, bottom: 4 }}
+                margin={{ top: 4, right: 88, left: 0, bottom: 4 }}
                 onClick={(state) => {
                   if (state && state.activeLabel) {
                     onSelectSkema(String(state.activeLabel));
                   }
                 }}
               >
-                <XAxis type="number" hide />
+                <XAxis
+                  type="number"
+                  domain={[0, (dataMax: number) => (dataMax > 0 ? Math.ceil(dataMax * 1.35) : 100)]}
+                  hide
+                />
                 <YAxis
                   type="category"
                   dataKey="label"
-                  width={72}
+                  width={66}
                   stroke="rgba(255,255,255,0.2)"
-                  tick={{ fill: "rgba(255,255,255,0.62)", fontSize: 11, fontFamily: "Plus Jakarta Sans, sans-serif" }}
+                  tick={{ fill: "rgba(255,255,255,0.7)", fontSize: 11, fontFamily: "Plus Jakarta Sans, sans-serif" }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <Bar
                   dataKey="value"
                   radius={[0, 4, 4, 0]}
-                  barSize={18}
+                  barSize={16}
                   background={{ fill: "rgba(255,255,255,0.03)", radius: 4 }}
                   style={{ cursor: "pointer" }}
                 >
@@ -182,9 +186,10 @@ export function BurnedAreaCard({ provinceFilter, skemaFilter, wilkerFilter, onSe
                     dataKey="value"
                     position="right"
                     formatter={(value: unknown) => `${formatHa(Number(value) || 0)} Ha`}
-                    fill="rgba(255,255,255,0.72)"
+                    fill="rgba(255,255,255,0.85)"
                     fontSize={10}
                     fontFamily="Plus Jakarta Sans, sans-serif"
+                    offset={8}
                   />
                   {bySkema.map((entry) => (
                     <Cell

@@ -434,7 +434,7 @@ function renderCompactCard(title: string, data: any[], total: number, activeLabe
   
   return (
     <section className="matrix-chart-card glass-panel" style={{ display: 'flex', flexDirection: 'column', height: 'auto', minHeight: 'unset' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
         <div>
           <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#fff', marginBottom: '0.25rem' }}>{title}</h3>
           <p style={{ fontSize: '0.8rem', color: '#9ca3af' }}>Total Hotspot: <strong style={{ color: '#fff' }}>{total}</strong></p>
@@ -446,51 +446,77 @@ function renderCompactCard(title: string, data: any[], total: number, activeLabe
         )}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        {data.map(item => {
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+        {data.map((item) => {
           const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
           const barWidth = Math.max((item.value / maxVal) * 100, 2);
           const isSelected = activeLabel === item.label;
-          const opacity = activeLabel && !isSelected ? 0.3 : 1;
-          const fill = isSelected ? '#8A1A10' : (item.color || '#374151');
+          const opacity = activeLabel && !isSelected ? 0.35 : 1;
+          const fill = isSelected ? '#ff6b35' : (item.color || '#f59e0b');
           
           return (
             <div 
               key={item.label} 
-              style={{ display: 'flex', alignItems: 'center', opacity, cursor: onClick ? 'pointer' : 'default', fontSize: '0.85rem' }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.35rem',
+                opacity,
+                cursor: onClick ? 'pointer' : 'default',
+                padding: '0.25rem 0.35rem',
+                borderRadius: '0.375rem',
+                transition: 'background 0.15s ease',
+                backgroundColor: isSelected ? 'rgba(185, 34, 22, 0.18)' : 'transparent',
+                border: isSelected ? '1px solid rgba(255, 107, 53, 0.35)' : '1px solid transparent'
+              }}
               onClick={() => onClick && onClick(item.label)}
             >
-              {/* width tetap 60px dulu cukup buat label pendek (Tinggi/Sedang/Rendah)
-                  tapi kartu ini dipakai juga utk "Titik per Kawasan Hutan" yang
-                  labelnya gabungan kata (HP Terbatas, Konservasi Laut, dst) --
-                  numpuk jadi 2 baris pas ketemu label panjang, tinggi tiap
-                  baris beda-beda jadi baris chart jadi tidak sejajar/berantakan
-                  (dilaporkan user, 2026-09-12). Dilebarkan + dikunci satu baris
-                  (ellipsis jaga-jaga kalau ada label lebih panjang lagi nanti). */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.84rem' }}>
+                <span
+                  title={item.label}
+                  style={{
+                    color: isSelected ? '#ff9b73' : '#e5e7eb',
+                    fontWeight: isSelected ? '700' : '500',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: '65%'
+                  }}
+                >
+                  {item.label}
+                </span>
+                <span style={{ color: '#ffffff', fontWeight: '700', fontSize: '0.82rem', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                  {item.value.toLocaleString()}{" "}
+                  <span style={{ color: '#9ca3af', fontWeight: '400', fontSize: '0.74rem' }}>
+                    ({pct}%)
+                  </span>
+                </span>
+              </div>
               <div
-                title={item.label}
                 style={{
-                  width: '5.5rem',
-                  flexShrink: 0,
-                  color: '#d1d5db',
-                  fontWeight: '500',
-                  whiteSpace: 'nowrap',
+                  width: '100%',
+                  height: '8px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.07)',
+                  borderRadius: '999px',
                   overflow: 'hidden',
-                  textOverflow: 'ellipsis'
+                  position: 'relative'
                 }}
               >
-                {item.label}
-              </div>
-              <div style={{ flex: 1, height: '12px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden', margin: '0 12px', display: 'flex' }}>
                 {item.value > 0 && (
-                  <div style={{ width: `${barWidth}%`, backgroundColor: fill, height: '100%', transition: 'width 0.3s ease' }} />
+                  <div
+                    style={{
+                      width: `${barWidth}%`,
+                      maxWidth: '100%',
+                      backgroundColor: fill,
+                      height: '100%',
+                      borderRadius: '999px',
+                      transition: 'width 0.3s ease'
+                    }}
+                  />
                 )}
               </div>
-              <div style={{ width: '5.5rem', flexShrink: 0, textAlign: 'right', color: '#fff', whiteSpace: 'nowrap' }}>
-                {item.value} <span style={{ color: '#9ca3af', fontSize: '0.75rem' }}>({pct}%)</span>
-              </div>
             </div>
-          )
+          );
         })}
       </div>
 
@@ -518,7 +544,7 @@ function renderKawasanBurnedCard(data: BurnedAreaKawasanResponse | null) {
 
   return (
     <section className="matrix-chart-card glass-panel" style={{ display: 'flex', flexDirection: 'column', height: 'auto', minHeight: 'unset' }}>
-      <div style={{ marginBottom: '1.25rem' }}>
+      <div style={{ marginBottom: '1rem' }}>
         <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#fff', marginBottom: '0.25rem' }}>Luas Kebakaran per Kawasan Hutan</h3>
         <p style={{ fontSize: '0.8rem', color: '#9ca3af' }}>
           Total: <strong style={{ color: '#fff' }}>{formatHa(totalHa)} Ha</strong>
@@ -528,35 +554,56 @@ function renderKawasanBurnedCard(data: BurnedAreaKawasanResponse | null) {
       {rows.length === 0 ? (
         <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>Belum ada data luas terbakar untuk pilihan ini.</p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
           {rows.map((row) => {
             const pct = totalHa > 0 ? Math.round((row.luas_ha / totalHa) * 100) : 0;
             const barWidth = Math.max((row.luas_ha / maxVal) * 100, 2);
+            const label = shortKawasanLabel(row.fungsi);
             return (
-              <div key={row.fungsi} style={{ display: 'flex', alignItems: 'center', fontSize: '0.85rem' }}>
-                {/* width 92px kadang masih kependekan buat "Konservasi Laut"/
-                    "HP Terbatas" -- numpuk 2 baris, baris chart jadi tidak
-                    sejajar (pola sama seperti renderCompactCard di atas,
-                    dilaporkan user 2026-09-12). */}
+              <div key={row.fungsi} style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', padding: '0.25rem 0.35rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.84rem' }}>
+                  <span
+                    title={label}
+                    style={{
+                      color: '#e5e7eb',
+                      fontWeight: '500',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      maxWidth: '65%'
+                    }}
+                  >
+                    {label}
+                  </span>
+                  <span style={{ color: '#ffffff', fontWeight: '700', fontSize: '0.82rem', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                    {formatHa(row.luas_ha)}{" "}
+                    <span style={{ color: '#9ca3af', fontWeight: '400', fontSize: '0.74rem' }}>
+                      ({pct}%)
+                    </span>
+                  </span>
+                </div>
                 <div
-                  title={shortKawasanLabel(row.fungsi)}
                   style={{
-                    width: '6.5rem',
-                    flexShrink: 0,
-                    color: '#d1d5db',
-                    fontWeight: '500',
-                    whiteSpace: 'nowrap',
+                    width: '100%',
+                    height: '8px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+                    borderRadius: '999px',
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis'
+                    position: 'relative'
                   }}
                 >
-                  {shortKawasanLabel(row.fungsi)}
-                </div>
-                <div style={{ flex: 1, height: '12px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden', margin: '0 12px' }}>
-                  <div style={{ width: `${barWidth}%`, backgroundColor: '#9B2C2C', height: '100%', transition: 'width 0.3s ease' }} />
-                </div>
-                <div style={{ width: '6.5rem', flexShrink: 0, textAlign: 'right', color: '#fff', whiteSpace: 'nowrap' }}>
-                  {formatHa(row.luas_ha)} <span style={{ color: '#9ca3af', fontSize: '0.75rem' }}>({pct}%)</span>
+                  {row.luas_ha > 0 && (
+                    <div
+                      style={{
+                        width: `${barWidth}%`,
+                        maxWidth: '100%',
+                        backgroundColor: '#ef4444',
+                        height: '100%',
+                        borderRadius: '999px',
+                        transition: 'width 0.3s ease'
+                      }}
+                    />
+                  )}
                 </div>
               </div>
             );
@@ -1367,30 +1414,29 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                 {topWilker.length === 0 ? (
                   <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Data hotspot tidak tersedia</div>
                 ) : (
-                  <div style={{ width: '100%', overflowX: 'auto' }}>
-                    <div style={{ width: `max(100%, ${topWilker.length * 64}px)`, height: 'clamp(240px, 50vw, 380px)', position: 'relative' }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={topWilker} layout="horizontal" margin={{ top: 24, right: 28, left: 20, bottom: 48 }} onClick={(state) => {
-                          if (state && state.activeLabel) {
-                            const label = String(state.activeLabel);
-                            setWilkerFilter(label === wilkerFilter ? "" : label);
-                            setCurrentPage(1);
-                          }
-                        }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
-                          <XAxis
-                            dataKey="label"
-                            stroke="rgba(255,255,255,0.2)"
-                            tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 8, fontFamily: 'Plus Jakarta Sans, sans-serif' }}
-                            axisLine={false}
-                            tickLine={false}
-                            interval={0}
-                            angle={-35}
-                            textAnchor="end"
-                            height={56}
-                            tickFormatter={(val) => (typeof val === 'string' ? val.replace(/^Balai PS\s+/i, '') : '')}
-                          />
-                          <YAxis hide />
+                  <div style={{ width: '100%', height: 'clamp(240px, 50vw, 360px)', position: 'relative' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={topWilker} layout="horizontal" margin={{ top: 28, right: 16, left: 16, bottom: 58 }} onClick={(state) => {
+                        if (state && state.activeLabel) {
+                          const label = String(state.activeLabel);
+                          setWilkerFilter(label === wilkerFilter ? "" : label);
+                          setCurrentPage(1);
+                        }
+                      }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
+                        <XAxis
+                          dataKey="label"
+                          stroke="rgba(255,255,255,0.2)"
+                          tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 9, fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+                          axisLine={false}
+                          tickLine={false}
+                          interval={0}
+                          angle={-30}
+                          textAnchor="end"
+                          height={54}
+                          tickFormatter={(val) => (typeof val === 'string' ? val.replace(/^Balai PS\s+/i, '') : '')}
+                        />
+                        <YAxis hide />
                           <ChartTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.01)' }} />
                           <Bar dataKey="value" fill="#B92216" radius={[4, 4, 0, 0]} background={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} barSize={16} isAnimationActive={false} style={{ cursor: 'pointer' }}>
                             <LabelList dataKey="value" position="top" fill="rgba(255,255,255,0.7)" fontSize={10} fontFamily="Plus Jakarta Sans, sans-serif" offset={8} />
@@ -1401,7 +1447,6 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
-                  </div>
                 )}
               </section>
 
