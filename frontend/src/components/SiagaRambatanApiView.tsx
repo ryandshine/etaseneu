@@ -144,23 +144,23 @@ interface ThreatDetail {
 const BASEMAP_CONFIGS = {
   hybrid: {
     key: "hybrid",
-    name: "Satelit (Esri Hybrid)",
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    subdomains: ["server"],
-    maxZoom: 19
+    name: "Satelit (Google Hybrid)",
+    url: "https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+    subdomains: ["0", "1", "2", "3"] as readonly string[],
+    maxZoom: 20
   },
   dark: {
     key: "dark",
-    name: "Gelap (CartoDB Dark)",
-    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-    subdomains: ["a", "b", "c", "d"],
-    maxZoom: 19
+    name: "Mode Gelap (Esri Dark)",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    subdomains: [] as readonly string[],
+    maxZoom: 16
   },
   street: {
     key: "street",
     name: "Peta Jalan (OSM)",
     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    subdomains: ["a", "b", "c"],
+    subdomains: ["a", "b", "c"] as readonly string[],
     maxZoom: 19
   }
 } as const;
@@ -1216,12 +1216,28 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
               zoomControl={false}
             >
               {!isMobile && <ZoomControl position="bottomright" />}
-              <TileLayer
-                key={activeBasemap.key}
-                url={activeBasemap.url}
-                subdomains={activeBasemap.subdomains as readonly string[] as string[]}
-                maxZoom={activeBasemap.maxZoom}
-              />
+              {basemap === "dark" ? (
+                <>
+                  <TileLayer
+                    key="esri-dark-base"
+                    attribution="Tiles &copy; Esri &mdash; Esri, HERE, Garmin"
+                    url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+                    maxZoom={16}
+                  />
+                  <TileLayer
+                    key="esri-dark-ref"
+                    url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
+                    maxZoom={16}
+                  />
+                </>
+              ) : (
+                <TileLayer
+                  key={activeBasemap.key}
+                  url={activeBasemap.url}
+                  subdomains={activeBasemap.subdomains as readonly string[] as string[]}
+                  maxZoom={activeBasemap.maxZoom}
+                />
+              )}
 
               {/* Viewport controller: Auto fly ke poligon KPS & hotspot */}
               <MapViewportController

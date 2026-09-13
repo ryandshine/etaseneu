@@ -11062,6 +11062,24 @@ textarea {
   }
 }
 
+@media (max-width: 639px) {
+  .fs-map-header {
+    padding-left: 4.25rem !important; /* Space for fixed 48px hamburger button + margin */
+    padding-right: 0.65rem !important;
+    gap: 0.35rem !important;
+  }
+
+  .fs-basemap-btn {
+    padding: 0.2rem 0.45rem !important;
+    font-size: 0.68rem !important;
+  }
+
+  .fs-drawer-reopen-btn {
+    padding: 0.3rem 0.6rem !important;
+    font-size: 0.7rem !important;
+  }
+}
+
 /* ============================================================================
    Early Warning View Toolbar & Responsive Filter Grid
    ============================================================================ */
