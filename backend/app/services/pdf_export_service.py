@@ -180,7 +180,7 @@ def fetch_basemap_image(min_lon, min_lat, max_lon, max_lat, width=540, height=21
     success = False
     for x in range(x_min, x_max + 1):
         for y in range(y_min, y_max + 1):
-            url = f"https://basemaps.cartocdn.com/light_all/{zoom}/{x}/{y}.png"
+            url = f"https://tile.openstreetmap.org/{zoom}/{x}/{y}.png"
             try:
                 resp = client.get(url, headers=headers)
                 if resp.status_code == 200:

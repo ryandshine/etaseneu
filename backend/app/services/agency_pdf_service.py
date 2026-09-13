@@ -176,7 +176,7 @@ def _fetch_map_b64(hotspots: list[dict], width: int = 520, height: int = 260,
         client = httpx.Client(timeout=8.0, headers={"User-Agent": "ETAseneu/2.0"})
         for x in range(x_min, x_max + 1):
             for y in range(y_min, y_max + 1):
-                url = f"https://basemaps.cartocdn.com/light_all/{zoom}/{x}/{y}.png"
+                url = f"https://tile.openstreetmap.org/{zoom}/{x}/{y}.png"
                 try:
                     r = client.get(url)
                     if r.status_code == 200:
