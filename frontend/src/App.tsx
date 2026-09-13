@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Maximize, Minimize, Menu, X } from "lucide-react";
+import { Maximize, Minimize, Menu, X, Flame } from "lucide-react";
 
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FilterPanel } from "./components/FilterPanel";
@@ -193,11 +193,78 @@ function readLandCoverPolygonIdFromUrl(): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function ViewLoader({ label }: { label: string }) {
+type ViewLoaderProps = {
+  label: string;
+  sublabel?: string;
+  fullScreen?: boolean;
+};
+
+function ViewLoader({
+  label,
+  sublabel = "Mohon tunggu sebentar...",
+  fullScreen = false,
+}: ViewLoaderProps) {
+  const cleanLabel = label.replace(/\.+$/, "");
+
+  if (fullScreen) {
+    return (
+      <div className="view-loader view-loader--fullscreen" role="status" aria-live="polite">
+        <div className="view-loader-glow-backdrop" aria-hidden="true" />
+        <div className="view-loader-card">
+          <div className="view-loader-emblem">
+            <span className="view-loader-pulse-ring" aria-hidden="true" />
+            <span className="view-loader-spin-ring" aria-hidden="true" />
+            <div className="view-loader-icon-wrap">
+              <Flame size={28} className="view-loader-flame" />
+            </div>
+          </div>
+          <div className="view-loader-brand-text">
+            <span className="view-loader-title">ETA SENEU</span>
+            <span className="view-loader-subtitle">KPS Hotspot &amp; Karhutla Monitoring</span>
+          </div>
+          <div className="view-loader-status-block">
+            <div className="view-loader-label-row">
+              <span className="view-loader-label">{cleanLabel}</span>
+              <span className="view-loader-dots" aria-hidden="true">
+                <span className="dot dot-1">.</span>
+                <span className="dot dot-2">.</span>
+                <span className="dot dot-3">.</span>
+              </span>
+            </div>
+            {sublabel && <p className="view-loader-sublabel">{sublabel}</p>}
+            <div className="view-loader-progress-track" aria-hidden="true">
+              <div className="view-loader-progress-bar" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="view-loader" role="status" aria-live="polite">
-      <span className="view-loader-dot" aria-hidden="true" />
-      <span>{label}</span>
+    <div className="view-loader view-loader--stage" role="status" aria-live="polite">
+      <div className="view-loader-stage-card">
+        <div className="view-loader-stage-header">
+          <div className="view-loader-stage-spinner" aria-hidden="true">
+            <span className="view-loader-stage-spinner-ring" />
+            <span className="view-loader-stage-spinner-dot" />
+          </div>
+          <div className="view-loader-stage-text">
+            <div className="view-loader-stage-label-row">
+              <span className="view-loader-stage-label">{cleanLabel}</span>
+              <span className="view-loader-dots" aria-hidden="true">
+                <span className="dot dot-1">.</span>
+                <span className="dot dot-2">.</span>
+                <span className="dot dot-3">.</span>
+              </span>
+            </div>
+            {sublabel && <span className="view-loader-stage-sublabel">{sublabel}</span>}
+          </div>
+        </div>
+        <div className="view-loader-progress-track" aria-hidden="true">
+          <div className="view-loader-progress-bar" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -732,7 +799,13 @@ export default function App() {
   }, [latestHotspot, clockSec]);
 
   if (restoringSession) {
-    return <ViewLoader label="Memulihkan sesi akun..." />;
+    return (
+      <ViewLoader
+        fullScreen
+        label="Memulihkan sesi akun"
+        sublabel="Menghubungkan ke server, mohon tunggu sebentar..."
+      />
+    );
   }
 
   if (!session) {
