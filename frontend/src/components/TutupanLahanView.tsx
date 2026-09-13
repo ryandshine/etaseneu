@@ -219,7 +219,10 @@ export function TutupanLahanView({
   const showDetail = !isCompact || selectedId !== null;
 
   return (
-    <section className="tl-shell" aria-label="Tutupan Lahan">
+    <section
+      className={`tl-shell${selectedId !== null ? " tl-shell--detail-active" : ""}`}
+      aria-label="Tutupan Lahan"
+    >
       <header className="tl-topbar">
         <div className="tl-topbar-row">
           <h2>Tutupan Lahan</h2>

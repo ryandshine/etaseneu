@@ -2271,36 +2271,29 @@ code {
 .lc-header-bar {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.55rem;
   padding: 0.75rem 1rem 0.65rem;
-  background: rgba(18, 14, 11, 0.96);
+  background: rgba(18, 14, 11, 0.98);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(12px);
   z-index: 1100;
   flex-shrink: 0;
 }
 
-.lc-header-bar__main {
+/* Baris 1: Navigasi Kiri & Aksi Kanan */
+.lc-header-bar__nav-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.lc-header-bar__info {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  min-width: 0;
-  flex: 1;
+  width: 100%;
 }
 
 .lc-back-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.35rem 0.8rem;
+  padding: 0.32rem 0.75rem;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: rgba(255, 255, 255, 0.06);
@@ -2319,31 +2312,34 @@ code {
   color: #fff;
 }
 
-.lc-header-bar__titles {
+.lc-header-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* Baris 2: Judul & Subtitle Poligon (Full Width) */
+.lc-header-bar__title-block {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
-  min-width: 0;
-}
-
-.lc-header-bar__title-line {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  width: 100%;
 }
 
 .lc-header-bar__title {
   margin: 0;
-  font-size: 0.98rem;
+  font-size: 1.05rem;
   font-weight: 800;
   color: var(--color-cream);
   line-height: 1.25;
   letter-spacing: -0.01em;
+  word-break: break-word;
 }
 
 .lc-header-bar__sublabel {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   color: rgba(231, 230, 194, 0.6);
   line-height: 1.2;
 }
@@ -2362,20 +2358,62 @@ code {
   white-space: nowrap;
 }
 
-.lc-header-bar__actions {
+/* Baris 3: Tab Switcher & Tombol Pertahun */
+.lc-header-bar__controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-top: 0.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.lc-year-selector {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
-.lc-header-bar__tabs-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding-top: 0.15rem;
+.lc-year-selector__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(231, 230, 194, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lc-year-selector__pills {
+  display: inline-flex;
+  gap: 0.2rem;
+  padding: 0.15rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.lc-year-pill {
+  padding: 0.26rem 0.65rem;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: rgba(231, 230, 194, 0.7);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.lc-year-pill:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.lc-year-pill--active {
+  background: var(--color-red) !important;
+  color: #fff !important;
+  box-shadow: 0 1px 6px rgba(185, 34, 22, 0.4);
 }
 
 /* Map frame & full-bleed canvas */
@@ -2546,11 +2584,61 @@ code {
 
 /* Responsif Tutupan Lahan (<=900px) */
 @media (max-width: 900px) {
+  /* Sembunyikan topbar umum saat detail poligon dibuka di mobile/tablet agar layar lega */
+  .tl-shell--detail-active .tl-topbar {
+    display: none;
+  }
+
   .land-cover-panel--stage {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     height: 100%;
+  }
+
+  .lc-header-bar {
+    padding: 0.6rem 0.75rem 0.55rem;
+    gap: 0.45rem;
+  }
+
+  .lc-header-bar__nav-row {
+    gap: 0.5rem;
+  }
+
+  .lc-back-btn {
+    padding: 0.28rem 0.65rem;
+    font-size: 0.7rem;
+  }
+
+  .lc-header-bar__title {
+    font-size: 0.96rem;
+  }
+
+  .lc-header-bar__controls-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.45rem;
+  }
+
+  .lc-year-selector {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+  }
+
+  .lc-year-selector__pills {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .lc-year-pill {
+    flex: 1;
+    text-align: center;
+    padding: 0.28rem 0.25rem;
+    font-size: 0.72rem;
   }
 
   .lc-mapframe--mobile {
@@ -2566,8 +2654,8 @@ code {
     position: relative;
     inset: auto;
     width: 100%;
-    height: min(48vh, 380px);
-    min-height: 280px;
+    height: 50vh;
+    min-height: 300px;
     border-radius: 0.5rem;
     overflow: hidden;
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -2577,13 +2665,14 @@ code {
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
-    margin-top: 0.75rem;
-    padding: 0 0.25rem 1.5rem;
+    margin-top: 0.6rem;
+    padding: 0 0.25rem 2rem;
   }
 
   .lc-mobilecontrols .map-legend {
-    background: rgba(255, 255, 255, 0.04);
-    backdrop-filter: none;
+    background: rgba(26, 15, 9, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(8px);
   }
 }
 

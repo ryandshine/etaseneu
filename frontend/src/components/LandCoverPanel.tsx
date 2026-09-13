@@ -380,37 +380,30 @@ export function LandCoverPanel({
   // Dedicated non-overlapping header bar
   const headerBar = (
     <header className="lc-header-bar">
-      <div className="lc-header-bar__main">
-        <div className="lc-header-bar__info">
-          {onBack && (
-            <button
-              type="button"
-              className="lc-back-btn"
-              onClick={onBack}
-              aria-label="Kembali ke daftar poligon"
-            >
-              ← Kembali ke Daftar
-            </button>
-          )}
-          <div className="lc-header-bar__titles">
-            <div className="lc-header-bar__title-line">
-              <h3 className="lc-header-bar__title">{polygonLabel ?? "Tutupan Lahan"}</h3>
-              {outdatedFormula && (
-                <span
-                  className="lc-formula-old"
-                  title={`Dihitung dengan formula v${formulaVersion ?? 1}; server sekarang memakai v${currentFormulaVersion}. Hapus hasil lalu jalankan lagi untuk memperbarui.`}
-                >
-                  Metode lama (v{formulaVersion ?? 1})
-                </span>
-              )}
-            </div>
-            {polygonSublabel && (
-              <span className="lc-header-bar__sublabel">{polygonSublabel}</span>
-            )}
-          </div>
-        </div>
+      {/* Baris 1: Navigasi Kiri & Aksi Kanan */}
+      <div className="lc-header-bar__nav-row">
+        {onBack ? (
+          <button
+            type="button"
+            className="lc-back-btn"
+            onClick={onBack}
+            aria-label="Kembali ke daftar poligon"
+          >
+            ← Kembali ke Daftar
+          </button>
+        ) : (
+          <span />
+        )}
 
         <div className="lc-header-bar__actions">
+          {outdatedFormula && (
+            <span
+              className="lc-formula-old"
+              title={`Dihitung dengan formula v${formulaVersion ?? 1}; server sekarang memakai v${currentFormulaVersion}. Hapus hasil lalu jalankan lagi untuk memperbarui.`}
+            >
+              Metode lama (v{formulaVersion ?? 1})
+            </span>
+          )}
           {onOpenKpsDetail && (
             <button type="button" className="tl-detail-link" onClick={onOpenKpsDetail}>
               Lihat Detail KPS →
@@ -436,8 +429,17 @@ export function LandCoverPanel({
         </div>
       </div>
 
+      {/* Baris 2: Judul & Subtitle Poligon (Full Width) */}
+      <div className="lc-header-bar__title-block">
+        <h3 className="lc-header-bar__title">{polygonLabel ?? "Tutupan Lahan"}</h3>
+        {polygonSublabel && (
+          <span className="lc-header-bar__sublabel">{polygonSublabel}</span>
+        )}
+      </div>
+
+      {/* Baris 3: Tab & Tombol Pertahun */}
       {state === "done" && (
-        <div className="lc-header-bar__tabs-wrap">
+        <div className="lc-header-bar__controls-row">
           <div className="lc-tabs" role="tablist" aria-label="Tampilan tutupan lahan">
             <button
               type="button"
@@ -458,6 +460,25 @@ export function LandCoverPanel({
               Tren Historis
             </button>
           </div>
+
+          {tab === "peta" && (
+            <div className="lc-year-selector" role="group" aria-label="Pilih tahun analisis">
+              <span className="lc-year-selector__label">Tahun:</span>
+              <div className="lc-year-selector__pills">
+                {LAND_COVER_YEARS.map((y) => (
+                  <button
+                    key={y}
+                    type="button"
+                    className={`lc-year-pill${year === y ? " lc-year-pill--active" : ""}`}
+                    aria-pressed={year === y}
+                    onClick={() => setYear(y)}
+                  >
+                    {y}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </header>
