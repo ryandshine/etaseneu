@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Maximize, Minimize, Menu, X, Flame } from "lucide-react";
+import { Maximize, Minimize, Menu, X, Flame, ChevronDown, Minus } from "lucide-react";
 
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FilterPanel } from "./components/FilterPanel";
@@ -489,8 +489,9 @@ export default function App() {
   }, []);
   const [showPanels, setShowPanels] = useState(true);
   // Di mobile panel statistik disajikan sebagai sheet yang dibuka lewat tombol
-  // ringkas; di desktop state ini tidak berpengaruh (panelnya selalu tampil).
+  // ringkas; di desktop panel bisa di-minimize menjadi kapsul ringkas.
   const [statsOpen, setStatsOpen] = useState(false);
+  const [statsCollapsed, setStatsCollapsed] = useState(false);
   const {
     endDate,
     exportDashboard,
@@ -960,101 +961,138 @@ export default function App() {
 
                 <aside
                   id="panel-statistik-hotspot"
-                  className={`control-overlay control-overlay--top-right panel panel--stats${statsOpen ? " mobile-open" : ""}`}
+                  className={`control-overlay control-overlay--top-right panel panel--stats${statsOpen ? " mobile-open" : ""}${statsCollapsed ? " panel--stats-collapsed" : ""}`}
                   style={{ maxHeight: '100%', overflowY: 'auto', overflowX: 'hidden' }}
                 >
-                  <article className="metric-card" style={{ padding: '0.65rem 0.75rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem', marginBottom: '0.3rem' }}>
-                      <p className="metric-label" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0, fontSize: '0.72rem' }}>
-                        Titik Panas (FRP)
-                        <span title="Kategori Intensitas Panas (FRP)&#10;&#10;Tinggi: > 30 MW&#10;Sedang: 10–30 MW&#10;Rendah: < 10 MW&#10;&#10;FRP (Fire Radiative Power) menunjukkan tingkat energi panas yang dipancarkan oleh hotspot yang terdeteksi satelit." style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '13px', height: '13px', borderRadius: '50%', border: '1px solid currentColor', fontSize: '9px', flexShrink: 0 }}>i</span>
-                      </p>
-                      <button
-                        type="button"
-                        className="stats-panel-close"
-                        onClick={() => setShowPanels(false)}
-                        aria-label="Sembunyikan panel statistik"
-                        title="Sembunyikan Panel"
-                      >
-                        ×
-                      </button>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
-                      <strong className="metric-value" style={{ lineHeight: 1, fontSize: '2rem' }}>{stats.hotspotCount.toLocaleString()}</strong>
-                      <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>hotspot</span>
-                    </div>
-
-                    {stats.hotspotCount > 0 && (
-                      <>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginTop: '0.55rem', paddingBottom: '0.55rem', borderBottom: '1px solid rgba(255,255,255,0.08)', fontSize: '0.75rem', color: '#d1d5db' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span><span style={{ color: '#ef4444', marginRight: '0.3rem' }}>■</span>Tinggi</span>
-                            <span><strong style={{ color: '#ffffff' }}>{totalTinggi.toLocaleString()}</strong> <span style={{ color: '#6b7280' }}>({pct(totalTinggi)})</span></span>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span><span style={{ color: '#f59e0b', marginRight: '0.3rem' }}>■</span>Sedang</span>
-                            <span><strong style={{ color: '#ffffff' }}>{totalSedang.toLocaleString()}</strong> <span style={{ color: '#6b7280' }}>({pct(totalSedang)})</span></span>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span><span style={{ color: '#3b82f6', marginRight: '0.3rem' }}>■</span>Rendah</span>
-                            <span><strong style={{ color: '#ffffff' }}>{totalRendah.toLocaleString()}</strong> <span style={{ color: '#6b7280' }}>({pct(totalRendah)})</span></span>
-                          </div>
+                  {statsCollapsed ? (
+                    <button
+                      type="button"
+                      className="stats-mini-badge"
+                      onClick={() => setStatsCollapsed(false)}
+                      title="Buka panel statistik titik panas"
+                      aria-label="Buka statistik titik panas"
+                    >
+                      <Flame size={15} style={{ color: '#f59e0b' }} />
+                      <strong style={{ color: '#ffffff', fontSize: '0.85rem' }}>
+                        {(selectedWilker ? visibleHotspots.length : stats.hotspotCount).toLocaleString()}
+                      </strong>
+                      <span style={{ color: '#9ca3af', fontSize: '0.72rem' }}>hotspot</span>
+                      <ChevronDown size={14} style={{ color: '#9ca3af' }} />
+                    </button>
+                  ) : (
+                    <article className="metric-card" style={{ padding: '0.65rem 0.75rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem', marginBottom: '0.3rem' }}>
+                        <p className="metric-label" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0, fontSize: '0.72rem' }}>
+                          Titik Panas (FRP)
+                          <span title="Kategori Intensitas Panas (FRP)&#10;&#10;Tinggi: > 30 MW&#10;Sedang: 10–30 MW&#10;Rendah: < 10 MW&#10;&#10;FRP (Fire Radiative Power) menunjukkan tingkat energi panas yang dipancarkan oleh hotspot yang terdeteksi satelit." style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '13px', height: '13px', borderRadius: '50%', border: '1px solid currentColor', fontSize: '9px', flexShrink: 0 }}>i</span>
+                        </p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <button
+                            type="button"
+                            className="stats-panel-minimize"
+                            onClick={() => setStatsCollapsed(true)}
+                            aria-label="Kecilkan panel statistik"
+                            title="Kecilkan Panel"
+                          >
+                            <Minus size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className="stats-panel-close"
+                            onClick={() => setShowPanels(false)}
+                            aria-label="Sembunyikan panel statistik"
+                            title="Sembunyikan Panel"
+                          >
+                            ×
+                          </button>
                         </div>
+                      </div>
 
-                        <div style={{ marginTop: '0.55rem' }}>
-                          <p style={{ fontSize: '0.65rem', color: '#6b7280', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Distribusi per Satelit</p>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.7rem', color: '#ffffff', tableLayout: 'fixed' }}>
-                            <thead>
-                              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', color: '#9ca3af' }}>
-                                <th style={{ padding: '0.25rem 0', fontWeight: '500', width: '30%', textAlign: 'left', fontSize: '0.62rem' }}>Satelit</th>
-                                <th style={{ padding: '0.25rem 0', fontWeight: '500', color: '#ef4444', width: '17.5%', textAlign: 'center', fontSize: '0.62rem' }}>T</th>
-                                <th style={{ padding: '0.25rem 0', fontWeight: '500', color: '#f59e0b', width: '17.5%', textAlign: 'center', fontSize: '0.62rem' }}>S</th>
-                                <th style={{ padding: '0.25rem 0', fontWeight: '500', color: '#3b82f6', width: '17.5%', textAlign: 'center', fontSize: '0.62rem' }}>R</th>
-                                <th style={{ padding: '0.25rem 0', fontWeight: '500', width: '17.5%', textAlign: 'center', fontSize: '0.62rem' }}>∑</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {satelliteRows.map(([sat, rowStats]) => (
-                                <tr key={sat} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                                  <td style={{ padding: '0.25rem 0', fontWeight: '600', wordBreak: 'break-all', textAlign: 'left', fontSize: '0.65rem' }}>{sat}</td>
-                                  <td style={{ padding: '0.25rem 0', textAlign: 'center' }}>{rowStats.tinggi.toLocaleString()}</td>
-                                  <td style={{ padding: '0.25rem 0', textAlign: 'center' }}>{rowStats.sedang.toLocaleString()}</td>
-                                  <td style={{ padding: '0.25rem 0', textAlign: 'center' }}>{rowStats.rendah.toLocaleString()}</td>
-                                  <td style={{ padding: '0.25rem 0', textAlign: 'center', fontWeight: '600' }}>{rowStats.total.toLocaleString()}</td>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                        <strong className="metric-value" style={{ lineHeight: 1, fontSize: '2rem' }}>{stats.hotspotCount.toLocaleString()}</strong>
+                        <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>hotspot</span>
+                      </div>
+
+                      {stats.hotspotCount > 0 && (
+                        <>
+                          <div
+                            className="frp-ratio-bar"
+                            title={`Tinggi: ${totalTinggi.toLocaleString()} (${pct(totalTinggi)}), Sedang: ${totalSedang.toLocaleString()} (${pct(totalSedang)}), Rendah: ${totalRendah.toLocaleString()} (${pct(totalRendah)})`}
+                          >
+                            <div style={{ width: pct(totalTinggi), backgroundColor: '#ef4444' }} />
+                            <div style={{ width: pct(totalSedang), backgroundColor: '#f59e0b' }} />
+                            <div style={{ width: pct(totalRendah), backgroundColor: '#3b82f6' }} />
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginTop: '0.45rem', paddingBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', fontSize: '0.75rem', color: '#d1d5db' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span><span style={{ color: '#ef4444', marginRight: '0.3rem' }}>■</span>Tinggi</span>
+                              <span><strong style={{ color: '#ffffff' }}>{totalTinggi.toLocaleString()}</strong> <span style={{ color: '#6b7280' }}>({pct(totalTinggi)})</span></span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span><span style={{ color: '#f59e0b', marginRight: '0.3rem' }}>■</span>Sedang</span>
+                              <span><strong style={{ color: '#ffffff' }}>{totalSedang.toLocaleString()}</strong> <span style={{ color: '#6b7280' }}>({pct(totalSedang)})</span></span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span><span style={{ color: '#3b82f6', marginRight: '0.3rem' }}>■</span>Rendah</span>
+                              <span><strong style={{ color: '#ffffff' }}>{totalRendah.toLocaleString()}</strong> <span style={{ color: '#6b7280' }}>({pct(totalRendah)})</span></span>
+                            </div>
+                          </div>
+
+                          <div style={{ marginTop: '0.55rem' }}>
+                            <p style={{ fontSize: '0.65rem', color: '#6b7280', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Distribusi per Satelit</p>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.7rem', color: '#ffffff', tableLayout: 'fixed' }}>
+                              <thead>
+                                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', color: '#9ca3af' }}>
+                                  <th style={{ padding: '0.25rem 0', fontWeight: '500', width: '30%', textAlign: 'left', fontSize: '0.62rem' }}>Satelit</th>
+                                  <th style={{ padding: '0.25rem 0', fontWeight: '500', color: '#ef4444', width: '17.5%', textAlign: 'center', fontSize: '0.62rem' }}>T</th>
+                                  <th style={{ padding: '0.25rem 0', fontWeight: '500', color: '#f59e0b', width: '17.5%', textAlign: 'center', fontSize: '0.62rem' }}>S</th>
+                                  <th style={{ padding: '0.25rem 0', fontWeight: '500', color: '#3b82f6', width: '17.5%', textAlign: 'center', fontSize: '0.62rem' }}>R</th>
+                                  <th style={{ padding: '0.25rem 0', fontWeight: '500', width: '17.5%', textAlign: 'center', fontSize: '0.62rem' }}>∑</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                            <tfoot>
-                              <tr style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderTop: '1px solid rgba(255,255,255,0.15)' }}>
-                                <td style={{ padding: '0.3rem 0', fontWeight: '700', textAlign: 'left', fontSize: '0.65rem' }}>TOTAL</td>
-                                <td style={{ padding: '0.3rem 0', textAlign: 'center', fontWeight: '600' }}>{totalTinggi.toLocaleString()}</td>
-                                <td style={{ padding: '0.3rem 0', textAlign: 'center', fontWeight: '600' }}>{totalSedang.toLocaleString()}</td>
-                                <td style={{ padding: '0.3rem 0', textAlign: 'center', fontWeight: '600' }}>{totalRendah.toLocaleString()}</td>
-                                <td style={{ padding: '0.3rem 0', textAlign: 'center', fontWeight: '700' }}>{grandTotal.toLocaleString()}</td>
-                              </tr>
-                            </tfoot>
-                          </table>
-                        </div>
+                              </thead>
+                              <tbody>
+                                {satelliteRows.map(([sat, rowStats]) => (
+                                  <tr key={sat} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                    <td style={{ padding: '0.25rem 0', fontWeight: '600', wordBreak: 'break-all', textAlign: 'left', fontSize: '0.65rem' }}>{sat}</td>
+                                    <td style={{ padding: '0.25rem 0', textAlign: 'center' }}>{rowStats.tinggi.toLocaleString()}</td>
+                                    <td style={{ padding: '0.25rem 0', textAlign: 'center' }}>{rowStats.sedang.toLocaleString()}</td>
+                                    <td style={{ padding: '0.25rem 0', textAlign: 'center' }}>{rowStats.rendah.toLocaleString()}</td>
+                                    <td style={{ padding: '0.25rem 0', textAlign: 'center', fontWeight: '600' }}>{rowStats.total.toLocaleString()}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot>
+                                <tr style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderTop: '1px solid rgba(255,255,255,0.15)' }}>
+                                  <td style={{ padding: '0.3rem 0', fontWeight: '700', textAlign: 'left', fontSize: '0.65rem' }}>TOTAL</td>
+                                  <td style={{ padding: '0.3rem 0', textAlign: 'center', fontWeight: '600' }}>{totalTinggi.toLocaleString()}</td>
+                                  <td style={{ padding: '0.3rem 0', textAlign: 'center', fontWeight: '600' }}>{totalSedang.toLocaleString()}</td>
+                                  <td style={{ padding: '0.3rem 0', textAlign: 'center', fontWeight: '600' }}>{totalRendah.toLocaleString()}</td>
+                                  <td style={{ padding: '0.3rem 0', textAlign: 'center', fontWeight: '700' }}>{grandTotal.toLocaleString()}</td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
 
-                        <div style={{ marginTop: '0.55rem', paddingTop: '0.55rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                          <p style={{ fontSize: '0.65rem', color: '#6b7280', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Insight</p>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem', fontSize: '0.72rem' }}>
-                            <div style={{ backgroundColor: 'rgba(255,255,255,0.04)', padding: '0.45rem 0.5rem', borderRadius: '5px' }}>
-                              <span style={{ color: '#6b7280', display: 'block', marginBottom: '0.15rem', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Satelit</span>
-                              <strong style={{ color: '#ffffff', display: 'block', fontSize: '0.78rem', wordBreak: 'break-word' }}>{dominantSat.name}</strong>
-                              <span style={{ color: '#6b7280', fontSize: '0.65rem' }}>{dominantSat.count.toLocaleString()}</span>
-                            </div>
-                            <div style={{ backgroundColor: 'rgba(255,255,255,0.04)', padding: '0.45rem 0.5rem', borderRadius: '5px' }}>
-                              <span style={{ color: '#6b7280', display: 'block', marginBottom: '0.15rem', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Conf</span>
-                              <strong style={{ color: '#ffffff', display: 'block', fontSize: '0.78rem' }}>{dominantConf.name}</strong>
-                              <span style={{ color: '#6b7280', fontSize: '0.65rem' }}>{dominantConf.pct}</span>
+                          <div style={{ marginTop: '0.55rem', paddingTop: '0.55rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                            <p style={{ fontSize: '0.65rem', color: '#6b7280', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Insight</p>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem', fontSize: '0.72rem' }}>
+                              <div style={{ backgroundColor: 'rgba(255,255,255,0.04)', padding: '0.45rem 0.5rem', borderRadius: '5px' }}>
+                                <span style={{ color: '#6b7280', display: 'block', marginBottom: '0.15rem', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Satelit</span>
+                                <strong style={{ color: '#ffffff', display: 'block', fontSize: '0.78rem', wordBreak: 'break-word' }}>{dominantSat.name}</strong>
+                                <span style={{ color: '#6b7280', fontSize: '0.65rem' }}>{dominantSat.count.toLocaleString()}</span>
+                              </div>
+                              <div style={{ backgroundColor: 'rgba(255,255,255,0.04)', padding: '0.45rem 0.5rem', borderRadius: '5px' }}>
+                                <span style={{ color: '#6b7280', display: 'block', marginBottom: '0.15rem', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Conf</span>
+                                <strong style={{ color: '#ffffff', display: 'block', fontSize: '0.78rem' }}>{dominantConf.name}</strong>
+                                <span style={{ color: '#6b7280', fontSize: '0.65rem' }}>{dominantConf.pct}</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </>
-                    )}
-                  </article>
+                        </>
+                      )}
+                    </article>
+                  )}
                 </aside>
             </div>
 

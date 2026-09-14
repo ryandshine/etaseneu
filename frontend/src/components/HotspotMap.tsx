@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { authFetch } from "../lib/api";
 import { formatHectares } from "../lib/hotspotDisplay";
 import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
-import { Clock, Flame, LocateFixed, Trees } from "lucide-react";
+import { ChevronDown, Clock, Flame, LocateFixed, Trees } from "lucide-react";
 import { useHotspotTimeline } from "../hooks/useHotspotTimeline";
 import { opacityForBucket } from "../lib/hotspotTimeline";
 import { applyMarkerOpacity, type HotspotMarkerLayer } from "../lib/leafletMarkerOpacity";
@@ -475,6 +475,7 @@ export function HotspotMap({
   const userLocation = useUserLocationWatch(showUserLocation);
   const userWeatherAnchor = useThrottledWeatherAnchor(userLocation.position);
   const [mapStyle, setMapStyle] = useState<"dark" | "satellite">("dark");
+  const [legendOpen, setLegendOpen] = useState(true);
   // Default nyala: pengguna ingin langsung tahu KPS mana yang terdampak
   // bekas kebakaran begitu buka peta, tanpa perlu tahu dulu ada tombol
   // togglenya (ikon api di sudut kiri atas kurang gampang ditemukan sendiri).
@@ -801,26 +802,39 @@ export function HotspotMap({
         </div>
       </div>
 
-      <div className="map-legend">
-        <span className="map-legend-title">Legenda</span>
-        <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#B92216" }} />MODIS</div>
-        <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#facc15" }} />VIIRS</div>
-        <div className="map-legend-row"><span className="map-legend-dot map-legend-dot--pulse" />FRP tinggi (&gt;30MW)</div>
-        {showBurnedArea && burnedArea.data ? (
-          <>
-            <div className="map-legend-divider" />
-            <div className="map-legend-row">
-              <span className="map-legend-swatch" style={{ background: "rgba(220,38,38,0.5)", borderColor: "#dc2626" }} />
-              Bekas terbakar
-            </div>
-            {burnedArea.data.features.some((feature) => feature.properties.is_estimated) ? (
-              <div className="map-legend-row">
-                <span className="map-legend-swatch map-legend-swatch--estimated" />
-                Perkiraan lokasi
-              </div>
+      <div className={`map-legend${legendOpen ? "" : " map-legend--collapsed"}`}>
+        <button
+          type="button"
+          className="map-legend-toggle"
+          onClick={() => setLegendOpen((prev) => !prev)}
+          aria-expanded={legendOpen}
+          aria-label="Toggle legenda peta"
+        >
+          <span className="map-legend-title">Legenda</span>
+          <ChevronDown size={13} className={`map-legend-chevron${legendOpen ? " is-open" : ""}`} />
+        </button>
+        {legendOpen && (
+          <div className="map-legend-body">
+            <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#B92216" }} />MODIS</div>
+            <div className="map-legend-row"><span className="map-legend-dot" style={{ background: "#facc15" }} />VIIRS</div>
+            <div className="map-legend-row"><span className="map-legend-dot map-legend-dot--pulse" />FRP tinggi (&gt;30MW)</div>
+            {showBurnedArea && burnedArea.data ? (
+              <>
+                <div className="map-legend-divider" />
+                <div className="map-legend-row">
+                  <span className="map-legend-swatch" style={{ background: "rgba(220,38,38,0.5)", borderColor: "#dc2626" }} />
+                  Bekas terbakar
+                </div>
+                {burnedArea.data.features.some((feature) => feature.properties.is_estimated) ? (
+                  <div className="map-legend-row">
+                    <span className="map-legend-swatch map-legend-swatch--estimated" />
+                    Perkiraan lokasi
+                  </div>
+                ) : null}
+              </>
             ) : null}
-          </>
-        ) : null}
+          </div>
+        )}
       </div>
       </div>
       ) : null}

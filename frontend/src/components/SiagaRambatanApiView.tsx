@@ -18,7 +18,9 @@ import {
   X,
   ChevronLeft,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
 import { CircleMarker, GeoJSON, MapContainer, Polyline, Popup, TileLayer, ZoomControl, useMap } from "react-leaflet";
 import L from "leaflet";
@@ -177,12 +179,14 @@ function MapViewportController({
   hotspots,
   focusTrigger,
   isDrawerOpen,
+  isMapExpanded,
 }: {
   polygonId: number | null;
   geometry: any;
   hotspots: ThreatDetailHotspot[];
   focusTrigger: number;
   isDrawerOpen: boolean;
+  isMapExpanded?: boolean;
 }) {
   const map = useMap();
 
@@ -204,9 +208,9 @@ function MapViewportController({
       if (bounds.isValid()) {
         const containerWidth = typeof map?.getSize === "function" ? map.getSize().x : (typeof window !== "undefined" ? window.innerWidth : 1200);
         const isDesktop = containerWidth > 1080;
-        // Pada desktop: lebar sliding drawer panel ~390px, geser canvas sebesar drawerOffset / 2.
+        // Pada desktop: lebar sliding drawer panel ~360px, geser canvas sebesar drawerOffset / 2.
         // Pada mobile: drawer berbentuk bottom sheet, padding horizontal tetap seimbang.
-        const drawerOffset = (isDesktop && isDrawerOpen) ? Math.min(410, Math.floor(containerWidth * 0.52)) : 0;
+        const drawerOffset = (isDesktop && isDrawerOpen) ? Math.min(380, Math.floor(containerWidth * 0.45)) : 0;
 
         const options: L.FitBoundsOptions = {
           paddingTopLeft: isDesktop ? [45, 45] : [24, 24],
@@ -224,7 +228,7 @@ function MapViewportController({
     } catch (err) {
       console.warn("Gagal fly ke poligon KPS:", err);
     }
-  }, [polygonId, geometry, hotspots, focusTrigger, isDrawerOpen, map]);
+  }, [polygonId, geometry, hotspots, focusTrigger, isDrawerOpen, isMapExpanded, map]);
 
   return null;
 }
@@ -258,6 +262,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
     return true;
   });
   const [isLegendOpen, setIsLegendOpen] = useState<boolean>(false);
+  const [isMapExpanded, setIsMapExpanded] = useState<boolean>(false);
 
   // 1. Fetch summary & threats
   const fetchData = async () => {
@@ -660,7 +665,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
       </div>
 
       {/* Main Layout: Left Column (Threat List) + Right Column (Sticky Interactive Map) */}
-      <div className="fs-main-grid">
+      <div className={`fs-main-grid ${isMapExpanded ? "fs-main-grid--expanded" : ""}`}>
         {/* Left Column: Daftar KPS Terancam */}
         <div className="fs-list-column">
           <div className="fs-list-header">
@@ -871,6 +876,18 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                   />
                 </button>
               )}
+
+              {/* Tombol Perbesar / Perkecil Peta */}
+              <button
+                type="button"
+                onClick={() => setIsMapExpanded((prev) => !prev)}
+                className={`fs-expand-map-btn ${isMapExpanded ? "fs-expand-map-btn--active" : ""}`}
+                title={isMapExpanded ? "Kembalikan ukuran normal (tampilkan daftar KPS)" : "Perbesar tampilan peta penuh"}
+                aria-label={isMapExpanded ? "Perkecil peta" : "Perbesar peta"}
+              >
+                {isMapExpanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+                <span>{isMapExpanded ? "Normal" : "Perbesar"}</span>
+              </button>
             </div>
           </div>
 
@@ -1246,6 +1263,7 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                 hotspots={threatDetail?.hotspots ?? []}
                 focusTrigger={focusTrigger}
                 isDrawerOpen={isDrawerOpen}
+                isMapExpanded={isMapExpanded}
               />
 
               {/* Visualisasi Poligon KPS Bersebelahan / Sekitar (Indigo Putus-putus) */}
@@ -1464,61 +1482,58 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
               })}
             </MapContainer>
 
-            {/* Legenda Peta Ringkas (Collapsible di Mobile) */}
+            {/* Legenda Peta Ringkas (Collapsible di Mobile & Desktop) */}
             <div className={`fs-map-legend ${isLegendOpen ? "fs-map-legend--open" : ""}`} aria-label="Legenda peta rambatan api">
               <button
                 type="button"
                 className="fs-map-legend__toggle"
                 onClick={() => setIsLegendOpen((open) => !open)}
                 aria-expanded={isLegendOpen}
+                aria-label="Toggle legenda peta"
               >
                 <span className="fs-map-legend__toggle-label">
-                  <span className="fs-map-legend__toggle-title">Legenda Peta</span>
+                  <span className="fs-map-legend__toggle-title">Legenda</span>
                   <span className="fs-map-legend__toggle-sub">8 simbol</span>
                 </span>
                 <ChevronDown
-                  size={14}
+                  size={13}
                   className={`fs-map-legend__chevron ${isLegendOpen ? "fs-map-legend__chevron--open" : ""}`}
                   aria-hidden="true"
                 />
               </button>
 
-              <div className="fs-map-legend-title">
-                Legenda Peta:
-              </div>
-
               <div className="fs-map-legend__grid">
-                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                  <span style={{ width: "14px", height: "3px", backgroundColor: "#B92216", border: "1px dashed #8A1A10" }} />
-                  <span>Batas Kawasan KPS (Terpilih)</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  <span style={{ width: "12px", height: "3px", backgroundColor: "#B92216", border: "1px dashed #8A1A10", flexShrink: 0 }} />
+                  <span>Batas KPS (Terpilih)</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                  <span style={{ width: "14px", height: "3px", backgroundColor: "#818cf8", border: "1px dashed #6366f1" }} />
-                  <span>Batas KPS Bersebelahan / Sekitar</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  <span style={{ width: "12px", height: "3px", backgroundColor: "#818cf8", border: "1px dashed #6366f1", flexShrink: 0 }} />
+                  <span>Batas KPS Sekitar</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                  <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: "#f43f5e", border: "2px solid #fff" }} />
-                  <span style={{ color: "#fda4af", fontWeight: "600" }}>Hotspot di DALAM Kawasan</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#f43f5e", border: "1.5px solid #fff", flexShrink: 0 }} />
+                  <span style={{ color: "#fda4af", fontWeight: "600" }}>Di DALAM Kawasan</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                  <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#ef4444", border: "1.5px solid #fff" }} />
-                  <span>Hotspot Luar &lt; 1 km (Kritis)</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#ef4444", border: "1px solid #fff", flexShrink: 0 }} />
+                  <span>Hotspot &lt; 1 km (Kritis)</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                  <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#f97316", border: "1.5px solid #fff" }} />
-                  <span>Hotspot Luar 1–3 km (Waspada)</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#f97316", border: "1px solid #fff", flexShrink: 0 }} />
+                  <span>Hotspot 1–3 km (Waspada)</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                  <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#eab308", border: "1.5px solid #fff" }} />
-                  <span>Hotspot Luar 3–5 km (Pantau)</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#eab308", border: "1px solid #fff", flexShrink: 0 }} />
+                  <span>Hotspot 3–5 km (Pantau)</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                  <span style={{ width: "14px", height: "2px", borderTop: "2px dashed #ef4444" }} />
-                  <span>Vektor Rambatan Terdekat</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  <span style={{ width: "12px", height: "2px", borderTop: "2px dashed #ef4444", flexShrink: 0 }} />
+                  <span>Vektor Rambatan</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#00f0ff", border: "1.5px solid #fff" }} />
-                  <span>Titik Masuk Batas Terdekat</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#00f0ff", border: "1px solid #fff", flexShrink: 0 }} />
+                  <span>Titik Masuk Batas</span>
                 </div>
               </div>
             </div>
