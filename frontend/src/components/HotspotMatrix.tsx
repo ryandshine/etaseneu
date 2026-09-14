@@ -432,15 +432,17 @@ function SkemaProvinsiCard({
 }
 
 function renderCompactCard(title: string, data: any[], total: number, activeLabel: string | null = null, onClick: ((label: string | null) => void) | null = null) {
-  const maxVal = Math.max(...data.map(d => d.value), 1);
+  const isKawasan = title.toLowerCase().includes('kawasan');
+  const displayData = isKawasan ? data.slice(0, 4) : data;
+  const maxVal = Math.max(...displayData.map(d => d.value), 1);
   const domCategory = [...data].sort((a, b) => b.value - a.value)[0];
   
   return (
-    <section className="matrix-chart-card glass-panel" style={{ display: 'flex', flexDirection: 'column', height: 'auto', minHeight: 'unset' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+    <section className="matrix-chart-card glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.85rem', minHeight: '3.25rem' }}>
         <div>
-          <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#fff', marginBottom: '0.25rem' }}>{title}</h3>
-          <p style={{ fontSize: '0.8rem', color: '#9ca3af' }}>Total Hotspot: <strong style={{ color: '#fff' }}>{total}</strong></p>
+          <h3 style={{ fontSize: '0.95rem', fontWeight: '600', color: '#fff', marginBottom: '0.2rem', lineHeight: 1.25 }}>{title}</h3>
+          <p style={{ fontSize: '0.78rem', color: '#9ca3af' }}>Total Hotspot: <strong style={{ color: '#fff' }}>{total.toLocaleString('id-ID')}</strong></p>
         </div>
         {activeLabel && onClick && (
           <button type="button" className="matrix-inline-action" onClick={() => onClick(null)}>
@@ -449,8 +451,8 @@ function renderCompactCard(title: string, data: any[], total: number, activeLabe
         )}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-        {data.map((item) => {
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', flex: 1 }}>
+        {displayData.map((item) => {
           const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
           const barWidth = Math.max((item.value / maxVal) * 100, 2);
           const isSelected = activeLabel === item.label;
@@ -489,7 +491,7 @@ function renderCompactCard(title: string, data: any[], total: number, activeLabe
                   {item.label}
                 </span>
                 <span style={{ color: '#ffffff', fontWeight: '700', fontSize: '0.82rem', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-                  {item.value.toLocaleString()}{" "}
+                  {item.value.toLocaleString('id-ID')}{" "}
                   <span style={{ color: '#9ca3af', fontWeight: '400', fontSize: '0.74rem' }}>
                     ({pct}%)
                   </span>
@@ -523,11 +525,15 @@ function renderCompactCard(title: string, data: any[], total: number, activeLabe
         })}
       </div>
 
-      {(title.toLowerCase().includes('confidence') || title.toLowerCase().includes('frp')) && (
-        <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.08)', fontSize: '0.75rem', color: '#9ca3af', lineHeight: 1.5 }}>
-          Mayoritas hotspot memiliki {title.toLowerCase().includes('confidence') ? 'confidence' : 'intensitas FRP'} <strong style={{ color: '#fff' }}>{domCategory?.label || '-'}</strong> ({total > 0 ? Math.round(((domCategory?.value || 0) / total) * 100) : 0}%).
-        </div>
-      )}
+      <div style={{ marginTop: 'auto', paddingTop: '0.85rem', borderTop: '1px solid rgba(255,255,255,0.08)', fontSize: '0.75rem', color: '#9ca3af', lineHeight: 1.4 }}>
+        {title.toLowerCase().includes('confidence') ? (
+          <>Mayoritas hotspot memiliki confidence <strong style={{ color: '#fff' }}>{domCategory?.label || '-'}</strong> ({total > 0 ? Math.round(((domCategory?.value || 0) / total) * 100) : 0}%).</>
+        ) : title.toLowerCase().includes('frp') ? (
+          <>Mayoritas hotspot memiliki intensitas FRP <strong style={{ color: '#fff' }}>{domCategory?.label || '-'}</strong> ({total > 0 ? Math.round(((domCategory?.value || 0) / total) * 100) : 0}%).</>
+        ) : (
+          <>Mayoritas titik berada di <strong style={{ color: '#fff' }}>{domCategory?.label || '-'}</strong> ({total > 0 ? Math.round(((domCategory?.value || 0) / total) * 100) : 0}%).</>
+        )}
+      </div>
     </section>
   );
 }
@@ -540,24 +546,25 @@ function formatHa(value: number): string {
 }
 
 function renderKawasanBurnedCard(data: BurnedAreaKawasanResponse | null) {
-  const rows = data?.rows ?? [];
+  const allRows = data?.rows ?? [];
+  const rows = allRows.slice(0, 4);
   const totalHa = data?.total_ha ?? 0;
   const maxVal = Math.max(...rows.map((row) => row.luas_ha), 1);
-  const dominant = [...rows].sort((a, b) => b.luas_ha - a.luas_ha)[0];
+  const dominant = [...allRows].sort((a, b) => b.luas_ha - a.luas_ha)[0];
 
   return (
-    <section className="matrix-chart-card glass-panel" style={{ display: 'flex', flexDirection: 'column', height: 'auto', minHeight: 'unset' }}>
-      <div style={{ marginBottom: '1rem' }}>
-        <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#fff', marginBottom: '0.25rem' }}>Luas Kebakaran per Kawasan Hutan</h3>
-        <p style={{ fontSize: '0.8rem', color: '#9ca3af' }}>
+    <section className="matrix-chart-card glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ marginBottom: '0.85rem', minHeight: '3.25rem' }}>
+        <h3 style={{ fontSize: '0.95rem', fontWeight: '600', color: '#fff', marginBottom: '0.2rem', lineHeight: 1.25 }}>Luas Terbakar Kawasan</h3>
+        <p style={{ fontSize: '0.78rem', color: '#9ca3af' }}>
           Total: <strong style={{ color: '#fff' }}>{formatHa(totalHa)} Ha</strong>
         </p>
       </div>
 
       {rows.length === 0 ? (
-        <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>Belum ada data luas terbakar untuk pilihan ini.</p>
+        <p style={{ fontSize: '0.85rem', color: '#9ca3af', flex: 1 }}>Belum ada data luas terbakar untuk pilihan ini.</p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', flex: 1 }}>
           {rows.map((row) => {
             const pct = totalHa > 0 ? Math.round((row.luas_ha / totalHa) * 100) : 0;
             const barWidth = Math.max((row.luas_ha / maxVal) * 100, 2);
@@ -614,11 +621,12 @@ function renderKawasanBurnedCard(data: BurnedAreaKawasanResponse | null) {
         </div>
       )}
 
-      <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.08)', fontSize: '0.75rem', color: '#9ca3af', lineHeight: 1.5 }}>
+      <div style={{ marginTop: 'auto', paddingTop: '0.85rem', borderTop: '1px solid rgba(255,255,255,0.08)', fontSize: '0.75rem', color: '#9ca3af', lineHeight: 1.4 }}>
         {dominant ? (
-          <>Terbanyak di <strong style={{ color: '#fff' }}>{shortKawasanLabel(dominant.fungsi)}</strong>. </>
-        ) : null}
-        Sumber: {data?.source ?? "Kementerian Kehutanan"} · {data?.period ?? "Januari–Juli 2026"}. Satuan hektar, tidak sebanding langsung dengan jumlah titik panas.
+          <>Terbanyak di <strong style={{ color: '#fff' }}>{shortKawasanLabel(dominant.fungsi)}</strong> ({totalHa > 0 ? Math.round((dominant.luas_ha / totalHa) * 100) : 0}%). </>
+        ) : (
+          <span>Data per kawasan belum tercatat.</span>
+        )}
       </div>
     </section>
   );
@@ -1406,8 +1414,8 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
 
             {/* ROW 3: SIDE-BY-SIDE ANALYTICS CHARTS (Wilker & Tren Volume) */}
             <div className="matrix-charts-row">
-              <section className="matrix-chart-card glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>
-                <div className="matrix-chart-card__header">
+              <section className="matrix-chart-card glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <div className="matrix-chart-card__header" style={{ minHeight: '3.25rem', marginBottom: '0.75rem' }}>
                   <div>
                     <p className="panel-eyebrow">Peringkat WILKER</p>
                     <h3>Hotspot per WILKER</h3>
@@ -1415,11 +1423,11 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                 </div>
 
                 {topWilker.length === 0 ? (
-                  <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Data hotspot tidak tersedia</div>
+                  <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '320px' }}>Data hotspot tidak tersedia</div>
                 ) : (
-                  <div style={{ width: '100%', height: 'clamp(240px, 50vw, 360px)', position: 'relative' }}>
+                  <div style={{ width: '100%', height: '320px', position: 'relative', flex: 1 }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={topWilker} layout="horizontal" margin={{ top: 28, right: 32, left: 16, bottom: 58 }} onClick={(state) => {
+                      <BarChart data={topWilker} layout="horizontal" margin={{ top: 28, right: 32, left: 36, bottom: 58 }} onClick={(state) => {
                         if (state && state.activeLabel) {
                           const label = String(state.activeLabel);
                           setWilkerFilter(label === wilkerFilter ? "" : label);
@@ -1453,25 +1461,22 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                 )}
               </section>
 
-              <section className="matrix-chart-card glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>
-                <div className="matrix-chart-card__header">
+              <section className="matrix-chart-card glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <div className="matrix-chart-card__header" style={{ minHeight: '3.25rem', marginBottom: '0.75rem' }}>
                   <div>
                     <p className="panel-eyebrow">Analitik Tren</p>
                     <h3>{trendGroupBy === 'month' ? 'Tren Volume Bulanan' : 'Tren Volume Harian'}</h3>
                   </div>
                 </div>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                  <p className="matrix-spark-title" style={{ flexShrink: 0, marginBottom: '12px' }}>
-                    {trendGroupBy === 'month' ? 'Volume Insiden Bulanan' : 'Volume Insiden Harian'}
-                  </p>
                   {dailyTrend.length === 0 ? (
-                    <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '240px', color: '#9ca3af' }}>
+                    <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '320px', color: '#9ca3af' }}>
                       Belum tersedia data untuk rentang waktu yang dipilih.
                     </div>
                   ) : (
-                    <div style={{ width: '100%', height: 'clamp(200px, 45vw, 380px)', position: 'relative' }}>
+                    <div style={{ width: '100%', height: '320px', position: 'relative', flex: 1 }}>
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={dailyTrend} margin={{ top: 24, right: 38, left: 4, bottom: 8 }} onClick={(state) => {
+                        <AreaChart data={dailyTrend} margin={{ top: 28, right: 38, left: 4, bottom: 8 }} onClick={(state) => {
                           if (state && state.activeLabel) {
                             const label = String(state.activeLabel);
                             setSelectedPeriod(label === selectedPeriod ? null : label);
