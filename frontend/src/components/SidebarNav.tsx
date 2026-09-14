@@ -15,8 +15,8 @@ type SidebarNavProps = {
   // "kps" (detail satu KPS dibuka dari Buku Besar) bukan tujuan navigasi
   // sidebar, tapi activeView tetap perlu menerimanya supaya perbandingan
   // "active" di bawah tidak salah tipe saat halaman itu sedang tampil.
-  activeView: "map" | "matrix" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "firespread" | "settings" | "kps";
-  onChangeView: (view: "map" | "matrix" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "firespread" | "settings") => void;
+  activeView: "map" | "matrix" | "kpscatalog" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "firespread" | "settings" | "kps";
+  onChangeView: (view: "map" | "matrix" | "kpscatalog" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "firespread" | "settings") => void;
   onManualSync: () => void;
   onPrewarmHistory: () => void;
   onLogout: () => void;
@@ -114,6 +114,9 @@ export function SidebarNav({
           </NavButton>
           <NavButton active={activeView === "matrix"} onClick={() => onChangeView("matrix")}>
             Matriks Data
+          </NavButton>
+          <NavButton active={activeView === "kpscatalog"} onClick={() => onChangeView("kpscatalog")}>
+            Data KPS
           </NavButton>
           <NavButton active={activeView === "pointmatch"} onClick={() => onChangeView("pointmatch")}>
             Cek Titik ke KPS

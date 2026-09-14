@@ -19,6 +19,7 @@ from app.api.wind import router as wind_router
 from app.api.weather import router as weather_router
 from app.api.early_warning import router as early_warning_router
 from app.api.fire_spread import router as fire_spread_router
+from app.api.kps_catalog import router as kps_catalog_router
 
 
 # Gate baca opsional (flag API_REQUIRE_AUTH). Dipasang di router BACA saja.
@@ -32,6 +33,7 @@ router = APIRouter()
 router.include_router(auth_router)
 router.include_router(layers_router, dependencies=_read_gate)
 router.include_router(polygons_router, dependencies=_read_gate)
+router.include_router(kps_catalog_router, dependencies=_read_gate)
 router.include_router(point_match_router, dependencies=_read_gate)
 router.include_router(hotspots_router, dependencies=_read_gate)
 router.include_router(hotspot_clusters_router, dependencies=_read_gate)

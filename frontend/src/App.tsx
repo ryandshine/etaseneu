@@ -10,7 +10,7 @@ import { useDashboardData } from "./hooks/useDashboardData";
 import { setAuthToken, setUnauthorizedHandler } from "./lib/api";
 import { clearDashboardCache } from "./lib/dashboardPersistence";
 import { getTodayWIB, formatDateTimeWIB } from "./lib/date";
-import type { AppSession } from "./types/api";
+import type { AppSession, KpsCatalogItem } from "./types/api";
 
 const HotspotMap = lazy(async () => {
   const module = await import("./components/HotspotMap");
@@ -20,6 +20,11 @@ const HotspotMap = lazy(async () => {
 const HotspotMatrix = lazy(async () => {
   const module = await import("./components/HotspotMatrix");
   return { default: module.HotspotMatrix };
+});
+
+const KpsCatalogView = lazy(async () => {
+  const module = await import("./components/KpsCatalogView");
+  return { default: module.KpsCatalogView };
 });
 
 const KpsDetailView = lazy(async () => {
@@ -61,11 +66,12 @@ function isSchedulerFailureStatus(status?: string | null): boolean {
   return status === "failure" || status === "failed";
 }
 
-type AppView = "map" | "matrix" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "firespread" | "settings" | "kps";
+type AppView = "map" | "matrix" | "kpscatalog" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "firespread" | "settings" | "kps";
 
 const VIEW_TITLES: Record<AppView, string> = {
   map: "Live Map",
   matrix: "Matriks Data",
+  kpscatalog: "Data KPS",
   pointmatch: "Cek Titik ke KPS",
   kompleks: "Kompleks Kebakaran",
   landcover: "Tutupan Lahan",
@@ -140,6 +146,9 @@ function readViewFromUrl(): AppView {
   const view = params.get("view");
   if (view === "matrix") {
     return "matrix";
+  }
+  if (view === "kpscatalog") {
+    return "kpscatalog";
   }
   if (view === "pointmatch") {
     return "pointmatch";
@@ -275,6 +284,10 @@ export default function App() {
   const [showWind, setShowWind] = useState(false);
   const [weatherOverlay, setWeatherOverlay] = useState<"temperature" | "humidity" | "precipitation" | "soil_moisture" | "fwi" | null>(null);
   const [activeView, setActiveView] = useState<AppView>(readViewFromUrl);
+  const [kpsReturnView, setKpsReturnView] = useState<AppView>(() => {
+    const v = readViewFromUrl();
+    return v === "kpscatalog" ? "kpscatalog" : "matrix";
+  });
   const [kpsAgency, setKpsAgency] = useState<string | null>(readKpsAgencyFromUrl);
   const [kpsPolygonId, setKpsPolygonId] = useState<number | null>(() => {
     return readViewFromUrl() === "kps" ? readKpsPolygonIdFromUrl() : null;
@@ -392,7 +405,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     params.delete("kps");
     params.delete("polygon");
-    if (view === "matrix" || view === "pointmatch" || view === "kompleks" || view === "landcover") {
+    if (view === "matrix" || view === "kpscatalog" || view === "pointmatch" || view === "kompleks" || view === "landcover" || view === "earlywarning" || view === "firespread") {
       params.set("view", view);
     } else {
       params.delete("view");
@@ -411,7 +424,7 @@ export default function App() {
     commitViewChange(view);
   };
 
-  // Dipicu dari klik baris KPS di Buku Besar / Tutupan Lahan / Peringatan Dini --
+  // Dipicu dari klik baris KPS di Data KPS / Buku Besar / Tutupan Lahan / Peringatan Dini --
   // beda dari commitViewChange karena butuh menulis nama KPS (dan polygon ID jika ada)
   // juga ke URL supaya tautan halaman detail ini bisa dibagikan/di-bookmark.
   // `useCallback` supaya `HotspotMarkersLayer` (React.memo di HotspotMap)
@@ -420,7 +433,12 @@ export default function App() {
   const openKpsDetail = useCallback((agency: string, polygonId?: number) => {
     setKpsAgency(agency);
     setKpsPolygonId(polygonId ?? null);
-    setActiveView("kps");
+    setActiveView((curr) => {
+      if (curr !== "kps") {
+        setKpsReturnView(curr);
+      }
+      return "kps";
+    });
     const params = new URLSearchParams(window.location.search);
     params.set("view", "kps");
     params.set("kps", agency);
@@ -430,6 +448,13 @@ export default function App() {
       params.delete("polygon");
     }
     window.history.pushState({}, "", `?${params.toString()}`);
+  }, []);
+
+  const handleOpenMapFromCatalog = useCallback((item: KpsCatalogItem) => {
+    if (item.nama_prov && item.nama_prov !== "—") {
+      setSelectedProvince(item.nama_prov);
+    }
+    commitViewChange("map");
   }, []);
 
   // Dipicu dari baris ringkas "Tutupan Lahan" di Detail KPS -- beda dari
@@ -1136,6 +1161,15 @@ export default function App() {
               />
             </Suspense>
           </section>
+        ) : activeView === "kpscatalog" ? (
+          <section aria-label="Data KPS workspace" className="workspace-stage workspace-stage--kpscatalog">
+            <Suspense fallback={<ViewLoader label="Memuat direktori data KPS..." />}>
+              <KpsCatalogView
+                onOpenKpsDetail={openKpsDetail}
+                onOpenMap={handleOpenMapFromCatalog}
+              />
+            </Suspense>
+          </section>
         ) : activeView === "pointmatch" ? (
           <section aria-label="Cek titik ke KPS workspace" className="workspace-stage workspace-stage--pointmatch">
             <Suspense fallback={<ViewLoader label="Memuat alat cek titik..." />}>
@@ -1182,7 +1216,7 @@ export default function App() {
                   agency={kpsAgency}
                   initialPolygonId={kpsPolygonId}
                   hotspots={hotspots}
-                  onClose={() => commitViewChange("matrix")}
+                  onClose={() => commitViewChange(kpsReturnView)}
                   onExportPdf={(filters) => void exportPdf(filters)}
                   isExportingPdf={isExportingPdf}
                   onOpenTutupanLahan={openTutupanLahan}

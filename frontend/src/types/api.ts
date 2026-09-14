@@ -439,3 +439,56 @@ export interface ApiClient {
     }
   ) => Promise<SurroundingHotspotResponse>;
 }
+
+export interface KpsCatalogItem {
+  id: number;
+  layer_key: string | null;
+  feature_key: string | null;
+  lembaga: string;
+  no_sk: string;
+  tgl_sk: string | null;
+  skema: string;
+  nama_prov: string;
+  nama_kab: string;
+  nama_kec: string;
+  nama_desa: string;
+  wilker_bps: string;
+  ps_id: string | null;
+  luas_final: number;
+  luas_hl: number;
+  luas_hp: number;
+  luas_hpt: number;
+  luas_hpk: number;
+  luas_hk: number;
+  jml_kk: number;
+  hotspot_count_30d: number;
+  last_hotspot_at: string | null;
+  burned_area_ha: number;
+}
+
+export interface KpsCatalogMeta {
+  summary: {
+    total_kps: number;
+    total_luas_ha: number;
+    total_provinsi: number;
+    total_balai: number;
+    kps_hotspot_30d: number;
+    kps_burned: number;
+  };
+  filters: {
+    skemas: string[];
+    wilkers: string[];
+    provinces: string[];
+  };
+}
+
+export interface KpsCatalogResponse {
+  pagination: {
+    page: number;
+    page_size: number;
+    total_records: number;
+    total_pages: number;
+  };
+  items: KpsCatalogItem[];
+}
+
