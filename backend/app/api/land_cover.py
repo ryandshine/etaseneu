@@ -181,7 +181,14 @@ async def land_cover_tile_url(
     if not service.enabled:
         raise HTTPException(status_code=503, detail="GEE belum dikonfigurasi di server")
     try:
-        return service.get_s2_tile_url(polygon_id, year)
+        res = service.get_s2_tile_url(polygon_id, year)
+        tile_url = str(res.get("tile_url") or res.get("url") or "")
+        return {
+            "polygon_id": polygon_id,
+            "year": year,
+            "url": tile_url,
+            "tile_url": tile_url,
+        }
     except LandCoverError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:

@@ -742,7 +742,13 @@ class LandCoverService:
         yr = int(year)
         cache_key = (pid, yr)
         if cache_key in _S2_TILE_CACHE:
-            return {"polygon_id": pid, "year": yr, "tile_url": _S2_TILE_CACHE[cache_key]}
+            cached_url = _S2_TILE_CACHE[cache_key]
+            return {
+                "polygon_id": pid,
+                "year": yr,
+                "tile_url": cached_url,
+                "url": cached_url,
+            }
 
         target = self.postgres_store.read_land_cover_target_polygon(pid)
         if not target:
@@ -760,5 +766,6 @@ class LandCoverService:
             "polygon_id": pid,
             "year": yr,
             "tile_url": url_format,
+            "url": url_format,
         }
 

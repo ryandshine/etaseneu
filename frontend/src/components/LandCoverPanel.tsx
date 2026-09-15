@@ -115,9 +115,13 @@ function Chevron({ dir }: { dir: "left" | "right" }): JSX.Element {
 function FitLandCover({
   overlay,
   outline,
+  isMobile = false,
+  isHudCollapsed = false,
 }: {
   overlay: OverlayFC | null;
   outline: Record<string, unknown> | null;
+  isMobile?: boolean;
+  isHudCollapsed?: boolean;
 }): null {
   const map = useMap();
   useEffect(() => {
@@ -132,12 +136,17 @@ function FitLandCover({
       const bounds = buildLeafletGeoJSON(source as never).getBounds();
       if (bounds.isValid()) {
         map.invalidateSize({ animate: false });
-        map.fitBounds(bounds, { padding: [24, 24], maxZoom: 15 });
+        const padLeft = isMobile || isHudCollapsed ? 24 : 260;
+        map.fitBounds(bounds, {
+          paddingTopLeft: [24, padLeft],
+          paddingBottomRight: [24, 24],
+          maxZoom: 15,
+        });
       }
     } catch {
       /* geometri tak valid — peta tetap di posisi default */
     }
-  }, [overlay, outline, map]);
+  }, [overlay, outline, isMobile, isHudCollapsed, map]);
   return null;
 }
 
@@ -216,10 +225,28 @@ export function LandCoverPanel({
   const [s2TileLoading, setS2TileLoading] = useState(false);
   const [s2TileError, setS2TileError] = useState<string | null>(null);
   const [overlayOpacity, setOverlayOpacity] = useState(0.75);
+  const [isHudCollapsed, setIsHudCollapsed] = useState<boolean>(false);
   const overlayCache = useRef<Map<number, OverlayFC>>(new Map());
   const s2TileCache = useRef<Map<string, string>>(new Map());
   const geoJsonRef = useRef<LeafletGeoJSON | null>(null);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const totalAreaHa = useMemo(() => {
+    if (!result?.table) return 0;
+    const latestTable = result.table[String(LAST_YEAR)] ?? result.table[String(year)];
+    if (!latestTable) return 0;
+    return Object.values(latestTable).reduce((acc, c) => acc + (c.area_ha || 0), 0);
+  }, [result, year]);
+
+  const forestLatest = useMemo(() => {
+    if (!result?.table) return null;
+    return result.table[String(LAST_YEAR)]?.hutan ?? null;
+  }, [result]);
+
+  const forestDelta = useMemo(() => {
+    if (!result?.net_change) return 0;
+    return result.net_change.hutan ?? 0;
+  }, [result]);
 
   const fetchStatus = useCallback(async (): Promise<State> => {
     const res = await authFetch(`/api/land-cover/status?polygon_id=${polygonId}`);
@@ -335,13 +362,14 @@ export function LandCoverPanel({
             typeof body?.detail === "string" ? body.detail : "Gagal memuat citra satelit",
           );
         }
-        return (await res.json()) as { url: string };
+        return (await res.json()) as { url?: string; tile_url?: string };
       })
       .then((data) => {
         if (!active) return;
-        if (data?.url) {
-          s2TileCache.current.set(cacheKey, data.url);
-          setS2TileUrl(data.url);
+        const tileUrl = data?.tile_url || data?.url;
+        if (tileUrl) {
+          s2TileCache.current.set(cacheKey, tileUrl);
+          setS2TileUrl(tileUrl);
         }
         setS2TileLoading(false);
       })
@@ -463,20 +491,26 @@ export function LandCoverPanel({
   // Dedicated non-overlapping header bar
   const headerBar = (
     <header className="lc-header-bar">
-      {/* Baris 1: Navigasi Kiri & Aksi Kanan */}
-      <div className="lc-header-bar__nav-row">
-        {onBack ? (
-          <button
-            type="button"
-            className="lc-back-btn"
-            onClick={onBack}
-            aria-label="Kembali ke daftar poligon"
-          >
-            ← Kembali ke Daftar
-          </button>
-        ) : (
-          <span />
-        )}
+      {/* Baris Utama: Judul & Subtitle Poligon di Kiri (beserta tombol Kembali di mobile), Aksi di Kanan */}
+      <div className="lc-header-bar__main-row">
+        <div className="lc-header-bar__identity">
+          {onBack && (
+            <button
+              type="button"
+              className="lc-back-btn"
+              onClick={onBack}
+              aria-label="Kembali ke daftar poligon"
+            >
+              ← Kembali ke Daftar
+            </button>
+          )}
+          <div className="lc-header-bar__title-block">
+            <h3 className="lc-header-bar__title">{polygonLabel ?? "Tutupan Lahan"}</h3>
+            {polygonSublabel && (
+              <span className="lc-header-bar__sublabel">{polygonSublabel}</span>
+            )}
+          </div>
+        </div>
 
         <div className="lc-header-bar__actions">
           {outdatedFormula && (
@@ -512,14 +546,6 @@ export function LandCoverPanel({
         </div>
       </div>
 
-      {/* Baris 2: Judul & Subtitle Poligon (Full Width) */}
-      <div className="lc-header-bar__title-block">
-        <h3 className="lc-header-bar__title">{polygonLabel ?? "Tutupan Lahan"}</h3>
-        {polygonSublabel && (
-          <span className="lc-header-bar__sublabel">{polygonSublabel}</span>
-        )}
-      </div>
-
       {/* Baris 3: Tab & Tombol Pertahun */}
       {state === "done" && (
         <div className="lc-header-bar__controls-row">
@@ -543,6 +569,27 @@ export function LandCoverPanel({
               Tren Historis
             </button>
           </div>
+
+          {tab === "peta" && result && (() => {
+            const curHutan = result.table?.[String(year)]?.hutan;
+            if (!curHutan) return null;
+            return (
+              <div className="lc-quick-stat" title="Ringkasan Hasil Analisis Tutupan Lahan">
+                <span className="lc-quick-stat__item">
+                  <span className="lc-swatch-sm" style={{ background: landCoverColor("hutan") }} aria-hidden />
+                  <span>Hutan {year}:</span>
+                  <strong>{`${curHutan.pct.toFixed(0)}% (${Math.round(curHutan.area_ha).toLocaleString("id-ID")} ha)`}</strong>
+                </span>
+                <span className="lc-quick-stat__sep">·</span>
+                <span className="lc-quick-stat__item">
+                  <span>Δ Netto Hutan:</span>
+                  <strong className={(result.net_change?.hutan ?? 0) < -0.5 ? "lc-delta--down" : (result.net_change?.hutan ?? 0) > 0.5 ? "lc-delta--up" : ""}>
+                    {formatDelta(result.net_change?.hutan ?? 0)}
+                  </strong>
+                </span>
+              </div>
+            );
+          })()}
 
           {tab === "peta" && (
             <div className="lc-year-selector" role="group" aria-label="Pilih tahun analisis">
@@ -715,7 +762,7 @@ export function LandCoverPanel({
               ))}
               {showS2TrueColor && s2TileUrl && (
                 <TileLayer
-                  key={`s2-truecolor-${polygonId}-${year}`}
+                  key={`s2-truecolor-${polygonId}-${year}-${s2TileUrl}`}
                   url={s2TileUrl}
                   maxZoom={19}
                 />
@@ -751,7 +798,12 @@ export function LandCoverPanel({
                   }}
                 />
               )}
-              <FitLandCover overlay={overlay} outline={outline} />
+              <FitLandCover
+                overlay={overlay}
+                outline={outline}
+                isMobile={isMobile}
+                isHudCollapsed={isHudCollapsed}
+              />
             </MapContainer>
 
             {overlayEmpty && (
@@ -781,7 +833,26 @@ export function LandCoverPanel({
             </div>
           </div>
 
-          <div className={isMobile ? "lc-mobilecontrols" : "map-left-stack"}>
+          <div className={isMobile ? "lc-mobilecontrols" : `map-left-stack${isHudCollapsed ? " map-left-stack--collapsed" : ""}`}>
+            {!isMobile && (
+              <button
+                type="button"
+                className="lc-hud-toggle-btn"
+                onClick={() => setIsHudCollapsed((v) => !v)}
+                title={isHudCollapsed ? "Buka panel kontrol peta & legenda" : "Sembunyikan panel untuk melihat peta penuh"}
+                aria-label={isHudCollapsed ? "Buka panel kontrol peta" : "Sembunyikan panel kontrol peta"}
+              >
+                <span className="lc-hud-toggle-title">
+                  {isHudCollapsed ? `🗺️ Kontrol & Legenda (${year})` : "🗺️ Kontrol Peta & Legenda"}
+                </span>
+                <span className="lc-hud-toggle-action">
+                  {isHudCollapsed ? "Buka ▶" : "Sembunyikan ◀"}
+                </span>
+              </button>
+            )}
+
+            {(!isHudCollapsed || isMobile) && (
+              <>
             {/* Pemilih tahun */}
             <div className="map-legend lc-yearcard">
               <span className="map-legend-title">Tahun Analisis</span>
@@ -827,7 +898,15 @@ export function LandCoverPanel({
                   type="checkbox"
                   className="lc-checkbox"
                   checked={showS2TrueColor}
-                  onChange={(e) => setShowS2TrueColor(e.target.checked)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setShowS2TrueColor(checked);
+                    if (checked && overlayOpacity > 0.45) {
+                      setOverlayOpacity(0.35);
+                    } else if (!checked && overlayOpacity <= 0.45) {
+                      setOverlayOpacity(0.75);
+                    }
+                  }}
                 />
                 <div className="lc-toggle-text">
                   <span className="lc-toggle-title">Citra Sentinel-2 ({year})</span>
@@ -898,17 +977,62 @@ export function LandCoverPanel({
                 );
               })}
             </div>
+            </>
+          )}
           </div>
         </div>
       ) : (
         <div className="lc-trend lc-trend--fill">
+          {result && (
+            <div className="lc-kpi-grid">
+              <div className="lc-kpi-card">
+                <span className="lc-kpi-label">Luas Poligon</span>
+                <div className="lc-kpi-val">
+                  {Math.round(totalAreaHa).toLocaleString("id-ID")}{" "}
+                  <span className="lc-kpi-unit">ha</span>
+                </div>
+                <span className="lc-kpi-sub">Total petak KPS teranalisis</span>
+              </div>
+
+              <div className="lc-kpi-card">
+                <span className="lc-kpi-label">Area Hutan ({LAST_YEAR})</span>
+                <div className="lc-kpi-val">
+                  {forestLatest ? `${forestLatest.pct.toFixed(1)}%` : "–"}
+                </div>
+                <span className="lc-kpi-sub">
+                  {forestLatest ? `${Math.round(forestLatest.area_ha).toLocaleString("id-ID")} ha` : "–"}
+                </span>
+              </div>
+
+              <div className="lc-kpi-card">
+                <span className="lc-kpi-label">Dinamika Area ({FIRST_YEAR}→{LAST_YEAR})</span>
+                <div className={`lc-kpi-val ${forestDelta < -0.5 ? "lc-delta--down" : forestDelta > 0.5 ? "lc-delta--up" : ""}`}>
+                  {formatDelta(forestDelta)}
+                </div>
+                <span className="lc-kpi-sub">
+                  {forestDelta < -0.5 ? "Penurunan area hutan" : forestDelta > 0.5 ? "Pertambahan area hutan" : "Area relatif stabil"}
+                </span>
+              </div>
+
+              <div className="lc-kpi-card">
+                <span className="lc-kpi-label">Model Satelit</span>
+                <div className="lc-kpi-val lc-kpi-val--sm">
+                  {usedRandomForest ? "Random Forest" : "Biofisik"}
+                </div>
+                <span className="lc-kpi-sub">
+                  {usedRandomForest ? `${result.meta.model_trees} Pohon · Sentinel-2` : "Aturan Spektral S2+SAR"}
+                </span>
+              </div>
+            </div>
+          )}
+
           <div className="lc-trend-card">
             <div className="lc-trend-header">
               <h4>Tren Perubahan Tutupan Lahan (2021–2025)</h4>
-              <span className="lc-trend-sub">Persentase luas (%) per tahun</span>
+              <span className="lc-trend-sub">Persentase luas (%) per tahun dari klasifikasi citra Sentinel-2</span>
             </div>
             <div className="lc-chart">
-              <ResponsiveContainer width="100%" height={230}>
+              <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={chartData} margin={{ top: 8, right: 10, bottom: 0, left: -18 }}>
                   <XAxis
                     dataKey="year"
@@ -936,8 +1060,9 @@ export function LandCoverPanel({
                       type="monotone"
                       dataKey={c.key}
                       stroke={c.color}
-                      strokeWidth={2}
-                      dot={false}
+                      strokeWidth={2.5}
+                      dot={{ r: 3, fill: c.color }}
+                      activeDot={{ r: 5 }}
                       isAnimationActive={false}
                     />
                   ))}
@@ -1012,7 +1137,14 @@ export function LandCoverPanel({
             </div>
           )}
 
-          {result && <p className="lc-summary">{result.summary_text}</p>}
+          {result && (
+            <div className="lc-summary-card">
+              <div className="lc-summary-card__head">
+                <span className="lc-summary-card__tag">IKHTISAR ANALISIS</span>
+              </div>
+              <p className="lc-summary">{result.summary_text}</p>
+            </div>
+          )}
 
           <p className="lc-note">
             5 kelas tutupan lahan mandiri ETA SENEU (Hutan, Pertanian/Perkebunan,
