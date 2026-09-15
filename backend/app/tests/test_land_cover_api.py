@@ -92,6 +92,17 @@ def test_analyze_and_delete_allowed_for_user_role(client):
     assert client.delete("/api/land-cover/result?polygon_id=1").status_code == 200
 
 
+def test_analyze_and_delete_forbidden_for_bps_role(client):
+    from app.core.auth import require_authenticated_user
+
+    client._app.dependency_overrides.pop(require_land_cover_role, None)
+    client._app.dependency_overrides[require_authenticated_user] = lambda: TokenClaims(
+        user_id=4, username="bpsuser", role="bps", wilker_bps="BPS Jawa"
+    )
+    assert client.post("/api/land-cover/analyze", json={"polygon_id": 1}).status_code == 403
+    assert client.delete("/api/land-cover/result?polygon_id=1").status_code == 403
+
+
 def test_analyze_and_delete_forbidden_for_unknown_role(client):
     from app.core.auth import require_authenticated_user
 

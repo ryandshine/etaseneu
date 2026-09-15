@@ -256,8 +256,8 @@ async def require_land_cover_role(
     claims: TokenClaims = Depends(require_authenticated_user),
 ) -> TokenClaims:
     """Dependency: butuh token valid dan role yang diizinkan untuk analisis
-    tutupan lahan (admin, user, bps). Anonim/tanpa login ditolak."""
-    if claims.role not in ("admin", "user", "bps"):
-        raise HTTPException(status_code=403, detail="Aksi ini membutuhkan hak akses yang sesuai.")
+    tutupan lahan (admin dan user/nasional). Role bps dan akun tanpa izin ditolak."""
+    if claims.role not in ("admin", "user"):
+        raise HTTPException(status_code=403, detail="Aksi ini khusus admin dan user/nasional.")
     return claims
 
