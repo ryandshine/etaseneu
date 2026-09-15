@@ -5,6 +5,7 @@ import {
   ShieldCheck,
   Download,
   Search,
+  X,
   RefreshCw,
   RotateCcw,
   ChevronRight,
@@ -689,6 +690,17 @@ export function EarlyWarningView({ onOpenKpsDetail, session, selectedWilker }: E
             onChange={(e) => setSearch(e.target.value)}
             className="ew-search-input"
           />
+          {search && (
+            <button
+              type="button"
+              className="ew-search-clear"
+              onClick={() => setSearch("")}
+              title="Hapus pencarian"
+              aria-label="Hapus pencarian"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
 
         {/* Dropdown Filters Grid */}

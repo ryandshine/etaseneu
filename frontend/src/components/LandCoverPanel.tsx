@@ -109,6 +109,23 @@ function Chevron({ dir }: { dir: "left" | "right" }): JSX.Element {
   );
 }
 
+function PlayIcon(): JSX.Element {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden focusable="false">
+      <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+  );
+}
+
+function PauseIcon(): JSX.Element {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden focusable="false">
+      <rect x="6" y="4" width="4" height="16" />
+      <rect x="14" y="4" width="4" height="16" />
+    </svg>
+  );
+}
+
 // fitBounds butuh instance peta, jadi harus komponen anak MapContainer (pola
 // sama dengan FitToPolygon di KpsDetailView.tsx). Fit ke rona kelas kalau ada,
 // kalau tidak ke outline poligon.
@@ -214,8 +231,9 @@ export function LandCoverPanel({
   const [formulaVersion, setFormulaVersion] = useState<number | null>(null);
   const [currentFormulaVersion, setCurrentFormulaVersion] = useState<number | null>(null);
   const [result, setResult] = useState<ResultResponse | null>(null);
-  const [tab, setTab] = useState<"peta" | "tren">("peta");
+  const [tab, setTab] = useState<"peta" | "tren" | "split">("peta");
   const [year, setYear] = useState<number>(LAST_YEAR);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [basemap, setBasemap] = useState<BasemapKey>("satelit");
   const isMobile = useIsMobile();
   const [overlay, setOverlay] = useState<OverlayFC | null>(null);
@@ -230,6 +248,15 @@ export function LandCoverPanel({
   const s2TileCache = useRef<Map<string, string>>(new Map());
   const geoJsonRef = useRef<LeafletGeoJSON | null>(null);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Animasi pemutaran otomatis time-lapse 2021-2025
+  useEffect(() => {
+    if (!isPlaying) return;
+    const timer = setInterval(() => {
+      setYear((prev) => (prev >= LAST_YEAR ? FIRST_YEAR : prev + 1));
+    }, 1700);
+    return () => clearInterval(timer);
+  }, [isPlaying]);
 
   const totalAreaHa = useMemo(() => {
     if (!result?.table) return 0;
@@ -546,7 +573,7 @@ export function LandCoverPanel({
         </div>
       </div>
 
-      {/* Baris 3: Tab & Tombol Pertahun */}
+      {/* Baris 3: Tab Tampilan (Peta, Tren, Split) & Quick Stat */}
       {state === "done" && (
         <div className="lc-header-bar__controls-row">
           <div className="lc-tabs" role="tablist" aria-label="Tampilan tutupan lahan">
@@ -568,9 +595,20 @@ export function LandCoverPanel({
             >
               Tren Historis
             </button>
+            {!isMobile && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === "split"}
+                className={`lc-tab${tab === "split" ? " lc-tab--active" : ""}`}
+                onClick={() => setTab("split")}
+              >
+                Peta &amp; Tren (Split)
+              </button>
+            )}
           </div>
 
-          {tab === "peta" && result && (() => {
+          {result && (() => {
             const curHutan = result.table?.[String(year)]?.hutan;
             if (!curHutan) return null;
             return (
@@ -590,25 +628,6 @@ export function LandCoverPanel({
               </div>
             );
           })()}
-
-          {tab === "peta" && (
-            <div className="lc-year-selector" role="group" aria-label="Pilih tahun analisis">
-              <span className="lc-year-selector__label">Tahun:</span>
-              <div className="lc-year-selector__pills">
-                {LAND_COVER_YEARS.map((y) => (
-                  <button
-                    key={y}
-                    type="button"
-                    className={`lc-year-pill${year === y ? " lc-year-pill--active" : ""}`}
-                    aria-pressed={year === y}
-                    onClick={() => setYear(y)}
-                  >
-                    {y}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
     </header>
@@ -736,159 +755,191 @@ export function LandCoverPanel({
     );
   }
 
-  return (
-    <section className="land-cover-panel land-cover-panel--stage">
-      {headerBar}
+  const renderMapCanvas = () => (
+    <div className={`lc-mapframe lc-mapframe--fill${isMobile ? " lc-mapframe--mobile" : ""}`}>
+      <div className="lc-mapframe__canvas">
+        <MapContainer
+          {...SMOOTH_ZOOM_MAP_PROPS}
+          center={[-2, 118]}
+          zoom={5}
+          zoomControl={false}
+          attributionControl={false}
+        >
+          {BASEMAPS[basemap].layers.map((layer, idx) => (
+            <TileLayer
+              key={`${basemap}-${idx}`}
+              url={layer.url}
+              subdomains={"subdomains" in layer && layer.subdomains ? (layer.subdomains as readonly string[] as string[]) : ["a", "b", "c"]}
+              maxZoom={layer.maxZoom}
+            />
+          ))}
+          {showS2TrueColor && s2TileUrl && (
+            <TileLayer
+              key={`s2-truecolor-${polygonId}-${year}-${s2TileUrl}`}
+              url={s2TileUrl}
+              maxZoom={19}
+            />
+          )}
+          {!isMobile && <ZoomControl position="bottomright" />}
+          {outline && (
+            <GeoJSON
+              key={`outline-${polygonId}`}
+              data={{ type: "Feature", geometry: outline } as never}
+              style={() => ({
+                color: "#E7E6C2",
+                weight: 1.5,
+                dashArray: "4 4",
+                fill: false,
+              })}
+            />
+          )}
+          {overlay && overlay.features.length > 0 && (
+            <GeoJSON
+              key={`lc-${polygonId}-${year}`}
+              ref={geoJsonRef}
+              data={overlay as never}
+              style={(feature) => {
+                const c = landCoverColor(
+                  (feature?.properties as { class_key?: string })?.class_key ?? "",
+                );
+                return {
+                  color: c,
+                  weight: overlayOpacity === 0 ? 0.5 : 0.75,
+                  fillColor: c,
+                  fillOpacity: overlayOpacity,
+                };
+              }}
+            />
+          )}
+          <FitLandCover
+            overlay={overlay}
+            outline={outline}
+            isMobile={isMobile}
+            isHudCollapsed={isHudCollapsed}
+          />
+        </MapContainer>
 
-      {tab === "peta" ? (
-        // Tata letak Peta Spasial: MapContainer full-bleed di dalam canvas,
-        // basemap switcher rapi di pojok kanan atas, panel tahun & legenda di kolom kiri.
-        <div className={`lc-mapframe lc-mapframe--fill${isMobile ? " lc-mapframe--mobile" : ""}`}>
-          <div className="lc-mapframe__canvas">
-            <MapContainer
-              {...SMOOTH_ZOOM_MAP_PROPS}
-              center={[-2, 118]}
-              zoom={5}
-              zoomControl={false}
-              attributionControl={false}
+        {overlayEmpty && (
+          <p className="lc-map__empty">
+            Rona kelas untuk {year} tidak tersedia — tutupan terlalu seragam atau
+            petak di bawah ambang luas minimum.
+          </p>
+        )}
+
+        {/* Basemap switcher rapi di pojok kanan atas peta */}
+        <div
+          className="basemap-switcher basemap-switcher--topright"
+          role="group"
+          aria-label="Basemap peta"
+        >
+          {(Object.keys(BASEMAPS) as BasemapKey[]).map((k) => (
+            <button
+              key={k}
+              type="button"
+              className={basemap === k ? "basemap-switcher-btn--active" : undefined}
+              aria-pressed={basemap === k}
+              onClick={() => setBasemap(k)}
             >
-              {BASEMAPS[basemap].layers.map((layer, idx) => (
-                <TileLayer
-                  key={`${basemap}-${idx}`}
-                  url={layer.url}
-                  subdomains={"subdomains" in layer && layer.subdomains ? (layer.subdomains as readonly string[] as string[]) : ["a", "b", "c"]}
-                  maxZoom={layer.maxZoom}
-                />
-              ))}
-              {showS2TrueColor && s2TileUrl && (
-                <TileLayer
-                  key={`s2-truecolor-${polygonId}-${year}-${s2TileUrl}`}
-                  url={s2TileUrl}
-                  maxZoom={19}
-                />
-              )}
-              {!isMobile && <ZoomControl position="bottomright" />}
-              {outline && (
-                <GeoJSON
-                  key={`outline-${polygonId}`}
-                  data={{ type: "Feature", geometry: outline } as never}
-                  style={() => ({
-                    color: "#E7E6C2",
-                    weight: 1.5,
-                    dashArray: "4 4",
-                    fill: false,
-                  })}
-                />
-              )}
-              {overlay && overlay.features.length > 0 && (
-                <GeoJSON
-                  key={`lc-${polygonId}-${year}`}
-                  ref={geoJsonRef}
-                  data={overlay as never}
-                  style={(feature) => {
-                    const c = landCoverColor(
-                      (feature?.properties as { class_key?: string })?.class_key ?? "",
-                    );
-                    return {
-                      color: c,
-                      weight: overlayOpacity === 0 ? 0.5 : 0.75,
-                      fillColor: c,
-                      fillOpacity: overlayOpacity,
-                    };
-                  }}
-                />
-              )}
-              <FitLandCover
-                overlay={overlay}
-                outline={outline}
-                isMobile={isMobile}
-                isHudCollapsed={isHudCollapsed}
-              />
-            </MapContainer>
+              {BASEMAPS[k].label}
+            </button>
+          ))}
+        </div>
 
-            {overlayEmpty && (
-              <p className="lc-map__empty">
-                Rona kelas untuk {year} tidak tersedia — tutupan terlalu seragam atau
-                petak di bawah ambang luas minimum.
-              </p>
-            )}
-
-            {/* Basemap switcher rapi di pojok kanan atas peta */}
-            <div
-              className="basemap-switcher basemap-switcher--topright"
-              role="group"
-              aria-label="Basemap peta"
+        {/* Satellite Timeline Player di bagian bawah kanvas peta */}
+        <div className="lc-timeline-player" role="region" aria-label="Pemutar garis waktu satelit">
+          <div className="lc-timeline-player__playback">
+            <button
+              type="button"
+              className={`lc-playback-btn${isPlaying ? " lc-playback-btn--active" : ""}`}
+              onClick={() => setIsPlaying((p) => !p)}
+              title={isPlaying ? "Jeda animasi (2021–2025)" : "Putar animasi perubahan tutupan lahan 2021–2025"}
+              aria-label={isPlaying ? "Jeda animasi" : "Putar animasi tahun"}
             >
-              {(Object.keys(BASEMAPS) as BasemapKey[]).map((k) => (
+              {isPlaying ? <PauseIcon /> : <PlayIcon />}
+            </button>
+            <button
+              type="button"
+              className="lc-step-btn"
+              aria-label="Tahun sebelumnya"
+              disabled={year <= FIRST_YEAR}
+              onClick={() => {
+                setIsPlaying(false);
+                setYear((y) => Math.max(FIRST_YEAR, y - 1));
+              }}
+            >
+              <Chevron dir="left" />
+            </button>
+            <button
+              type="button"
+              className="lc-step-btn"
+              aria-label="Tahun berikutnya"
+              disabled={year >= LAST_YEAR}
+              onClick={() => {
+                setIsPlaying(false);
+                setYear((y) => Math.min(LAST_YEAR, y + 1));
+              }}
+            >
+              <Chevron dir="right" />
+            </button>
+          </div>
+
+          <div className="lc-timeline-player__track">
+            <input
+              type="range"
+              className="lc-range lc-timeline-range"
+              min={FIRST_YEAR}
+              max={LAST_YEAR}
+              step={1}
+              value={year}
+              aria-label="Tahun tutupan lahan"
+              onChange={(e) => {
+                setIsPlaying(false);
+                setYear(Number(e.target.value));
+              }}
+            />
+            <div className="lc-timeline-player__pills">
+              {LAND_COVER_YEARS.map((y) => (
                 <button
-                  key={k}
+                  key={y}
                   type="button"
-                  className={basemap === k ? "basemap-switcher-btn--active" : undefined}
-                  aria-pressed={basemap === k}
-                  onClick={() => setBasemap(k)}
+                  className={`lc-timeline-pill${year === y ? " lc-timeline-pill--active" : ""}`}
+                  aria-pressed={year === y}
+                  onClick={() => {
+                    setIsPlaying(false);
+                    setYear(y);
+                  }}
                 >
-                  {BASEMAPS[k].label}
+                  {y}
                 </button>
               ))}
             </div>
           </div>
 
-          <div className={isMobile ? "lc-mobilecontrols" : `map-left-stack${isHudCollapsed ? " map-left-stack--collapsed" : ""}`}>
-            {!isMobile && (
-              <button
-                type="button"
-                className="lc-hud-toggle-btn"
-                onClick={() => setIsHudCollapsed((v) => !v)}
-                title={isHudCollapsed ? "Buka panel kontrol peta & legenda" : "Sembunyikan panel untuk melihat peta penuh"}
-                aria-label={isHudCollapsed ? "Buka panel kontrol peta" : "Sembunyikan panel kontrol peta"}
-              >
-                <span className="lc-hud-toggle-title">
-                  {isHudCollapsed ? `🗺️ Kontrol & Legenda (${year})` : "🗺️ Kontrol Peta & Legenda"}
-                </span>
-                <span className="lc-hud-toggle-action">
-                  {isHudCollapsed ? "Buka ▶" : "Sembunyikan ◀"}
-                </span>
-              </button>
-            )}
+          <strong className="lc-timeline-year-glow">{year}</strong>
+        </div>
+      </div>
 
-            {(!isHudCollapsed || isMobile) && (
-              <>
-            {/* Pemilih tahun */}
-            <div className="map-legend lc-yearcard">
-              <span className="map-legend-title">Tahun Analisis</span>
-              <div className="lc-yearcard__row">
-                <button
-                  type="button"
-                  className="lc-step"
-                  aria-label="Tahun sebelumnya"
-                  disabled={year <= FIRST_YEAR}
-                  onClick={() => setYear((y) => Math.max(FIRST_YEAR, y - 1))}
-                >
-                  <Chevron dir="left" />
-                </button>
-                <input
-                  type="range"
-                  className="lc-range"
-                  min={FIRST_YEAR}
-                  max={LAST_YEAR}
-                  step={1}
-                  value={year}
-                  aria-label="Tahun tutupan lahan"
-                  onChange={(e) => setYear(Number(e.target.value))}
-                />
-                <button
-                  type="button"
-                  className="lc-step"
-                  aria-label="Tahun berikutnya"
-                  disabled={year >= LAST_YEAR}
-                  onClick={() => setYear((y) => Math.min(LAST_YEAR, y + 1))}
-                >
-                  <Chevron dir="right" />
-                </button>
-                <strong className="lc-year">{year}</strong>
-              </div>
-            </div>
+      {/* Floating Glass Layer & Legend Deck */}
+      <div className={isMobile ? "lc-mobilecontrols" : `map-left-stack${isHudCollapsed ? " map-left-stack--collapsed" : ""}`}>
+        {!isMobile && (
+          <button
+            type="button"
+            className="lc-hud-toggle-btn"
+            onClick={() => setIsHudCollapsed((v) => !v)}
+            title={isHudCollapsed ? "Buka panel kontrol citra & legenda" : "Sembunyikan panel untuk melihat peta penuh"}
+            aria-label={isHudCollapsed ? "Buka panel kontrol peta" : "Sembunyikan panel kontrol peta"}
+          >
+            <span className="lc-hud-toggle-title">
+              {isHudCollapsed ? `🗺️ Layer & Legenda (${year})` : "🗺️ Citra & Legenda"}
+            </span>
+            <span className="lc-hud-toggle-action">
+              {isHudCollapsed ? "Buka ▶" : "Sembunyikan ◀"}
+            </span>
+          </button>
+        )}
 
+        {(!isHudCollapsed || isMobile) && (
+          <>
             {/* Kontrol Citra Satelit & Transparansi */}
             <div className="map-legend lc-layercard">
               <span className="map-legend-title">Citra Satelit &amp; Tampilan</span>
@@ -898,6 +949,7 @@ export function LandCoverPanel({
                   type="checkbox"
                   className="lc-checkbox"
                   checked={showS2TrueColor}
+                  aria-label="Citra Sentinel-2"
                   onChange={(e) => {
                     const checked = e.target.checked;
                     setShowS2TrueColor(checked);
@@ -977,200 +1029,218 @@ export function LandCoverPanel({
                 );
               })}
             </div>
-            </>
-          )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderAnalyticsDashboard = () => (
+    <div className="lc-trend lc-trend--fill">
+      {result && (
+        <div className="lc-kpi-grid">
+          <div className="lc-kpi-card">
+            <span className="lc-kpi-label">Luas Poligon</span>
+            <div className="lc-kpi-val">
+              {Math.round(totalAreaHa).toLocaleString("id-ID")}{" "}
+              <span className="lc-kpi-unit">ha</span>
+            </div>
+            <span className="lc-kpi-sub">Total petak KPS teranalisis</span>
+          </div>
+
+          <div className="lc-kpi-card">
+            <span className="lc-kpi-label">Area Hutan ({LAST_YEAR})</span>
+            <div className="lc-kpi-val">
+              {forestLatest ? `${forestLatest.pct.toFixed(1)}%` : "–"}
+            </div>
+            <span className="lc-kpi-sub">
+              {forestLatest ? `${Math.round(forestLatest.area_ha).toLocaleString("id-ID")} ha` : "–"}
+            </span>
+          </div>
+
+          <div className="lc-kpi-card">
+            <span className="lc-kpi-label">Dinamika Area ({FIRST_YEAR}→{LAST_YEAR})</span>
+            <div className={`lc-kpi-val ${forestDelta < -0.5 ? "lc-delta--down" : forestDelta > 0.5 ? "lc-delta--up" : ""}`}>
+              {formatDelta(forestDelta)}
+            </div>
+            <span className="lc-kpi-sub">
+              {forestDelta < -0.5 ? "Penurunan area hutan" : forestDelta > 0.5 ? "Pertambahan area hutan" : "Area relatif stabil"}
+            </span>
+          </div>
+
+          <div className="lc-kpi-card">
+            <span className="lc-kpi-label">Model Satelit</span>
+            <div className="lc-kpi-val lc-kpi-val--sm">
+              {usedRandomForest ? "Random Forest" : "Biofisik"}
+            </div>
+            <span className="lc-kpi-sub">
+              {usedRandomForest ? `${result.meta.model_trees} Pohon · Sentinel-2` : "Aturan Spektral S2+SAR"}
+            </span>
           </div>
         </div>
-      ) : (
-        <div className="lc-trend lc-trend--fill">
-          {result && (
-            <div className="lc-kpi-grid">
-              <div className="lc-kpi-card">
-                <span className="lc-kpi-label">Luas Poligon</span>
-                <div className="lc-kpi-val">
-                  {Math.round(totalAreaHa).toLocaleString("id-ID")}{" "}
-                  <span className="lc-kpi-unit">ha</span>
-                </div>
-                <span className="lc-kpi-sub">Total petak KPS teranalisis</span>
-              </div>
+      )}
 
-              <div className="lc-kpi-card">
-                <span className="lc-kpi-label">Area Hutan ({LAST_YEAR})</span>
-                <div className="lc-kpi-val">
-                  {forestLatest ? `${forestLatest.pct.toFixed(1)}%` : "–"}
-                </div>
-                <span className="lc-kpi-sub">
-                  {forestLatest ? `${Math.round(forestLatest.area_ha).toLocaleString("id-ID")} ha` : "–"}
-                </span>
-              </div>
+      <div className="lc-trend-card">
+        <div className="lc-trend-header">
+          <h4>Tren Perubahan Tutupan Lahan (2021–2025)</h4>
+          <span className="lc-trend-sub">Persentase luas (%) per tahun dari klasifikasi citra Sentinel-2</span>
+        </div>
+        <div className="lc-chart">
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={chartData} margin={{ top: 8, right: 10, bottom: 0, left: -18 }}>
+              <XAxis
+                dataKey="year"
+                tick={{ fontSize: 11, fill: "rgba(245,239,230,0.6)" }}
+                tickLine={false}
+                axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+              />
+              <YAxis
+                width={40}
+                domain={[0, 100]}
+                ticks={[0, 25, 50, 75, 100]}
+                tickFormatter={(v) => `${v}%`}
+                tick={{ fontSize: 11, fill: "rgba(245,239,230,0.6)" }}
+                tickLine={false}
+                axisLine={false}
+              />
+              <Tooltip
+                cursor={{ stroke: "rgba(255,255,255,0.15)" }}
+                content={<LandCoverTooltip />}
+                wrapperStyle={{ outline: "none" }}
+              />
+              {visibleClasses.map((c) => (
+                <Line
+                  key={c.key}
+                  type="monotone"
+                  dataKey={c.key}
+                  stroke={c.color}
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: c.color }}
+                  activeDot={{ r: 5 }}
+                  isAnimationActive={false}
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
 
-              <div className="lc-kpi-card">
-                <span className="lc-kpi-label">Dinamika Area ({FIRST_YEAR}→{LAST_YEAR})</span>
-                <div className={`lc-kpi-val ${forestDelta < -0.5 ? "lc-delta--down" : forestDelta > 0.5 ? "lc-delta--up" : ""}`}>
-                  {formatDelta(forestDelta)}
-                </div>
-                <span className="lc-kpi-sub">
-                  {forestDelta < -0.5 ? "Penurunan area hutan" : forestDelta > 0.5 ? "Pertambahan area hutan" : "Area relatif stabil"}
-                </span>
-              </div>
-
-              <div className="lc-kpi-card">
-                <span className="lc-kpi-label">Model Satelit</span>
-                <div className="lc-kpi-val lc-kpi-val--sm">
-                  {usedRandomForest ? "Random Forest" : "Biofisik"}
-                </div>
-                <span className="lc-kpi-sub">
-                  {usedRandomForest ? `${result.meta.model_trees} Pohon · Sentinel-2` : "Aturan Spektral S2+SAR"}
-                </span>
-              </div>
-            </div>
-          )}
-
-          <div className="lc-trend-card">
-            <div className="lc-trend-header">
-              <h4>Tren Perubahan Tutupan Lahan (2021–2025)</h4>
-              <span className="lc-trend-sub">Persentase luas (%) per tahun dari klasifikasi citra Sentinel-2</span>
-            </div>
-            <div className="lc-chart">
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={chartData} margin={{ top: 8, right: 10, bottom: 0, left: -18 }}>
-                  <XAxis
-                    dataKey="year"
-                    tick={{ fontSize: 11, fill: "rgba(245,239,230,0.6)" }}
-                    tickLine={false}
-                    axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
-                  />
-                  <YAxis
-                    width={40}
-                    domain={[0, 100]}
-                    ticks={[0, 25, 50, 75, 100]}
-                    tickFormatter={(v) => `${v}%`}
-                    tick={{ fontSize: 11, fill: "rgba(245,239,230,0.6)" }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <Tooltip
-                    cursor={{ stroke: "rgba(255,255,255,0.15)" }}
-                    content={<LandCoverTooltip />}
-                    wrapperStyle={{ outline: "none" }}
-                  />
-                  {visibleClasses.map((c) => (
-                    <Line
-                      key={c.key}
-                      type="monotone"
-                      dataKey={c.key}
-                      stroke={c.color}
-                      strokeWidth={2.5}
-                      dot={{ r: 3, fill: c.color }}
-                      activeDot={{ r: 5 }}
-                      isAnimationActive={false}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+      {result && (
+        <div className="lc-table-card">
+          <div className="lc-trend-header">
+            <h4>Tabel Rincian Luas &amp; Perubahan Netto</h4>
           </div>
-
-          {result && (
-            <div className="lc-table-card">
-              <div className="lc-trend-header">
-                <h4>Tabel Rincian Luas &amp; Perubahan Netto</h4>
-              </div>
-              <div className="lc-table-wrap">
-                <table className="lc-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">Kelas</th>
-                      {LAND_COVER_YEARS.map((y) => (
-                        <th key={y} scope="col">
-                          {y}
-                        </th>
-                      ))}
-                      <th scope="col">
-                        Δ {FIRST_YEAR}→{LAST_YEAR}
+          <div className="lc-table-wrap">
+            <table className="lc-table">
+              <thead>
+                <tr>
+                  <th scope="col">Kelas</th>
+                  {LAND_COVER_YEARS.map((y) => (
+                    <th key={y} scope="col">
+                      {y}
+                    </th>
+                  ))}
+                  <th scope="col">
+                    Δ {FIRST_YEAR}→{LAST_YEAR}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleClasses.map((c) => {
+                  const delta = result.net_change[c.key] ?? 0;
+                  return (
+                    <tr key={c.key}>
+                      <th scope="row">
+                        <span className="lc-swatch" style={{ background: c.color }} aria-hidden />
+                        {c.label}
                       </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visibleClasses.map((c) => {
-                      const delta = result.net_change[c.key] ?? 0;
-                      return (
-                        <tr key={c.key}>
-                          <th scope="row">
-                            <span className="lc-swatch" style={{ background: c.color }} aria-hidden />
-                            {c.label}
-                          </th>
-                          {LAND_COVER_YEARS.map((y) => {
-                            const cell = result.table[String(y)]?.[c.key];
-                            const negligible = !cell || cell.area_ha < 0.5;
-                            return (
-                              <td key={y}>
-                                {negligible ? (
-                                  "–"
-                                ) : (
-                                  <div className="lc-cell">
-                                    <span className="lc-cell__ha">{Math.round(cell!.area_ha)} ha</span>
-                                    <span className="lc-cell__pct">{cell!.pct.toFixed(1)}%</span>
-                                  </div>
-                                )}
-                              </td>
-                            );
-                          })}
-                          <td
-                            className={
-                              delta > 0.5 ? "lc-delta lc-delta--up" : delta < -0.5 ? "lc-delta lc-delta--down" : "lc-delta"
-                            }
-                          >
-                            {formatDelta(delta)}
+                      {LAND_COVER_YEARS.map((y) => {
+                        const cell = result.table[String(y)]?.[c.key];
+                        const negligible = !cell || cell.area_ha < 0.5;
+                        return (
+                          <td key={y}>
+                            {negligible ? (
+                              "–"
+                            ) : (
+                              <div className="lc-cell">
+                                <span className="lc-cell__ha">{Math.round(cell!.area_ha)} ha</span>
+                                <span className="lc-cell__pct">{cell!.pct.toFixed(1)}%</span>
+                              </div>
+                            )}
                           </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {hiddenClassCount > 0 && (
-                  <p className="lc-hidden-note">
-                    {hiddenClassCount} kelas lain tidak ditemukan di poligon ini.
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
+                        );
+                      })}
+                      <td
+                        className={
+                          delta > 0.5 ? "lc-delta lc-delta--up" : delta < -0.5 ? "lc-delta lc-delta--down" : "lc-delta"
+                        }
+                      >
+                        {formatDelta(delta)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {hiddenClassCount > 0 && (
+              <p className="lc-hidden-note">
+                {hiddenClassCount} kelas lain tidak ditemukan di poligon ini.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
-          {result && (
-            <div className="lc-summary-card">
-              <div className="lc-summary-card__head">
-                <span className="lc-summary-card__tag">IKHTISAR ANALISIS</span>
-              </div>
-              <p className="lc-summary">{result.summary_text}</p>
-            </div>
-          )}
+      {result && (
+        <div className="lc-summary-card">
+          <div className="lc-summary-card__head">
+            <span className="lc-summary-card__tag">IKHTISAR ANALISIS</span>
+          </div>
+          <p className="lc-summary">{result.summary_text}</p>
+        </div>
+      )}
 
-          <p className="lc-note">
-            5 kelas tutupan lahan mandiri ETA SENEU (Hutan, Pertanian/Perkebunan,
-            Semak/Belukar, Lahan Basah/Perairan, Lahan Terbuka) dianalisis langsung
-            dari citra Sentinel-2 L2A &amp; radar Sentinel-1 SAR tanpa ketergantungan
-            model pihak ketiga. Estimasi satelit, bukan angka resmi.
-          </p>
+      <p className="lc-note">
+        5 kelas tutupan lahan mandiri ETA SENEU (Hutan, Pertanian/Perkebunan,
+        Semak/Belukar, Lahan Basah/Perairan, Lahan Terbuka) dianalisis langsung
+        dari citra Sentinel-2 L2A &amp; radar Sentinel-1 SAR tanpa ketergantungan
+        model pihak ketiga. Estimasi satelit, bukan angka resmi.
+      </p>
 
-          {result && (
-            <p className="lc-foot">
-              {usedRandomForest
-                ? `Random Forest ${result.meta.model_trees} pohon · ${result.meta.n_training} titik latih · OOB ${
-                    result.meta.oob_accuracy != null
-                      ? Number(result.meta.oob_accuracy).toFixed(2)
-                      : "–"
-                  }`
-                : "Aturan Spektral Biofisik (Decision Tree) — poligon homogen"}
-              {result.meta.computed_at
-                ? ` · ${new Date(String(result.meta.computed_at)).toLocaleDateString("id-ID", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })}`
-                : ""}
-            </p>
-          )}
+      {result && (
+        <p className="lc-foot">
+          {usedRandomForest
+            ? `Random Forest ${result.meta.model_trees} pohon · ${result.meta.n_training} titik latih · OOB ${
+                result.meta.oob_accuracy != null
+                  ? Number(result.meta.oob_accuracy).toFixed(2)
+                  : "–"
+              }`
+            : "Aturan Spektral Biofisik (Decision Tree) — poligon homogen"}
+          {result.meta.computed_at
+            ? ` · ${new Date(String(result.meta.computed_at)).toLocaleDateString("id-ID", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}`
+            : ""}
+        </p>
+      )}
+    </div>
+  );
+
+  return (
+    <section
+      className={`land-cover-panel land-cover-panel--stage${
+        tab === "split" ? " land-cover-panel--split-active" : ""
+      }`}
+    >
+      {headerBar}
+      {tab === "peta" && renderMapCanvas()}
+      {tab === "tren" && renderAnalyticsDashboard()}
+      {tab === "split" && (
+        <div className="lc-split-stage">
+          <div className="lc-split-stage__map">{renderMapCanvas()}</div>
+          <div className="lc-split-stage__analytics">{renderAnalyticsDashboard()}</div>
         </div>
       )}
     </section>

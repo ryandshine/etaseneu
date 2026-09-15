@@ -215,51 +215,79 @@ export function TutupanLahanView({
   );
 
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(() => {
+    // Pada layar desktop, default terbuka jika belum ada poligon terpilih;
+    // jika sudah ada poligon terpilih, tetap bisa ditutup untuk fokus peta.
+    return initialPolygonId === null;
+  });
 
   // Responsive: pada layar ringkas (<=900px), daftar dan detail bergantian tampil.
-  // Pada desktop (>900px), sidebar poligon bisa ditutup/dibuka agar peta & hasil analisis bisa tampil penuh (full width).
+  // Pada desktop (>900px), daftar poligon berfungsi sebagai collapsible drawer/sidebar.
   const showList = !isCompact ? (selectedId === null || isSidebarOpen) : (selectedId === null);
   const showDetail = !isCompact || selectedId !== null;
 
   return (
     <section
-      className={`tl-shell${selectedId !== null ? " tl-shell--detail-active" : ""}`}
+      className={`tl-shell${selectedId !== null ? " tl-shell--detail-active" : ""}${
+        !isCompact && selectedId !== null && !isSidebarOpen ? " tl-shell--full-canvas" : ""
+      }`}
       aria-label="Tutupan Lahan"
     >
+      {/* Topbar Command Bar */}
       <header className="tl-topbar">
         <div className="tl-topbar-row">
           <div className="tl-topbar-title-wrap">
-            <h2>Tutupan Lahan</h2>
-            <span className="tl-summary">
-              {loading ? (
-                "Memuat…"
-              ) : (
-                <>
-                  <strong>{analyzedCount}</strong> dari <strong>{rows.length}</strong> poligon telah
-                  dianalisis
-                </>
-              )}
-            </span>
+            <div className="tl-title-icon-badge" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                <polyline points="2 17 12 22 22 17" />
+                <polyline points="2 12 12 17 22 12" />
+              </svg>
+            </div>
+            <div className="tl-title-text-group">
+              <div className="tl-title-line">
+                <h2>Tutupan Lahan</h2>
+                <span className="tl-engine-badge">Sentinel-2 &amp; SAR</span>
+              </div>
+              <span className="tl-summary">
+                {loading ? (
+                  "Memuat…"
+                ) : (
+                  <>
+                    <strong>{analyzedCount}</strong> dari <strong>{rows.length}</strong> poligon telah
+                    dianalisis
+                  </>
+                )}
+              </span>
+            </div>
           </div>
 
-          {selectedId !== null && !isCompact && (
-            <button
-              type="button"
-              className="tl-toggle-sidebar-btn"
-              onClick={() => setIsSidebarOpen((v) => !v)}
-              aria-label={isSidebarOpen ? "Sembunyikan daftar poligon (Fokus Peta & Analisis)" : "Tampilkan daftar poligon"}
-              title={isSidebarOpen ? "Sembunyikan daftar poligon untuk tampilan peta penuh" : "Tampilkan daftar poligon"}
-            >
-              {isSidebarOpen ? "◀ Sembunyikan Daftar (Fokus Peta)" : "▶ Buka Daftar Poligon"}
-            </button>
+          {/* Tombol aksi poligon pada desktop */}
+          {!isCompact && selectedId !== null && (
+            <div className="tl-topbar-controls">
+              <button
+                type="button"
+                className={`tl-drawer-toggle-btn${isSidebarOpen ? " tl-drawer-toggle-btn--active" : ""}`}
+                onClick={() => setIsSidebarOpen((v) => !v)}
+                aria-label={isSidebarOpen ? "Sembunyikan daftar poligon (Fokus Peta & Analisis)" : "Tampilkan daftar poligon"}
+                title={isSidebarOpen ? "Tutup panel daftar untuk tampilan peta penuh" : "Buka panel daftar poligon"}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <line x1="9" y1="3" x2="9" y2="21" />
+                </svg>
+                <span>{isSidebarOpen ? "Tutup Panel Poligon" : "Pilih / Ganti Poligon"}</span>
+              </button>
+            </div>
           )}
         </div>
-        <p className="tl-lede">
-          Klasifikasi Sentinel-2 + Random Forest per poligon KPS/Hutan Adat, 2021–2025. Analisis
-          dijalankan manual satu per satu — pilih poligon di bawah untuk mulai atau melihat
-          hasilnya.
-        </p>
+        {selectedId === null && (
+          <p className="tl-lede">
+            Klasifikasi Sentinel-2 + Random Forest per poligon KPS/Hutan Adat, 2021–2025. Analisis
+            dijalankan manual satu per satu — pilih poligon di bawah untuk mulai atau melihat
+            hasilnya.
+          </p>
+        )}
       </header>
 
       {error ? (

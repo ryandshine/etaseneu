@@ -234,10 +234,12 @@ code {
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  text-align: left;
   gap: 12px;
   width: 100%;
-  height: 44px;
-  padding: 0 0.95rem;
+  min-height: 44px;
+  height: auto;
+  padding: 0.45rem 0.95rem;
   margin: 0;
   box-sizing: border-box;
   border-radius: 0.5rem;
@@ -273,11 +275,13 @@ code {
   border-radius: 0.125rem;
   background: currentColor;
   flex-shrink: 0;
-  transform: translateY(-1.5px);
+  transform: translateY(-1px);
 }
 
-.side-nav-link > span {
-  /* Line-height removed to allow natural vertical alignment */
+.side-nav-link > span:not(.side-nav-mark) {
+  text-align: left;
+  line-height: 1.35;
+  flex: 1;
 }
 
 /* Aksi keluar sengaja beda dari .side-nav-link -- ini bukan tujuan
@@ -2507,6 +2511,249 @@ code {
   background: rgba(185, 34, 22, 0.22);
   border-color: rgba(185, 34, 22, 0.5);
   color: #fff;
+}
+
+/* Satellite Timeline Player Bar di Kanvas Bawah Peta */
+.lc-timeline-player {
+  position: absolute;
+  bottom: 1.15rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(22, 13, 8, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  max-width: calc(100% - 2rem);
+  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lc-timeline-player__playback {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.lc-playback-btn {
+  width: 1.95rem;
+  height: 1.95rem;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(185, 34, 22, 0.85);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 150ms ease;
+  flex-shrink: 0;
+}
+
+.lc-playback-btn:hover {
+  background: var(--color-red);
+  transform: scale(1.06);
+  box-shadow: 0 0 12px rgba(185, 34, 22, 0.6);
+}
+
+.lc-playback-btn--active {
+  background: #10b981 !important;
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.5) !important;
+}
+
+.lc-step-btn {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-cream);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 150ms ease;
+  flex-shrink: 0;
+}
+
+.lc-step-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.lc-step-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.lc-timeline-player__track {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 13.5rem;
+}
+
+.lc-timeline-range {
+  width: 100%;
+  height: 4px;
+  accent-color: var(--color-red);
+  cursor: pointer;
+}
+
+.lc-timeline-player__pills {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0 0.15rem;
+}
+
+.lc-timeline-pill {
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: rgba(231, 230, 194, 0.65);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.lc-timeline-pill:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.lc-timeline-pill--active {
+  background: var(--color-red) !important;
+  color: #fff !important;
+  box-shadow: 0 0 10px rgba(185, 34, 22, 0.5);
+}
+
+.lc-timeline-year-glow {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--color-cream);
+  font-variant-numeric: tabular-nums;
+  padding: 0.18rem 0.55rem;
+  border-radius: 0.4rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  flex-shrink: 0;
+}
+
+/* Split View Stage (Peta di Kiri + Analisis di Kanan) */
+.land-cover-panel--split-active {
+  overflow: hidden;
+}
+
+.lc-split-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg-deep);
+}
+
+.lc-split-stage__map {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lc-split-stage__analytics {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  background: rgba(20, 11, 6, 0.4);
+}
+
+/* Header Badge & Drawer Toggle Styles */
+.tl-title-icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 0.5rem;
+  background: rgba(185, 34, 22, 0.15);
+  border: 1px solid rgba(185, 34, 22, 0.35);
+  color: var(--color-cream);
+  flex-shrink: 0;
+}
+
+.tl-title-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.tl-title-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tl-engine-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(183, 198, 136, 0.15);
+  border: 1px solid rgba(183, 198, 136, 0.35);
+  color: var(--color-green);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.tl-topbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: auto;
+}
+
+.tl-drawer-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.32rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-cream);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.tl-drawer-toggle-btn:hover {
+  background: rgba(185, 34, 22, 0.22);
+  border-color: rgba(185, 34, 22, 0.5);
+  color: #fff;
+}
+
+.tl-drawer-toggle-btn--active {
+  background: rgba(185, 34, 22, 0.85) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(185, 34, 22, 0.4);
 }
 
 .lc-hud-toggle-title {
@@ -5499,13 +5746,18 @@ code {
   color: rgba(209, 213, 219, 0.45);
 }
 
-.ledger-search__input {
+.ledger-search__input,
+.ledger-search input.ledger-search__input,
+input.ledger-search__input {
   flex: 1;
   min-width: 0;
-  padding: 0.35rem 0;
-  border: none;
-  background: transparent;
-  color: var(--color-cream);
+  padding: 0.35rem 0.25rem !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  min-height: 0 !important;
+  height: auto !important;
+  color: var(--color-cream) !important;
   font-family: inherit;
   font-size: 0.85rem;
   outline: none;
@@ -7537,13 +7789,13 @@ a:focus-visible {
 }
 
 /* Mobile-Friendly Input & Select */
-input[type="text"],
+input[type="text"]:not(.ew-search-input):not(.kps-search-input):not(.fs-search-input):not(.ledger-search__input),
 input[type="email"],
 input[type="password"],
-input[type="search"],
+input[type="search"]:not(.ew-search-input):not(.kps-search-input):not(.fs-search-input):not(.ledger-search__input),
 input[type="number"],
-input[type="date"],
-select,
+input[type="date"]:not(.matrix-date-input):not(.filter-date-input),
+select:not(.ew-filter-select):not(.fs-filter-select):not(.kps-select):not(.matrix-select-compact):not(.filter-select-input),
 textarea {
   min-height: 44px;
   font-size: 16px; /* Prevent auto-zoom on iOS */
@@ -7623,13 +7875,13 @@ textarea {
      sehingga satu baris data menghabiskan lebih dari setengah layar. */
 
   /* Better Form Styling */
-  input[type="text"],
+  input[type="text"]:not(.ew-search-input):not(.kps-search-input):not(.fs-search-input):not(.ledger-search__input),
   input[type="email"],
   input[type="password"],
-  input[type="search"],
+  input[type="search"]:not(.ew-search-input):not(.kps-search-input):not(.fs-search-input):not(.ledger-search__input),
   input[type="number"],
-  input[type="date"],
-  select,
+  input[type="date"]:not(.matrix-date-input):not(.filter-date-input),
+  select:not(.ew-filter-select):not(.fs-filter-select):not(.kps-select):not(.matrix-select-compact):not(.filter-select-input),
   textarea {
     min-height: 48px;
     padding: 0.75rem 1rem;
@@ -7641,13 +7893,13 @@ textarea {
     transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   }
 
-  input[type="text"]:focus,
+  input[type="text"]:not(.ew-search-input):not(.kps-search-input):not(.fs-search-input):not(.ledger-search__input):focus,
   input[type="email"]:focus,
   input[type="password"]:focus,
-  input[type="search"]:focus,
+  input[type="search"]:not(.ew-search-input):not(.kps-search-input):not(.fs-search-input):not(.ledger-search__input):focus,
   input[type="number"]:focus,
-  input[type="date"]:focus,
-  select:focus,
+  input[type="date"]:not(.matrix-date-input):not(.filter-date-input):focus,
+  select:not(.ew-filter-select):not(.fs-filter-select):not(.kps-select):not(.matrix-select-compact):not(.filter-select-input):focus,
   textarea:focus {
     background: rgba(255, 255, 255, 0.08);
     border-color: rgba(245, 158, 11, 0.5);
@@ -11453,23 +11705,34 @@ textarea {
 .fs-search-icon {
   position: absolute;
   left: 0.65rem;
+  top: 50%;
+  transform: translateY(-50%);
   color: #9ca3af;
   pointer-events: none;
+  z-index: 2;
 }
 
-.fs-search-input {
+.fs-search-input,
+.fs-search-wrap input.fs-search-input,
+input.fs-search-input {
   width: 100%;
-  padding: 0.4rem 0.65rem 0.4rem 2rem;
-  background: transparent;
-  border: none;
-  color: #ffffff;
+  padding: 0.4rem 2rem 0.4rem 2.35rem !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
   font-size: 0.8rem;
   height: 34px;
+  min-height: 34px;
   box-sizing: border-box;
 }
 
-.fs-search-input:focus {
+.fs-search-input:focus,
+.fs-search-wrap input.fs-search-input:focus,
+input.fs-search-input:focus {
   outline: none;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 /* Main Grid: List (left) + Map (right) */
@@ -12514,6 +12777,8 @@ textarea {
 .ew-search-wrap {
   position: relative;
   width: 100%;
+  display: flex;
+  align-items: center;
 }
 
 .ew-search-icon {
@@ -12523,29 +12788,58 @@ textarea {
   transform: translateY(-50%);
   color: #9ca3af;
   pointer-events: none;
+  z-index: 2;
 }
 
-.ew-search-input {
+.ew-search-input,
+.ew-search-wrap input.ew-search-input,
+input.ew-search-input {
   width: 100%;
   height: 38px;
-  padding: 0 0.75rem 0 2.25rem;
-  background-color: rgba(18, 10, 6, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 0.45rem;
-  color: #ffffff;
+  min-height: 38px;
+  padding: 0.45rem 2.2rem 0.45rem 2.5rem !important;
+  background-color: rgba(18, 10, 6, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 0.45rem !important;
+  color: #ffffff !important;
   font-size: 0.82rem;
   box-sizing: border-box;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.ew-search-input:focus {
+.ew-search-input:focus,
+.ew-search-wrap input.ew-search-input:focus,
+input.ew-search-input:focus {
   outline: none;
-  border-color: var(--color-red);
-  box-shadow: 0 0 0 2px rgba(185, 34, 22, 0.25);
+  border-color: var(--color-red) !important;
+  box-shadow: 0 0 0 2px rgba(185, 34, 22, 0.25) !important;
 }
 
-.ew-search-input::placeholder {
+.ew-search-input::placeholder,
+.ew-search-wrap input.ew-search-input::placeholder {
   color: #6b7280;
+}
+
+.ew-search-clear {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  z-index: 2;
+  transition: color 150ms ease;
+}
+
+.ew-search-clear:hover {
+  color: #ffffff;
 }
 
 .ew-filter-grid {
@@ -12567,11 +12861,13 @@ textarea {
   }
 }
 
-.ew-filter-select {
+.ew-filter-select,
+select.ew-filter-select {
   width: 100%;
   min-width: 0;
   height: 38px;
-  padding: 0 1.85rem 0 0.75rem;
+  min-height: 38px;
+  padding: 0 1.85rem 0 0.75rem !important;
   background-color: rgba(18, 10, 6, 0.85);
   color: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -12580,9 +12876,10 @@ textarea {
   font-weight: 500;
   cursor: pointer;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.65rem center;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0.65rem center !important;
   text-overflow: ellipsis;
   white-space: nowrap;
   overflow: hidden;
@@ -13395,23 +13692,31 @@ textarea {
   transform: translateY(-50%);
   color: #9ca3af;
   pointer-events: none;
+  z-index: 2;
 }
 
-.kps-search-input {
+.kps-search-input,
+.kps-catalog-search-box input.kps-search-input,
+input.kps-search-input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0.375rem;
-  padding: 0.45rem 2.2rem 0.45rem 2.2rem;
-  color: #ffffff;
+  height: 38px;
+  min-height: 38px;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 0.375rem !important;
+  padding: 0.45rem 2.2rem 0.45rem 2.5rem !important;
+  color: #ffffff !important;
   font-size: 0.8rem;
   outline: none;
+  box-sizing: border-box;
   transition: all 150ms ease;
 }
 
-.kps-search-input:focus {
-  border-color: #f97316;
-  background: rgba(255, 255, 255, 0.08);
+.kps-search-input:focus,
+.kps-catalog-search-box input.kps-search-input:focus,
+input.kps-search-input:focus {
+  border-color: #f97316 !important;
+  background: rgba(255, 255, 255, 0.08) !important;
 }
 
 .kps-search-clear {
@@ -13423,8 +13728,13 @@ textarea {
   border: none;
   color: #9ca3af;
   cursor: pointer;
-  padding: 0.2rem;
-  border-radius: 50%;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  z-index: 2;
+  transition: color 150ms ease;
 }
 
 .kps-search-clear:hover {
