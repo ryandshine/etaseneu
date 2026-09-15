@@ -80,7 +80,7 @@ S2_COLLECTION = "COPERNICUS/S2_SR_HARMONIZED"
 #       restriksi elevasi/lereng pada fitur SAR & fenologi musiman, relaksasi batas atas th_hutan p85<=0.76).
 FORMULA_VERSION = 9
 FORMULA_LABEL = (
-    "Sentinel-2 L2A median kemarau + variabilitas fenologi ndvi_std + ndvi_cv + NDMI + "
+    "Sentinel-2 L2A median tahunan bebas awan (SCL masking) + variabilitas fenologi ndvi_std + ndvi_cv + NDMI + "
     "Sentinel-1 SAR (koreksi topografi pegunungan) + Random Forest; 5 kelas mandiri ETA SENEU; "
     "endmember adaptif persentil lokal terkalibrasi; eliminasi lubang spasial MMU (ETA SENEU v9)"
 )
@@ -92,7 +92,6 @@ _CLASS_IDX = {k: i for i, k in enumerate(CLASS_KEYS)}
 RF_TREES = 150
 SAMPLES_PER_CLASS_PER_YEAR = 200
 MIN_SAMPLES_PER_CLASS = 30
-DRY_SEASON = ("05-01", "10-31")
 OPTICAL_FEATURE_NAMES = [
     "B2", "B3", "B4", "B8", "B11", "B12",
     "ndvi", "evi", "nbr", "ndmi", "mndwi", "ndbi", "bsi", "ndvi_std", "ndvi_cv",
@@ -251,14 +250,6 @@ class LandCoverService:
             end = today
         return start.isoformat(), end.isoformat()
 
-    def _dry_window(self, year: int) -> tuple[str, str]:
-        start = date.fromisoformat(f"{year}-{DRY_SEASON[0]}")
-        end = date.fromisoformat(f"{year}-{DRY_SEASON[1]}")
-        today = date.today()
-        if end >= today:
-            end = today
-        return start.isoformat(), end.isoformat()
-
     def _s2_median(self, ee, region, start: str, end: str):
         return (
             ee.ImageCollection(S2_COLLECTION)
@@ -297,17 +288,11 @@ class LandCoverService:
         (`sar_img` dari land_cover/sar.py) kalau diberikan. Urutan band =
         OPTICAL_FEATURE_NAMES (+ SAR_FEATURE_NAMES)."""
         clip_to = region if region is not None else roi
-        # Prioritas musim kemarau: lebih sedikit awan/haze dan fenologi lebih
-        # seragam antar-tahun. Piksel yang tetap kosong (kemarau berawan
-        # terus, lazim di Kalbar/Riau) diisi median setahun penuh.
-        dry_start, dry_end = self._dry_window(year)
+        # Komposit bebas awan setahun penuh (1 Jan - 31 Des):
+        # Seleksi piksel jernih berbasis sensor SCL dari seluruh lintasan Sentinel-2 (~70+ scene/th).
+        # Invarian terhadap anomali cuaca & pergeseran musim di seluruh wilayah Indonesia (Sumatera hingga Papua).
         full_start, full_end = self._year_window(year)
-        dry = self._s2_median(ee, clip_to, dry_start, dry_end)
-        if dry_start >= dry_end:
-            # tahun berjalan sebelum Mei: belum ada data kemarau
-            s2 = self._s2_median(ee, clip_to, full_start, full_end).clip(clip_to)
-        else:
-            s2 = dry.unmask(self._s2_median(ee, clip_to, full_start, full_end)).clip(clip_to)
+        s2 = self._s2_median(ee, clip_to, full_start, full_end).clip(clip_to)
         ndvi = s2.normalizedDifference(["B8", "B4"]).rename("ndvi")
         nbr = s2.normalizedDifference(["B8", "B12"]).rename("nbr")
         ndmi = s2.normalizedDifference(["B8", "B11"]).rename("ndmi")
