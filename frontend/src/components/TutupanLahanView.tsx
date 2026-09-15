@@ -58,8 +58,9 @@ type TutupanLahanViewProps = {
    *  sinkronisasi tambahan. */
   initialPolygonId?: number | null;
   onOpenKpsDetail?: (agency: string, polygonId?: number) => void;
-  /** Diteruskan ke LandCoverPanel: tombol Jalankan/Hapus analisis khusus admin. */
+  /** Diteruskan ke LandCoverPanel: tombol Jalankan/Hapus analisis. */
   isAdmin?: boolean;
+  canAnalyze?: boolean;
 };
 
 // Cuma 2 layer aktif saat ini (lihat CLAUDE.md, bagian "Model data poligon").
@@ -110,7 +111,9 @@ export function TutupanLahanView({
   initialPolygonId = null,
   onOpenKpsDetail,
   isAdmin = false,
+  canAnalyze,
 }: TutupanLahanViewProps): JSX.Element {
+  const allowAnalyze = canAnalyze ?? isAdmin;
   const [rows, setRows] = useState<LandCoverPolygonRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -473,6 +476,7 @@ export function TutupanLahanView({
               <LandCoverPanel
                 polygonId={selectedRow.polygon_metadata_id}
                 isAdmin={isAdmin}
+                canAnalyze={allowAnalyze}
                 polygonLabel={selectedRow.lembaga || "(tanpa nama)"}
                 polygonSublabel={`${layerLabel(selectedRow.layer_key)} · ${
                   [selectedRow.nama_kab, selectedRow.nama_prov].filter(Boolean).join(", ") || "-"

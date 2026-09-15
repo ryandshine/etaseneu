@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.api.land_cover as lc_mod
-from app.core.auth import TokenClaims, require_admin_role
+from app.core.auth import TokenClaims, require_land_cover_role
 from app.main import create_app
 
 YEARS = (2021, 2022, 2023, 2024, 2025)
@@ -64,29 +64,40 @@ def client(monkeypatch):
     monkeypatch.setattr(lc_mod, "PostgresStore", lambda *_a, **_k: store)
     monkeypatch.setattr(lc_mod, "LandCoverService", _FakeService)
     app = create_app()
-    # analyze & delete khusus admin -- default fixture: sudah login admin.
+    # analyze & delete khusus role yang diizinkan (admin, user, bps) -- default fixture: sudah login admin.
     # Test gate-nya sendiri melepas override ini.
-    app.dependency_overrides[require_admin_role] = lambda: _ADMIN
+    app.dependency_overrides[require_land_cover_role] = lambda: _ADMIN
     c = TestClient(app)
     c._store = store  # akses di test
     c._app = app
     return c
 
 
-def test_analyze_and_delete_require_admin(client):
-    """Tanpa sesi admin: 401 (tak ada token). Mencegah role `user`/anonim
-    membakar kuota GEE atau menghapus hasil orang lain."""
-    client._app.dependency_overrides.pop(require_admin_role, None)
+def test_analyze_and_delete_require_auth(client):
+    """Tanpa sesi: 401 (tak ada token). Mencegah user anonim
+    membakar kuota GEE atau menghapus hasil."""
+    client._app.dependency_overrides.pop(require_land_cover_role, None)
     assert client.post("/api/land-cover/analyze", json={"polygon_id": 1}).status_code == 401
     assert client.delete("/api/land-cover/result?polygon_id=1").status_code == 401
 
 
-def test_analyze_and_delete_forbidden_for_user_role(client):
+def test_analyze_and_delete_allowed_for_user_role(client):
     from app.core.auth import require_authenticated_user
 
-    client._app.dependency_overrides.pop(require_admin_role, None)
+    client._app.dependency_overrides.pop(require_land_cover_role, None)
     client._app.dependency_overrides[require_authenticated_user] = lambda: TokenClaims(
         user_id=2, username="u", role="user"
+    )
+    assert client.post("/api/land-cover/analyze", json={"polygon_id": 1}).status_code == 202
+    assert client.delete("/api/land-cover/result?polygon_id=1").status_code == 200
+
+
+def test_analyze_and_delete_forbidden_for_unknown_role(client):
+    from app.core.auth import require_authenticated_user
+
+    client._app.dependency_overrides.pop(require_land_cover_role, None)
+    client._app.dependency_overrides[require_authenticated_user] = lambda: TokenClaims(
+        user_id=3, username="unknown", role="guest"
     )
     assert client.post("/api/land-cover/analyze", json={"polygon_id": 1}).status_code == 403
     assert client.delete("/api/land-cover/result?polygon_id=1").status_code == 403

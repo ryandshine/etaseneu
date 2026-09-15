@@ -210,7 +210,7 @@ def parse_geojson(raw: bytes) -> ParseResult:
         points=points,
         source_format="geojson",
         kind="points",
-        skipped_features=skipped,
+        skipped_features=skipped + len(polygon_geoms),
     )
 
 
@@ -343,7 +343,12 @@ def parse_kml(raw: bytes) -> ParseResult:
             skipped_features=skipped,
         )
 
-    return ParseResult(points=points, source_format="kml", kind="points", skipped_features=skipped)
+    return ParseResult(
+        points=points,
+        source_format="kml",
+        kind="points",
+        skipped_features=skipped + len(polygon_geoms),
+    )
 
 
 # -------------------------------------------------------------- SHP (zip)

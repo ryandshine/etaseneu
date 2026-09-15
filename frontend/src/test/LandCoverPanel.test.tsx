@@ -303,7 +303,7 @@ describe("LandCoverPanel role & formula version", () => {
     expect(screen.queryByRole("button", { name: /jalankan analisis/i })).not.toBeInTheDocument();
   });
 
-  it("non-admin: no 'Hapus hasil' button when done", async () => {
+  it("non-admin without canAnalyze: no 'Hapus hasil' button when done", async () => {
     mockFetch((url) => {
       if (url.includes("/land-cover/status")) {
         return jsonResponse({
@@ -321,6 +321,18 @@ describe("LandCoverPanel role & formula version", () => {
     await screen.findByRole("list", { name: /luas per kelas tahun 2025/i });
     expect(screen.queryByRole("button", { name: /hapus hasil/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/metode lama/i)).not.toBeInTheDocument();
+  });
+
+  it("user with canAnalyze: shows run button in idle and 'Hapus hasil' when done", async () => {
+    mockFetch((url) => {
+      if (url.includes("/land-cover/status")) {
+        return jsonResponse({ state: "idle", step: null, error: null, computed_at: null });
+      }
+      return jsonResponse({}, 404);
+    });
+    render(<LandCoverPanel polygonId={1} canAnalyze />);
+    expect(await screen.findByRole("button", { name: /jalankan analisis/i })).toBeInTheDocument();
+    expect(screen.queryByText(/hanya bisa dilakukan/i)).not.toBeInTheDocument();
   });
 
   it("done: shows 'Metode lama' badge when stored formula_version < current", async () => {

@@ -171,11 +171,12 @@ function LandCoverTooltip({ active, payload, label }: TipProps): JSX.Element | n
 
 type LandCoverPanelProps = {
   polygonId: number;
-  /** Jalankan/Hapus/Mulai ulang analisis = khusus admin (backend
-   *  `require_admin_role`); role lain cuma melihat hasil. Default false
+  /** Jalankan/Hapus/Mulai ulang analisis = admin & role user yang diizinkan (backend
+   *  `require_land_cover_role`); role tanpa izin cuma melihat hasil. Default false
    *  supaya lupa meneruskan prop tidak pernah memunculkan tombol yang
    *  bakal ditolak 403. */
   isAdmin?: boolean;
+  canAnalyze?: boolean;
   /** Identitas poligon -- ditampilkan di chrome mengambang di atas peta
    *  (TutupanLahanView tidak lagi merender .tl-detail-head sendiri supaya
    *  peta bisa full-bleed, pola sama Live Map). */
@@ -189,11 +190,13 @@ type LandCoverPanelProps = {
 export function LandCoverPanel({
   polygonId,
   isAdmin = false,
+  canAnalyze,
   polygonLabel,
   polygonSublabel,
   onOpenKpsDetail,
   onBack,
 }: LandCoverPanelProps): JSX.Element {
+  const allowAnalyze = canAnalyze ?? isAdmin;
   const [state, setState] = useState<State>("idle");
   const [step, setStep] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -373,7 +376,7 @@ export function LandCoverPanel({
 
   const nonAdminHint = (
     <p className="lc-busy" role="status">
-      Menjalankan analisis hanya bisa dilakukan admin.
+      Menjalankan analisis hanya bisa dilakukan admin atau pengguna terdaftar.
     </p>
   );
 
@@ -409,7 +412,7 @@ export function LandCoverPanel({
               Lihat Detail KPS →
             </button>
           )}
-          {state === "done" && isAdmin && (
+          {state === "done" && allowAnalyze && (
             <button
               type="button"
               className="lc-rerun lc-rerun--danger"
@@ -502,7 +505,7 @@ export function LandCoverPanel({
               Klasifikasi Sentinel-2 + Random Forest, 5 kelas. Sekali hitung per KPS,
               hasilnya tersimpan permanen.
             </p>
-            {!isAdmin ? (
+            {!allowAnalyze ? (
               nonAdminHint
             ) : (
               <div className="lc-state-actions">
@@ -544,7 +547,7 @@ export function LandCoverPanel({
                 hasilnya tetap tersimpan.
               </span>
             </div>
-            {isAdmin && (
+            {allowAnalyze && (
               <button
                 type="button"
                 className="lc-rerun"
@@ -580,7 +583,7 @@ export function LandCoverPanel({
             <p className="lc-error" role="alert">
               {errorMsg ?? "Terjadi kesalahan saat analisis."}
             </p>
-            {!isAdmin ? (
+            {!allowAnalyze ? (
               nonAdminHint
             ) : (
               <div className="lc-state-actions">

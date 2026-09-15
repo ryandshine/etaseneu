@@ -1189,6 +1189,7 @@ export default function App() {
                 initialPolygonId={landCoverPolygonId}
                 onOpenKpsDetail={openKpsDetail}
                 isAdmin={session?.role === "admin"}
+                canAnalyze={session?.role === "admin" || session?.role === "user" || session?.role === "bps"}
               />
             </Suspense>
           </section>

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query
 
-from app.core.auth import TokenClaims, require_admin_role
+from app.core.auth import TokenClaims, require_land_cover_role
 from app.core.config import get_settings
 from app.services.land_cover_service import (
     CLASS_KEYS,
@@ -33,9 +33,9 @@ async def land_cover_analyze(
     background_tasks: BackgroundTasks,
     polygon_id: int = Body(..., embed=True),
     force: bool = Query(default=False),
-    _claims: TokenClaims = Depends(require_admin_role),
+    _claims: TokenClaims = Depends(require_land_cover_role),
 ) -> dict[str, object]:
-    # Khusus admin: satu job = 1-5 menit kuota GEE + CPU; membaca hasil
+    # Akses admin & user terdaftar: satu job = 1-5 menit kuota GEE + CPU; membaca hasil
     # tetap untuk semua role (gate baca di router.py).
     service = LandCoverService()
     if not service.enabled:
@@ -79,7 +79,7 @@ async def land_cover_analyze(
 @router.delete("/land-cover/result")
 async def land_cover_delete(
     polygon_id: int,
-    _claims: TokenClaims = Depends(require_admin_role),
+    _claims: TokenClaims = Depends(require_land_cover_role),
 ) -> dict[str, object]:
     """Hapus hasil analisis supaya poligon kembali ke 'belum dianalisis'.
     Alur UI "hapus dulu, baru analisis lagi" (menggantikan tombol "Analisis
