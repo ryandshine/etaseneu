@@ -72,7 +72,7 @@ const VIEW_TITLES: Record<AppView, string> = {
   map: "Live Map",
   matrix: "Matriks Data",
   kpscatalog: "Data KPS",
-  pointmatch: "Cek Titik ke KPS",
+  pointmatch: "Cek Titik Api (Titik & Poligon)",
   kompleks: "Kompleks Kebakaran",
   landcover: "Tutupan Lahan",
   earlywarning: "Peringatan Dini",
@@ -1171,8 +1171,8 @@ export default function App() {
             </Suspense>
           </section>
         ) : activeView === "pointmatch" ? (
-          <section aria-label="Cek titik ke KPS workspace" className="workspace-stage workspace-stage--pointmatch">
-            <Suspense fallback={<ViewLoader label="Memuat alat cek titik..." />}>
+          <section aria-label="Cek titik api (titik dan poligon) workspace" className="workspace-stage workspace-stage--pointmatch">
+            <Suspense fallback={<ViewLoader label="Memuat alat cek titik api..." />}>
               <PointMatchView />
             </Suspense>
           </section>

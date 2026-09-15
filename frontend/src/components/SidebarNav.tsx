@@ -119,7 +119,7 @@ export function SidebarNav({
             Data KPS
           </NavButton>
           <NavButton active={activeView === "pointmatch"} onClick={() => onChangeView("pointmatch")}>
-            Cek Titik ke KPS
+            Cek Titik Api (Titik & Poligon)
           </NavButton>
           <NavButton active={activeView === "kompleks"} onClick={() => onChangeView("kompleks")}>
             Kompleks Kebakaran

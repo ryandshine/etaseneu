@@ -14,6 +14,11 @@ from dataclasses import dataclass, field
 from typing import Any
 from xml.etree import ElementTree
 
+import pyproj
+import shapely
+from shapely.geometry import MultiPolygon, Polygon, mapping, shape
+from shapely.ops import transform
+
 SUPPORTED_EXTENSIONS = (".geojson", ".json", ".kml", ".zip")
 
 # Nama kolom yang lazim dipakai kalau titik disimpan sebagai atribut, bukan
@@ -34,13 +39,41 @@ class ParsedPoint:
 
 
 @dataclass
+class ParsedPolygon:
+    geometry: Any  # shapely Polygon or MultiPolygon
+    geojson: dict[str, Any]  # GeoJSON geometry mapping
+    area_ha: float
+    bounds: tuple[float, float, float, float]  # (min_lon, min_lat, max_lon, max_lat)
+    properties: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class ParseResult:
-    points: list[ParsedPoint]
-    source_format: str
+    points: list[ParsedPoint] = field(default_factory=list)
+    source_format: str = ""
     # Hal-hal yang perlu diketahui pengguna tapi tidak menggagalkan proses,
     # mis. asumsi CRS atau geometry non-titik yang dilewati. Ditampilkan di UI.
     warnings: list[str] = field(default_factory=list)
     skipped_features: int = 0
+    kind: str = "points"  # "points" | "polygon"
+    polygon: ParsedPolygon | None = None
+
+
+def _calculate_polygon_area_ha(geom: Any) -> float:
+    try:
+        geod = pyproj.Geod(ellps="WGS84")
+        area, _ = geod.geometry_area_perimeter(geom)
+        return round(abs(area) / 10000.0, 2)
+    except Exception:
+        return 0.0
+
+
+def _clean_geometry(geom: Any) -> Any:
+    if not geom.is_valid:
+        geom = shapely.make_valid(geom)
+    if geom.has_z:
+        geom = transform(lambda x, y, *_: (x, y), geom)
+    return geom
 
 
 def _is_valid_lat(value: float) -> bool:
@@ -90,9 +123,12 @@ def _iter_geojson_features(payload: Any) -> list[dict[str, Any]]:
         return [f for f in features if isinstance(f, dict)]
     if kind == "Feature":
         return [payload]
-    if kind in {"Point", "MultiPoint"}:
+    if kind in {"Point", "MultiPoint", "Polygon", "MultiPolygon"}:
         return [{"type": "Feature", "geometry": payload, "properties": {}}]
-    raise PointParseError(f"Tipe GeoJSON '{kind}' tidak didukung; harus berisi titik.")
+    if kind == "GeometryCollection":
+        geometries = payload.get("geometries", [])
+        return [{"type": "Feature", "geometry": g, "properties": {}} for g in geometries if isinstance(g, dict)]
+    raise PointParseError(f"Tipe GeoJSON '{kind}' tidak didukung.")
 
 
 def parse_geojson(raw: bytes) -> ParseResult:
@@ -101,10 +137,13 @@ def parse_geojson(raw: bytes) -> ParseResult:
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise PointParseError("Berkas GeoJSON tidak bisa dibaca (format JSON rusak).") from exc
 
+    features = _iter_geojson_features(payload)
+    polygon_geoms: list[Any] = []
+    polygon_properties: dict[str, Any] = {}
     points: list[ParsedPoint] = []
     skipped = 0
 
-    for feature in _iter_geojson_features(payload):
+    for feature in features:
         properties = feature.get("properties")
         properties = dict(properties) if isinstance(properties, dict) else {}
         geometry = feature.get("geometry")
@@ -120,7 +159,16 @@ def parse_geojson(raw: bytes) -> ParseResult:
         geom_type = geometry.get("type")
         coords = geometry.get("coordinates")
 
-        if geom_type == "Point" and isinstance(coords, (list, tuple)) and len(coords) >= 2:
+        if geom_type in ("Polygon", "MultiPolygon") and coords:
+            try:
+                g = _clean_geometry(shape(geometry))
+                if not g.is_empty:
+                    polygon_geoms.append(g)
+                    if not polygon_properties:
+                        polygon_properties = properties
+            except Exception:
+                skipped += 1
+        elif geom_type == "Point" and isinstance(coords, (list, tuple)) and len(coords) >= 2:
             lon, lat = _coerce_float(coords[0]), _coerce_float(coords[1])
             if lat is None or lon is None or not _is_valid_lat(lat) or not _is_valid_lon(lon):
                 skipped += 1
@@ -137,11 +185,33 @@ def parse_geojson(raw: bytes) -> ParseResult:
             if added == 0:
                 skipped += 1
         else:
-            # Poligon/garis sengaja dilewati, bukan error: fitur ini memang
-            # untuk titik. Jumlahnya dilaporkan supaya pengguna sadar.
             skipped += 1
 
-    return ParseResult(points=points, source_format="geojson", skipped_features=skipped)
+    if polygon_geoms and not points:
+        union_geom = shapely.unary_union(polygon_geoms) if len(polygon_geoms) > 1 else polygon_geoms[0]
+        union_geom = _clean_geometry(union_geom)
+        bounds = tuple(float(x) for x in union_geom.bounds)
+        area_ha = _calculate_polygon_area_ha(union_geom)
+        parsed_poly = ParsedPolygon(
+            geometry=union_geom,
+            geojson=mapping(union_geom),
+            area_ha=area_ha,
+            bounds=(bounds[0], bounds[1], bounds[2], bounds[3]),
+            properties=polygon_properties,
+        )
+        return ParseResult(
+            source_format="geojson",
+            kind="polygon",
+            polygon=parsed_poly,
+            skipped_features=skipped,
+        )
+
+    return ParseResult(
+        points=points,
+        source_format="geojson",
+        kind="points",
+        skipped_features=skipped,
+    )
 
 
 # -------------------------------------------------------------------- KML
@@ -179,6 +249,8 @@ def parse_kml(raw: bytes) -> ParseResult:
         raise PointParseError("Berkas KML tidak bisa dibaca (format XML rusak).") from exc
 
     points: list[ParsedPoint] = []
+    polygon_geoms: list[Any] = []
+    polygon_properties: dict[str, Any] = {}
     skipped = 0
 
     placemarks = [el for el in root.iter() if _strip_ns(el.tag) == "Placemark"]
@@ -193,11 +265,46 @@ def parse_kml(raw: bytes) -> ParseResult:
                 properties.setdefault(tag, child.text.strip())
 
         point_elements = [el for el in placemark.iter() if _strip_ns(el.tag) == "Point"]
-        if not point_elements:
-            skipped += 1
-            continue
+        poly_elements = [el for el in placemark.iter() if _strip_ns(el.tag) == "Polygon"]
 
-        added = 0
+        for poly_el in poly_elements:
+            outer_coords: list[tuple[float, float]] = []
+            for child in poly_el.iter():
+                if _strip_ns(child.tag) == "outerBoundaryIs":
+                    for coord_el in child.iter():
+                        if _strip_ns(coord_el.tag) == "coordinates" and coord_el.text:
+                            for chunk in coord_el.text.strip().split():
+                                parts = chunk.split(",")
+                                if len(parts) >= 2:
+                                    lon, lat = _coerce_float(parts[0]), _coerce_float(parts[1])
+                                    if lon is not None and lat is not None and _is_valid_lon(lon) and _is_valid_lat(lat):
+                                        outer_coords.append((lon, lat))
+            inner_rings: list[list[tuple[float, float]]] = []
+            for child in poly_el.iter():
+                if _strip_ns(child.tag) == "innerBoundaryIs":
+                    hole: list[tuple[float, float]] = []
+                    for coord_el in child.iter():
+                        if _strip_ns(coord_el.tag) == "coordinates" and coord_el.text:
+                            for chunk in coord_el.text.strip().split():
+                                parts = chunk.split(",")
+                                if len(parts) >= 2:
+                                    lon, lat = _coerce_float(parts[0]), _coerce_float(parts[1])
+                                    if lon is not None and lat is not None and _is_valid_lon(lon) and _is_valid_lat(lat):
+                                        hole.append((lon, lat))
+                    if len(hole) >= 3:
+                        inner_rings.append(hole)
+
+            if len(outer_coords) >= 3:
+                try:
+                    p = Polygon(outer_coords, holes=inner_rings)
+                    p = _clean_geometry(p)
+                    if not p.is_empty:
+                        polygon_geoms.append(p)
+                        if not polygon_properties:
+                            polygon_properties = dict(properties)
+                except Exception:
+                    skipped += 1
+
         for point_el in point_elements:
             coord_text = ""
             for el in point_el.iter():
@@ -205,7 +312,6 @@ def parse_kml(raw: bytes) -> ParseResult:
                     coord_text = el.text.strip()
             if not coord_text:
                 continue
-            # KML: "lon,lat[,alt]" dan boleh banyak pasangan dipisah spasi
             for chunk in coord_text.split():
                 parts = chunk.split(",")
                 if len(parts) < 2:
@@ -214,11 +320,30 @@ def parse_kml(raw: bytes) -> ParseResult:
                 if lat is None or lon is None or not _is_valid_lat(lat) or not _is_valid_lon(lon):
                     continue
                 points.append(ParsedPoint(lat, lon, dict(properties)))
-                added += 1
-        if added == 0:
+
+        if not point_elements and not poly_elements:
             skipped += 1
 
-    return ParseResult(points=points, source_format="kml", skipped_features=skipped)
+    if polygon_geoms and not points:
+        union_geom = shapely.unary_union(polygon_geoms) if len(polygon_geoms) > 1 else polygon_geoms[0]
+        union_geom = _clean_geometry(union_geom)
+        bounds = tuple(float(x) for x in union_geom.bounds)
+        area_ha = _calculate_polygon_area_ha(union_geom)
+        parsed_poly = ParsedPolygon(
+            geometry=union_geom,
+            geojson=mapping(union_geom),
+            area_ha=area_ha,
+            bounds=(bounds[0], bounds[1], bounds[2], bounds[3]),
+            properties=polygon_properties,
+        )
+        return ParseResult(
+            source_format="kml",
+            kind="polygon",
+            polygon=parsed_poly,
+            skipped_features=skipped,
+        )
+
+    return ParseResult(points=points, source_format="kml", kind="points", skipped_features=skipped)
 
 
 # -------------------------------------------------------------- SHP (zip)
@@ -299,17 +424,30 @@ def parse_shapefile_zip(raw: bytes) -> ParseResult:
 
     raw_coords: list[tuple[float, float]] = []
     props_per_point: list[dict[str, Any]] = []
+    polygon_geoms: list[Any] = []
+    polygon_properties: dict[str, Any] = {}
     skipped = 0
 
     for record in reader.iterShapeRecords():
-        shape = record.shape
+        shp_rec = record.shape
         properties = dict(zip(field_names, list(record.record)))
-        # Normalisasi tipe yang tidak bisa di-JSON (date, bytes, dst)
         for key, value in list(properties.items()):
             if not isinstance(value, (str, int, float, bool, type(None))):
                 properties[key] = str(value)
 
-        pts = list(getattr(shape, "points", []) or [])
+        # Poligon (shapeType 5=POLYGON, 15=POLYGONZ, 25=POLYGONM)
+        if shp_rec.shapeType in (shapefile.POLYGON, shapefile.POLYGONZ, shapefile.POLYGONM):
+            try:
+                g = _clean_geometry(shape(shp_rec.__geo_interface__))
+                if not g.is_empty:
+                    polygon_geoms.append(g)
+                    if not polygon_properties:
+                        polygon_properties = dict(properties)
+            except Exception:
+                skipped += 1
+            continue
+
+        pts = list(getattr(shp_rec, "points", []) or [])
         if not pts:
             fallback = _point_from_properties(properties)
             if fallback is None:
@@ -319,25 +457,63 @@ def parse_shapefile_zip(raw: bytes) -> ParseResult:
             props_per_point.append(properties)
             continue
 
-        # shapeType 1/11/21 = Point, 8/18/28 = MultiPoint
-        if shape.shapeType in (1, 11, 21, 8, 18, 28):
+        if shp_rec.shapeType in (1, 11, 21, 8, 18, 28):
             for x, y in pts:
                 raw_coords.append((float(x), float(y)))
                 props_per_point.append(dict(properties))
         else:
             skipped += 1
 
+    transformer_to_wgs84 = None
     if prj_name:
         prj_text = archive.read(prj_name).decode("utf-8", errors="replace")
-        raw_coords, warning = _reproject_to_wgs84(raw_coords, prj_text)
-        if warning:
-            warnings.append(warning)
+        try:
+            from pyproj import CRS, Transformer
+            crs = CRS.from_wkt(prj_text)
+            if crs.to_epsg() != 4326:
+                transformer_to_wgs84 = Transformer.from_crs(crs, CRS.from_epsg(4326), always_xy=True)
+                name = crs.name or "tidak bernama"
+                warnings.append(f"Koordinat diproyeksikan ulang dari {name} ke WGS84.")
+        except Exception:
+            warnings.append(
+                "Berkas .prj ada tapi sistem koordinatnya tidak dikenali; "
+                "koordinat dianggap sudah WGS84 (lon/lat)."
+            )
     else:
         warnings.append(
             "Berkas .prj tidak ada di dalam ZIP, jadi koordinat dianggap sudah "
             "WGS84 (lon/lat). Kalau data aslinya memakai proyeksi lain (mis. UTM), "
-            "hasil pencocokan KPS akan salah."
+            "hasil pencocokan akan salah."
         )
+
+    if polygon_geoms and not raw_coords:
+        if transformer_to_wgs84:
+            polygon_geoms = [transform(transformer_to_wgs84.transform, g) for g in polygon_geoms]
+        union_geom = shapely.unary_union(polygon_geoms) if len(polygon_geoms) > 1 else polygon_geoms[0]
+        union_geom = _clean_geometry(union_geom)
+        bounds = tuple(float(x) for x in union_geom.bounds)
+        area_ha = _calculate_polygon_area_ha(union_geom)
+        parsed_poly = ParsedPolygon(
+            geometry=union_geom,
+            geojson=mapping(union_geom),
+            area_ha=area_ha,
+            bounds=(bounds[0], bounds[1], bounds[2], bounds[3]),
+            properties=polygon_properties,
+        )
+        return ParseResult(
+            source_format="shapefile",
+            kind="polygon",
+            polygon=parsed_poly,
+            warnings=warnings,
+            skipped_features=skipped,
+        )
+
+    if transformer_to_wgs84 and raw_coords:
+        converted: list[tuple[float, float]] = []
+        for x, y in raw_coords:
+            lon, lat = transformer_to_wgs84.transform(x, y)
+            converted.append((lon, lat))
+        raw_coords = converted
 
     points: list[ParsedPoint] = []
     for (lon, lat), properties in zip(raw_coords, props_per_point):
@@ -349,6 +525,7 @@ def parse_shapefile_zip(raw: bytes) -> ParseResult:
     return ParseResult(
         points=points,
         source_format="shapefile",
+        kind="points",
         warnings=warnings,
         skipped_features=skipped,
     )
@@ -357,8 +534,8 @@ def parse_shapefile_zip(raw: bytes) -> ParseResult:
 # ------------------------------------------------------------- dispatcher
 
 
-def parse_points(raw: bytes, filename: str) -> ParseResult:
-    """Baca berkas titik berdasarkan ekstensinya."""
+def parse_spatial_file(raw: bytes, filename: str) -> ParseResult:
+    """Baca berkas spasial (titik atau poligon) berdasarkan ekstensinya."""
     lowered = (filename or "").lower()
 
     if lowered.endswith(".zip"):
@@ -373,10 +550,19 @@ def parse_points(raw: bytes, filename: str) -> ParseResult:
             "atau .zip berisi shapefile."
         )
 
-    if not result.points:
+    if result.kind == "points" and not result.points:
         raise PointParseError(
-            "Tidak ada titik yang bisa dibaca dari berkas ini. "
-            "Pastikan isinya berupa titik (Point), bukan hanya poligon atau garis."
+            "Tidak ada titik maupun poligon yang bisa dibaca dari berkas ini. "
+            "Pastikan berkas berisi koordinat titik atau poligon batas areal."
+        )
+    if result.kind == "polygon" and not result.polygon:
+        raise PointParseError(
+            "Poligon tidak valid atau kosong di dalam berkas ini."
         )
 
     return result
+
+
+def parse_points(raw: bytes, filename: str) -> ParseResult:
+    """Kompatibilitas mundur: baca berkas spasial."""
+    return parse_spatial_file(raw, filename)

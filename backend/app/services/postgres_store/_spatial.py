@@ -98,3 +98,70 @@ class _SpatialMatchMixin:
                     }
 
         return results
+
+    def check_polygon_kps_overlap(
+        self, polygon_geojson: str, limit: int = 20
+    ) -> list[dict[str, object]]:
+        """Cek apakah poligon yang diunggah beririsan dengan kawasan KPS mana saja."""
+        sql = """
+            SELECT
+                poly.id,
+                poly.lembaga,
+                poly.nama_prov,
+                poly.nama_kab,
+                poly.nama_kec,
+                poly.nama_desa,
+                poly.skema,
+                poly.no_sk,
+                poly.tgl_sk,
+                poly.status,
+                poly.wilker_bps,
+                poly.ps_id,
+                poly.luas_final
+            FROM polygon_metadata poly
+            WHERE poly.is_active = TRUE
+              AND ST_Intersects(poly.geometry, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326))
+            ORDER BY poly.id
+            LIMIT %s
+        """
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, (polygon_geojson, limit))
+                return [dict(row) for row in cur.fetchall()]
+
+    def find_hotspots_in_polygon(
+        self,
+        polygon_geojson: str,
+        start_date: str,
+        end_date: str,
+    ) -> list[dict[str, object]]:
+        """Ambil seluruh titik panas NASA di dalam poligon pada rentang tanggal tertentu.
+
+        Hasil di-deduplicate per koordinat dan waktu deteksi agar titik yang sama
+        tidak tercatat ganda karena perbedaan layer/perimeter.
+        """
+        sql = """
+            WITH distinct_hotspots AS (
+                SELECT DISTINCT ON (h.latitude, h.longitude, h.detected_at)
+                    h.id,
+                    h.source,
+                    h.satellite,
+                    h.latitude,
+                    h.longitude,
+                    h.brightness,
+                    h.confidence,
+                    h.detected_at,
+                    h.raw_payload
+                FROM hotspot_observations h
+                WHERE h.detected_at >= %s::timestamptz
+                  AND h.detected_at <= %s::timestamptz
+                  AND ST_Intersects(h.geom, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326))
+                ORDER BY h.latitude, h.longitude, h.detected_at, h.id DESC
+            )
+            SELECT * FROM distinct_hotspots
+            ORDER BY detected_at DESC
+        """
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, (start_date, end_date, polygon_geojson))
+                return [dict(row) for row in cur.fetchall()]

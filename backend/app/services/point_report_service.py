@@ -283,7 +283,109 @@ def _write_dashboard_sheet(sheet, outcome: MatchOutcome, source_name: str) -> No
     sheet.column_dimensions["D"].width = 3
 
 
-def build_excel_file(outcome: MatchOutcome, source_name: str) -> bytes:
+def build_polygon_excel_file(outcome: Any, source_name: str) -> bytes:
+    workbook = Workbook()
+
+    summary_sheet = workbook.active
+    summary_sheet.title = "Ringkasan"
+    summary_sheet.views.sheetView[0].showGridLines = True
+
+    summary_sheet["A1"] = "LAPORAN VERIFIKASI TITIK PANAS NASA PADA POLIGON KAWASAN"
+    summary_sheet["A1"].font = Font(bold=True, size=15, color=_INK)
+    summary_sheet["A2"] = (
+        f"Sumber berkas: {source_name} ({getattr(outcome, 'source_format', 'poligon')})  •  "
+        f"Dibuat {datetime.now(WIB).strftime('%d-%m-%Y %H:%M')} WIB"
+    )
+    summary_sheet["A2"].font = Font(size=10, color=_MUTED, italic=True)
+
+    summary = outcome.summary
+    area_ha = getattr(outcome, "area_ha", 0.0)
+    density = getattr(summary, "density_per_1000ha", 0.0)
+    overlaps_kps = getattr(outcome, "overlaps_kps", False)
+    status_kawasan = "Beririsan dengan Kawasan KPS" if overlaps_kps else "Di luar Kawasan Perhutanan Sosial"
+
+    info_rows = [
+        ("Nama Berkas", source_name),
+        ("Format Berkas", str(getattr(outcome, "source_format", "-")).upper()),
+        ("Luas Poligon", f"{area_ha:,.2f} Ha"),
+        ("Status Kawasan", status_kawasan),
+        ("Total Titik Panas (2026)", summary.total_hotspots),
+        ("Kerapatan Hotspot", f"{density:.2f} titik / 1.000 Ha"),
+        ("Keyakinan Tinggi (High)", summary.confidence_high),
+        ("Keyakinan Sedang (Medium)", summary.confidence_medium),
+        ("Keyakinan Rendah (Low)", summary.confidence_low),
+    ]
+
+    r = 4
+    for label, val in info_rows:
+        c1 = summary_sheet.cell(row=r, column=1, value=label)
+        c1.font = Font(bold=True, size=10, color=_INK)
+        c1.fill = PatternFill("solid", fgColor=_BAND)
+        c1.border = _CELL_BORDER
+
+        c2 = summary_sheet.cell(row=r, column=2, value=str(val))
+        c2.font = Font(size=10)
+        c2.border = _CELL_BORDER
+        r += 1
+
+    r += 1
+    m_row, h_row, count = _write_section(
+        summary_sheet, r, "Sebaran Titik Panas per Bulan (2026)", "Bulan", summary.by_month, summary.total_hotspots
+    )
+    _attach_bar_chart(summary_sheet, "E4", "Grafik Titik Panas per Bulan", h_row, count)
+
+    s_row, sh_row, scount = _write_section(
+        summary_sheet, m_row + 1, "Sebaran per Satelit / Sensor", "Satelit", summary.by_satellite, summary.total_hotspots
+    )
+
+    summary_sheet.column_dimensions["A"].width = 32
+    summary_sheet.column_dimensions["B"].width = 30
+    summary_sheet.column_dimensions["C"].width = 12
+
+    data_sheet = workbook.create_sheet("Data Titik Panas")
+    data_sheet.views.sheetView[0].showGridLines = True
+
+    poly_headers = [
+        "No",
+        "Waktu Deteksi (WIB)",
+        "Latitude",
+        "Longitude",
+        "Satelit / Sensor",
+        "Tingkat Keyakinan",
+        "Kecerahan",
+        "FRP (MW)",
+    ]
+    header_fill = PatternFill("solid", fgColor=_INK)
+    for col_idx, h in enumerate(poly_headers, start=1):
+        c = data_sheet.cell(row=1, column=col_idx, value=h)
+        c.fill = header_fill
+        c.font = Font(bold=True, color=_HEADER_TEXT, size=10)
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = _CELL_BORDER
+
+    for row_idx, row in enumerate(outcome.preview_rows, start=2):
+        for col_idx, val in enumerate(row, start=1):
+            c = data_sheet.cell(row=row_idx, column=col_idx, value=val)
+            c.border = _CELL_BORDER
+            if row_idx % 2 == 1:
+                c.fill = PatternFill("solid", fgColor=_BAND)
+            if col_idx in (1, 3, 4, 7, 8):
+                c.alignment = Alignment(horizontal="right")
+
+    for col in data_sheet.columns:
+        col_letter = get_column_letter(col[0].column)
+        max_len = max(len(str(c.value or "")) for c in col[:50])
+        data_sheet.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+    buffer = BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
+def build_excel_file(outcome: Any, source_name: str) -> bytes:
+    if getattr(outcome, "kind", "") == "polygon":
+        return build_polygon_excel_file(outcome, source_name)
+
     workbook = Workbook()
 
     data_sheet = workbook.active
@@ -484,7 +586,120 @@ def _kps_maps_html(outcome: MatchOutcome) -> str:
     )
 
 
-def build_pdf_file(outcome: MatchOutcome, source_name: str) -> bytes:
+def build_polygon_pdf_file(outcome: Any, source_name: str) -> bytes:
+    from weasyprint import HTML
+
+    summary = outcome.summary
+    area_ha = getattr(outcome, "area_ha", 0.0)
+    density = getattr(summary, "density_per_1000ha", 0.0)
+    overlaps_kps = getattr(outcome, "overlaps_kps", False)
+    kps_matches = getattr(outcome, "kps_matches", [])
+
+    generated = datetime.now(WIB).strftime("%d %b %Y %H:%M")
+
+    if overlaps_kps:
+        kps_names = ", ".join(str(m.get("lembaga") or "KPS") for m in kps_matches[:5])
+        kps_status_html = f"""
+        <div class="kps-box kps-box--overlap">
+            <strong>Status Kawasan:</strong> Beririsan dengan {len(kps_matches)} unit Perhutanan Sosial.<br>
+            <span class="submeta">Unit terkait: {_escape(kps_names)}</span>
+        </div>
+        """
+    else:
+        kps_status_html = """
+        <div class="kps-box kps-box--outside">
+            <strong>Status Kawasan:</strong> Di luar Kawasan Perhutanan Sosial (Areal Konsesi / Hutan Bebas / Lainnya).
+        </div>
+        """
+
+    detail_limit = 200
+    detail_rows = "".join(
+        "<tr>"
+        f"<td class='num'>{row[0]}</td>"
+        f"<td>{_escape(row[1])}</td>"
+        f"<td class='num'>{row[2]}</td>"
+        f"<td class='num'>{row[3]}</td>"
+        f"<td>{_escape(row[4])}</td>"
+        f"<td class='{'alert' if row[5] == 'Tinggi' else ''}'>{_escape(row[5])}</td>"
+        f"<td class='num'>{_escape(row[6])}</td>"
+        f"<td class='num'>{_escape(row[7])}</td>"
+        "</tr>"
+        for row in outcome.preview_rows[:detail_limit]
+    )
+    if not detail_rows:
+        detail_rows = "<tr><td colspan='8' class='empty'>Tidak ada titik panas terdeteksi di dalam poligon pada tahun 2026.</td></tr>"
+
+    detail_note = (
+        f"<p class='more'>Menampilkan {detail_limit} dari {summary.total_hotspots:,} titik panas. "
+        "Data lengkap tersedia di berkas Excel.</p>"
+        if summary.total_hotspots > detail_limit
+        else ""
+    )
+
+    warnings_html = ""
+    if outcome.warnings:
+        items = "".join(f"<li>{_escape(w)}</li>" for w in outcome.warnings)
+        warnings_html = f"<div class='warn'><strong>Catatan:</strong><ul>{items}</ul></div>"
+
+    html = f"""<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><title>Laporan Titik Panas NASA (Poligon Kawasan)</title>
+<style>
+  @page {{ size: A4; margin: 16mm 14mm; }}
+  body {{ font-family: "DejaVu Sans", sans-serif; color: #1B3A2B; font-size: 9pt; }}
+  h1 {{ font-size: 16pt; margin: 0 0 2mm; }}
+  h2 {{ font-size: 11pt; margin: 6mm 0 2mm; border-bottom: 1px solid #D8DEDA;
+        padding-bottom: 1mm; break-after: avoid; page-break-after: avoid; }}
+  .sub {{ color: #6B726D; font-style: italic; margin: 0 0 4mm; }}
+  .kps-box {{ padding: 2.5mm 3.5mm; margin-bottom: 4mm; border-radius: 2px; font-size: 8.5pt; }}
+  .kps-box--overlap {{ background: #FEF3C7; border: 1px solid #F59E0B; color: #92400E; }}
+  .kps-box--outside {{ background: #EEF3EF; border: 1px solid #1B3A2B; color: #1B3A2B; }}
+  .submeta {{ font-size: 7.5pt; color: #6B726D; }}
+  .cards {{ display: flex; gap: 3.5mm; margin-bottom: 5mm; }}
+  .card {{ flex: 1; border: 1px solid #D8DEDA; border-top: 3px solid #E0862A; padding: 2.5mm; }}
+  .card .label {{ font-size: 7pt; color: #6B726D; text-transform: uppercase; }}
+  .card .value {{ font-size: 14pt; font-weight: bold; }}
+  .card.alert .value {{ color: #B4453C; }}
+  table {{ width: 100%; border-collapse: collapse; margin-bottom: 4mm; }}
+  th {{ background: #1B3A2B; color: #fff; font-size: 8pt; text-align: left; padding: 1.6mm 2mm; }}
+  td {{ border: 1px solid #D8DEDA; padding: 1.4mm 2mm; font-size: 8pt; }}
+  tbody tr:nth-child(even) td {{ background: #EEF3EF; }}
+  .num {{ text-align: right; }}
+  .alert {{ color: #B4453C; font-weight: bold; }}
+  .more {{ font-size: 8pt; color: #6B726D; font-style: italic; }}
+  .empty {{ text-align: center; color: #6B726D; font-style: italic; padding: 4mm 2mm; }}
+  .warn {{ border-left: 3px solid #B4453C; background: #FBF0EF; padding: 2mm 3mm; margin-bottom: 4mm; font-size: 8.5pt; }}
+  .warn ul {{ margin: 1mm 0 0 4mm; padding: 0; }}
+</style></head>
+<body>
+  <h1>Laporan Titik Panas NASA (Poligon Kawasan)</h1>
+  <p class="sub">Sumber berkas: {_escape(source_name)} ({_escape(outcome.source_format)}) &bull; Dibuat {generated} WIB &bull; Periode: Tahun Berjalan (2026)</p>
+  {warnings_html}
+  {kps_status_html}
+  <div class="cards">
+    <div class="card"><div class="label">Total Hotspot</div><div class="value">{summary.total_hotspots:,}</div></div>
+    <div class="card"><div class="label">Luas Areal</div><div class="value">{area_ha:,.1f} Ha</div></div>
+    <div class="card"><div class="label">Kerapatan / 1k Ha</div><div class="value">{density:.2f}</div></div>
+    <div class="card {'alert' if summary.confidence_high else ''}"><div class="label">Tingkat Tinggi</div><div class="value">{summary.confidence_high:,}</div></div>
+    <div class="card"><div class="label">Tingkat Sedang</div><div class="value">{summary.confidence_medium:,}</div></div>
+  </div>
+  {_summary_table_html("Sebaran Titik Panas per Bulan (2026)", "Bulan", summary.by_month, summary.total_hotspots)}
+  {_summary_table_html("Sebaran per Satelit / Sensor", "Satelit", summary.by_satellite, summary.total_hotspots)}
+  <h2>Daftar Titik Panas di Dalam Poligon</h2>
+  <table>
+    <thead><tr><th class="num">No</th><th>Waktu Deteksi (WIB)</th><th class="num">Lat</th><th class="num">Lon</th>
+    <th>Satelit</th><th>Confidence</th><th class="num">Kecerahan</th><th class="num">FRP (MW)</th></tr></thead>
+    <tbody>{detail_rows}</tbody>
+  </table>
+  {detail_note}
+</body></html>"""
+
+    return HTML(string=html).write_pdf()
+
+
+def build_pdf_file(outcome: Any, source_name: str) -> bytes:
+    if getattr(outcome, "kind", "") == "polygon":
+        return build_polygon_pdf_file(outcome, source_name)
+
     from weasyprint import HTML
 
     summary = outcome.summary
