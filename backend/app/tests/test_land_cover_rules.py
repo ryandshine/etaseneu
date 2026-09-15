@@ -298,3 +298,23 @@ def test_sparse_classes_flags_only_small_nonzero_counts() -> None:
     counts = {"hutan": 400, "pertanian": 12, "semak": 0, "basah": 30}
     assert labels.sparse_classes(counts, CLASS_KEYS, 30) == ["pertanian"]
 
+
+def test_formula_v9_mountain_forest_preservation_and_sar_topography() -> None:
+    ee = FakeEE
+
+    # Hutan pegunungan tropis berketinggian tinggi (elevasi 1.900m, lereng 25°):
+    # - Kanopi lebat permanen: NDVI = 0.79, NBR = 0.62, NDMI = 0.22, B8 = 0.32
+    # - Terkena efek topografi lereng pada radar SAR: VH_VV_ratio = -6.8 (pantulan VV tebing tinggi)
+    #   dan VH = -15.2 (bayangan radar parsial pada lereng belakang)
+    # - Terkena fluktuasi kabut/awan orografis: ndvi_std = 0.15
+    # Formula v9 WAJIB mengenalinya sebagai Hutan (H), BUKAN Pertanian (P)!
+    mountain_forest = FakeFeatImage({
+        "ndvi": 0.79, "nbr": 0.62, "B8": 0.32, "mndwi": -0.30,
+        "bsi": -0.15, "B4": 0.03, "B11": 0.10, "ndmi": 0.22,
+        "ndvi_std": 0.15, "ndvi_cv": 0.18,
+        "elevation": 1900.0, "slope": 25.0,
+        "VH": -15.2, "VV": -8.4, "VH_VV_ratio": -6.8,
+    })
+    assert labels.spectral_seed_image(ee, mountain_forest, IDX, use_sar=True).v == H
+    assert labels.rule_based_classify(ee, mountain_forest, IDX, use_sar=True).v == H
+

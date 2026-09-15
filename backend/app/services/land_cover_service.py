@@ -76,11 +76,13 @@ S2_COLLECTION = "COPERNICUS/S2_SR_HARMONIZED"
 #       kelembaban NDMI, dan fenologi ndvi_std); eliminasi lubang spasial MMU (clump modal fill)
 #   8 = 2026-09-07: Ambang batas spektral adaptif persentil lokal (p15/p40/p65/p85) +
 #       koefisien variasi fenologi musiman (ndvi_cv) invarian-skala
-FORMULA_VERSION = 8
+#   9 = 2026-09-15: Kalibrasi lanskap pegunungan tropis (koreksi distorsi topografi radar SAR,
+#       restriksi elevasi/lereng pada fitur SAR & fenologi musiman, relaksasi batas atas th_hutan p85<=0.76).
+FORMULA_VERSION = 9
 FORMULA_LABEL = (
     "Sentinel-2 L2A median kemarau + variabilitas fenologi ndvi_std + ndvi_cv + NDMI + "
-    "Sentinel-1 SAR + Random Forest; 5 kelas mandiri ETA SENEU (tanpa guru eksternal); "
-    "endmember adaptif persentil lokal (p15/p40/p65/p85); eliminasi lubang spasial MMU (ETA SENEU v8)"
+    "Sentinel-1 SAR (koreksi topografi pegunungan) + Random Forest; 5 kelas mandiri ETA SENEU; "
+    "endmember adaptif persentil lokal terkalibrasi; eliminasi lubang spasial MMU (ETA SENEU v9)"
 )
 
 YEARS: tuple[int, ...] = (2021, 2022, 2023, 2024, 2025)
