@@ -215,10 +215,11 @@ export function TutupanLahanView({
   );
 
 
-  // Responsive: pada layar ringkas (<=900px), daftar dan detail bergantian tampil
-  // agar user tidak perlu menggulir melewati daftar poligon untuk melihat peta.
-  // Pada desktop (>900px), kedua kolom tampil berdampingan.
-  const showList = !isCompact || selectedId === null;
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
+
+  // Responsive: pada layar ringkas (<=900px), daftar dan detail bergantian tampil.
+  // Pada desktop (>900px), sidebar poligon bisa ditutup/dibuka agar peta & hasil analisis bisa tampil penuh (full width).
+  const showList = !isCompact ? (selectedId === null || isSidebarOpen) : (selectedId === null);
   const showDetail = !isCompact || selectedId !== null;
 
   return (
@@ -228,17 +229,31 @@ export function TutupanLahanView({
     >
       <header className="tl-topbar">
         <div className="tl-topbar-row">
-          <h2>Tutupan Lahan</h2>
-          <span className="tl-summary">
-            {loading ? (
-              "Memuat…"
-            ) : (
-              <>
-                <strong>{analyzedCount}</strong> dari <strong>{rows.length}</strong> poligon telah
-                dianalisis
-              </>
-            )}
-          </span>
+          <div className="tl-topbar-title-wrap">
+            <h2>Tutupan Lahan</h2>
+            <span className="tl-summary">
+              {loading ? (
+                "Memuat…"
+              ) : (
+                <>
+                  <strong>{analyzedCount}</strong> dari <strong>{rows.length}</strong> poligon telah
+                  dianalisis
+                </>
+              )}
+            </span>
+          </div>
+
+          {selectedId !== null && !isCompact && (
+            <button
+              type="button"
+              className="tl-toggle-sidebar-btn"
+              onClick={() => setIsSidebarOpen((v) => !v)}
+              aria-label={isSidebarOpen ? "Sembunyikan daftar poligon (Fokus Peta & Analisis)" : "Tampilkan daftar poligon"}
+              title={isSidebarOpen ? "Sembunyikan daftar poligon untuk tampilan peta penuh" : "Tampilkan daftar poligon"}
+            >
+              {isSidebarOpen ? "◀ Sembunyikan Daftar (Fokus Peta)" : "▶ Buka Daftar Poligon"}
+            </button>
+          )}
         </div>
         <p className="tl-lede">
           Klasifikasi Sentinel-2 + Random Forest per poligon KPS/Hutan Adat, 2021–2025. Analisis
@@ -253,7 +268,7 @@ export function TutupanLahanView({
         </p>
       ) : null}
 
-      <div className="tl-body">
+      <div className={`tl-body${!isCompact && selectedId !== null && !isSidebarOpen ? " tl-body--full" : ""}`}>
         {showList && (
           <div className="tl-list">
             <div className="tl-list-head">
@@ -447,6 +462,18 @@ export function TutupanLahanView({
               selectedId !== null && !loading && selectedRow ? " tl-detail--stage" : ""
             }`}
           >
+            {!isCompact && selectedId !== null && !isSidebarOpen && (
+              <button
+                type="button"
+                className="tl-dock-toggle-btn"
+                onClick={() => setIsSidebarOpen(true)}
+                title="Buka daftar poligon KPS"
+                aria-label="Buka daftar poligon KPS"
+              >
+                <span>Daftar Poligon</span>
+                <span className="tl-dock-toggle-arrow">▶</span>
+              </button>
+            )}
             {selectedId === null ? (
               <div className="tl-empty tl-empty--stage">
                 <div className="tl-empty-card">
