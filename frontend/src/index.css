@@ -2751,6 +2751,105 @@ code {
   color: var(--color-cream);
 }
 
+/* Layer & Opasitas Card */
+.lc-layercard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.lc-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.lc-checkbox {
+  margin-top: 0.15rem;
+  accent-color: var(--color-red);
+  cursor: pointer;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.lc-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.lc-toggle-title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--color-cream);
+  line-height: 1.25;
+}
+
+.lc-toggle-sub {
+  font-size: 0.65rem;
+  color: rgba(231, 230, 194, 0.55);
+  line-height: 1.2;
+}
+
+.lc-layer-status {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.68rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.35rem;
+}
+
+.lc-layer-status--loading {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(231, 230, 194, 0.85);
+}
+
+.lc-layer-status--error {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.lc-layer-spinner {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--color-red);
+  animation: spin 800ms linear infinite;
+  flex-shrink: 0;
+}
+
+.lc-opacity-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lc-opacity-box__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.7rem;
+  color: rgba(231, 230, 194, 0.7);
+}
+
+.lc-opacity-box__val {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-cream);
+}
+
+.lc-range--sm {
+  height: 1.4rem;
+}
+
 /* LandCoverPanel cuma dirender di panel detail TutupanLahanView (lebar,
    lihat .tl-detail) -- BUKAN lagi di sidebar sempit Detail KPS. Tab "Peta
    Spasial" sekarang pakai tata letak Live Map (.lc-mapframe + .map-left-stack

@@ -116,6 +116,8 @@ _DW_MAP = {
 
 # Progres langkah live — boleh hilang saat restart; status final ada di DB.
 _LAND_COVER_RUN_STATE: dict[int, dict] = {}
+# Cache XYZ tile URL komposit Sentinel-2 True Color (polygon_id, year) -> tile_url
+_S2_TILE_CACHE: dict[tuple[int, int], str] = {}
 
 
 class LandCoverError(Exception):
@@ -732,3 +734,31 @@ class LandCoverService:
             raise LandCoverError(f"Analisis gagal: {exc}") from exc
         finally:
             _LAND_COVER_RUN_STATE.pop(pid, None)
+
+    def get_s2_tile_url(self, polygon_id: int, year: int) -> dict[str, object]:
+        """Menghasilkan XYZ tile URL untuk citra komposit Sentinel-2 True Color (RGB: B4, B3, B2)
+        pada tahun tertentu langsung dari Google Earth Engine CDN."""
+        pid = int(polygon_id)
+        yr = int(year)
+        cache_key = (pid, yr)
+        if cache_key in _S2_TILE_CACHE:
+            return {"polygon_id": pid, "year": yr, "tile_url": _S2_TILE_CACHE[cache_key]}
+
+        target = self.postgres_store.read_land_cover_target_polygon(pid)
+        if not target:
+            raise LandCoverError(f"Poligon {pid} tidak ditemukan / tidak aktif.")
+        ee = self._ensure_ee()
+        roi = ee.Geometry(target["geometry_json"])
+        start, end = self._year_window(yr)
+        s2 = self._s2_median(ee, roi, start, end).clip(roi)
+        # True Color alami (Red=B4, Green=B3, Blue=B2) dengan peregangan kontras
+        vis = {"bands": ["B4", "B3", "B2"], "min": 0.02, "max": 0.25, "gamma": 1.3}
+        map_id = s2.getMapId(vis)
+        url_format = map_id["tile_fetcher"].url_format
+        _S2_TILE_CACHE[cache_key] = url_format
+        return {
+            "polygon_id": pid,
+            "year": yr,
+            "tile_url": url_format,
+        }
+

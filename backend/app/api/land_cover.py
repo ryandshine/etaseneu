@@ -13,6 +13,7 @@ from app.services.land_cover_service import (
     CLASS_KEYS,
     FORMULA_VERSION,
     YEARS,
+    LandCoverError,
     LandCoverService,
     _build_summary_text,
     _net_change,
@@ -165,3 +166,24 @@ async def land_cover_overlay(
             if r.get("geometry_json")
         ],
     }
+
+
+@router.get("/land-cover/tile-url")
+async def land_cover_tile_url(
+    polygon_id: int,
+    year: int = Query(...),
+) -> dict[str, object]:
+    """Mengembalikan XYZ tile URL untuk citra komposit Sentinel-2 True Color (RGB).
+    Tile dilayani langsung dari Google Earth Engine CDN."""
+    if year not in YEARS:
+        raise HTTPException(status_code=404, detail="Tahun di luar rentang 2021-2025")
+    service = LandCoverService()
+    if not service.enabled:
+        raise HTTPException(status_code=503, detail="GEE belum dikonfigurasi di server")
+    try:
+        return service.get_s2_tile_url(polygon_id, year)
+    except LandCoverError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Gagal mengambil citra satelit: {exc}") from exc
+

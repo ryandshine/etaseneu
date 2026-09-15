@@ -284,9 +284,73 @@ describe("LandCoverPanel", () => {
     });
     render(<LandCoverPanel polygonId={1} isAdmin />);
     await screen.findByText("Hutan");
-    const slider = screen.getByRole("slider");
+    const slider = screen.getByRole("slider", { name: /tahun tutupan lahan/i });
     fireEvent.change(slider, { target: { value: "2024" } });
     await waitFor(() => expect(overlayYears).toContain("2024"));
+  });
+
+  it("done: toggling Sentinel-2 layer fetches tile url from backend", async () => {
+    const tileCalls: string[] = [];
+    mockFetch((url) => {
+      if (url.includes("/land-cover/status")) {
+        return jsonResponse({
+          state: "done",
+          step: null,
+          error: null,
+          computed_at: RESULT.meta.computed_at,
+        });
+      }
+      if (url.includes("/land-cover/result")) return jsonResponse(RESULT);
+      if (url.includes("/land-cover/overlay")) {
+        return jsonResponse({ type: "FeatureCollection", features: [] });
+      }
+      if (url.includes("/land-cover/tile-url")) {
+        tileCalls.push(url);
+        return jsonResponse({
+          url: "https://earthengine.googleapis.com/v1/mock/tiles/{z}/{x}/{y}",
+          year: 2025,
+          polygon_id: 1,
+        });
+      }
+      return jsonResponse({}, 404);
+    });
+    render(<LandCoverPanel polygonId={1} isAdmin />);
+    await screen.findByText("Hutan");
+
+    const checkbox = screen.getByRole("checkbox", { name: /citra sentinel-2/i });
+    expect(checkbox).not.toBeChecked();
+
+    fireEvent.click(checkbox);
+    expect(checkbox).toBeChecked();
+
+    await waitFor(() =>
+      expect(tileCalls.some((c) => c.includes("/land-cover/tile-url") && c.includes("year=2025"))).toBe(true),
+    );
+  });
+
+  it("done: changing opacity slider updates displayed percentage", async () => {
+    mockFetch((url) => {
+      if (url.includes("/land-cover/status")) {
+        return jsonResponse({
+          state: "done",
+          step: null,
+          error: null,
+          computed_at: RESULT.meta.computed_at,
+        });
+      }
+      if (url.includes("/land-cover/result")) return jsonResponse(RESULT);
+      if (url.includes("/land-cover/overlay")) {
+        return jsonResponse({ type: "FeatureCollection", features: [] });
+      }
+      return jsonResponse({}, 404);
+    });
+    render(<LandCoverPanel polygonId={1} isAdmin />);
+    await screen.findByText("Hutan");
+
+    expect(screen.getByText("75%")).toBeInTheDocument();
+    const opacitySlider = screen.getByRole("slider", { name: /opasitas rona tutupan lahan/i });
+    fireEvent.change(opacitySlider, { target: { value: "40" } });
+    expect(screen.getByText("40%")).toBeInTheDocument();
   });
 });
 

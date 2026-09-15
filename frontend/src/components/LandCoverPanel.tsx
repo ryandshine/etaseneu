@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { GeoJSON as LeafletGeoJSON } from "leaflet";
 import { geoJSON as buildLeafletGeoJSON } from "leaflet";
 import { GeoJSON, MapContainer, TileLayer, ZoomControl, useMap } from "react-leaflet";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -210,7 +211,14 @@ export function LandCoverPanel({
   const isMobile = useIsMobile();
   const [overlay, setOverlay] = useState<OverlayFC | null>(null);
   const [outline, setOutline] = useState<Record<string, unknown> | null>(null);
+  const [showS2TrueColor, setShowS2TrueColor] = useState(false);
+  const [s2TileUrl, setS2TileUrl] = useState<string | null>(null);
+  const [s2TileLoading, setS2TileLoading] = useState(false);
+  const [s2TileError, setS2TileError] = useState<string | null>(null);
+  const [overlayOpacity, setOverlayOpacity] = useState(0.75);
   const overlayCache = useRef<Map<number, OverlayFC>>(new Map());
+  const s2TileCache = useRef<Map<string, string>>(new Map());
+  const geoJsonRef = useRef<LeafletGeoJSON | null>(null);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchStatus = useCallback(async (): Promise<State> => {
@@ -227,6 +235,12 @@ export function LandCoverPanel({
 
   useEffect(() => {
     overlayCache.current.clear();
+    s2TileCache.current.clear();
+    setShowS2TrueColor(false);
+    setS2TileUrl(null);
+    setS2TileLoading(false);
+    setS2TileError(null);
+    setOverlayOpacity(0.75);
     setResult(null);
     setOverlay(null);
     setOutline(null);
@@ -294,6 +308,69 @@ export function LandCoverPanel({
       });
   }, [state, polygonId, year]);
 
+  useEffect(() => {
+    if (!showS2TrueColor || state !== "done") {
+      setS2TileUrl(null);
+      setS2TileLoading(false);
+      setS2TileError(null);
+      return;
+    }
+    const cacheKey = `${polygonId}-${year}`;
+    const cached = s2TileCache.current.get(cacheKey);
+    if (cached) {
+      setS2TileUrl(cached);
+      setS2TileLoading(false);
+      setS2TileError(null);
+      return;
+    }
+    let active = true;
+    setS2TileUrl(null);
+    setS2TileLoading(true);
+    setS2TileError(null);
+    void authFetch(`/api/land-cover/tile-url?polygon_id=${polygonId}&year=${year}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { detail?: string } | null;
+          throw new Error(
+            typeof body?.detail === "string" ? body.detail : "Gagal memuat citra satelit",
+          );
+        }
+        return (await res.json()) as { url: string };
+      })
+      .then((data) => {
+        if (!active) return;
+        if (data?.url) {
+          s2TileCache.current.set(cacheKey, data.url);
+          setS2TileUrl(data.url);
+        }
+        setS2TileLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setS2TileError(err instanceof Error ? err.message : "Gagal memuat citra satelit");
+        setS2TileLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [showS2TrueColor, polygonId, year, state]);
+
+  useEffect(() => {
+    if (geoJsonRef.current) {
+      geoJsonRef.current.setStyle((feature) => {
+        const c = landCoverColor(
+          (feature?.properties as { class_key?: string })?.class_key ?? "",
+        );
+        return {
+          color: c,
+          weight: overlayOpacity === 0 ? 0.5 : 0.75,
+          fillColor: c,
+          fillOpacity: overlayOpacity,
+        };
+      });
+    }
+  }, [overlayOpacity]);
+
   const runAnalyze = useCallback(
     async (force: boolean) => {
       const res = await authFetch(
@@ -344,6 +421,9 @@ export function LandCoverPanel({
       return;
     }
     overlayCache.current.clear();
+    s2TileCache.current.clear();
+    setShowS2TrueColor(false);
+    setS2TileUrl(null);
     setResult(null);
     setOverlay(null);
     setErrorMsg(null);
@@ -633,6 +713,13 @@ export function LandCoverPanel({
                   maxZoom={layer.maxZoom}
                 />
               ))}
+              {showS2TrueColor && s2TileUrl && (
+                <TileLayer
+                  key={`s2-truecolor-${polygonId}-${year}`}
+                  url={s2TileUrl}
+                  maxZoom={19}
+                />
+              )}
               {!isMobile && <ZoomControl position="bottomright" />}
               {outline && (
                 <GeoJSON
@@ -649,12 +736,18 @@ export function LandCoverPanel({
               {overlay && overlay.features.length > 0 && (
                 <GeoJSON
                   key={`lc-${polygonId}-${year}`}
+                  ref={geoJsonRef}
                   data={overlay as never}
                   style={(feature) => {
                     const c = landCoverColor(
                       (feature?.properties as { class_key?: string })?.class_key ?? "",
                     );
-                    return { color: c, weight: 0.75, fillColor: c, fillOpacity: 0.8 };
+                    return {
+                      color: c,
+                      weight: overlayOpacity === 0 ? 0.5 : 0.75,
+                      fillColor: c,
+                      fillOpacity: overlayOpacity,
+                    };
                   }}
                 />
               )}
@@ -722,6 +815,54 @@ export function LandCoverPanel({
                   <Chevron dir="right" />
                 </button>
                 <strong className="lc-year">{year}</strong>
+              </div>
+            </div>
+
+            {/* Kontrol Citra Satelit & Transparansi */}
+            <div className="map-legend lc-layercard">
+              <span className="map-legend-title">Citra Satelit &amp; Tampilan</span>
+
+              <label className="lc-toggle-row">
+                <input
+                  type="checkbox"
+                  className="lc-checkbox"
+                  checked={showS2TrueColor}
+                  onChange={(e) => setShowS2TrueColor(e.target.checked)}
+                />
+                <div className="lc-toggle-text">
+                  <span className="lc-toggle-title">Citra Sentinel-2 ({year})</span>
+                  <span className="lc-toggle-sub">True Color RGB (Bebas Awan)</span>
+                </div>
+              </label>
+
+              {showS2TrueColor && s2TileLoading && (
+                <div className="lc-layer-status lc-layer-status--loading">
+                  <span className="lc-layer-spinner" aria-hidden />
+                  <span>Mengambil citra dari GEE…</span>
+                </div>
+              )}
+
+              {showS2TrueColor && s2TileError && (
+                <div className="lc-layer-status lc-layer-status--error">
+                  <span>{s2TileError}</span>
+                </div>
+              )}
+
+              <div className="lc-opacity-box">
+                <div className="lc-opacity-box__head">
+                  <span>Opasitas Rona</span>
+                  <span className="lc-opacity-box__val">{Math.round(overlayOpacity * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  className="lc-range lc-range--sm"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={Math.round(overlayOpacity * 100)}
+                  aria-label="Opasitas rona tutupan lahan"
+                  onChange={(e) => setOverlayOpacity(Number(e.target.value) / 100)}
+                />
               </div>
             </div>
 
