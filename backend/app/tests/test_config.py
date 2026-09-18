@@ -1,7 +1,10 @@
 from pathlib import Path
 
-def test_settings_use_local_defaults() -> None:
+def test_settings_use_local_defaults(monkeypatch) -> None:
     from app.core.config import Settings
+
+    monkeypatch.delenv("FRONTEND_ORIGIN", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
 
     settings = Settings(
         _env_file=None,
@@ -25,7 +28,17 @@ def test_settings_use_local_defaults() -> None:
 def test_settings_load_env_values_and_resolve_paths(tmp_path: Path, monkeypatch) -> None:
     from app.core.config import BACKEND_DIR, Settings
 
-    monkeypatch.delenv("DATABASE_URL", raising=False)
+    for key in [
+        "NASA_FIRMS_API_KEY",
+        "DATABASE_URL",
+        "FRONTEND_ORIGIN",
+        "SHP_DIR",
+        "CACHE_DIR",
+        "CACHE_TTL_HOURS",
+        "REQUEST_TIMEOUT_SECONDS",
+        "SCHEDULER_NEW_HOTSPOT_ALERT_THRESHOLD",
+    ]:
+        monkeypatch.delenv(key, raising=False)
 
     env_file = tmp_path / "test.env"
     env_file.write_text(

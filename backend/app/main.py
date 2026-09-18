@@ -74,11 +74,12 @@ async def lifespan(app: FastAPI):
 
         store = PostgresStore(settings.database_url)
         if store.enabled:
+            store.ensure_performance_indexes()
             n = store.reset_stale_land_cover_running()
             if n:
                 logger.warning("LAND_COVER: %s analisis 'running' basi ditandai error saat startup", n)
     except Exception:  # noqa: BLE001
-        logger.exception("LAND_COVER: gagal mereset status running basi saat startup")
+        logger.exception("DB startup initialization failed")
 
     scheduler_task = None
     scheduler_start_handle = None

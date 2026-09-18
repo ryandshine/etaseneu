@@ -123,7 +123,7 @@ class FireSpreadService:
                     COUNT(DISTINCT obs.id) AS hotspot_count,
                     COUNT(DISTINCT obs.id) FILTER (WHERE obs.layer_key = 'perimeter_threat') AS non_kps_count,
                     COUNT(DISTINCT obs.id) FILTER (WHERE obs.layer_key != 'perimeter_threat') AS neighbor_kps_count,
-                    ROUND(MIN(ST_Distance(poly.geometry::geography, obs.geom::geography)))::int AS min_dist_m
+                    ROUND(MIN(ST_Distance(poly.geometry, obs.geom) * 111320.0))::int AS min_dist_m
                 FROM polygon_metadata poly
                 JOIN hotspot_observations obs ON {where_sql}
                 GROUP BY poly.id
@@ -235,7 +235,7 @@ class FireSpreadService:
                     COUNT(DISTINCT obs.id) AS external_hotspots_count,
                     COUNT(DISTINCT obs.id) FILTER (WHERE obs.layer_key = 'perimeter_threat') AS non_kps_count,
                     COUNT(DISTINCT obs.id) FILTER (WHERE obs.layer_key != 'perimeter_threat') AS neighbor_kps_count,
-                    ROUND(MIN(ST_Distance(poly.geometry::geography, obs.geom::geography)))::int AS min_distance_m,
+                    ROUND(MIN(ST_Distance(poly.geometry, obs.geom) * 111320.0))::int AS min_distance_m,
                     ROUND(MAX(COALESCE((obs.raw_payload->>'frp')::float, 0.0))::numeric, 1) AS max_frp,
                     ROUND(AVG(COALESCE((obs.raw_payload->>'frp')::float, 0.0))::numeric, 1) AS avg_frp
                 FROM polygon_metadata poly

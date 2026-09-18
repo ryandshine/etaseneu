@@ -305,27 +305,47 @@ export function useDashboardData(
     }
 
     try {
-      const [schedulerRes, storageRes, layersRes] = await Promise.all([
-        api.getSchedulerMetrics(),
-        api.getStorageStatus(),
-        api.getLayers("preview"),
-      ]);
-      const mappedLayers = layersRes.layers.map(mapLayerResponse);
-
-      const activeLayerIds = mappedLayers.filter((layer) => layer.active).map((layer) => layer.id);
       const initialTimeRange = buildTimeRange(timePreset, startDate, endDate, clockTick);
+      const cachedActiveLayers = cachedDashboard?.layers.filter((l) => l.active).map((l) => l.id);
+      const predictedActiveLayers =
+        cachedActiveLayers && cachedActiveLayers.length > 0
+          ? cachedActiveLayers
+          : ["psagustus2026", "HUTAN_ADAT_APR26"];
+
       const initialQueryParams = {
         start_at: initialTimeRange.startAt.toISOString(),
         end_at: initialTimeRange.endAt.toISOString(),
         start_date: initialTimeRange.startAt.toISOString().slice(0, 10),
         end_date: initialTimeRange.endAt.toISOString().slice(0, 10),
         satellites: selectedSatellites,
-        active_layers: activeLayerIds,
+        active_layers: predictedActiveLayers,
         view: hotspotView,
       };
-      const hotspotsRes = await api.getHotspots(initialQueryParams);
 
-      const mappedHotspots = hotspotsRes.hotspots
+      // Paralel penuh: tarik hotspots bersamaan dengan metrik & layer tanpa menunggu secara bertingkat
+      const [schedulerRes, storageRes, layersRes, hotspotsRes] = await Promise.all([
+        api.getSchedulerMetrics(),
+        api.getStorageStatus(),
+        api.getLayers("preview"),
+        api.getHotspots(initialQueryParams),
+      ]);
+      const mappedLayers = layersRes.layers.map(mapLayerResponse);
+      const actualActiveLayerIds = mappedLayers.filter((layer) => layer.active).map((layer) => layer.id);
+
+      // Sinkronisasi jika layer aktif aktual berbeda dari prediksi awal
+      let finalHotspotsRes = hotspotsRes;
+      const isLayerMismatch =
+        actualActiveLayerIds.length !== predictedActiveLayers.length ||
+        !actualActiveLayerIds.every((id) => predictedActiveLayers.includes(id));
+
+      if (isLayerMismatch && actualActiveLayerIds.length > 0) {
+        finalHotspotsRes = await api.getHotspots({
+          ...initialQueryParams,
+          active_layers: actualActiveLayerIds,
+        });
+      }
+
+      const mappedHotspots = finalHotspotsRes.hotspots
         .map(mapHotspotRecordToDashboardHotspot)
         .filter((h) => h.is_inside !== false && !h.agencyName.startsWith("Luar Kawasan"));
 
@@ -333,13 +353,13 @@ export function useDashboardData(
       setSchedulerMetrics(schedulerRes);
       setStorageStatus(storageRes);
       setHotspots(mappedHotspots);
-      setRemoteStats(hotspotsRes.stats);
+      setRemoteStats(finalHotspotsRes.stats);
       setUsingCachedData(false);
       setLoadError(null);
       saveDashboardCache({
         layers: mappedLayers,
         hotspots: mappedHotspots,
-        remoteStats: hotspotsRes.stats,
+        remoteStats: finalHotspotsRes.stats,
       });
 
       // Data ready — dismiss overlay immediately, no animation

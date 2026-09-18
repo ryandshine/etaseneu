@@ -1,6 +1,7 @@
 """Registrasi layer (dataset polygon) dan berkas GeoJSON sumbernya."""
 
 from datetime import datetime, timezone
+from typing import Any
 
 from ._base import Json
 
@@ -68,6 +69,20 @@ class _LayerRegistryMixin:
                     (layer_key,),
                 )
                 return cur.fetchone()
+
+    def read_all_layers_preview(self) -> list[dict[str, Any]]:
+        """Membaca daftar layer beserta display_geojson yang sudah tersimpan di database."""
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT layer_key, layer_name, layer_label, feature_count, bounds, agencies, display_geojson
+                    FROM layers
+                    WHERE display_geojson IS NOT NULL
+                    ORDER BY id ASC
+                    """
+                )
+                return [dict(r) for r in cur.fetchall()]
 
     def read_geojson_file_registry(self, file_name: str) -> dict[str, object] | None:
         with self.connection() as conn:

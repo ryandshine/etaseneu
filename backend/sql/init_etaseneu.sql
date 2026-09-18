@@ -1,4 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 CREATE TABLE IF NOT EXISTS layers (
     id BIGSERIAL PRIMARY KEY,
@@ -50,6 +51,12 @@ CREATE INDEX IF NOT EXISTS hotspot_observations_layer_key_idx
 CREATE INDEX IF NOT EXISTS hotspot_observations_geom_idx
     ON hotspot_observations
     USING GIST (geom);
+
+CREATE INDEX IF NOT EXISTS idx_hotspots_layer_detected
+    ON hotspot_observations (layer_key, detected_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_hotspots_source_detected
+    ON hotspot_observations (source, detected_at DESC);
 
 CREATE TABLE IF NOT EXISTS hotspot_history_archives (
     id BIGSERIAL PRIMARY KEY,
@@ -137,6 +144,27 @@ CREATE INDEX IF NOT EXISTS polygon_metadata_geometry_idx
     ON polygon_metadata
     USING GIST (geometry);
 
+CREATE INDEX IF NOT EXISTS idx_polygon_metadata_layer_active
+    ON polygon_metadata (layer_key, is_active);
+
+CREATE INDEX IF NOT EXISTS idx_polygon_metadata_wilker_bps
+    ON polygon_metadata (wilker_bps);
+
+CREATE INDEX IF NOT EXISTS idx_polygon_metadata_nama_kab
+    ON polygon_metadata (nama_kab);
+
+CREATE INDEX IF NOT EXISTS idx_polygon_metadata_nama_prov
+    ON polygon_metadata (nama_prov);
+
+CREATE INDEX IF NOT EXISTS idx_polygon_metadata_lembaga_trgm
+    ON polygon_metadata USING gin (lembaga gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS idx_polygon_metadata_desa_trgm
+    ON polygon_metadata USING gin (nama_desa gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS idx_polygon_metadata_no_sk_trgm
+    ON polygon_metadata USING gin (no_sk gin_trgm_ops);
+
 CREATE TABLE IF NOT EXISTS hotspot_polygon_relation (
     id BIGSERIAL PRIMARY KEY,
     hotspot_observation_id BIGINT NOT NULL,
@@ -147,6 +175,9 @@ CREATE TABLE IF NOT EXISTS hotspot_polygon_relation (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (hotspot_observation_id, polygon_metadata_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_hpr_polygon_metadata_id
+    ON hotspot_polygon_relation (polygon_metadata_id);
 
 CREATE TABLE IF NOT EXISTS polygon_hotspot_summary (
     id BIGSERIAL PRIMARY KEY,

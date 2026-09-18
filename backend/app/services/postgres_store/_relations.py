@@ -1,12 +1,38 @@
 """Relasi hotspot <-> polygon: intersect spasial dan ringkasan agregat per polygon per tahun."""
 
+import logging
 from collections.abc import Sequence
 from typing import Any
 
 from ._base import _safe_json
 
+logger = logging.getLogger("hotspot.postgres")
+
 
 class _PolygonRelationMixin:
+    def ensure_performance_indexes(self) -> None:
+        """Memastikan indeks relasi dan performa penting telah dibuat (idempotent)."""
+        statements = [
+            "CREATE EXTENSION IF NOT EXISTS pg_trgm;",
+            "CREATE INDEX IF NOT EXISTS idx_hpr_polygon_metadata_id ON hotspot_polygon_relation (polygon_metadata_id);",
+            "CREATE INDEX IF NOT EXISTS idx_polygon_metadata_layer_active ON polygon_metadata (layer_key, is_active);",
+            "CREATE INDEX IF NOT EXISTS idx_polygon_metadata_wilker_bps ON polygon_metadata (wilker_bps);",
+            "CREATE INDEX IF NOT EXISTS idx_polygon_metadata_nama_kab ON polygon_metadata (nama_kab);",
+            "CREATE INDEX IF NOT EXISTS idx_polygon_metadata_nama_prov ON polygon_metadata (nama_prov);",
+            "CREATE INDEX IF NOT EXISTS idx_polygon_metadata_lembaga_trgm ON polygon_metadata USING gin (lembaga gin_trgm_ops);",
+            "CREATE INDEX IF NOT EXISTS idx_polygon_metadata_desa_trgm ON polygon_metadata USING gin (nama_desa gin_trgm_ops);",
+            "CREATE INDEX IF NOT EXISTS idx_polygon_metadata_no_sk_trgm ON polygon_metadata USING gin (no_sk gin_trgm_ops);",
+            "CREATE INDEX IF NOT EXISTS idx_hotspots_layer_detected ON hotspot_observations (layer_key, detected_at DESC);",
+            "CREATE INDEX IF NOT EXISTS idx_hotspots_source_detected ON hotspot_observations (source, detected_at DESC);",
+        ]
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                for sql in statements:
+                    try:
+                        cur.execute(sql)
+                    except Exception as e:
+                        logger.warning("Gagal membuat index performa: %s (%s)", sql, e)
+
     def refresh_polygon_hotspot_summaries(self, layer_keys: Sequence[str] | None = None) -> dict[str, int]:
         active_polygon_ids = self.read_active_polygon_metadata_ids(layer_keys=layer_keys)
         pruned_count = 0

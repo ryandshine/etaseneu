@@ -117,7 +117,43 @@ class LayerService:
         if self._preview_layers_cache is not None:
             return self._preview_layers_cache
 
-        layers: list[LayerFeature] = []
+        # 1. Jalur Cepat: Muat langsung dari tabel database (jauh lebih cepat, < 1 detik dibanding parsing 176MB GeoJSON)
+        if self.postgres_store.enabled:
+            try:
+                db_layers = self.postgres_store.read_all_layers_preview()
+                if db_layers:
+                    layers: list[LayerFeature] = []
+                    for index, row in enumerate(db_layers):
+                        layer_id = str(row["layer_key"])
+                        color = LAYER_COLORS[index % len(LAYER_COLORS)]
+                        b_raw = row.get("bounds") or {}
+                        bounds = LayerBounds(
+                            min_lat=float(b_raw.get("min_lat", 0.0)),
+                            min_lon=float(b_raw.get("min_lon", 0.0)),
+                            max_lat=float(b_raw.get("max_lat", 0.0)),
+                            max_lon=float(b_raw.get("max_lon", 0.0)),
+                        )
+                        layers.append(
+                            LayerFeature(
+                                id=layer_id,
+                                name=str(row.get("layer_name") or layer_id),
+                                label=str(row.get("layer_label") or layer_id),
+                                color=color,
+                                active=True,
+                                feature_count=int(row.get("feature_count") or 0),
+                                bounds=bounds,
+                                geojson=row.get("display_geojson") or {"type": "FeatureCollection", "features": []},
+                                geojson_mode="preview",
+                                agencies=list(row.get("agencies") or []),
+                            )
+                        )
+                    self._preview_layers_cache = layers
+                    return layers
+            except Exception as e:
+                logger.warning("Gagal memuat layer preview dari database: %s. Fallback ke berkas disk.", e)
+
+        # 2. Fallback: Parse berkas GeoJSON dari disk (hanya jika database kosong)
+        layers = []
 
         for index, path in enumerate(sorted(self.shp_dir.glob("*.geojson"))):
             payload = json.loads(path.read_text(encoding="utf-8"))

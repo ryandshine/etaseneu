@@ -153,11 +153,14 @@ export function saveDashboardCache(payload: DashboardCachePayload): void {
       ? payload.hotspots.slice(0, CACHE_MAX_HOTSPOTS)
       : payload.hotspots;
 
-  if (write(payload.layers, hotspots)) return;
+  const hasHeavyLayers = payload.layers.some(
+    (l) => ((l.geojson as { features?: unknown[] })?.features?.length ?? 0) > 50,
+  );
 
-  // Degradasi: kuota localStorage penuh. Buang layer SEPENUHNYA (bukan
-  // dikosongkan geojson-nya -- itu bikin <GeoJSON> crash saat hydrate). Cache
-  // cuma hotspot + stats; batas KPS di-load ulang dari jaringan.
+  if (!hasHeavyLayers && write(payload.layers, hotspots)) return;
+
+  // Degradasi / Optimasi: Jangan paksa simpan layer poligon berukuran MB ke localStorage.
+  // Cache cuma hotspot + stats; batas KPS di-load ulang dari jaringan/cache server.
   if (write([], hotspots)) return;
   write([], hotspots.slice(0, CACHE_MIN_HOTSPOTS));
 }
