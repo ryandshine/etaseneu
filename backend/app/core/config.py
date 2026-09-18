@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     # Notifikasi Telegram Bot untuk peringatan hotspot baru (opsional)
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    # Laporan Harian Paparan PPTX otomatis via Telegram (pukul 07:00 WIB)
+    daily_report_telegram_enabled: bool = True
+    daily_report_fixed_hour: int = 7
+    daily_report_timezone: str = "Asia/Jakarta"
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,

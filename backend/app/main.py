@@ -118,6 +118,18 @@ async def lifespan(app: FastAPI):
             "BURNED_AREA_SCHEDULER: Dinonaktifkan (BURNED_AREA_SCHEDULER_ENABLED=false)."
         )
 
+    daily_report_task = None
+    if settings.daily_report_telegram_enabled:
+        from app.services.daily_report_service import daily_report_scheduler_loop
+
+        logger.info(
+            "DAILY_REPORT_SCHEDULER: Auto-report PPTX aktif — dijadwalkan setiap pukul %02d:00 WIB.",
+            settings.daily_report_fixed_hour,
+        )
+        daily_report_task = asyncio.create_task(daily_report_scheduler_loop())
+    else:
+        logger.info("DAILY_REPORT_SCHEDULER: Dinonaktifkan (DAILY_REPORT_TELEGRAM_ENABLED=false).")
+
     yield  # aplikasi berjalan di sini
 
     if scheduler_start_handle is not None and scheduler_task_holder is not None:
@@ -145,6 +157,14 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("BURNED_AREA_SCHEDULER: Dihentikan.")
+
+    if daily_report_task is not None:
+        daily_report_task.cancel()
+        try:
+            await daily_report_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("DAILY_REPORT_SCHEDULER: Dihentikan.")
 
 
 def create_app() -> FastAPI:
