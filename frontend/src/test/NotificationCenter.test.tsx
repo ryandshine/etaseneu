@@ -15,19 +15,20 @@ const mockNotifications: HotspotNotification[] = [
     hotspot_count: 3,
     severity: "danger",
     metadata: {
-      provinces: ["Riau"],
-      agencies: ["KTH Tella Serasan"],
+      provinces: ["Sumatera Selatan"],
+      agencies: ["KTH TELLA SERASAN"],
       satellites: ["NOAA-20"],
       max_frp: 35.5,
       hotspots: [
         {
-          latitude: 0.5123,
-          longitude: 101.4421,
+          latitude: -3.095974,
+          longitude: 104.376196,
           frp: 35.5,
           confidence: "Tinggi",
-          agency_name: "KTH Tella Serasan",
-          province_name: "Riau",
-          google_maps_url: "https://www.google.com/maps?q=0.51230,101.44210",
+          agency_name: "KTH TELLA SERASAN",
+          province_name: "Sumatera Selatan",
+          kabupaten_name: "Muara Enim",
+          google_maps_url: "https://www.google.com/maps?q=-3.095974,104.376196",
         },
       ],
     },
@@ -82,7 +83,7 @@ describe("NotificationCenter Component", () => {
     // Verify FRP and Google Maps link inside notification center
     expect(screen.getByText("Maps")).toBeInTheDocument();
     const mapsLink = screen.getByTitle(/Buka titik koordinat di Google Maps/i);
-    expect(mapsLink).toHaveAttribute("href", "https://www.google.com/maps?q=0.51230,101.44210");
+    expect(mapsLink).toHaveAttribute("href", "https://www.google.com/maps?q=-3.095974,104.376196");
     expect(screen.getByText("35.5 MW")).toBeInTheDocument();
 
     // Click "Lihat di Peta"
@@ -149,7 +150,7 @@ describe("ToastNotification Component", () => {
 
     // Google Maps link in toast
     const gmapsLink = screen.getByText("Google Maps").closest("a");
-    expect(gmapsLink).toHaveAttribute("href", "https://www.google.com/maps?q=0.51230,101.44210");
+    expect(gmapsLink).toHaveAttribute("href", "https://www.google.com/maps?q=-3.095974,104.376196");
 
     // Click View Map
     const btn = screen.getByText("Lihat di Peta");

@@ -454,6 +454,8 @@ export interface HotspotNotificationItem {
   raw_confidence?: string;
   agency_name?: string;
   province_name?: string;
+  kabupaten_name?: string;
+  desa_name?: string;
   satellite?: string;
   google_maps_url: string;
 }

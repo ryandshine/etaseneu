@@ -91,7 +91,7 @@ async def test_notification_service_notify_new_hotspots(monkeypatch) -> None:
     assert "KTH Tella Serasan" in notif["metadata"]["agencies"]
     assert len(notif["metadata"]["hotspots"]) == 2
     assert notif["metadata"]["hotspots"][0]["frp"] == 35.0
-    assert "google.com/maps?q=0.50000,101.40000" in notif["metadata"]["hotspots"][0]["google_maps_url"]
+    assert "google.com/maps?q=0.500000,101.400000" in notif["metadata"]["hotspots"][0]["google_maps_url"]
 
     listed = service.list_notifications(limit=5)
     assert any(n["id"] == notif["id"] for n in listed)
@@ -151,9 +151,9 @@ async def test_notification_filters_low_confidence_and_includes_gmaps_frp(monkey
     assert len(hotspots) == 2
     assert all(h["confidence"] in ("Tinggi", "Sedang") for h in hotspots)
     assert hotspots[0]["frp"] == 42.5
-    assert "https://www.google.com/maps?q=-1.23400,103.56700" in hotspots[0]["google_maps_url"]
+    assert "https://www.google.com/maps?q=-1.234000,103.567000" in hotspots[0]["google_maps_url"]
     assert hotspots[1]["frp"] == 14.2
-    assert "https://www.google.com/maps?q=-0.89100,102.12300" in hotspots[1]["google_maps_url"]
+    assert "https://www.google.com/maps?q=-0.891000,102.123000" in hotspots[1]["google_maps_url"]
 
     # Jika semua hotspot berkeyakinan rendah, notifikasi harus kosong / tidak dipicu
     low_only = [

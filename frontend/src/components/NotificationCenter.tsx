@@ -519,6 +519,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                                         gap: "0.3rem",
                                         fontSize: "0.62rem",
                                         color: "rgba(255, 255, 255, 0.55)",
+                                        flexWrap: "wrap",
                                       }}
                                     >
                                       <span
@@ -533,12 +534,20 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                                       <span style={{ color: "#fbbf24", fontWeight: 600 }}>
                                         {h.frp !== null ? `${h.frp} MW` : "FRP —"}
                                       </span>
-                                      {h.province_name && (
+                                      {(h.kabupaten_name || h.province_name) && (
                                         <>
                                           <span>•</span>
-                                          <span>{h.province_name}</span>
+                                          <span>
+                                            {h.kabupaten_name
+                                              ? `${h.kabupaten_name}, ${h.province_name}`
+                                              : h.province_name}
+                                          </span>
                                         </>
                                       )}
+                                      <span>•</span>
+                                      <span style={{ fontFamily: "monospace", color: "rgba(255, 255, 255, 0.45)" }}>
+                                        {h.latitude.toFixed(5)}, {h.longitude.toFixed(5)}
+                                      </span>
                                     </div>
                                   </div>
 

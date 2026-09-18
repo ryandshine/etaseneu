@@ -125,6 +125,8 @@ class NotificationService:
             try:
                 lat = float(h["latitude"])
                 lon = float(h["longitude"])
+                if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+                    continue
             except (KeyError, ValueError, TypeError):
                 continue
 
@@ -139,23 +141,57 @@ class NotificationService:
             if conf_cat == "Tinggi":
                 has_high_conf = True
 
+            poly_meta = (
+                h.get("polygonMetadata")
+                or h.get("polygon_metadata")
+                or (h.get("raw_payload") or {}).get("polygon_metadata")
+                or {}
+            )
+            raw_payload = h.get("raw_payload") or {}
+
             prov = (
-                (h.get("polygonMetadata") or {}).get("NAMA_PROV")
+                poly_meta.get("NAMA_PROV")
                 or h.get("provinceName")
+                or h.get("province_name")
+                or raw_payload.get("province_name")
                 or ""
             ).strip()
-            if prov and prov != "—" and prov != "-":
+            if prov and prov not in ("—", "-"):
                 provinces_set.add(prov)
             else:
                 prov = "Indonesia"
 
+            kab = (
+                poly_meta.get("NAMA_KAB")
+                or h.get("kabupatenName")
+                or h.get("kabupaten_name")
+                or raw_payload.get("kabupaten_name")
+                or ""
+            ).strip()
+
+            kec = (
+                poly_meta.get("NAMA_KEC")
+                or h.get("kecamatanName")
+                or h.get("kecamatan_name")
+                or ""
+            ).strip()
+
+            desa = (
+                poly_meta.get("NAMA_DESA")
+                or h.get("desaName")
+                or h.get("desa_name")
+                or ""
+            ).strip()
+
             agency = (
                 h.get("agencyName")
-                or (h.get("polygonMetadata") or {}).get("LEMBAGA")
+                or h.get("agency_name")
+                or poly_meta.get("LEMBAGA")
+                or raw_payload.get("agency_name")
                 or h.get("layer_name")
                 or ""
             ).strip()
-            if agency and agency != "—" and agency != "-":
+            if agency and agency not in ("—", "-"):
                 agencies_set.add(agency)
             else:
                 agency = "Areal Perhutanan Sosial"
@@ -164,16 +200,20 @@ class NotificationService:
             if sat:
                 satellites_set.add(sat)
 
-            gmaps_url = f"https://www.google.com/maps?q={lat:.5f},{lon:.5f}"
+            # URL Google Maps presisi 6 desimal (~0.11 m) dengan pin langsung
+            gmaps_url = f"https://www.google.com/maps?q={lat:.6f},{lon:.6f}"
 
             hotspot_details.append({
-                "latitude": round(lat, 5),
-                "longitude": round(lon, 5),
+                "latitude": round(lat, 6),
+                "longitude": round(lon, 6),
                 "frp": frp_val,
                 "confidence": conf_cat,  # "Tinggi" atau "Sedang"
                 "raw_confidence": str(h.get("confidence") or ""),
                 "agency_name": agency,
                 "province_name": prov,
+                "kabupaten_name": kab if kab and kab not in ("—", "-") else None,
+                "kecamatan_name": kec if kec and kec not in ("—", "-") else None,
+                "desa_name": desa if desa and desa not in ("—", "-") else None,
                 "satellite": sat,
                 "google_maps_url": gmaps_url,
             })
@@ -251,7 +291,7 @@ class NotificationService:
             except Exception:
                 wib_time = now.strftime("%Y-%m-%d %H:%M UTC")
 
-            # Susun daftar rincian per hotspot (maks 8 titik agar nyaman dibaca di layar HP)
+            # Susun daftar rincian per hotspot dengan lokasi teliti dan koordinat presisi
             item_lines: list[str] = []
             for idx, item in enumerate(hotspot_details[:8], 1):
                 frp_text = f"{item['frp']} MW" if item['frp'] is not None else "—"
@@ -259,11 +299,26 @@ class NotificationService:
                 if item.get("raw_confidence"):
                     conf_badge += f" ({html.escape(item['raw_confidence'])})"
 
+                # Susun label wilayah yang teliti (Desa, Kecamatan, Kabupaten, Provinsi)
+                loc_parts = []
+                if item.get("desa_name"):
+                    loc_parts.append(f"Desa {item['desa_name']}")
+                if item.get("kecamatan_name"):
+                    loc_parts.append(f"Kec. {item['kecamatan_name']}")
+                if item.get("kabupaten_name"):
+                    loc_parts.append(f"Kab. {item['kabupaten_name']}")
+                if item.get("province_name") and item["province_name"] != "Indonesia":
+                    loc_parts.append(item["province_name"])
+
+                loc_str = ", ".join(loc_parts) if loc_parts else item.get("province_name") or "Indonesia"
+
                 item_lines.append(
-                    f"{idx}. 🏛️ <b>{html.escape(item['agency_name'])}</b> ({html.escape(item['province_name'])})\n"
+                    f"{idx}. 🏛️ <b>{html.escape(item['agency_name'])}</b>\n"
+                    f"   • Wilayah: <b>{html.escape(loc_str)}</b>\n"
+                    f"   • Koordinat: <code>{item['latitude']:.6f}, {item['longitude']:.6f}</code>\n"
                     f"   • Keyakinan: {conf_badge}\n"
                     f"   • FRP: <b>{frp_text}</b>\n"
-                    f"   • 📍 <a href=\"{item['google_maps_url']}\">Buka di Google Maps</a>"
+                    f"   • 📍 <a href=\"{item['google_maps_url']}\">Buka di Google Maps ({item['latitude']:.5f}, {item['longitude']:.5f})</a>"
                 )
 
             if len(hotspot_details) > 8:
@@ -325,29 +380,82 @@ class NotificationService:
         chat_id: str | None = None,
     ) -> dict[str, Any]:
         now = datetime.now(timezone.utc)
-        mock_hotspots = [
-            {
-                "source": "VIIRS NOAA-20",
-                "satellite": "NOAA-20",
-                "latitude": 0.5123,
-                "longitude": 101.4421,
-                "confidence": "high",
-                "frp": 38.5,
-                "agencyName": "KTH Tella Serasan",
-                "polygonMetadata": {"NAMA_PROV": "Riau", "LEMBAGA": "KTH Tella Serasan"},
-            },
-            {
-                "source": "VIIRS S-NPP",
-                "satellite": "S-NPP",
-                "latitude": -2.3123,
-                "longitude": 104.2123,
-                "confidence": "nominal",
-                "frp": 16.2,
-                "agencyName": "KUPS Muara Medak",
-                "polygonMetadata": {"NAMA_PROV": "Sumatera Selatan", "LEMBAGA": "KUPS Muara Medak"},
-            },
-        ]
-        notif = await self.notify_new_hotspots(mock_hotspots, sync_time=now)
+        real_hotspots = []
+
+        # Coba ambil titik panas aktual dari tabel hotspot_observations
+        if self.store.enabled:
+            try:
+                with self.store.connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            SELECT h.latitude, h.longitude,
+                                   (h.raw_payload->>'frp')::float as frp,
+                                   h.confidence, h.satellite, h.source,
+                                   h.agency_name,
+                                   h.raw_payload->>'province_name' as prov,
+                                   h.raw_payload->'polygon_metadata' as poly_meta
+                            FROM hotspot_observations h
+                            WHERE (h.raw_payload->>'frp') IS NOT NULL
+                              AND (h.confidence IN ('high', 'h', 'nominal', 'n')
+                                   OR (h.confidence ~ '^[0-9]+$' AND h.confidence::int >= 30))
+                            ORDER BY h.detected_at DESC
+                            LIMIT 5;
+                        """)
+                        for r in cur.fetchall():
+                            real_hotspots.append({
+                                "latitude": float(r["latitude"]),
+                                "longitude": float(r["longitude"]),
+                                "frp": float(r["frp"]) if r["frp"] is not None else None,
+                                "confidence": str(r["confidence"] or ""),
+                                "satellite": str(r["satellite"] or "NASA"),
+                                "source": str(r["source"] or "NASA"),
+                                "agencyName": r["agency_name"],
+                                "provinceName": r["prov"],
+                                "polygonMetadata": r["poly_meta"] or {},
+                            })
+            except Exception as exc:
+                logger.warning("Gagal query hotspot riil untuk test notifikasi: %s", exc)
+
+        if not real_hotspots:
+            # Koordinat spasial riil poligon KPS yang terverifikasi di PostGIS
+            # KTH TELLA SERASAN: Desa Teluk Limau, Kec. Gelumbang, Kab. Muara Enim, Sumatera Selatan
+            # KTH MEDAK LESTARI: Desa Muara Medak, Kec. Bayung Lencir, Kab. Musi Banyuasin, Sumatera Selatan
+            real_hotspots = [
+                {
+                    "source": "VIIRS NOAA-20",
+                    "satellite": "NOAA-20",
+                    "latitude": -3.095974,
+                    "longitude": 104.376196,
+                    "confidence": "high",
+                    "frp": 38.5,
+                    "agencyName": "KTH TELLA SERASAN",
+                    "polygonMetadata": {
+                        "NAMA_PROV": "Sumatera Selatan",
+                        "NAMA_KAB": "Muara Enim",
+                        "NAMA_KEC": "Gelumbang",
+                        "NAMA_DESA": "Teluk Limau",
+                        "LEMBAGA": "KTH TELLA SERASAN",
+                    },
+                },
+                {
+                    "source": "VIIRS S-NPP",
+                    "satellite": "S-NPP",
+                    "latitude": -1.871053,
+                    "longitude": 103.889048,
+                    "confidence": "nominal",
+                    "frp": 16.2,
+                    "agencyName": "KTH MEDAK LESTARI",
+                    "polygonMetadata": {
+                        "NAMA_PROV": "Sumatera Selatan",
+                        "NAMA_KAB": "Musi Banyuasin",
+                        "NAMA_KEC": "Bayung Lencir",
+                        "NAMA_DESA": "Muara Medak",
+                        "LEMBAGA": "KTH MEDAK LESTARI",
+                    },
+                },
+            ]
+
+        notif = await self.notify_new_hotspots(real_hotspots, sync_time=now)
         if bot_token and chat_id:
             await self.send_telegram_alert(
                 "🧪 <b>UJI COBA NOTIFIKASI ETASENEU</b>\n"
