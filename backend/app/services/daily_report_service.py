@@ -633,6 +633,71 @@ class DailyReportService:
         max_frp = max(frp_values, default=0.0)
         avg_frp = (sum(frp_values) / len(frp_values)) if frp_values else 0.0
 
+        # Ambil data dari Menu Peringatan Dini (Early Warning Service & FTRI)
+        early_warning_kps_list = []
+        ew_summary_data = {
+            "strict_reburn_kps": 0,
+            "expanding_kps": 0,
+            "ew_new_kps": 0,
+            "total_burned_ha": 0.0,
+        }
+        try:
+            from app.services.early_warning_service import EarlyWarningService
+
+            ew_svc = EarlyWarningService(store=self.store)
+            ew_summary = ew_svc.get_summary_metrics()
+            b_stats = ew_summary.get("burned_area_stats", {})
+            e_stats = ew_summary.get("early_warning_stats", {})
+
+            ew_summary_data = {
+                "strict_reburn_kps": int(b_stats.get("strict_reburn_kps_today", 0)),
+                "expanding_kps": int(b_stats.get("active_today", 0)),
+                "ew_new_kps": int(e_stats.get("active_today", 0)),
+                "total_burned_ha": round(float(b_stats.get("total_burned_ha", 0.0)), 1),
+            }
+
+            # 1. KPS dari kategori Terbakar Kembali (Re-burn & Ekspansi)
+            burned_active_items = ew_svc.get_kps_analysis_list(category="burned_active_today", limit=5)
+            for it in burned_active_items:
+                is_strict = it.get("hotspots_today_strict_reburn", 0) > 0
+                cat_label = "Strict Re-burn" if is_strict else "Ekspansi Bara"
+                it_copy = dict(it)
+                it_copy["ew_category"] = cat_label
+                early_warning_kps_list.append(it_copy)
+
+            # 2. KPS dari kategori Peringatan Dini Baru
+            ew_active_items = ew_svc.get_kps_analysis_list(category="early_warning_active_today", limit=5)
+            for it in ew_active_items:
+                it_copy = dict(it)
+                it_copy["ew_category"] = "Peringatan Dini Baru"
+                early_warning_kps_list.append(it_copy)
+
+            # Query titik centroid poligon untuk Google Maps presisi
+            poly_ids = [k["id"] for k in early_warning_kps_list if k.get("id")]
+            if poly_ids and self.store.enabled:
+                with self.store.connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            SELECT id, ST_Y(ST_Centroid(geometry)) as lat, ST_X(ST_Centroid(geometry)) as lon
+                            FROM polygon_metadata
+                            WHERE id = ANY(%s);
+                            """,
+                            (poly_ids,),
+                        )
+                        coords_map = {r["id"]: (float(r["lat"]), float(r["lon"])) for r in cur.fetchall()}
+
+                for k in early_warning_kps_list:
+                    lat, lon = coords_map.get(k["id"], (0.0, 0.0))
+                    k["latitude"] = round(lat, 6)
+                    k["longitude"] = round(lon, 6)
+                    k["google_maps_url"] = f"https://www.google.com/maps?q={lat:.6f},{lon:.6f}"
+                    ftri = float(k.get("ftri_score") or 0.0)
+                    k["ftri_label"] = "Ekstrem" if ftri >= 70 else ("Tinggi" if ftri >= 50 else ("Sedang" if ftri >= 30 else "Rendah"))
+
+        except Exception as e:
+            logger.error("Gagal mengambil daftar KPS menu peringatan dini: %s", e)
+
         high_and_med = confidence_counts["Tinggi"] + confidence_counts["Sedang"]
         if confidence_counts["Tinggi"] >= 5 or max_frp > 100 or high_and_med >= 50 or delta_pct > 20:
             status_siaga = "SIAGA DARURAT"
@@ -675,6 +740,8 @@ class DailyReportService:
             "siaga_color": siaga_color,
             "balai_list": balai_list,
             "kps_list": kps_list,
+            "early_warning_summary": ew_summary_data,
+            "early_warning_kps_list": early_warning_kps_list,
             "has_data": total_hotspots > 0,
         }
 
@@ -984,12 +1051,183 @@ class DailyReportService:
         _add_slide_footer(s3)
 
         # =====================================================================
-        # SLIDE 4: REKAPITULASI SPASIAL BALAI PERHUTANAN SOSIAL (BPS)
+        # SLIDE 4: DAFTAR KPS MENU PERINGATAN DINI & ANCAMAN RE-BURN (FTRI)
         # =====================================================================
         s4 = prs.slides.add_slide(blank_layout)
         _add_rect(s4, Inches(0), Inches(0), Inches(13.333), Inches(7.5), fill_color=BG_CANVAS)
         _add_slide_header(
             s4,
+            category="Sistem Peringatan Dini ETASENEU",
+            title="Daftar KPS Prioritas Menu Peringatan Dini & Ancaman Terbakar Ulang (Re-burn)",
+            date_stamp=f"{data.get('report_date_str', '')} • 07:00 WIB",
+        )
+
+        ew_sum = data.get("early_warning_summary", {})
+        # 3 Mini Metrik Cards di atas tabel
+        mini_w = Inches(3.75)
+        mini_h = Inches(0.85)
+        mini_y = Inches(1.3)
+        mini_gap = Inches(0.24)
+        mini_start_x = Inches(0.8)
+
+        mini_cards = [
+            (
+                "🚨 KPS TERBAKAR ULANG (RE-BURN)",
+                f"{ew_sum.get('strict_reburn_kps', 0)} KPS",
+                "Ancaman Kritis pada Bekas Bakaran",
+                RED,
+            ),
+            (
+                "🟠 KPS EKSPANSI PERAMBATAN",
+                f"{ew_sum.get('expanding_kps', 0)} KPS",
+                "Perambatan Api Baru ke Vegetasi",
+                AMBER,
+            ),
+            (
+                "🟡 KPS PERINGATAN DINI BARU",
+                f"{ew_sum.get('ew_new_kps', 0)} KPS",
+                "Terindikasi Hotspot Hari Ini",
+                BLUE,
+            ),
+        ]
+
+        for idx, (m_title, m_val, m_sub, m_col) in enumerate(mini_cards):
+            mx = mini_start_x + (idx * (mini_w + mini_gap))
+            _add_rect(s4, mx, mini_y, mini_w, mini_h, fill_color=CARD_BG, line_color=CARD_BORDER, rounded=True)
+            _add_rect(s4, mx, mini_y, mini_w, Inches(0.06), fill_color=m_col, rounded=True)
+
+            tb_m = s4.shapes.add_textbox(mx + Inches(0.12), mini_y + Inches(0.08), mini_w - Inches(0.24), mini_h - Inches(0.12))
+            tf_m = tb_m.text_frame
+            tf_m.word_wrap = True
+            tf_m.margin_left = tf_m.margin_top = tf_m.margin_right = tf_m.margin_bottom = 0
+
+            p_mt = tf_m.paragraphs[0]
+            r_mt = p_mt.add_run()
+            r_mt.text = m_title
+            r_mt.font.name = FONT_FAMILY
+            r_mt.font.size = Pt(8.5)
+            r_mt.font.bold = True
+            r_mt.font.color.rgb = SLATE
+
+            p_mv = tf_m.add_paragraph()
+            r_mv = p_mv.add_run()
+            r_mv.text = f"{m_val}  ·  "
+            r_mv.font.name = FONT_FAMILY
+            r_mv.font.size = Pt(14)
+            r_mv.font.bold = True
+            r_mv.font.color.rgb = m_col
+
+            r_ms = p_mv.add_run()
+            r_ms.text = m_sub
+            r_ms.font.name = FONT_FAMILY
+            r_ms.font.size = Pt(8.5)
+            r_ms.font.color.rgb = SLATE
+
+        # Tabel Daftar KPS Menu Peringatan Dini
+        tbl_ew_y = Inches(2.3)
+        tbl_ew_w = Inches(11.733)
+        tbl_ew_h = Inches(4.7)
+
+        ew_rows = data.get("early_warning_kps_list", [])[:8]
+        num_ew_rows = max(len(ew_rows) + 1, 2)
+        tbl_ew_shape = s4.shapes.add_table(num_ew_rows, 8, Inches(0.8), tbl_ew_y, tbl_ew_w, tbl_ew_h)
+        tbl_ew = tbl_ew_shape.table
+
+        ew_col_widths = [
+            Inches(0.5),   # No
+            Inches(2.6),   # Nama Lembaga KPS & Skema
+            Inches(1.8),   # Balai PS
+            Inches(2.133), # Wilayah Administrasi
+            Inches(1.4),   # Kategori Ancaman
+            Inches(0.9),   # Hotspot Hari Ini
+            Inches(1.1),   # Skor FTRI
+            Inches(1.3),   # Navigasi
+        ]
+        for idx, w in enumerate(ew_col_widths):
+            tbl_ew.columns[idx].width = w
+
+        ew_headers = [
+            "NO",
+            "NAMA LEMBAGA KPS",
+            "BALAI PS",
+            "WILAYAH",
+            "KATEGORI ANCAMAN",
+            "HARI INI",
+            "SKOR FTRI",
+            "NAVIGASI",
+        ]
+        for col_idx, h_text in enumerate(ew_headers):
+            cell = tbl_ew.cell(0, col_idx)
+            cell.fill.solid()
+            cell.fill.fore_color.rgb = NAVY
+            cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+            p = cell.text_frame.paragraphs[0]
+            p.alignment = PP_ALIGN.CENTER if col_idx not in (1, 2, 3) else PP_ALIGN.LEFT
+            r = p.add_run()
+            r.text = h_text
+            r.font.name = FONT_FAMILY
+            r.font.size = Pt(9.5)
+            r.font.bold = True
+            r.font.color.rgb = WHITE
+
+        if not ew_rows:
+            cell = tbl_ew.cell(1, 1)
+            p = cell.text_frame.paragraphs[0]
+            r = p.add_run()
+            r.text = "Nihil unit KPS dalam status ancaman peringatan dini hari ini."
+            r.font.name = FONT_FAMILY
+            r.font.size = Pt(10)
+            r.font.italic = True
+        else:
+            for row_idx, item in enumerate(ew_rows, 1):
+                bg_c = CARD_BG if row_idx % 2 == 1 else RGBColor(241, 245, 249)
+                wil_str = f"{item.get('nama_kab', '')}, {item.get('nama_prov', '')}".strip(", ") or "Indonesia"
+                h_today_val = str(item.get("hotspots_today") or item.get("h_today") or 0)
+                ftri_val = float(item.get("ftri_score") or 0.0)
+                ftri_str = f"{ftri_val:.1f} ({item.get('ftri_label', 'Sedang')})"
+                cat_str = item.get("ew_category", "Peringatan Dini")
+                gmaps = item.get("google_maps_url")
+
+                cat_color = RED if "Strict" in cat_str else (AMBER if "Ekspansi" in cat_str else BLUE)
+                ftri_color = RED if ftri_val >= 70 else (AMBER if ftri_val >= 50 else SLATE)
+
+                row_items = [
+                    (str(row_idx), PP_ALIGN.CENTER, NAVY, False, None),
+                    (f"{item.get('lembaga', 'Areal KPS')} ({item.get('skema', 'PS')})", PP_ALIGN.LEFT, NAVY, True, None),
+                    (item.get("wilker_bps", "Balai PS"), PP_ALIGN.LEFT, SLATE, False, None),
+                    (wil_str, PP_ALIGN.LEFT, NAVY_LIGHT, False, None),
+                    (cat_str, PP_ALIGN.CENTER, cat_color, True, None),
+                    (f"{h_today_val} titik", PP_ALIGN.CENTER, RED if int(h_today_val) > 10 else NAVY, True, None),
+                    (ftri_str, PP_ALIGN.CENTER, ftri_color, True, None),
+                    ("Buka Google Maps", PP_ALIGN.CENTER, BLUE, True, gmaps),
+                ]
+
+                for col_idx, (text_val, align, text_color, is_bold, link_url) in enumerate(row_items):
+                    cell = tbl_ew.cell(row_idx, col_idx)
+                    cell.fill.solid()
+                    cell.fill.fore_color.rgb = bg_c
+                    cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+                    p = cell.text_frame.paragraphs[0]
+                    p.alignment = align
+                    r = p.add_run()
+                    r.text = text_val
+                    r.font.name = FONT_FAMILY
+                    r.font.size = Pt(9)
+                    r.font.bold = is_bold
+                    r.font.color.rgb = text_color
+                    if link_url:
+                        r.hyperlink.address = link_url
+                        r.font.underline = True
+
+        _add_slide_footer(s4)
+
+        # =====================================================================
+        # SLIDE 5: REKAPITULASI SPASIAL BALAI PERHUTANAN SOSIAL (BPS)
+        # =====================================================================
+        s5 = prs.slides.add_slide(blank_layout)
+        _add_rect(s5, Inches(0), Inches(0), Inches(13.333), Inches(7.5), fill_color=BG_CANVAS)
+        _add_slide_header(
+            s5,
             category="Pemetaan Wilayah Kerja",
             title="Rekapitulasi Spasial per Balai Perhutanan Sosial (BPS)",
             date_stamp=f"{data.get('report_date_str', '')} • 07:00 WIB",
@@ -1001,7 +1239,7 @@ class DailyReportService:
 
         balai_rows = data.get("balai_list", [])[:9]
         num_rows = max(len(balai_rows) + 1, 2)
-        tbl_shape = s4.shapes.add_table(num_rows, 8, Inches(0.8), table_y, table_w, table_h)
+        tbl_shape = s5.shapes.add_table(num_rows, 8, Inches(0.8), table_y, table_w, table_h)
         tbl = tbl_shape.table
 
         col_widths = [
@@ -1076,15 +1314,15 @@ class DailyReportService:
                     r.font.bold = (col_idx in (1, 6, 7))
                     r.font.color.rgb = text_color
 
-        _add_slide_footer(s4)
+        _add_slide_footer(s5)
 
         # =====================================================================
-        # SLIDE 5: MATRIKS KEPUTUSAN & INSTRUKSI LAPANGAN SATGAS HARI INI
+        # SLIDE 6: MATRIKS KEPUTUSAN & INSTRUKSI LAPANGAN SATGAS HARI INI
         # =====================================================================
-        s5 = prs.slides.add_slide(blank_layout)
-        _add_rect(s5, Inches(0), Inches(0), Inches(13.333), Inches(7.5), fill_color=BG_CANVAS)
+        s6 = prs.slides.add_slide(blank_layout)
+        _add_rect(s6, Inches(0), Inches(0), Inches(13.333), Inches(7.5), fill_color=BG_CANVAS)
         _add_slide_header(
-            s5,
+            s6,
             category="Instruksi Operasional",
             title="Matriks Keputusan & Instruksi Lapangan Satgas Hari Ini",
             date_stamp=f"{data.get('report_date_str', '')} • 07:00 WIB",
@@ -1096,19 +1334,25 @@ class DailyReportService:
         step_gap = Inches(0.24)
         step_start_x = Inches(0.8)
 
-        # Data top 3 KPS untuk kartu keputusan langsung
-        top_3_kps = data.get("kps_list", [])[:3]
+        # Prioritaskan KPS dari Menu Peringatan Dini sebagai target tugas utama
+        top_targets = data.get("early_warning_kps_list", [])[:3] or data.get("kps_list", [])[:3]
         kps_decision_text = []
-        for idx, kps in enumerate(top_3_kps, 1):
+        for idx, kps in enumerate(top_targets, 1):
+            k_name = kps.get("lembaga") or kps.get("name") or "Areal KPS"
+            k_bps = kps.get("wilker_bps") or kps.get("bps") or "Balai PS"
+            k_pts = kps.get("hotspots_today") or kps.get("total") or 0
+            k_ftri = kps.get("ftri_score")
+            ftri_note = f" | FTRI: {k_ftri:.1f}" if k_ftri else ""
+            k_lat = kps.get("latitude", 0.0)
+            k_lon = kps.get("longitude", 0.0)
             kps_decision_text.append(
-                f"{idx}. {kps['name']} ({kps['bps']})\n"
-                f"   • Titik: {kps['high_count']} High / {kps['medium_count']} Med\n"
-                f"   • FRP: {kps['max_frp']} MW | Koordinat: {kps['latitude']:.4f}, {kps['longitude']:.4f}"
+                f"{idx}. {k_name} ({k_bps})\n"
+                f"   • Titik: {k_pts} Titik{ftri_note} | Pin: {k_lat:.4f}, {k_lon:.4f}"
             )
 
-        b_list_s5 = data.get("balai_list", [])
-        b1_name = b_list_s5[0]["name"] if b_list_s5 else "Balai Terkait"
-        b2_name = b_list_s5[1]["name"] if len(b_list_s5) > 1 else "Balai Kedua"
+        b_list_s6 = data.get("balai_list", [])
+        b1_name = b_list_s6[0]["name"] if b_list_s6 else "Balai Terkait"
+        b2_name = b_list_s6[1]["name"] if len(b_list_s6) > 1 else "Balai Kedua"
         hi_cnt = data.get("high_count", 0)
 
         instructions = [
@@ -1124,11 +1368,11 @@ class DailyReportService:
                 ],
             ),
             (
-                "02. DISPOSISI GROUND CHECK 3 KPS",
+                "02. DISPOSISI GROUND CHECK MENU EW",
                 "Perintah Tugas Lapangan Hari Ini",
                 BLUE,
                 [
-                    "Terbitkan Surat Perintah Tugas (SPT) verifikasi darat untuk 3 KPS prioritas tertinggi hari ini:",
+                    "Terbitkan Surat Perintah Tugas (SPT) verifikasi darat untuk 3 KPS prioritas Peringatan Dini:",
                 ] + (kps_decision_text if kps_decision_text else ["Nihil unit KPS kritis hari ini."]),
             ),
             (
@@ -1146,10 +1390,10 @@ class DailyReportService:
 
         for idx, (ins_title, ins_sub, ins_color, ins_points) in enumerate(instructions):
             ix = step_start_x + (idx * (step_w + step_gap))
-            _add_rect(s5, ix, step_y, step_w, step_h, fill_color=CARD_BG, line_color=CARD_BORDER, rounded=True)
-            _add_rect(s5, ix, step_y, step_w, Inches(0.1), fill_color=ins_color, rounded=True)
+            _add_rect(s6, ix, step_y, step_w, step_h, fill_color=CARD_BG, line_color=CARD_BORDER, rounded=True)
+            _add_rect(s6, ix, step_y, step_w, Inches(0.1), fill_color=ins_color, rounded=True)
 
-            tb_i = s5.shapes.add_textbox(ix + Inches(0.2), step_y + Inches(0.2), step_w - Inches(0.4), step_h - Inches(0.4))
+            tb_i = s6.shapes.add_textbox(ix + Inches(0.2), step_y + Inches(0.2), step_w - Inches(0.4), step_h - Inches(0.4))
             tf_i = tb_i.text_frame
             tf_i.word_wrap = True
             tf_i.margin_left = tf_i.margin_top = tf_i.margin_right = tf_i.margin_bottom = 0
@@ -1181,7 +1425,7 @@ class DailyReportService:
                 r_p.font.size = Pt(9)
                 r_p.font.color.rgb = NAVY_LIGHT
 
-        _add_slide_footer(s5)
+        _add_slide_footer(s6)
 
         buf = io.BytesIO()
         prs.save(buf)

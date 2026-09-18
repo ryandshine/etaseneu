@@ -88,7 +88,7 @@ def test_generate_daily_hotspot_pptx():
 
     # Parse generated pptx with python-pptx
     prs = Presentation(io.BytesIO(pptx_bytes))
-    assert len(prs.slides) == 5
+    assert len(prs.slides) == 6
     assert abs(prs.slide_width - Inches(13.333)) < 1000
     assert abs(prs.slide_height - Inches(7.5)) < 1000
 
