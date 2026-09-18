@@ -127,6 +127,15 @@ class HotspotService:
             hydrated_hotspots = self._hydrate_polygon_metadata(query, internal_hotspots)
             self.cache_service.write(query.cache_key(), hydrated_hotspots)
 
+        # Saring ketat: pastikan HANYA titik di dalam poligon KPS yang dihitung & disajikan
+        hydrated_hotspots = [
+            h for h in hydrated_hotspots
+            if not h.get("is_perimeter")
+            and h.get("layer_id") != "perimeter_threat"
+            and h.get("layer_key") != "perimeter_threat"
+            and not str(h.get("agency_name", "")).startswith("Luar Kawasan")
+        ]
+
         stats = build_stats(hydrated_hotspots)
 
         # Inferred Selected Filter

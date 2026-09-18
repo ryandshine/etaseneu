@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   Bell,
   BellRing,
@@ -11,6 +12,7 @@ import {
   ExternalLink,
   ShieldCheck,
   MapPin,
+  Eye,
   Zap,
 } from "lucide-react";
 import type { HotspotNotification } from "../types/api";
@@ -27,6 +29,7 @@ interface NotificationCenterProps {
   onToggleSound: () => void;
   onToggleDesktop: () => void;
   onNavigateToMap: () => void;
+  onOpenKpsDetail?: (agency: string, polygonId?: number) => void;
 }
 
 export const NotificationCenter: React.FC<NotificationCenterProps> = ({
@@ -40,10 +43,83 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   onToggleSound,
   onToggleDesktop,
   onNavigateToMap,
+  onOpenKpsDetail,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+
+  const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({
+    position: "fixed",
+    top: 60,
+    left: 16,
+    width: "min(92vw, 420px)",
+    zIndex: 99999,
+  });
+
+  const updatePanelPosition = useCallback(() => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const vw = typeof window !== "undefined" ? window.innerWidth : 1024;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 768;
+    const panelWidth = Math.min(420, vw - 24);
+
+    let top = rect.bottom + 8;
+    if (top + 380 > vh) {
+      top = Math.max(12, vh - 440);
+    }
+
+    if (vw < 540) {
+      // Layar mobile kecil: rentangkan di tengah layar
+      setPanelStyle({
+        position: "fixed",
+        top: Math.min(rect.bottom + 8, vh - 100),
+        left: 12,
+        right: 12,
+        width: "auto",
+        maxHeight: "calc(100vh - 80px)",
+        zIndex: 99999,
+      });
+    } else if (rect.left < panelWidth) {
+      // Tombol di dekat tepi kiri layar (misal: di sidebar brand)
+      // Buka panel ke arah kanan agar TIDAK terpotong di tepi kiri layar
+      const left = Math.max(12, Math.min(rect.left, vw - panelWidth - 12));
+      setPanelStyle({
+        position: "fixed",
+        top,
+        left,
+        right: "auto",
+        width: panelWidth,
+        maxHeight: "calc(100vh - 80px)",
+        zIndex: 99999,
+      });
+    } else {
+      // Tombol di sisi kanan (misal: header navigasi)
+      // Buka panel ke arah kiri tombol
+      const right = Math.max(12, vw - rect.right);
+      setPanelStyle({
+        position: "fixed",
+        top,
+        left: "auto",
+        right,
+        width: panelWidth,
+        maxHeight: "calc(100vh - 80px)",
+        zIndex: 99999,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      updatePanelPosition();
+      window.addEventListener("resize", updatePanelPosition);
+      window.addEventListener("scroll", updatePanelPosition, true);
+    }
+    return () => {
+      window.removeEventListener("resize", updatePanelPosition);
+      window.removeEventListener("scroll", updatePanelPosition, true);
+    };
+  }, [isOpen, updatePanelPosition]);
 
   // Tutup panel bila klik di luar
   useEffect(() => {
@@ -138,29 +214,26 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
         )}
       </button>
 
-      {/* Popover Panel */}
-      {isOpen && (
-        <div
-          ref={panelRef}
-          role="dialog"
-          aria-label="Pusat Notifikasi Titik Panas"
-          style={{
-            position: "absolute",
-            top: "calc(100% + 8px)",
-            right: 0,
-            zIndex: 10000,
-            width: "min(92vw, 420px)",
-            maxHeight: "80vh",
-            backgroundColor: "#161412",
-            border: "1px solid rgba(255, 255, 255, 0.14)",
-            borderRadius: "12px",
-            boxShadow: "0 20px 35px -10px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            animation: "fadeIn 0.2s ease-out",
-          }}
-        >
+      {/* Popover Panel with Portal */}
+      {isOpen &&
+        (typeof document !== "undefined" && document.body
+          ? createPortal(
+              <div
+                ref={panelRef}
+                role="dialog"
+                aria-label="Pusat Notifikasi Titik Panas"
+                style={{
+                  ...panelStyle,
+                  backgroundColor: "#161412",
+                  border: "1px solid rgba(255, 255, 255, 0.16)",
+                  borderRadius: "12px",
+                  boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.9), 0 0 25px rgba(0, 0, 0, 0.7)",
+                  display: "flex",
+                  flexDirection: "column",
+                  overflow: "hidden",
+                  animation: "fadeIn 0.2s ease-out",
+                }}
+              >
           {/* Panel Header */}
           <div
             style={{
@@ -508,24 +581,45 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                                     alignItems: "center",
                                     justifyContent: "space-between",
                                     fontSize: "0.68rem",
-                                    padding: "0.25rem 0.4rem",
-                                    borderRadius: "4px",
+                                    padding: "0.35rem 0.5rem",
+                                    borderRadius: "6px",
                                     backgroundColor: "rgba(255, 255, 255, 0.04)",
-                                    border: "1px solid rgba(255, 255, 255, 0.05)",
-                                    gap: "0.4rem",
+                                    border: "1px solid rgba(255, 255, 255, 0.07)",
+                                    gap: "0.5rem",
                                   }}
                                 >
-                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div
+                                    style={{
+                                      flex: 1,
+                                      minWidth: 0,
+                                      cursor: onOpenKpsDetail ? "pointer" : "default",
+                                    }}
+                                    onClick={(e) => {
+                                      if (onOpenKpsDetail && h.agency_name) {
+                                        e.stopPropagation();
+                                        setIsOpen(false);
+                                        onMarkAsRead(notif.id);
+                                        onOpenKpsDetail(h.agency_name);
+                                      }
+                                    }}
+                                    title={onOpenKpsDetail ? `Buka Detail KPS: ${h.agency_name || "Areal KPS"}` : undefined}
+                                  >
                                     <div
                                       style={{
-                                        fontWeight: 600,
+                                        fontWeight: 700,
                                         color: "#f3f4f6",
                                         whiteSpace: "nowrap",
                                         overflow: "hidden",
                                         textOverflow: "ellipsis",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "0.3rem",
                                       }}
                                     >
-                                      {h.agency_name || "Areal PS"}
+                                      <span>{h.agency_name || "Areal KPS"}</span>
+                                      {onOpenKpsDetail && (
+                                        <Eye size={11} style={{ opacity: 0.7, color: "#6ee7b7", flexShrink: 0 }} />
+                                      )}
                                     </div>
                                     <div
                                       style={{
@@ -535,6 +629,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                                         fontSize: "0.62rem",
                                         color: "rgba(255, 255, 255, 0.55)",
                                         flexWrap: "wrap",
+                                        marginTop: "0.15rem",
                                       }}
                                     >
                                       <span
@@ -574,31 +669,68 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                                     </div>
                                   </div>
 
-                                  <a
-                                    href={h.google_maps_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    title="Buka titik koordinat di Google Maps"
-                                    style={{
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "0.25rem",
-                                      fontSize: "0.65rem",
-                                      fontWeight: 600,
-                                      padding: "0.2rem 0.45rem",
-                                      borderRadius: "4px",
-                                      backgroundColor: "rgba(59, 130, 246, 0.2)",
-                                      color: "#93c5fd",
-                                      border: "1px solid rgba(59, 130, 246, 0.35)",
-                                      textDecoration: "none",
-                                      flexShrink: 0,
-                                      transition: "all 0.15s ease",
-                                    }}
-                                  >
-                                    <MapPin size={11} />
-                                    <span>Maps</span>
-                                  </a>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexShrink: 0 }}>
+                                    {/* Tombol Shortcut Utama: Detail KPS */}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsOpen(false);
+                                        onMarkAsRead(notif.id);
+                                        if (onOpenKpsDetail && h.agency_name) {
+                                          onOpenKpsDetail(h.agency_name);
+                                        } else {
+                                          onNavigateToMap();
+                                        }
+                                      }}
+                                      title={`Buka Detail KPS: ${h.agency_name || "Areal KPS"}`}
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "0.25rem",
+                                        fontSize: "0.66rem",
+                                        fontWeight: 700,
+                                        padding: "0.24rem 0.55rem",
+                                        borderRadius: "5px",
+                                        backgroundColor: "rgba(16, 185, 129, 0.22)",
+                                        color: "#6ee7b7",
+                                        border: "1px solid rgba(16, 185, 129, 0.45)",
+                                        cursor: "pointer",
+                                        transition: "all 0.15s ease",
+                                      }}
+                                    >
+                                      <Eye size={11} />
+                                      <span>Detail KPS</span>
+                                    </button>
+
+                                    {/* Tombol Shortcut Maps (Google Maps) */}
+                                    {h.google_maps_url && (
+                                      <a
+                                        href={h.google_maps_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        title="Buka titik koordinat di Google Maps"
+                                        style={{
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: "0.2rem",
+                                          fontSize: "0.64rem",
+                                          fontWeight: 600,
+                                          padding: "0.24rem 0.45rem",
+                                          borderRadius: "5px",
+                                          backgroundColor: "rgba(59, 130, 246, 0.18)",
+                                          color: "#93c5fd",
+                                          border: "1px solid rgba(59, 130, 246, 0.35)",
+                                          textDecoration: "none",
+                                          transition: "all 0.15s ease",
+                                        }}
+                                      >
+                                        <MapPin size={11} />
+                                        <span>Maps</span>
+                                      </a>
+                                    )}
+                                  </div>
                                 </div>
                               );
                             })}
@@ -663,8 +795,9 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
               })
             )}
           </div>
-        </div>
-      )}
+        </div>,
+        document.body
+      ) : null)}
     </div>
   );
 };

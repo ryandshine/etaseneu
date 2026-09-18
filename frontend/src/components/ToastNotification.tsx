@@ -1,21 +1,24 @@
 import React from "react";
-import { Flame, X, ExternalLink, MapPin } from "lucide-react";
+import { Flame, X, ExternalLink, MapPin, Eye } from "lucide-react";
 import type { HotspotNotification } from "../types/api";
 
 interface ToastNotificationProps {
   notification: HotspotNotification;
   onClose: () => void;
   onViewMap?: () => void;
+  onOpenKpsDetail?: (agency: string, polygonId?: number) => void;
 }
 
 export const ToastNotification: React.FC<ToastNotificationProps> = ({
   notification,
   onClose,
   onViewMap,
+  onOpenKpsDetail,
 }) => {
   const isDanger = notification.severity === "danger";
   const firstHotspot = notification.metadata?.hotspots?.[0];
   const maxFrp = notification.metadata?.max_frp ?? firstHotspot?.frp;
+  const kpsAgencyName = firstHotspot?.agency_name || notification.metadata?.agencies?.[0];
 
   return (
     <div
@@ -134,6 +137,33 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+            {onOpenKpsDetail && kpsAgencyName && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenKpsDetail(kpsAgencyName);
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.35rem",
+                  fontSize: "0.74rem",
+                  fontWeight: 700,
+                  padding: "0.3rem 0.65rem",
+                  borderRadius: "6px",
+                  backgroundColor: "rgba(16, 185, 129, 0.22)",
+                  color: "#6ee7b7",
+                  border: "1px solid rgba(16, 185, 129, 0.45)",
+                  cursor: "pointer",
+                  transition: "background-color 0.15s ease",
+                }}
+              >
+                <Eye size={12} />
+                <span>Detail KPS</span>
+              </button>
+            )}
+
             {onViewMap && (
               <button
                 type="button"

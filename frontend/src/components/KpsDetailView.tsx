@@ -477,8 +477,8 @@ export function KpsDetailView({
   // terisi setelah detail poligon berhasil dimuat via lookup nama lembaga (/api/polygons/by-agency).
   const polygonId = hotspotPolygonId ?? (detail ? detail.id : null);
 
-  // Kontrol zona penyangga (buffer) untuk menyertakan hotspot di luar poligon KPS
-  const [includeSurrounding, setIncludeSurrounding] = useState(true);
+  // Kontrol zona penyangga (buffer) untuk menyertakan hotspot di luar poligon KPS (khusus analisis perimeter, default nonaktif)
+  const [includeSurrounding, setIncludeSurrounding] = useState(false);
   const [bufferKm, setBufferKm] = useState<number>(5.0);
   const [surroundingData, setSurroundingData] = useState<SurroundingHotspotItem[] | null>(null);
   const [surroundingLoading, setSurroundingLoading] = useState(false);
@@ -1198,9 +1198,9 @@ export function KpsDetailView({
             <div className="kps-detail-buffer-header">
               <div className="kps-detail-buffer-title">
                 <ShieldAlert size={15} style={{ color: "#f59e0b" }} />
-                <span>Titik Luar Kawasan (Buffer)</span>
+                <span>Analisis Zona Penyangga (Buffer Luar)</span>
               </div>
-              <label className="buffer-toggle-switch" title="Sertakan titik hotspot di luar poligon KPS">
+              <label className="buffer-toggle-switch" title="Aktifkan analisis titik hotspot di luar poligon KPS (zona penyangga)">
                 <input
                   type="checkbox"
                   checked={includeSurrounding}
@@ -1210,7 +1210,7 @@ export function KpsDetailView({
               </label>
             </div>
             <p className="help-copy" style={{ fontSize: "0.76rem", margin: "0.25rem 0 0.5rem" }}>
-              Hotspot di sekitar kawasan untuk deteksi dini arah rambatan api.
+              Fitur analisis: pantau hotspot di luar batas kawasan untuk peringatan dini arah rambatan api.
             </p>
             {includeSurrounding && (
               <div className="kps-detail-buffer-radius-row">
@@ -1242,7 +1242,7 @@ export function KpsDetailView({
                   </span>
                 ) : (
                   <span style={{ fontSize: "0.74rem", color: "#6b7280" }}>
-                    Titik luar kawasan disembunyikan
+                    Zona penyangga nonaktif (hanya titik di dalam poligon KPS)
                   </span>
                 )}
               </div>
@@ -1252,11 +1252,17 @@ export function KpsDetailView({
           <div className="kps-detail-stats">
             <div className="control-metric">
               <span>Total hotspot terpantau:</span>
-              <strong>{stats.total}</strong>
+              <strong>{includeSurrounding ? stats.total : stats.insideCount}</strong>
             </div>
+            {includeSurrounding && (
+              <div className="control-metric" style={{ marginTop: "0.25rem" }}>
+                <span style={{ color: "#f59e0b" }}>Hotspot sekitar luar ({bufferKm} km):</span>
+                <strong style={{ color: "#f59e0b" }}>{stats.outsideCount}</strong>
+              </div>
+            )}
             {includeSurrounding && stats.outsideCount > 0 && (
               <div style={{ fontSize: "0.76rem", color: "#9ca3af", margin: "0.2rem 0 0.4rem" }}>
-                Dalam kawasan: <strong style={{ color: "#E7E6C2" }}>{stats.insideCount}</strong> &bull; Luar kawasan: <strong style={{ color: "#f59e0b" }}>{stats.outsideCount}</strong>
+                Total gabungan (analisis): <strong style={{ color: "#E7E6C2" }}>{stats.total}</strong>
               </div>
             )}
             {stats.total > 0 && (

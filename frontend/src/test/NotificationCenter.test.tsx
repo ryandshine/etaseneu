@@ -82,7 +82,8 @@ describe("NotificationCenter Component", () => {
     expect(screen.getByText("🔥 3 Titik Panas Baru Terdeteksi")).toBeInTheDocument();
     expect(screen.getByText("+3 Titik Baru")).toBeInTheDocument();
 
-    // Verify FRP and Google Maps link inside notification center
+    // Verify Detail KPS button and Google Maps link inside notification center
+    expect(screen.getByText("Detail KPS")).toBeInTheDocument();
     expect(screen.getByText("Maps")).toBeInTheDocument();
     const mapsLink = screen.getByTitle(/Buka titik koordinat di Google Maps/i);
     expect(mapsLink).toHaveAttribute("href", "https://www.google.com/maps?q=-3.095974,104.376196");
@@ -94,6 +95,35 @@ describe("NotificationCenter Component", () => {
     expect(viewMapButtons.length).toBeGreaterThan(0);
     fireEvent.click(viewMapButtons[0]);
     expect(onNavigateToMap).toHaveBeenCalledTimes(1);
+    expect(onMarkAsRead).toHaveBeenCalledWith("notif-1");
+  });
+
+  it("triggers onOpenKpsDetail when Detail KPS button or agency name is clicked", () => {
+    const onOpenKpsDetail = vi.fn();
+    const onMarkAsRead = vi.fn();
+
+    render(
+      <NotificationCenter
+        notifications={mockNotifications}
+        unreadCount={1}
+        readIds={new Set()}
+        soundEnabled={true}
+        desktopEnabled={false}
+        onMarkAsRead={onMarkAsRead}
+        onMarkAllAsRead={vi.fn()}
+        onToggleSound={vi.fn()}
+        onToggleDesktop={vi.fn()}
+        onNavigateToMap={vi.fn()}
+        onOpenKpsDetail={onOpenKpsDetail}
+      />
+    );
+
+    fireEvent.click(screen.getByLabelText(/Notifikasi Hotspot/i));
+
+    const detailKpsBtn = screen.getByText("Detail KPS");
+    fireEvent.click(detailKpsBtn);
+
+    expect(onOpenKpsDetail).toHaveBeenCalledWith("KTH TELLA SERASAN");
     expect(onMarkAsRead).toHaveBeenCalledWith("notif-1");
   });
 
@@ -132,15 +162,17 @@ describe("NotificationCenter Component", () => {
 });
 
 describe("ToastNotification Component", () => {
-  it("renders toast alert, FRP badge, Google Maps link, and handles view map", () => {
+  it("renders toast alert, FRP badge, Google Maps link, and handles view map and detail kps", () => {
     const onClose = vi.fn();
     const onViewMap = vi.fn();
+    const onOpenKpsDetail = vi.fn();
 
     render(
       <ToastNotification
         notification={mockNotifications[0]}
         onClose={onClose}
         onViewMap={onViewMap}
+        onOpenKpsDetail={onOpenKpsDetail}
       />
     );
 
@@ -156,10 +188,16 @@ describe("ToastNotification Component", () => {
     const gmapsLink = screen.getByText("Google Maps").closest("a");
     expect(gmapsLink).toHaveAttribute("href", "https://www.google.com/maps?q=-3.095974,104.376196");
 
+    // Click Detail KPS
+    const detailBtn = screen.getByText("Detail KPS");
+    fireEvent.click(detailBtn);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onOpenKpsDetail).toHaveBeenCalledWith("KTH TELLA SERASAN");
+
     // Click View Map
     const btn = screen.getByText("Lihat di Peta");
     fireEvent.click(btn);
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(2);
     expect(onViewMap).toHaveBeenCalledTimes(1);
   });
 });

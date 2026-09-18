@@ -325,7 +325,9 @@ export function useDashboardData(
       };
       const hotspotsRes = await api.getHotspots(initialQueryParams);
 
-      const mappedHotspots = hotspotsRes.hotspots.map(mapHotspotRecordToDashboardHotspot);
+      const mappedHotspots = hotspotsRes.hotspots
+        .map(mapHotspotRecordToDashboardHotspot)
+        .filter((h) => h.is_inside !== false && !h.agencyName.startsWith("Luar Kawasan"));
 
       setLayers(mappedLayers);
       setSchedulerMetrics(schedulerRes);
@@ -483,7 +485,9 @@ export function useDashboardData(
         .getHotspots(hotspotQueryParams)
         .then((response) => {
           if (!isMounted) return;
-          const mapped = response.hotspots.map(mapHotspotRecordToDashboardHotspot);
+          const mapped = response.hotspots
+            .map(mapHotspotRecordToDashboardHotspot)
+            .filter((h) => h.is_inside !== false && !h.agencyName.startsWith("Luar Kawasan"));
           setHotspots(mapped);
           setRemoteStats(response.stats);
           setLoadError(null);

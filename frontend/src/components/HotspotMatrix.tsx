@@ -865,6 +865,9 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
   const filteredHotspots = useMemo(
     () =>
       hotspots.filter((hotspot) => {
+        if (hotspot.is_inside === false || String(hotspot.agencyName || "").startsWith("Luar Kawasan")) {
+          return false;
+        }
         const wilkerMatch = wilkerFilter
           ? matchWilker(hotspot.polygonMetadata.WILKER_BPS, wilkerFilter)
           : true;

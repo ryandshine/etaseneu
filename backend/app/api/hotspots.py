@@ -32,18 +32,25 @@ async def get_hotspots(
     service = HotspotService()
     result = await service.fetch_filtered_hotspots(query)
 
-    hotspots = result.get("hotspots", [])
+    hotspots = [
+        h for h in result.get("hotspots", [])
+        if not h.get("is_perimeter")
+        and h.get("layer_id") != "perimeter_threat"
+        and h.get("layer_key") != "perimeter_threat"
+        and not str(h.get("agency_name", "")).startswith("Luar Kawasan")
+    ]
     if claims and claims.role == "bps" and claims.wilker_bps:
         hotspots = [
             h for h in hotspots
             if (h.get("polygon_metadata") or {}).get("WILKER_BPS") == claims.wilker_bps
         ]
-        result = {
-            **result,
-            "count": len(hotspots),
-            "hotspots": hotspots,
-            "stats": build_stats(hotspots),
-        }
+
+    result = {
+        **result,
+        "count": len(hotspots),
+        "hotspots": hotspots,
+        "stats": build_stats(hotspots),
+    }
 
     if view == "map":
         return {

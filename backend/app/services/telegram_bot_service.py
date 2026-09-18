@@ -8,6 +8,7 @@ import asyncio
 import html
 import io
 import logging
+import urllib.parse
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -148,11 +149,14 @@ class TelegramBotService:
                     {"text": "🚨 KPS Peringatan Dini", "callback_data": "cmd_ew"},
                 ],
                 [
+                    {"text": "🔍 Cari Data KPS", "callback_data": "cmd_cari"},
                     {"text": "📥 Unduh Laporan PPTX", "callback_data": "cmd_laporan"},
-                    {"text": "🏢 Sebaran per Balai PS", "callback_data": "cmd_balai"},
                 ],
                 [
+                    {"text": "🏢 Sebaran per Balai PS", "callback_data": "cmd_balai"},
                     {"text": "🆔 Cek ID Saya", "callback_data": "cmd_id"},
+                ],
+                [
                     {"text": "🌐 Dashboard ETASENEU", "url": dashboard_url},
                 ],
             ]
@@ -183,6 +187,7 @@ class TelegramBotService:
             "• <b>/start</b> — Menampilkan menu utama & navigasi bot.\n"
             "• <b>/status</b> — Status siaga nasional & titik panas 24 jam terakhir.\n"
             "• <b>/peringatandini</b> — Daftar KPS terbakar ulang (*Strict Re-burn*) & prioritas mitigasi.\n"
+            "• <b>/cari [nama KPS]</b> — Cari profil KPS, koordinat lokasi, status titik panas & riwayat kebakaran.\n"
             "• <b>/laporan</b> — Mengunduh dokumen paparan presentasi PPTX resmi hari ini.\n"
             "• <b>/balai</b> — Rekapitulasi sebaran hotspot per Balai Perhutanan Sosial.\n"
             "• <b>/id</b> — Cek ID Telegram akun Anda (untuk pendaftaran notifikasi).\n"
@@ -205,7 +210,7 @@ class TelegramBotService:
             "<i>(Khusus Titik Panas di Dalam Poligon Definitif KPS)</i>\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📅 <b>Tanggal</b>: {data['report_date_str']}\n"
-            f"⏱️ <b>Jendela Pantauan</b>: <code>{data['time_window_str']}</code> (24 Jam Terakhir)\n"
+            f"⏱️ <b>Jendela Pantauan</b>: <code>{data.get('time_window_str', '24 Jam Terakhir')}</code> (24 Jam Terakhir)\n"
             "ℹ️ <i>Keterangan: Akumulasi 24 jam ke belakang dari saat ini, khusus titik api yang berada tepat di dalam batas poligon KPS (bukan buffer/luar kawasan).</i>\n\n"
             f"🚨 <b>Status Siaga</b>: <b>{data['status_siaga']}</b>\n"
             f"📈 <b>Total Hotspot di Dalam KPS</b>: <b>{data['total_hotspots']:,} titik</b>\n"
@@ -339,7 +344,7 @@ class TelegramBotService:
         caption = (
             f"📊 <b>Laporan Harian Titik Panas KPS</b>\n"
             f"📅 <b>Tanggal</b>: {data['report_date_str']}\n"
-            f"⏱️ <b>Jendela Pantauan</b>: <code>{data['time_window_str']}</code> (24 Jam)\n"
+            f"⏱️ <b>Jendela Pantauan</b>: <code>{data.get('time_window_str', '24 Jam')}</code> (24 Jam)\n"
             "📍 <b>Lingkup Spasial</b>: Khusus titik panas di dalam poligon definitif KPS (luar kawasan/buffer ditiadakan)\n"
             f"🚨 <b>Status Siaga</b>: <b>{data['status_siaga']}</b> | Total: <b>{data['total_hotspots']:,} titik</b>\n\n"
             "<i>Presentasi 10 slide widescreen memuat grafik tren H vs H-1, jam kritis patroli, "
@@ -372,6 +377,175 @@ class TelegramBotService:
         )
         await self.send_message(chat_id, text, reply_markup=self._get_main_keyboard())
 
+    def _search_kps_in_db(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+        """Mencari KPS di database berdasarkan nama lembaga, desa, kecamatan, kabupaten, provinsi, atau no_sk."""
+        clean_q = query.strip()
+        if not clean_q or not self.store.enabled:
+            return []
+
+        search_pattern = f"%{clean_q}%"
+        try:
+            with self.store.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT 
+                            p.id, p.lembaga, p.skema, p.nama_desa, p.nama_kec, p.nama_kab, p.nama_prov, p.wilker_bps, p.no_sk, p.tgl_sk,
+                            COALESCE(p.luas_final::numeric, 0) as luas_ha,
+                            ST_Y(ST_Centroid(p.geometry)) as lat,
+                            ST_X(ST_Centroid(p.geometry)) as lon,
+                            COALESCE((
+                                SELECT sum(burned_area_ha)
+                                FROM burned_area_summary b
+                                WHERE b.polygon_metadata_id = p.id
+                            ), 0) as burned_area_ha,
+                            COALESCE((
+                                SELECT count(DISTINCT r.hotspot_observation_id)
+                                FROM hotspot_polygon_relation r
+                                JOIN hotspot_observations h ON h.id = r.hotspot_observation_id
+                                WHERE r.polygon_metadata_id = p.id AND h.detected_at >= NOW() - INTERVAL '24 hours'
+                            ), 0) as hotspot_count_today
+                        FROM polygon_metadata p
+                        WHERE p.lembaga ILIKE %s 
+                           OR p.nama_desa ILIKE %s 
+                           OR p.nama_kec ILIKE %s 
+                           OR p.nama_kab ILIKE %s 
+                           OR p.nama_prov ILIKE %s
+                           OR p.no_sk ILIKE %s
+                        ORDER BY 
+                            CASE 
+                                WHEN p.lembaga ILIKE %s THEN 1
+                                WHEN p.no_sk ILIKE %s THEN 2
+                                WHEN p.nama_desa ILIKE %s THEN 3
+                                WHEN p.nama_kec ILIKE %s THEN 4
+                                WHEN p.nama_kab ILIKE %s THEN 5
+                                ELSE 6
+                            END ASC,
+                            hotspot_count_today DESC,
+                            p.id DESC
+                        LIMIT %s;
+                        """,
+                        (
+                            search_pattern, search_pattern, search_pattern, search_pattern, search_pattern, search_pattern,
+                            search_pattern, search_pattern, search_pattern, search_pattern, search_pattern,
+                            limit * 4,
+                        ),
+                    )
+                    rows = [dict(r) for r in cur.fetchall()]
+
+            # Deduplikasi berdasarkan (lembaga, no_sk) agar tidak duplikat lintas shapefile revisi
+            seen = set()
+            unique_results = []
+            for r in rows:
+                key = (
+                    (r.get("lembaga") or "").strip().upper(),
+                    (r.get("no_sk") or "").strip().upper(),
+                )
+                if key in seen and key != ("", ""):
+                    continue
+                seen.add(key)
+                unique_results.append(r)
+                if len(unique_results) >= limit:
+                    break
+
+            return unique_results
+        except Exception as e:
+            logger.error("Gagal melakukan pencarian KPS '%s': %s", clean_q, e)
+            return []
+
+    async def handle_search_kps(self, chat_id: int | str, query: str) -> None:
+        """Menangani pencarian data KPS dan menampilkan profil, koordinat, dan hotspot terkini."""
+        clean_q = query.strip()
+        if not clean_q:
+            guide_text = (
+                "🔍 <b>PENCARIAN DATA KPS (PERHUTANAN SOSIAL)</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Gunakan fitur ini untuk mencari profil KPS, titik koordinat, status titik panas hari ini, dan riwayat kebakaran.\n\n"
+                "<b>Cara Penggunaan:</b>\n"
+                "Ketik: <code>/cari [kata kunci]</code>\n\n"
+                "<b>Contoh Pencarian:</b>\n"
+                "• <code>/cari Tella Serasan</code> (Nama KPS / Lembaga)\n"
+                "• <code>/cari Teluk Limau</code> (Nama Desa)\n"
+                "• <code>/cari Ogan Komering Ilir</code> (Nama Kabupaten)\n"
+                "• <code>/cari 4284</code> (Nomor SK)\n\n"
+                "<i>Anda juga bisa langsung mengetik pesan seperti:</i>\n"
+                "<i>\"cari kps tella serasan\"</i> atau <i>\"cek kps lingat\"</i>"
+            )
+            await self.send_message(chat_id, guide_text, reply_markup=self._get_main_keyboard())
+            return
+
+        await self.send_chat_action(chat_id, "typing")
+        results = self._search_kps_in_db(clean_q, limit=5)
+
+        if not results:
+            not_found = (
+                f"🔍 <b>PENCARIAN KPS:</b> <i>\"{html.escape(clean_q)}\"</i>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "❌ <b>Data KPS tidak ditemukan.</b>\n\n"
+                "Tips pencarian:\n"
+                "• Pastikan ejaan nama KPS, desa, kecamatan, atau nomor SK benar.\n"
+                "• Coba gunakan kata kunci yang lebih ringkas (mis. <i>Tella</i> atau <i>Rimba</i>).\n"
+                "• Ketik <b>/help</b> untuk melihat bantuan."
+            )
+            await self.send_message(chat_id, not_found, reply_markup=self._get_main_keyboard())
+            return
+
+        dashboard_url = (self.settings.frontend_origin or "https://etaseneu.kehutanan.go.id").rstrip("/")
+
+        lines = [
+            f"🔍 <b>HASIL PENCARIAN KPS:</b> <i>\"{html.escape(clean_q)}\"</i>",
+            f"Ditemukan <b>{len(results)}</b> KPS yang cocok:\n━━━━━━━━━━━━━━━━━━━━━━",
+        ]
+
+        for idx, k in enumerate(results, 1):
+            lembaga = html.escape(k.get("lembaga") or "KPS Tanpa Nama")
+            skema = html.escape(k.get("skema") or "-")
+            balai = html.escape(k.get("wilker_bps") or "-")
+            desa = html.escape(k.get("nama_desa") or "-")
+            kec = html.escape(k.get("nama_kec") or "-")
+            kab = html.escape(k.get("nama_kab") or "-")
+            prov = html.escape(k.get("nama_prov") or "-")
+            no_sk = html.escape(k.get("no_sk") or "-")
+            tgl_sk = html.escape(str(k.get("tgl_sk") or ""))
+            luas = float(k.get("luas_ha") or 0.0)
+            lat = float(k.get("lat") or 0.0)
+            lon = float(k.get("lon") or 0.0)
+            hs_today = int(k.get("hotspot_count_today") or 0)
+            burned_ha = float(k.get("burned_area_ha") or 0.0)
+            poly_id = k.get("id")
+
+            hs_status = f"🚨 <b>{hs_today} titik panas aktif</b>" if hs_today > 0 else "✅ <b>Nihil (0 titik)</b>"
+            burned_str = f"{burned_ha:,.2f} Ha" if burned_ha > 0 else "0 Ha (Tidak terpapar)"
+
+            maps_item = ""
+            if lat and lon:
+                gmaps_link = f"https://www.google.com/maps?q={lat:.6f},{lon:.6f}"
+                maps_item = f"   • 🗺️ <a href=\"{gmaps_link}\">Buka Lokasi Google Maps</a>\n"
+
+            kps_encoded = urllib.parse.quote(k.get("lembaga") or "")
+            web_link = f"{dashboard_url}/?view=kps&kps={kps_encoded}&polygon={poly_id}"
+
+            item_text = (
+                f"<b>{idx}. 🌲 {lembaga}</b>\n"
+                f"   • <b>Skema</b>: {skema}\n"
+                f"   • 🏢 <b>Balai PS</b>: {balai}\n"
+                f"   • 📍 <b>Lokasi</b>: Desa {desa}, Kec. {kec}, Kab. {kab}, {prov}\n"
+                f"   • 📜 <b>No. SK</b>: <code>{no_sk}</code>" + (f" ({tgl_sk})" if tgl_sk else "") + "\n"
+                f"   • 📐 <b>Luas SK</b>: {luas:,.2f} Ha\n"
+                f"   • 🔥 <b>Hotspot 24 Jam Terakhir</b>: {hs_status}\n"
+                f"   • ⬛ <b>Riwayat Kebakaran</b>: {burned_str}\n"
+                f"{maps_item}"
+                f"   • 🌐 <a href=\"{web_link}\">Buka Detail KPS di ETASENEU</a>"
+            )
+            lines.append(item_text)
+            if idx < len(results):
+                lines.append("──────────────────────")
+
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("<i>Gunakan <b>/cari [kata kunci lain]</b> untuk pencarian berikutnya.</i>")
+        msg_text = "\n".join(lines)
+        await self.send_message(chat_id, msg_text, reply_markup=self._get_main_keyboard())
+
     async def handle_unknown_or_text(self, chat_id: int | str, text_msg: str, first_name: str) -> None:
         """Respon pintar untuk percakapan bebas atau perintah tidak dikenal."""
         lower = text_msg.lower().strip()
@@ -381,6 +555,19 @@ class TelegramBotService:
         if any(lower.startswith(s) or lower == s for s in sapaan_list):
             await self.handle_start(chat_id, first_name)
             return
+
+        # Deteksi pencarian KPS dengan frasa awalan spesifik
+        search_prefixes = [
+            "cari kps ", "cari data kps ", "cari kps: ", "cari ",
+            "cek kps ", "cek data kps ", "cek kps: ", "cek ",
+            "info kps ", "profil kps ", "kps "
+        ]
+        for prefix in search_prefixes:
+            if lower.startswith(prefix):
+                q = text_msg[len(prefix):].strip()
+                if q and not any(k in q.lower() for k in ["hotspot", "titik panas", "status", "siaga", "laporan", "pptx", "balai"]):
+                    await self.handle_search_kps(chat_id, q)
+                    return
 
         # Deteksi kata kunci hotspot / status
         if any(k in lower for k in ["hotspot", "titik panas", "status", "siaga", "kondisi", "karhutla", "kebakaran"]):
@@ -402,6 +589,11 @@ class TelegramBotService:
             await self.handle_balai(chat_id)
             return
 
+        # Deteksi kata "cari" saja
+        if lower in ["cari", "cari kps", "carikps", "search", "find"]:
+            await self.handle_search_kps(chat_id, "")
+            return
+
         # Fallback pesan tidak dikenal
         fallback_text = (
             f"Maaf <b>{html.escape(first_name)}</b>, saya belum memahami pesan:\n"
@@ -409,6 +601,7 @@ class TelegramBotService:
             "Silakan gunakan tombol menu interaktif di bawah atau ketik perintah:\n"
             "• <b>/status</b> — Cek titik panas & status siaga hari ini\n"
             "• <b>/peringatandini</b> — Cek KPS terbakar ulang & ancaman baru\n"
+            "• <b>/cari [nama KPS]</b> — Cari data profil & titik panas KPS\n"
             "• <b>/laporan</b> — Unduh berkas presentasi PPTX\n"
             "• <b>/balai</b> — Sebaran per Balai PS\n"
             "• <b>/help</b> — Panduan lengkap"
@@ -445,6 +638,8 @@ class TelegramBotService:
                 await self.handle_laporan(chat_id)
             elif cb_data == "cmd_balai":
                 await self.handle_balai(chat_id)
+            elif cb_data == "cmd_cari":
+                await self.handle_search_kps(chat_id, "")
             elif cb_data == "cmd_id":
                 await self.handle_id(chat_id, from_user)
             return
@@ -476,6 +671,10 @@ class TelegramBotService:
                 await self.handle_laporan(chat_id)
             elif cmd in ("/balai", "/wilker"):
                 await self.handle_balai(chat_id)
+            elif cmd in ("/cari", "/carikps", "/kps", "/search", "/find"):
+                parts = text.split(maxsplit=1)
+                search_query = parts[1].strip() if len(parts) > 1 else ""
+                await self.handle_search_kps(chat_id, search_query)
             elif cmd in ("/id", "/chatid", "/whoami"):
                 await self.handle_id(chat_id, from_user)
             else:

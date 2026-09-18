@@ -858,6 +858,7 @@ export default function App() {
       onToggleSound={toggleSound}
       onToggleDesktop={toggleDesktopNotification}
       onNavigateToMap={handleNavigateToMap}
+      onOpenKpsDetail={openKpsDetail}
     />
   );
 
@@ -882,6 +883,7 @@ export default function App() {
           notification={toastNotification}
           onClose={dismissToast}
           onViewMap={handleNavigateToMap}
+          onOpenKpsDetail={openKpsDetail}
         />
       )}
 

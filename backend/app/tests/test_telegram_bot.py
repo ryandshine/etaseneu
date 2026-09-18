@@ -12,6 +12,7 @@ def mock_report_service():
     service = MagicMock()
     service.collect_daily_hotspot_data.return_value = {
         "report_date_str": "Jumat, 18 September 2026",
+        "time_window_str": "17 Sep 2026, 07:00 - 18 Sep 2026, 07:00 WIB",
         "status_siaga": "SIAGA DARURAT",
         "total_hotspots": 6061,
         "high_count": 120,
@@ -180,3 +181,105 @@ async def test_process_update_dispatch(mock_report_service):
         }
         await bot.process_update(upd_cb)
         mock_status.assert_called_once_with(123)
+
+
+@pytest.mark.anyio
+async def test_handle_search_kps():
+    bot = TelegramBotService()
+    bot.token = "fake_token_123"
+
+    # 1. Search empty query (guidance)
+    with patch.object(bot, "send_message", new_callable=AsyncMock) as mock_send_msg:
+        await bot.handle_search_kps(chat_id="111", query="")
+        mock_send_msg.assert_called_once()
+        assert "PENCARIAN DATA KPS" in mock_send_msg.call_args[0][1]
+        assert "/cari" in mock_send_msg.call_args[0][1]
+
+    # 2. Search with results found
+    fake_kps = [
+        {
+            "id": 292491,
+            "lembaga": "KTH TELLA SERASAN",
+            "skema": "HKm",
+            "nama_desa": "Teluk Limau",
+            "nama_kec": "Gelumbang",
+            "nama_kab": "Muara Enim",
+            "nama_prov": "Sumatera Selatan",
+            "wilker_bps": "Balai PS Wilayah Sumatera",
+            "no_sk": "SK.4284/MENLHK-PSKL/PKPS/PSL.0/6/2018",
+            "tgl_sk": "2018-06-25",
+            "luas_ha": 5800.0,
+            "lat": -3.095974,
+            "lon": 104.376196,
+            "burned_area_ha": 12.5,
+            "hotspot_count_today": 3,
+        }
+    ]
+    with patch.object(bot, "_search_kps_in_db", return_value=fake_kps), \
+         patch.object(bot, "send_message", new_callable=AsyncMock) as mock_send_msg, \
+         patch.object(bot, "send_chat_action", new_callable=AsyncMock):
+        await bot.handle_search_kps(chat_id="111", query="tella")
+        mock_send_msg.assert_called_once()
+        msg_text = mock_send_msg.call_args[0][1]
+        assert "KTH TELLA SERASAN" in msg_text
+        assert "3 titik panas aktif" in msg_text
+        assert "12.50 Ha" in msg_text
+        assert "Google Maps" in msg_text
+        assert "view=kps" in msg_text
+
+    # 3. Search not found
+    with patch.object(bot, "_search_kps_in_db", return_value=[]), \
+         patch.object(bot, "send_message", new_callable=AsyncMock) as mock_send_msg, \
+         patch.object(bot, "send_chat_action", new_callable=AsyncMock):
+        await bot.handle_search_kps(chat_id="111", query="nonexistentkpsxyz")
+        mock_send_msg.assert_called_once()
+        assert "Data KPS tidak ditemukan" in mock_send_msg.call_args[0][1]
+
+
+@pytest.mark.anyio
+async def test_search_dispatch():
+    bot = TelegramBotService()
+    bot.token = "fake_token_123"
+
+    with patch.object(bot, "handle_search_kps", new_callable=AsyncMock) as mock_search, \
+         patch.object(bot, "answer_callback_query", new_callable=AsyncMock):
+
+        # Command /cari
+        upd_cmd = {
+            "update_id": 10,
+            "message": {
+                "chat": {"id": 123},
+                "from": {"first_name": "Ryan"},
+                "text": "/cari Tella Serasan",
+            },
+        }
+        await bot.process_update(upd_cmd)
+        mock_search.assert_called_once_with(123, "Tella Serasan")
+
+        # Callback cmd_cari
+        mock_search.reset_mock()
+        upd_cb = {
+            "update_id": 11,
+            "callback_query": {
+                "id": "cb_100",
+                "data": "cmd_cari",
+                "message": {"chat": {"id": 123}},
+                "from": {"first_name": "Ryan"},
+            },
+        }
+        await bot.process_update(upd_cb)
+        mock_search.assert_called_once_with(123, "")
+
+        # Natural language: "cari kps lingat"
+        mock_search.reset_mock()
+        upd_natural = {
+            "update_id": 12,
+            "message": {
+                "chat": {"id": 123},
+                "from": {"first_name": "Ryan"},
+                "text": "cari kps lingat",
+            },
+        }
+        await bot.process_update(upd_natural)
+        mock_search.assert_called_once_with(123, "lingat")
+

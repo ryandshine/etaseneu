@@ -44,7 +44,13 @@ export function mapHotspotRecordToDashboardHotspot(
     // objek kawasan_hutan. Ambil dari mana pun yang terisi.
     fungsiKawasan: String(hotspot.fungsi_kawasan ?? hotspot.kawasan_hutan?.fungsi ?? ""),
     namaKawasan: String(hotspot.kawasan_hutan?.nama_kawasan ?? ""),
-    kelompokKawasan: String(hotspot.kelompok ?? hotspot.kawasan_hutan?.kelompok ?? "")
+    kelompokKawasan: String(hotspot.kelompok ?? hotspot.kawasan_hutan?.kelompok ?? ""),
+    is_inside:
+      hotspot.is_inside !== undefined
+        ? hotspot.is_inside
+        : (hotspot as Record<string, unknown>).is_perimeter !== undefined
+        ? !(hotspot as Record<string, unknown>).is_perimeter
+        : !String(hotspot.agency_name || "").startsWith("Luar Kawasan")
   };
 }
 
