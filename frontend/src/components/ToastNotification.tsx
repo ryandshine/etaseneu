@@ -99,9 +99,9 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({
             {notification.message}
           </p>
 
-          {/* Badge FRP jika ada */}
-          {maxFrp !== undefined && maxFrp !== null && (
-            <div style={{ marginBottom: "0.55rem" }}>
+          {/* Badge FRP & Balai PS jika ada */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginBottom: "0.55rem", flexWrap: "wrap" }}>
+            {maxFrp !== undefined && maxFrp !== null && (
               <span
                 style={{
                   fontSize: "0.68rem",
@@ -115,8 +115,23 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({
               >
                 FRP: {maxFrp} MW
               </span>
-            </div>
-          )}
+            )}
+            {(firstHotspot?.wilker_bps || notification.metadata?.wilker_bps?.[0]) && (
+              <span
+                style={{
+                  fontSize: "0.68rem",
+                  fontWeight: 600,
+                  backgroundColor: "rgba(16, 185, 129, 0.15)",
+                  color: "#6ee7b7",
+                  border: "1px solid rgba(16, 185, 129, 0.3)",
+                  padding: "0.15rem 0.4rem",
+                  borderRadius: "4px",
+                }}
+              >
+                {firstHotspot?.wilker_bps || notification.metadata?.wilker_bps?.[0]}
+              </span>
+            )}
+          </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
             {onViewMap && (

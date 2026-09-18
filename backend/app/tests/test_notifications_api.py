@@ -69,7 +69,7 @@ async def test_notification_service_notify_new_hotspots(monkeypatch) -> None:
             "confidence": "high",
             "frp": 35.0,
             "agencyName": "KTH Tella Serasan",
-            "polygonMetadata": {"NAMA_PROV": "Riau", "LEMBAGA": "KTH Tella Serasan"},
+            "polygonMetadata": {"NAMA_PROV": "Riau", "LEMBAGA": "KTH Tella Serasan", "WILKER_BPS": "Balai PS Palembang"},
         },
         {
             "source": "MODIS",
@@ -79,7 +79,7 @@ async def test_notification_service_notify_new_hotspots(monkeypatch) -> None:
             "confidence": "nominal",
             "frp": 12.0,
             "agencyName": "Muara Medak",
-            "polygonMetadata": {"NAMA_PROV": "Sumatera Selatan"},
+            "polygonMetadata": {"NAMA_PROV": "Sumatera Selatan", "WILKER_BPS": "Balai PS Palembang"},
         },
     ]
 
@@ -89,8 +89,10 @@ async def test_notification_service_notify_new_hotspots(monkeypatch) -> None:
     assert "Riau" in notif["metadata"]["provinces"]
     assert "Sumatera Selatan" in notif["metadata"]["provinces"]
     assert "KTH Tella Serasan" in notif["metadata"]["agencies"]
+    assert "Balai PS Palembang" in notif["metadata"]["wilker_bps"]
     assert len(notif["metadata"]["hotspots"]) == 2
     assert notif["metadata"]["hotspots"][0]["frp"] == 35.0
+    assert notif["metadata"]["hotspots"][0]["wilker_bps"] == "Balai PS Palembang"
     assert "google.com/maps?q=0.500000,101.400000" in notif["metadata"]["hotspots"][0]["google_maps_url"]
 
     listed = service.list_notifications(limit=5)

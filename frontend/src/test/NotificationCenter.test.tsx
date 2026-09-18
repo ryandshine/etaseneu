@@ -17,6 +17,7 @@ const mockNotifications: HotspotNotification[] = [
     metadata: {
       provinces: ["Sumatera Selatan"],
       agencies: ["KTH TELLA SERASAN"],
+      wilker_bps: ["Balai PS Palembang"],
       satellites: ["NOAA-20"],
       max_frp: 35.5,
       hotspots: [
@@ -28,6 +29,7 @@ const mockNotifications: HotspotNotification[] = [
           agency_name: "KTH TELLA SERASAN",
           province_name: "Sumatera Selatan",
           kabupaten_name: "Muara Enim",
+          wilker_bps: "Balai PS Palembang",
           google_maps_url: "https://www.google.com/maps?q=-3.095974,104.376196",
         },
       ],
@@ -85,6 +87,7 @@ describe("NotificationCenter Component", () => {
     const mapsLink = screen.getByTitle(/Buka titik koordinat di Google Maps/i);
     expect(mapsLink).toHaveAttribute("href", "https://www.google.com/maps?q=-3.095974,104.376196");
     expect(screen.getByText("35.5 MW")).toBeInTheDocument();
+    expect(screen.getAllByText("Balai PS Palembang").length).toBeGreaterThan(0);
 
     // Click "Lihat di Peta"
     const viewMapButtons = screen.getAllByText("Lihat di Peta");
@@ -147,6 +150,7 @@ describe("ToastNotification Component", () => {
       screen.getByText(/Terdeteksi 3 titik panas baru di areal Perhutanan Sosial/i)
     ).toBeInTheDocument();
     expect(screen.getByText("FRP: 35.5 MW")).toBeInTheDocument();
+    expect(screen.getByText("Balai PS Palembang")).toBeInTheDocument();
 
     // Google Maps link in toast
     const gmapsLink = screen.getByText("Google Maps").closest("a");

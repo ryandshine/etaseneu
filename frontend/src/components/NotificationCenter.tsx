@@ -436,6 +436,21 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                                 {p}
                               </span>
                             ))}
+                            {notif.metadata.wilker_bps?.slice(0, 2).map((bps) => (
+                              <span
+                                key={bps}
+                                style={{
+                                  fontSize: "0.65rem",
+                                  backgroundColor: "rgba(16, 185, 129, 0.15)",
+                                  color: "#6ee7b7",
+                                  border: "1px solid rgba(16, 185, 129, 0.3)",
+                                  padding: "0.1rem 0.35rem",
+                                  borderRadius: "4px",
+                                }}
+                              >
+                                {bps}
+                              </span>
+                            ))}
                             {notif.metadata.max_frp ? (
                               <span
                                 style={{
@@ -534,6 +549,14 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                                       <span style={{ color: "#fbbf24", fontWeight: 600 }}>
                                         {h.frp !== null ? `${h.frp} MW` : "FRP —"}
                                       </span>
+                                      {h.wilker_bps && (
+                                        <>
+                                          <span>•</span>
+                                          <span style={{ color: "#6ee7b7", fontWeight: 600 }}>
+                                            {h.wilker_bps}
+                                          </span>
+                                        </>
+                                      )}
                                       {(h.kabupaten_name || h.province_name) && (
                                         <>
                                           <span>•</span>

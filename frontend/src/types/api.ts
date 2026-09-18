@@ -456,6 +456,7 @@ export interface HotspotNotificationItem {
   province_name?: string;
   kabupaten_name?: string;
   desa_name?: string;
+  wilker_bps?: string;
   satellite?: string;
   google_maps_url: string;
 }
@@ -470,6 +471,7 @@ export interface HotspotNotification {
   metadata?: {
     provinces?: string[];
     agencies?: string[];
+    wilker_bps?: string[];
     satellites?: string[];
     max_frp?: number;
     has_high_confidence?: boolean;

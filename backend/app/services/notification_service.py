@@ -113,10 +113,11 @@ class NotificationService:
             )
             return {}
 
-        # Susun data detail tiap hotspot (FRP, Google Maps URL, keyakinan, lembaga)
+        # Susun data detail tiap hotspot (FRP, Google Maps URL, keyakinan, lembaga, Balai PS)
         hotspot_details: list[dict[str, Any]] = []
         provinces_set = set()
         agencies_set = set()
+        bps_set = set()
         satellites_set = set()
         frp_vals: list[float] = []
         has_high_conf = False
@@ -196,6 +197,37 @@ class NotificationService:
             else:
                 agency = "Areal Perhutanan Sosial"
 
+            # Ekstraksi nama Balai PS (Wilker BPS)
+            bps = (
+                poly_meta.get("WILKER_BPS")
+                or poly_meta.get("wilker_bps")
+                or h.get("wilker_bps")
+                or h.get("wilkerBps")
+                or raw_payload.get("wilker_bps")
+                or ""
+            ).strip()
+
+            if not bps and self.store.enabled:
+                lookup_target = raw_payload.get("nearest_kps_name") or agency
+                if lookup_target and lookup_target not in ("Areal Perhutanan Sosial", "—", "-"):
+                    try:
+                        with self.store.connection() as conn:
+                            with conn.cursor() as cur:
+                                cur.execute(
+                                    "SELECT wilker_bps FROM polygon_metadata WHERE lembaga = %s AND wilker_bps IS NOT NULL LIMIT 1;",
+                                    (lookup_target,),
+                                )
+                                row = cur.fetchone()
+                                if row and row.get("wilker_bps"):
+                                    bps = row["wilker_bps"].strip()
+                    except Exception:
+                        pass
+
+            if bps and bps not in ("—", "-"):
+                bps_set.add(bps)
+            else:
+                bps = None
+
             sat = str(h.get("satellite") or h.get("source") or "NASA").strip()
             if sat:
                 satellites_set.add(sat)
@@ -210,6 +242,7 @@ class NotificationService:
                 "confidence": conf_cat,  # "Tinggi" atau "Sedang"
                 "raw_confidence": str(h.get("confidence") or ""),
                 "agency_name": agency,
+                "wilker_bps": bps,
                 "province_name": prov,
                 "kabupaten_name": kab if kab and kab not in ("—", "-") else None,
                 "kecamatan_name": kec if kec and kec not in ("—", "-") else None,
@@ -224,6 +257,7 @@ class NotificationService:
 
         provinces = sorted(list(provinces_set))
         agencies = sorted(list(agencies_set))
+        bps_list = sorted(list(bps_set))
         satellites = sorted(list(satellites_set))
         max_frp = max(frp_vals, default=0.0)
 
@@ -241,10 +275,11 @@ class NotificationService:
         metadata = {
             "provinces": provinces,
             "agencies": agencies[:10],
+            "wilker_bps": bps_list,
             "satellites": satellites,
             "max_frp": round(max_frp, 1),
             "has_high_confidence": has_high_conf,
-            "hotspots": hotspot_details[:50],  # simpan rincian titik panas lengkap dengan frp & gmaps
+            "hotspots": hotspot_details[:50],  # simpan rincian titik panas lengkap dengan frp, gmaps, dan Balai PS
             "synced_at": now.isoformat(),
         }
 
@@ -291,13 +326,16 @@ class NotificationService:
             except Exception:
                 wib_time = now.strftime("%Y-%m-%d %H:%M UTC")
 
-            # Susun daftar rincian per hotspot dengan lokasi teliti dan koordinat presisi
+            # Susun daftar rincian per hotspot dengan lokasi teliti, Balai PS, dan koordinat presisi
             item_lines: list[str] = []
             for idx, item in enumerate(hotspot_details[:8], 1):
                 frp_text = f"{item['frp']} MW" if item['frp'] is not None else "—"
                 conf_badge = f"<b>{item['confidence']}</b>"
                 if item.get("raw_confidence"):
                     conf_badge += f" ({html.escape(item['raw_confidence'])})"
+
+                # Baris Balai PS
+                bps_line = f"   • Balai PS: <b>{html.escape(item['wilker_bps'])}</b>\n" if item.get("wilker_bps") else ""
 
                 # Susun label wilayah yang teliti (Desa, Kecamatan, Kabupaten, Provinsi)
                 loc_parts = []
@@ -314,6 +352,7 @@ class NotificationService:
 
                 item_lines.append(
                     f"{idx}. 🏛️ <b>{html.escape(item['agency_name'])}</b>\n"
+                    f"{bps_line}"
                     f"   • Wilayah: <b>{html.escape(loc_str)}</b>\n"
                     f"   • Koordinat: <code>{item['latitude']:.6f}, {item['longitude']:.6f}</code>\n"
                     f"   • Keyakinan: {conf_badge}\n"
@@ -327,10 +366,12 @@ class NotificationService:
             hotspots_block = "\n\n".join(item_lines)
 
             status_label = "TINGGI / BAHAYA" if severity == "danger" else "WASPADA"
+            balai_summary_line = f"🏢 <b>Balai PS</b>: {', '.join(bps_list)}\n" if bps_list else ""
             tg_text = (
                 "🔥 <b>PERINGATAN TITIK PANAS (HOTSPOT) KPS</b>\n"
                 "━━━━━━━━━━━━━━━━━━━━━\n"
                 f"🚨 <b>Status</b>: {status_label} ({count} Titik Baru — Keyakinan Sedang & Tinggi)\n"
+                f"{balai_summary_line}"
                 f"⚡ <b>FRP Maksimum</b>: {round(max_frp, 1)} MW\n"
                 f"📅 <b>Waktu Deteksi</b>: {wib_time}\n\n"
                 "<b>Rincian Titik Panas:</b>\n\n"
@@ -382,7 +423,7 @@ class NotificationService:
         now = datetime.now(timezone.utc)
         real_hotspots = []
 
-        # Coba ambil titik panas aktual dari tabel hotspot_observations
+        # Coba ambil titik panas aktual dari tabel hotspot_observations beserta Balai PS
         if self.store.enabled:
             try:
                 with self.store.connection() as conn:
@@ -393,8 +434,19 @@ class NotificationService:
                                    h.confidence, h.satellite, h.source,
                                    h.agency_name,
                                    h.raw_payload->>'province_name' as prov,
-                                   h.raw_payload->'polygon_metadata' as poly_meta
+                                   h.raw_payload->'polygon_metadata' as poly_meta,
+                                   p.wilker_bps,
+                                   p.nama_kab,
+                                   p.nama_kec,
+                                   p.nama_desa
                             FROM hotspot_observations h
+                            LEFT JOIN polygon_metadata p ON (
+                                p.is_active = TRUE AND (
+                                    ST_Contains(p.geometry, ST_SetSRID(ST_Point(h.longitude, h.latitude), 4326))
+                                    OR p.lembaga = h.agency_name
+                                    OR p.lembaga = (h.raw_payload->>'nearest_kps_name')
+                                )
+                            )
                             WHERE (h.raw_payload->>'frp') IS NOT NULL
                               AND (h.confidence IN ('high', 'h', 'nominal', 'n')
                                    OR (h.confidence ~ '^[0-9]+$' AND h.confidence::int >= 30))
@@ -402,6 +454,16 @@ class NotificationService:
                             LIMIT 5;
                         """)
                         for r in cur.fetchall():
+                            poly_meta = r["poly_meta"] or {}
+                            if r.get("wilker_bps"):
+                                poly_meta["WILKER_BPS"] = r["wilker_bps"]
+                            if r.get("nama_kab"):
+                                poly_meta["NAMA_KAB"] = r["nama_kab"]
+                            if r.get("nama_kec"):
+                                poly_meta["NAMA_KEC"] = r["nama_kec"]
+                            if r.get("nama_desa"):
+                                poly_meta["NAMA_DESA"] = r["nama_desa"]
+
                             real_hotspots.append({
                                 "latitude": float(r["latitude"]),
                                 "longitude": float(r["longitude"]),
@@ -411,15 +473,16 @@ class NotificationService:
                                 "source": str(r["source"] or "NASA"),
                                 "agencyName": r["agency_name"],
                                 "provinceName": r["prov"],
-                                "polygonMetadata": r["poly_meta"] or {},
+                                "wilker_bps": r.get("wilker_bps"),
+                                "polygonMetadata": poly_meta,
                             })
             except Exception as exc:
                 logger.warning("Gagal query hotspot riil untuk test notifikasi: %s", exc)
 
         if not real_hotspots:
             # Koordinat spasial riil poligon KPS yang terverifikasi di PostGIS
-            # KTH TELLA SERASAN: Desa Teluk Limau, Kec. Gelumbang, Kab. Muara Enim, Sumatera Selatan
-            # KTH MEDAK LESTARI: Desa Muara Medak, Kec. Bayung Lencir, Kab. Musi Banyuasin, Sumatera Selatan
+            # KTH TELLA SERASAN: Desa Teluk Limau, Kec. Gelumbang, Kab. Muara Enim, Sumatera Selatan (Balai PS Palembang)
+            # KTH MEDAK LESTARI: Desa Muara Medak, Kec. Bayung Lencir, Kab. Musi Banyuasin, Sumatera Selatan (Balai PS Palembang)
             real_hotspots = [
                 {
                     "source": "VIIRS NOAA-20",
@@ -429,12 +492,14 @@ class NotificationService:
                     "confidence": "high",
                     "frp": 38.5,
                     "agencyName": "KTH TELLA SERASAN",
+                    "wilker_bps": "Balai PS Palembang",
                     "polygonMetadata": {
                         "NAMA_PROV": "Sumatera Selatan",
                         "NAMA_KAB": "Muara Enim",
                         "NAMA_KEC": "Gelumbang",
                         "NAMA_DESA": "Teluk Limau",
                         "LEMBAGA": "KTH TELLA SERASAN",
+                        "WILKER_BPS": "Balai PS Palembang",
                     },
                 },
                 {
@@ -445,12 +510,14 @@ class NotificationService:
                     "confidence": "nominal",
                     "frp": 16.2,
                     "agencyName": "KTH MEDAK LESTARI",
+                    "wilker_bps": "Balai PS Palembang",
                     "polygonMetadata": {
                         "NAMA_PROV": "Sumatera Selatan",
                         "NAMA_KAB": "Musi Banyuasin",
                         "NAMA_KEC": "Bayung Lencir",
                         "NAMA_DESA": "Muara Medak",
                         "LEMBAGA": "KTH MEDAK LESTARI",
+                        "WILKER_BPS": "Balai PS Palembang",
                     },
                 },
             ]
