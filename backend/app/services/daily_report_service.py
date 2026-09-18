@@ -656,21 +656,42 @@ class DailyReportService:
                 "total_burned_ha": round(float(b_stats.get("total_burned_ha", 0.0)), 1),
             }
 
-            # 1. KPS dari kategori Terbakar Kembali (Re-burn & Ekspansi)
-            burned_active_items = ew_svc.get_kps_analysis_list(category="burned_active_today", limit=5)
+            # 1. KPS dari kategori Terbakar Kembali (Re-burn & Ekspansi) - AMBIL SEMUA
+            burned_active_items = ew_svc.get_kps_analysis_list(category="burned_active_today", limit=500)
+            burned_kps_list = []
             for it in burned_active_items:
                 is_strict = it.get("hotspots_today_strict_reburn", 0) > 0
                 cat_label = "Strict Re-burn" if is_strict else "Ekspansi Bara"
                 it_copy = dict(it)
                 it_copy["ew_category"] = cat_label
-                early_warning_kps_list.append(it_copy)
+                burned_kps_list.append(it_copy)
 
-            # 2. KPS dari kategori Peringatan Dini Baru
-            ew_active_items = ew_svc.get_kps_analysis_list(category="early_warning_active_today", limit=5)
+            burned_kps_list.sort(
+                key=lambda x: (
+                    1 if x.get("hotspots_today_strict_reburn", 0) > 0 else 0,
+                    x.get("hotspots_today") or 0,
+                    x.get("ftri_score") or 0.0,
+                ),
+                reverse=True,
+            )
+
+            # 2. KPS dari kategori Peringatan Dini Baru (early_warning_today) - AMBIL SEMUA
+            ew_active_items = ew_svc.get_kps_analysis_list(category="early_warning_today", limit=500)
+            ew_new_list = []
             for it in ew_active_items:
                 it_copy = dict(it)
                 it_copy["ew_category"] = "Peringatan Dini Baru"
-                early_warning_kps_list.append(it_copy)
+                ew_new_list.append(it_copy)
+
+            ew_new_list.sort(
+                key=lambda x: (
+                    x.get("ftri_score") or 0.0,
+                    x.get("hotspots_today") or 0,
+                ),
+                reverse=True,
+            )
+
+            early_warning_kps_list = burned_kps_list + ew_new_list
 
             # Query titik centroid poligon untuk Google Maps presisi
             poly_ids = [k["id"] for k in early_warning_kps_list if k.get("id")]
@@ -697,6 +718,8 @@ class DailyReportService:
 
         except Exception as e:
             logger.error("Gagal mengambil daftar KPS menu peringatan dini: %s", e)
+            burned_kps_list = []
+            ew_new_list = []
 
         high_and_med = confidence_counts["Tinggi"] + confidence_counts["Sedang"]
         if confidence_counts["Tinggi"] >= 5 or max_frp > 100 or high_and_med >= 50 or delta_pct > 20:
@@ -740,8 +763,11 @@ class DailyReportService:
             "siaga_color": siaga_color,
             "balai_list": balai_list,
             "kps_list": kps_list,
+            "burned_kps_list": burned_kps_list,
+            "ew_new_list": ew_new_list,
             "early_warning_summary": ew_summary_data,
             "early_warning_kps_list": early_warning_kps_list,
+            "total_ew_active_today": len(early_warning_kps_list),
             "has_data": total_hotspots > 0,
         }
 
@@ -1051,19 +1077,113 @@ class DailyReportService:
         _add_slide_footer(s3)
 
         # =====================================================================
-        # SLIDE 4: DAFTAR KPS MENU PERINGATAN DINI & ANCAMAN RE-BURN (FTRI)
+        # HELPER: RENDER TABEL KPS PERINGATAN DINI DI ATAS SLIDE
         # =====================================================================
-        s4 = prs.slides.add_slide(blank_layout)
-        _add_rect(s4, Inches(0), Inches(0), Inches(13.333), Inches(7.5), fill_color=BG_CANVAS)
-        _add_slide_header(
-            s4,
-            category="Sistem Peringatan Dini ETASENEU",
-            title="Daftar KPS Prioritas Menu Peringatan Dini & Ancaman Terbakar Ulang (Re-burn)",
-            date_stamp=f"{data.get('report_date_str', '')} • 07:00 WIB",
-        )
+        def _render_kps_table_on_slide(
+            slide,
+            items_chunk: list[dict[str, Any]],
+            start_no: int,
+            tbl_y: Any,
+            tbl_h: Any,
+            empty_msg: str = "Nihil unit KPS dalam status ancaman peringatan dini hari ini.",
+        ):
+            tbl_w = Inches(11.733)
+            num_rows = max(len(items_chunk) + 1, 2)
+            tbl_shape = slide.shapes.add_table(num_rows, 8, Inches(0.8), tbl_y, tbl_w, tbl_h)
+            tbl = tbl_shape.table
 
+            ew_col_widths = [
+                Inches(0.5),   # No
+                Inches(2.6),   # Nama Lembaga KPS & Skema
+                Inches(1.8),   # Balai PS
+                Inches(2.133), # Wilayah Administrasi
+                Inches(1.4),   # Kategori Ancaman
+                Inches(0.9),   # Hotspot Hari Ini
+                Inches(1.1),   # Skor FTRI
+                Inches(1.3),   # Navigasi
+            ]
+            for idx, w in enumerate(ew_col_widths):
+                tbl.columns[idx].width = w
+
+            ew_headers = [
+                "NO",
+                "NAMA LEMBAGA KPS",
+                "BALAI PS",
+                "WILAYAH",
+                "KATEGORI ANCAMAN",
+                "HARI INI",
+                "SKOR FTRI",
+                "NAVIGASI",
+            ]
+            for col_idx, h_text in enumerate(ew_headers):
+                cell = tbl.cell(0, col_idx)
+                cell.fill.solid()
+                cell.fill.fore_color.rgb = NAVY
+                cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+                p = cell.text_frame.paragraphs[0]
+                p.alignment = PP_ALIGN.CENTER if col_idx not in (1, 2, 3) else PP_ALIGN.LEFT
+                r = p.add_run()
+                r.text = h_text
+                r.font.name = FONT_FAMILY
+                r.font.size = Pt(9.5)
+                r.font.bold = True
+                r.font.color.rgb = WHITE
+
+            if not items_chunk:
+                cell = tbl.cell(1, 1)
+                p = cell.text_frame.paragraphs[0]
+                r = p.add_run()
+                r.text = empty_msg
+                r.font.name = FONT_FAMILY
+                r.font.size = Pt(10)
+                r.font.italic = True
+            else:
+                for idx_item, item in enumerate(items_chunk):
+                    row_idx = idx_item + 1
+                    no_val = str(start_no + idx_item)
+                    bg_c = CARD_BG if row_idx % 2 == 1 else RGBColor(241, 245, 249)
+                    wil_str = f"{item.get('nama_kab', '')}, {item.get('nama_prov', '')}".strip(", ") or "Indonesia"
+                    h_today_val = str(item.get("hotspots_today") or item.get("h_today") or 0)
+                    ftri_val = float(item.get("ftri_score") or 0.0)
+                    ftri_str = f"{ftri_val:.1f} ({item.get('ftri_label', 'Sedang')})"
+                    cat_str = item.get("ew_category", "Peringatan Dini")
+                    gmaps = item.get("google_maps_url")
+
+                    cat_color = RED if "Strict" in cat_str else (AMBER if "Ekspansi" in cat_str else BLUE)
+                    ftri_color = RED if ftri_val >= 70 else (AMBER if ftri_val >= 50 else SLATE)
+
+                    row_items = [
+                        (no_val, PP_ALIGN.CENTER, NAVY, False, None),
+                        (f"{item.get('lembaga', 'Areal KPS')} ({item.get('skema', 'PS')})", PP_ALIGN.LEFT, NAVY, True, None),
+                        (item.get("wilker_bps", "Balai PS"), PP_ALIGN.LEFT, SLATE, False, None),
+                        (wil_str, PP_ALIGN.LEFT, NAVY_LIGHT, False, None),
+                        (cat_str, PP_ALIGN.CENTER, cat_color, True, None),
+                        (f"{h_today_val} titik", PP_ALIGN.CENTER, RED if int(h_today_val) > 10 else NAVY, True, None),
+                        (ftri_str, PP_ALIGN.CENTER, ftri_color, True, None),
+                        ("Buka Google Maps", PP_ALIGN.CENTER, BLUE, True, gmaps),
+                    ]
+
+                    for col_idx, (text_val, align, text_color, is_bold, link_url) in enumerate(row_items):
+                        cell = tbl.cell(row_idx, col_idx)
+                        cell.fill.solid()
+                        cell.fill.fore_color.rgb = bg_c
+                        cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+                        p = cell.text_frame.paragraphs[0]
+                        p.alignment = align
+                        r = p.add_run()
+                        r.text = text_val
+                        r.font.name = FONT_FAMILY
+                        r.font.size = Pt(9)
+                        r.font.bold = is_bold
+                        r.font.color.rgb = text_color
+                        if link_url:
+                            r.hyperlink.address = link_url
+                            r.font.underline = True
+
+        # =====================================================================
+        # SLIDE KPS TERBAKAR KEMBALI & EKSPANSI BARA (SELURUH KPS TANPA TERPOTONG)
+        # =====================================================================
         ew_sum = data.get("early_warning_summary", {})
-        # 3 Mini Metrik Cards di atas tabel
         mini_w = Inches(3.75)
         mini_h = Inches(0.85)
         mini_y = Inches(1.3)
@@ -1091,138 +1211,106 @@ class DailyReportService:
             ),
         ]
 
-        for idx, (m_title, m_val, m_sub, m_col) in enumerate(mini_cards):
-            mx = mini_start_x + (idx * (mini_w + mini_gap))
-            _add_rect(s4, mx, mini_y, mini_w, mini_h, fill_color=CARD_BG, line_color=CARD_BORDER, rounded=True)
-            _add_rect(s4, mx, mini_y, mini_w, Inches(0.06), fill_color=m_col, rounded=True)
+        burned_kps_list = data.get("burned_kps_list", [])
+        burned_chunks = [burned_kps_list[i:i + 9] for i in range(0, len(burned_kps_list), 9)] if burned_kps_list else [[]]
+        total_burned_pages = len(burned_chunks)
 
-            tb_m = s4.shapes.add_textbox(mx + Inches(0.12), mini_y + Inches(0.08), mini_w - Inches(0.24), mini_h - Inches(0.12))
-            tf_m = tb_m.text_frame
-            tf_m.word_wrap = True
-            tf_m.margin_left = tf_m.margin_top = tf_m.margin_right = tf_m.margin_bottom = 0
+        for p_idx, b_chunk in enumerate(burned_chunks):
+            s_burn = prs.slides.add_slide(blank_layout)
+            _add_rect(s_burn, Inches(0), Inches(0), Inches(13.333), Inches(7.5), fill_color=BG_CANVAS)
 
-            p_mt = tf_m.paragraphs[0]
-            r_mt = p_mt.add_run()
-            r_mt.text = m_title
-            r_mt.font.name = FONT_FAMILY
-            r_mt.font.size = Pt(8.5)
-            r_mt.font.bold = True
-            r_mt.font.color.rgb = SLATE
+            p_label = f" (Hal. {p_idx + 1}/{total_burned_pages})" if total_burned_pages > 1 else ""
+            _add_slide_header(
+                s_burn,
+                category="Sistem Peringatan Dini • Areal Bekas Terbakar",
+                title=f"Daftar KPS Terbakar Kembali & Ekspansi Bara{p_label}",
+                date_stamp=f"{data.get('report_date_str', '')} • 07:00 WIB",
+            )
 
-            p_mv = tf_m.add_paragraph()
-            r_mv = p_mv.add_run()
-            r_mv.text = f"{m_val}  ·  "
-            r_mv.font.name = FONT_FAMILY
-            r_mv.font.size = Pt(14)
-            r_mv.font.bold = True
-            r_mv.font.color.rgb = m_col
+            if p_idx == 0:
+                for idx, (m_title, m_val, m_sub, m_col) in enumerate(mini_cards):
+                    mx = mini_start_x + (idx * (mini_w + mini_gap))
+                    _add_rect(s_burn, mx, mini_y, mini_w, mini_h, fill_color=CARD_BG, line_color=CARD_BORDER, rounded=True)
+                    _add_rect(s_burn, mx, mini_y, mini_w, Inches(0.06), fill_color=m_col, rounded=True)
 
-            r_ms = p_mv.add_run()
-            r_ms.text = m_sub
-            r_ms.font.name = FONT_FAMILY
-            r_ms.font.size = Pt(8.5)
-            r_ms.font.color.rgb = SLATE
+                    tb_m = s_burn.shapes.add_textbox(mx + Inches(0.12), mini_y + Inches(0.08), mini_w - Inches(0.24), mini_h - Inches(0.12))
+                    tf_m = tb_m.text_frame
+                    tf_m.word_wrap = True
+                    tf_m.margin_left = tf_m.margin_top = tf_m.margin_right = tf_m.margin_bottom = 0
 
-        # Tabel Daftar KPS Menu Peringatan Dini
-        tbl_ew_y = Inches(2.3)
-        tbl_ew_w = Inches(11.733)
-        tbl_ew_h = Inches(4.7)
+                    p_mt = tf_m.paragraphs[0]
+                    r_mt = p_mt.add_run()
+                    r_mt.text = m_title
+                    r_mt.font.name = FONT_FAMILY
+                    r_mt.font.size = Pt(8.5)
+                    r_mt.font.bold = True
+                    r_mt.font.color.rgb = SLATE
 
-        ew_rows = data.get("early_warning_kps_list", [])[:8]
-        num_ew_rows = max(len(ew_rows) + 1, 2)
-        tbl_ew_shape = s4.shapes.add_table(num_ew_rows, 8, Inches(0.8), tbl_ew_y, tbl_ew_w, tbl_ew_h)
-        tbl_ew = tbl_ew_shape.table
+                    p_mv = tf_m.add_paragraph()
+                    r_mv = p_mv.add_run()
+                    r_mv.text = f"{m_val}  ·  "
+                    r_mv.font.name = FONT_FAMILY
+                    r_mv.font.size = Pt(14)
+                    r_mv.font.bold = True
+                    r_mv.font.color.rgb = m_col
 
-        ew_col_widths = [
-            Inches(0.5),   # No
-            Inches(2.6),   # Nama Lembaga KPS & Skema
-            Inches(1.8),   # Balai PS
-            Inches(2.133), # Wilayah Administrasi
-            Inches(1.4),   # Kategori Ancaman
-            Inches(0.9),   # Hotspot Hari Ini
-            Inches(1.1),   # Skor FTRI
-            Inches(1.3),   # Navigasi
-        ]
-        for idx, w in enumerate(ew_col_widths):
-            tbl_ew.columns[idx].width = w
+                    r_ms = p_mv.add_run()
+                    r_ms.text = m_sub
+                    r_ms.font.name = FONT_FAMILY
+                    r_ms.font.size = Pt(8.5)
+                    r_ms.font.color.rgb = SLATE
 
-        ew_headers = [
-            "NO",
-            "NAMA LEMBAGA KPS",
-            "BALAI PS",
-            "WILAYAH",
-            "KATEGORI ANCAMAN",
-            "HARI INI",
-            "SKOR FTRI",
-            "NAVIGASI",
-        ]
-        for col_idx, h_text in enumerate(ew_headers):
-            cell = tbl_ew.cell(0, col_idx)
-            cell.fill.solid()
-            cell.fill.fore_color.rgb = NAVY
-            cell.vertical_anchor = MSO_ANCHOR.MIDDLE
-            p = cell.text_frame.paragraphs[0]
-            p.alignment = PP_ALIGN.CENTER if col_idx not in (1, 2, 3) else PP_ALIGN.LEFT
-            r = p.add_run()
-            r.text = h_text
-            r.font.name = FONT_FAMILY
-            r.font.size = Pt(9.5)
-            r.font.bold = True
-            r.font.color.rgb = WHITE
-
-        if not ew_rows:
-            cell = tbl_ew.cell(1, 1)
-            p = cell.text_frame.paragraphs[0]
-            r = p.add_run()
-            r.text = "Nihil unit KPS dalam status ancaman peringatan dini hari ini."
-            r.font.name = FONT_FAMILY
-            r.font.size = Pt(10)
-            r.font.italic = True
-        else:
-            for row_idx, item in enumerate(ew_rows, 1):
-                bg_c = CARD_BG if row_idx % 2 == 1 else RGBColor(241, 245, 249)
-                wil_str = f"{item.get('nama_kab', '')}, {item.get('nama_prov', '')}".strip(", ") or "Indonesia"
-                h_today_val = str(item.get("hotspots_today") or item.get("h_today") or 0)
-                ftri_val = float(item.get("ftri_score") or 0.0)
-                ftri_str = f"{ftri_val:.1f} ({item.get('ftri_label', 'Sedang')})"
-                cat_str = item.get("ew_category", "Peringatan Dini")
-                gmaps = item.get("google_maps_url")
-
-                cat_color = RED if "Strict" in cat_str else (AMBER if "Ekspansi" in cat_str else BLUE)
-                ftri_color = RED if ftri_val >= 70 else (AMBER if ftri_val >= 50 else SLATE)
-
-                row_items = [
-                    (str(row_idx), PP_ALIGN.CENTER, NAVY, False, None),
-                    (f"{item.get('lembaga', 'Areal KPS')} ({item.get('skema', 'PS')})", PP_ALIGN.LEFT, NAVY, True, None),
-                    (item.get("wilker_bps", "Balai PS"), PP_ALIGN.LEFT, SLATE, False, None),
-                    (wil_str, PP_ALIGN.LEFT, NAVY_LIGHT, False, None),
-                    (cat_str, PP_ALIGN.CENTER, cat_color, True, None),
-                    (f"{h_today_val} titik", PP_ALIGN.CENTER, RED if int(h_today_val) > 10 else NAVY, True, None),
-                    (ftri_str, PP_ALIGN.CENTER, ftri_color, True, None),
-                    ("Buka Google Maps", PP_ALIGN.CENTER, BLUE, True, gmaps),
-                ]
-
-                for col_idx, (text_val, align, text_color, is_bold, link_url) in enumerate(row_items):
-                    cell = tbl_ew.cell(row_idx, col_idx)
-                    cell.fill.solid()
-                    cell.fill.fore_color.rgb = bg_c
-                    cell.vertical_anchor = MSO_ANCHOR.MIDDLE
-                    p = cell.text_frame.paragraphs[0]
-                    p.alignment = align
-                    r = p.add_run()
-                    r.text = text_val
-                    r.font.name = FONT_FAMILY
-                    r.font.size = Pt(9)
-                    r.font.bold = is_bold
-                    r.font.color.rgb = text_color
-                    if link_url:
-                        r.hyperlink.address = link_url
-                        r.font.underline = True
-
-        _add_slide_footer(s4)
+                _render_kps_table_on_slide(
+                    slide=s_burn,
+                    items_chunk=b_chunk,
+                    start_no=1,
+                    tbl_y=Inches(2.3),
+                    tbl_h=Inches(4.7),
+                    empty_msg="Nihil KPS terbakar ulang atau ekspansi bara hari ini.",
+                )
+            else:
+                _render_kps_table_on_slide(
+                    slide=s_burn,
+                    items_chunk=b_chunk,
+                    start_no=(p_idx * 9) + 1,
+                    tbl_y=Inches(1.4),
+                    tbl_h=Inches(5.4),
+                    empty_msg="Nihil KPS terbakar ulang atau ekspansi bara hari ini.",
+                )
+            _add_slide_footer(s_burn)
 
         # =====================================================================
-        # SLIDE 5: REKAPITULASI SPASIAL BALAI PERHUTANAN SOSIAL (BPS)
+        # SLIDE KPS PERINGATAN DINI BARU — PRIORITAS FTRI EKSTREM & TINGGI
+        # =====================================================================
+        ew_new_list = data.get("ew_new_list", [])
+        top_ew_items = ew_new_list[:18]  # Top 18 KPS ancaman FTRI tertinggi
+        ew_chunks = [top_ew_items[i:i + 9] for i in range(0, len(top_ew_items), 9)] if top_ew_items else [[]]
+        total_ew_pages = len(ew_chunks)
+
+        for e_idx, e_chunk in enumerate(ew_chunks):
+            s_ew = prs.slides.add_slide(blank_layout)
+            _add_rect(s_ew, Inches(0), Inches(0), Inches(13.333), Inches(7.5), fill_color=BG_CANVAS)
+
+            e_label = f" (Hal. {e_idx + 1}/{total_ew_pages})" if total_ew_pages > 1 else ""
+            _add_slide_header(
+                s_ew,
+                category=f"Sistem Peringatan Dini • Potensi Kebakaran Baru (Total {len(ew_new_list)} KPS Aktif)",
+                title=f"Daftar KPS Peringatan Dini Baru — Ancaman FTRI Ekstrem{e_label}",
+                date_stamp=f"{data.get('report_date_str', '')} • 07:00 WIB",
+            )
+
+            _render_kps_table_on_slide(
+                slide=s_ew,
+                items_chunk=e_chunk,
+                start_no=(e_idx * 9) + 1,
+                tbl_y=Inches(1.4),
+                tbl_h=Inches(5.4),
+                empty_msg="Nihil KPS terindikasi titik panas baru hari ini.",
+            )
+            _add_slide_footer(s_ew)
+
+        # =====================================================================
+        # SLIDE: REKAPITULASI SPASIAL BALAI PERHUTANAN SOSIAL (BPS)
         # =====================================================================
         s5 = prs.slides.add_slide(blank_layout)
         _add_rect(s5, Inches(0), Inches(0), Inches(13.333), Inches(7.5), fill_color=BG_CANVAS)
@@ -1504,32 +1592,52 @@ class DailyReportService:
         pptx_bytes = self.generate_daily_hotspot_pptx(data)
         filename = f"Laporan_Harian_Hotspot_KPS_{date_iso}_0700WIB.pptx"
 
-        top_balai_str = ", ".join([b["name"] for b in data["balai_list"][:2]]) if data["balai_list"] else "Nihil"
-        top_kps_lines = []
-        for idx, kps in enumerate(data["kps_list"][:3], 1):
-            short_name = kps["name"][:35]
-            top_kps_lines.append(
-                f"{idx}. <b>{html.escape(short_name)}</b>\n"
-                f"   • {kps['high_count']}H/{kps['medium_count']}M | FRP: {kps['max_frp']} MW | <a href=\"{kps['google_maps_url']}\">Peta</a>"
-            )
+        top_balai_str = ", ".join([b["name"].replace("Balai PS ", "") for b in data.get("balai_list", [])[:2]]) if data.get("balai_list") else "Nihil"
+        ew_sum = data.get("early_warning_summary", {})
 
-        top_kps_block = "\n".join(top_kps_lines) if top_kps_lines else "<i>Nihil indikasi titik panas.</i>"
+        # Rincian KPS Strict Re-burn (Terbakar Ulang) - maks 2 baris agar aman dalam 1024 char limit Telegram
+        strict_kps = [k for k in data.get("burned_kps_list", []) if k.get("hotspots_today_strict_reburn", 0) > 0]
+
+        strict_lines = []
+        for idx, kps in enumerate(strict_kps[:2], 1):
+            s_name = kps.get("lembaga", "Areal KPS")[:20]
+            s_bps = kps.get("wilker_bps", "Balai PS").replace("Balai PS ", "")
+            s_pts = kps.get("hotspots_today") or 0
+            s_re = kps.get("hotspots_today_strict_reburn") or 0
+            gmaps = kps.get("google_maps_url", "#")
+            strict_lines.append(
+                f"{idx}. 🚨 <b>{html.escape(s_name)}</b> ({s_bps})\n"
+                f"   • {s_pts} Titik ({s_re} Re-burn) • <a href=\"{gmaps}\">Maps</a>"
+            )
+        more_strict = len(strict_kps) - 2
+        if more_strict > 0:
+            strict_lines.append(f"   <i>(+{more_strict} KPS terbakar ulang lainnya di slide .pptx)</i>")
+
+        strict_block = "\n".join(strict_lines) if strict_lines else "<i>Nihil KPS terbakar ulang hari ini.</i>"
+
+        tot_ew = data.get("total_ew_active_today", 0)
+        str_kps_cnt = ew_sum.get("strict_reburn_kps", 0)
+        exp_kps_cnt = ew_sum.get("expanding_kps", 0)
+        new_kps_cnt = ew_sum.get("ew_new_kps", 0)
 
         caption = (
             "📊 <b>LAPORAN HARIAN HOTSPOT KPS (07:00 WIB)</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📅 <b>Tanggal</b>: {data['report_date_str']}\n"
             f"🚨 <b>Status Siaga</b>: <b>{data['status_siaga']}</b>\n"
-            f"📈 <b>Tren H vs H-1</b>: <b>{data['total_hotspots']:,} titik</b> (vs {data['yesterday_total']:,} kemarin, <b>{data['trend_icon']} {data['delta_pct']:+.1f}%</b>)\n"
-            f"⏰ <b>Puncak Jam Rawan</b>: Siang Pkl {data['peak_day_hour']:02d}:00 & Dini Hari Pkl {data['peak_night_hour']:02d}:00 WIB\n"
-            f"⚡ <b>FRP Maks</b>: <b>{data['max_frp']} MW</b> (Rerata: {data['avg_frp']} MW)\n"
-            f"🏢 <b>Fokus Balai</b>: {top_balai_str}\n\n"
-            "<b>🎯 3 KPS Intervensi Prioritas:</b>\n"
-            f"{top_kps_block}\n"
+            f"📈 <b>Tren H vs H-1</b>: <b>{data['total_hotspots']:,} titik</b> ({data['trend_icon']} {data['delta_pct']:+.1f}% vs {data['yesterday_total']:,})\n"
+            f"⚡ <b>FRP Maks</b>: <b>{data['max_frp']} MW</b> | Fokus: {top_balai_str}\n\n"
+            "<b>🔥 REKAP PERINGATAN DINI:</b>\n"
+            f"• 🚨 <b>{str_kps_cnt} KPS Terbakar Ulang</b> | 🟠 <b>{exp_kps_cnt} Ekspansi</b>\n"
+            f"• 🟡 <b>{new_kps_cnt} KPS Baru</b> <i>(Total {tot_ew} KPS aktif)</i>\n\n"
+            "<b>🚨 KPS TERBAKAR ULANG (PRIORITAS 1):</b>\n"
+            f"{strict_block}\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "📎 <i>Paparan resmi (.pptx) terlampir memuat grafik tren H-1, siklus jam deteksi, & arahan keputusan.</i>\n"
-            f"🔗 <a href=\"{self.settings.frontend_origin}\">Buka Dashboard ETASENEU</a>"
+            "📎 <i>Semua 27 KPS Terbakar Ulang & Top FTRI termuat di .pptx.</i>\n"
+            f"🔗 <a href=\"{self.settings.frontend_origin}\">Unduh Excel {tot_ew} KPS di ETASENEU</a>"
         )
+        if len(caption) > 1020:
+            caption = caption[:1015] + "..."
 
         url = f"https://api.telegram.org/bot{token}/sendDocument"
         payload_data = {
