@@ -446,6 +446,18 @@ export interface ApiClient {
   ) => Promise<SurroundingHotspotResponse>;
 }
 
+export interface HotspotNotificationItem {
+  latitude: number;
+  longitude: number;
+  frp: number | null;
+  confidence: "Tinggi" | "Sedang" | string;
+  raw_confidence?: string;
+  agency_name?: string;
+  province_name?: string;
+  satellite?: string;
+  google_maps_url: string;
+}
+
 export interface HotspotNotification {
   id: string;
   type: string;
@@ -461,6 +473,7 @@ export interface HotspotNotification {
     has_high_confidence?: boolean;
     synced_at?: string;
     schedule?: string;
+    hotspots?: HotspotNotificationItem[];
   };
   created_at: string;
 }

@@ -8,7 +8,9 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+import html
 from app.core.config import get_settings
+from app.services.hotspot_categories import confidence_category
 from app.services.postgres_store import PostgresStore
 
 logger = logging.getLogger("hotspot.notifications")
@@ -54,6 +56,7 @@ class NotificationService:
         text: str,
         bot_token: str | None = None,
         chat_id: str | None = None,
+        parse_mode: str = "HTML",
     ) -> bool:
         token = (bot_token or self.settings.telegram_bot_token or "").strip()
         target_chat = (chat_id or self.settings.telegram_chat_id or "").strip()
@@ -66,7 +69,7 @@ class NotificationService:
         payload = {
             "chat_id": target_chat,
             "text": text,
-            "parse_mode": "Markdown",
+            "parse_mode": parse_mode,
             "disable_web_page_preview": True,
         }
 
@@ -95,15 +98,47 @@ class NotificationService:
             return {}
 
         now = sync_time or datetime.now(timezone.utc)
-        count = len(new_hotspots)
 
+        # Saring HANYA titik panas dengan confidence Sedang (medium/nominal) dan Tinggi (high)
+        qualifying_hotspots: list[tuple[dict, str]] = []
+        for h in new_hotspots:
+            cat = confidence_category(h)
+            if cat in ("Tinggi", "Sedang"):
+                qualifying_hotspots.append((h, cat))
+
+        if not qualifying_hotspots:
+            logger.info(
+                "Semua %d titik panas baru terdeteksi berkeyakinan Rendah (low). Notifikasi disaring/dilewati.",
+                len(new_hotspots),
+            )
+            return {}
+
+        # Susun data detail tiap hotspot (FRP, Google Maps URL, keyakinan, lembaga)
+        hotspot_details: list[dict[str, Any]] = []
         provinces_set = set()
         agencies_set = set()
         satellites_set = set()
         frp_vals: list[float] = []
         has_high_conf = False
 
-        for h in new_hotspots:
+        for h, conf_cat in qualifying_hotspots:
+            try:
+                lat = float(h["latitude"])
+                lon = float(h["longitude"])
+            except (KeyError, ValueError, TypeError):
+                continue
+
+            frp_val: float | None = None
+            if h.get("frp") is not None:
+                try:
+                    frp_val = round(float(h["frp"]), 1)
+                    frp_vals.append(frp_val)
+                except (ValueError, TypeError):
+                    frp_val = None
+
+            if conf_cat == "Tinggi":
+                has_high_conf = True
+
             prov = (
                 (h.get("polygonMetadata") or {}).get("NAMA_PROV")
                 or h.get("provinceName")
@@ -111,6 +146,8 @@ class NotificationService:
             ).strip()
             if prov and prov != "—" and prov != "-":
                 provinces_set.add(prov)
+            else:
+                prov = "Indonesia"
 
             agency = (
                 h.get("agencyName")
@@ -120,37 +157,46 @@ class NotificationService:
             ).strip()
             if agency and agency != "—" and agency != "-":
                 agencies_set.add(agency)
+            else:
+                agency = "Areal Perhutanan Sosial"
 
             sat = str(h.get("satellite") or h.get("source") or "NASA").strip()
             if sat:
                 satellites_set.add(sat)
 
-            frp = h.get("frp")
-            if frp is not None:
-                try:
-                    frp_vals.append(float(frp))
-                except (ValueError, TypeError):
-                    pass
+            gmaps_url = f"https://www.google.com/maps?q={lat:.5f},{lon:.5f}"
 
-            conf = str(h.get("confidence") or "").lower()
-            if conf in ("h", "high", "tinggi") or (frp and float(frp) > 30):
-                has_high_conf = True
+            hotspot_details.append({
+                "latitude": round(lat, 5),
+                "longitude": round(lon, 5),
+                "frp": frp_val,
+                "confidence": conf_cat,  # "Tinggi" atau "Sedang"
+                "raw_confidence": str(h.get("confidence") or ""),
+                "agency_name": agency,
+                "province_name": prov,
+                "satellite": sat,
+                "google_maps_url": gmaps_url,
+            })
+
+        count = len(hotspot_details)
+        if count == 0:
+            return {}
 
         provinces = sorted(list(provinces_set))
         agencies = sorted(list(agencies_set))
         satellites = sorted(list(satellites_set))
         max_frp = max(frp_vals, default=0.0)
 
-        severity = "danger" if (has_high_conf or count >= 10) else "warning"
+        severity = "danger" if (has_high_conf or max_frp > 30 or count >= 10) else "warning"
         title = f"🔥 {count} Titik Panas Baru Terdeteksi"
 
         if provinces:
             prov_text = ", ".join(provinces[:3])
             if len(provinces) > 3:
                 prov_text += f" dan {len(provinces) - 3} provinsi lain"
-            message = f"Terdeteksi {count} titik panas baru di areal Perhutanan Sosial ({prov_text})."
+            message = f"Terdeteksi {count} titik panas (Keyakinan Sedang & Tinggi) di areal Perhutanan Sosial ({prov_text})."
         else:
-            message = f"Terdeteksi {count} titik panas baru di areal Perhutanan Sosial."
+            message = f"Terdeteksi {count} titik panas (Keyakinan Sedang & Tinggi) di areal Perhutanan Sosial."
 
         metadata = {
             "provinces": provinces,
@@ -158,6 +204,7 @@ class NotificationService:
             "satellites": satellites,
             "max_frp": round(max_frp, 1),
             "has_high_confidence": has_high_conf,
+            "hotspots": hotspot_details[:50],  # simpan rincian titik panas lengkap dengan frp & gmaps
             "synced_at": now.isoformat(),
         }
 
@@ -204,21 +251,40 @@ class NotificationService:
             except Exception:
                 wib_time = now.strftime("%Y-%m-%d %H:%M UTC")
 
+            # Susun daftar rincian per hotspot (maks 8 titik agar nyaman dibaca di layar HP)
+            item_lines: list[str] = []
+            for idx, item in enumerate(hotspot_details[:8], 1):
+                frp_text = f"{item['frp']} MW" if item['frp'] is not None else "—"
+                conf_badge = f"<b>{item['confidence']}</b>"
+                if item.get("raw_confidence"):
+                    conf_badge += f" ({html.escape(item['raw_confidence'])})"
+
+                item_lines.append(
+                    f"{idx}. 🏛️ <b>{html.escape(item['agency_name'])}</b> ({html.escape(item['province_name'])})\n"
+                    f"   • Keyakinan: {conf_badge}\n"
+                    f"   • FRP: <b>{frp_text}</b>\n"
+                    f"   • 📍 <a href=\"{item['google_maps_url']}\">Buka di Google Maps</a>"
+                )
+
+            if len(hotspot_details) > 8:
+                item_lines.append(f"<i>... dan {len(hotspot_details) - 8} titik panas lainnya.</i>")
+
+            hotspots_block = "\n\n".join(item_lines)
+
+            status_label = "TINGGI / BAHAYA" if severity == "danger" else "WASPADA"
             tg_text = (
-                "🔥 *PERINGATAN TITIK PANAS BARU (ETA SENEU)*\n"
+                "🔥 <b>PERINGATAN TITIK PANAS (HOTSPOT) KPS</b>\n"
                 "━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🚨 *Jumlah Hotspot*: {count} Titik Baru\n"
-                f"⚠️ *Tingkat Siaga*: {'TINGGI / BAHAYA' if severity == 'danger' else 'WASPADA'}\n"
-                f"📍 *Wilayah*: {', '.join(provinces) if provinces else 'Kawasan Hutan / KPS'}\n"
-                f"🏛️ *KPS / Lembaga*: {', '.join(agencies[:5]) if agencies else 'Areal PS'}\n"
-                f"🛰️ *Satelit*: {', '.join(satellites) if satellites else 'VIIRS / MODIS'}\n"
-                f"⚡ *FRP Maks*: {round(max_frp, 1)} MW\n"
-                f"📅 *Waktu Deteksi*: {wib_time}\n"
+                f"🚨 <b>Status</b>: {status_label} ({count} Titik Baru — Keyakinan Sedang & Tinggi)\n"
+                f"⚡ <b>FRP Maksimum</b>: {round(max_frp, 1)} MW\n"
+                f"📅 <b>Waktu Deteksi</b>: {wib_time}\n\n"
+                "<b>Rincian Titik Panas:</b>\n\n"
+                f"{hotspots_block}\n"
                 "━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🔗 Pantau Live: {self.settings.frontend_origin}"
+                f"🔗 <a href=\"{self.settings.frontend_origin}\">Pantau Live di Dashboard ETASENEU</a>"
             )
             # Jalankan kirim Telegram di background asyncio task agar tidak memblokir siklus sync
-            asyncio.create_task(self.send_telegram_alert(tg_text))
+            asyncio.create_task(self.send_telegram_alert(tg_text, parse_mode="HTML"))
 
         return notif
 
@@ -284,9 +350,10 @@ class NotificationService:
         notif = await self.notify_new_hotspots(mock_hotspots, sync_time=now)
         if bot_token and chat_id:
             await self.send_telegram_alert(
-                "🧪 *UJI COBA NOTIFIKASI ETASENEU*\n"
+                "🧪 <b>UJI COBA NOTIFIKASI ETASENEU</b>\n"
                 "Integrasi notifikasi Telegram telah berhasil dikonfigurasi!",
                 bot_token=bot_token,
                 chat_id=chat_id,
+                parse_mode="HTML",
             )
         return notif

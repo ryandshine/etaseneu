@@ -19,6 +19,17 @@ const mockNotifications: HotspotNotification[] = [
       agencies: ["KTH Tella Serasan"],
       satellites: ["NOAA-20"],
       max_frp: 35.5,
+      hotspots: [
+        {
+          latitude: 0.5123,
+          longitude: 101.4421,
+          frp: 35.5,
+          confidence: "Tinggi",
+          agency_name: "KTH Tella Serasan",
+          province_name: "Riau",
+          google_maps_url: "https://www.google.com/maps?q=0.51230,101.44210",
+        },
+      ],
     },
     created_at: "2026-09-18T10:00:00Z",
   },
@@ -68,6 +79,12 @@ describe("NotificationCenter Component", () => {
     expect(screen.getByText("🔥 3 Titik Panas Baru Terdeteksi")).toBeInTheDocument();
     expect(screen.getByText("+3 Titik Baru")).toBeInTheDocument();
 
+    // Verify FRP and Google Maps link inside notification center
+    expect(screen.getByText("Maps")).toBeInTheDocument();
+    const mapsLink = screen.getByTitle(/Buka titik koordinat di Google Maps/i);
+    expect(mapsLink).toHaveAttribute("href", "https://www.google.com/maps?q=0.51230,101.44210");
+    expect(screen.getByText("35.5 MW")).toBeInTheDocument();
+
     // Click "Lihat di Peta"
     const viewMapButtons = screen.getAllByText("Lihat di Peta");
     expect(viewMapButtons.length).toBeGreaterThan(0);
@@ -111,7 +128,7 @@ describe("NotificationCenter Component", () => {
 });
 
 describe("ToastNotification Component", () => {
-  it("renders toast alert and handles close and view map actions", () => {
+  it("renders toast alert, FRP badge, Google Maps link, and handles view map", () => {
     const onClose = vi.fn();
     const onViewMap = vi.fn();
 
@@ -128,6 +145,11 @@ describe("ToastNotification Component", () => {
     expect(
       screen.getByText(/Terdeteksi 3 titik panas baru di areal Perhutanan Sosial/i)
     ).toBeInTheDocument();
+    expect(screen.getByText("FRP: 35.5 MW")).toBeInTheDocument();
+
+    // Google Maps link in toast
+    const gmapsLink = screen.getByText("Google Maps").closest("a");
+    expect(gmapsLink).toHaveAttribute("href", "https://www.google.com/maps?q=0.51230,101.44210");
 
     // Click View Map
     const btn = screen.getByText("Lihat di Peta");

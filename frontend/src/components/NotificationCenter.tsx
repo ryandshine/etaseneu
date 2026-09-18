@@ -10,6 +10,8 @@ import {
   X,
   ExternalLink,
   ShieldCheck,
+  MapPin,
+  Zap,
 } from "lucide-react";
 import type { HotspotNotification } from "../types/api";
 import { formatDateTimeWIB } from "../lib/date";
@@ -447,6 +449,141 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                                 FRP: {notif.metadata.max_frp} MW
                               </span>
                             ) : null}
+                          </div>
+                        )}
+
+                        {/* Rincian Hotspot Confidence Sedang & Tinggi (FRP & Google Maps) */}
+                        {notif.metadata?.hotspots && notif.metadata.hotspots.length > 0 && (
+                          <div
+                            style={{
+                              marginTop: "0.35rem",
+                              marginBottom: "0.45rem",
+                              backgroundColor: "rgba(0, 0, 0, 0.3)",
+                              borderRadius: "6px",
+                              border: "1px solid rgba(255, 255, 255, 0.08)",
+                              padding: "0.4rem 0.5rem",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "0.35rem",
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize: "0.66rem",
+                                fontWeight: 700,
+                                color: "#E7E6C2",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                              }}
+                            >
+                              <span>Daftar Titik Panas ({notif.metadata.hotspots.length})</span>
+                              <span style={{ fontSize: "0.6rem", color: "rgba(255, 255, 255, 0.45)", fontWeight: 400 }}>
+                                Sedang / Tinggi
+                              </span>
+                            </div>
+
+                            {notif.metadata.hotspots.slice(0, 5).map((h, hIdx) => {
+                              const isHigh = h.confidence === "Tinggi";
+                              return (
+                                <div
+                                  key={`${h.latitude}-${h.longitude}-${hIdx}`}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    fontSize: "0.68rem",
+                                    padding: "0.25rem 0.4rem",
+                                    borderRadius: "4px",
+                                    backgroundColor: "rgba(255, 255, 255, 0.04)",
+                                    border: "1px solid rgba(255, 255, 255, 0.05)",
+                                    gap: "0.4rem",
+                                  }}
+                                >
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div
+                                      style={{
+                                        fontWeight: 600,
+                                        color: "#f3f4f6",
+                                        whiteSpace: "nowrap",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                      }}
+                                    >
+                                      {h.agency_name || "Areal PS"}
+                                    </div>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "0.3rem",
+                                        fontSize: "0.62rem",
+                                        color: "rgba(255, 255, 255, 0.55)",
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          color: isHigh ? "#fca5a5" : "#fcd34d",
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        {h.confidence}
+                                      </span>
+                                      <span>•</span>
+                                      <span style={{ color: "#fbbf24", fontWeight: 600 }}>
+                                        {h.frp !== null ? `${h.frp} MW` : "FRP —"}
+                                      </span>
+                                      {h.province_name && (
+                                        <>
+                                          <span>•</span>
+                                          <span>{h.province_name}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <a
+                                    href={h.google_maps_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    title="Buka titik koordinat di Google Maps"
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "0.25rem",
+                                      fontSize: "0.65rem",
+                                      fontWeight: 600,
+                                      padding: "0.2rem 0.45rem",
+                                      borderRadius: "4px",
+                                      backgroundColor: "rgba(59, 130, 246, 0.2)",
+                                      color: "#93c5fd",
+                                      border: "1px solid rgba(59, 130, 246, 0.35)",
+                                      textDecoration: "none",
+                                      flexShrink: 0,
+                                      transition: "all 0.15s ease",
+                                    }}
+                                  >
+                                    <MapPin size={11} />
+                                    <span>Maps</span>
+                                  </a>
+                                </div>
+                              );
+                            })}
+
+                            {notif.metadata.hotspots.length > 5 && (
+                              <div
+                                style={{
+                                  fontSize: "0.62rem",
+                                  color: "rgba(255, 255, 255, 0.45)",
+                                  textAlign: "center",
+                                  fontStyle: "italic",
+                                  paddingTop: "0.15rem",
+                                }}
+                              >
+                                +{notif.metadata.hotspots.length - 5} titik lainnya dapat dilihat di peta
+                              </div>
+                            )}
                           </div>
                         )}
 

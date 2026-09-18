@@ -1,5 +1,5 @@
 import React from "react";
-import { Flame, X, ExternalLink } from "lucide-react";
+import { Flame, X, ExternalLink, MapPin } from "lucide-react";
 import type { HotspotNotification } from "../types/api";
 
 interface ToastNotificationProps {
@@ -14,6 +14,8 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({
   onViewMap,
 }) => {
   const isDanger = notification.severity === "danger";
+  const firstHotspot = notification.metadata?.hotspots?.[0];
+  const maxFrp = notification.metadata?.max_frp ?? firstHotspot?.frp;
 
   return (
     <div
@@ -90,39 +92,86 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({
             style={{
               fontSize: "0.78rem",
               color: "rgba(255, 255, 255, 0.85)",
-              margin: "0.35rem 0 0.6rem 0",
+              margin: "0.35rem 0 0.5rem 0",
               lineHeight: 1.35,
             }}
           >
             {notification.message}
           </p>
 
-          {onViewMap && (
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onViewMap();
-              }}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.35rem",
-                fontSize: "0.74rem",
-                fontWeight: 600,
-                padding: "0.3rem 0.65rem",
-                borderRadius: "6px",
-                backgroundColor: isDanger ? "#dc2626" : "#d97706",
-                color: "#ffffff",
-                border: "none",
-                cursor: "pointer",
-                transition: "background-color 0.15s ease",
-              }}
-            >
-              <span>Lihat di Peta</span>
-              <ExternalLink size={12} />
-            </button>
+          {/* Badge FRP jika ada */}
+          {maxFrp !== undefined && maxFrp !== null && (
+            <div style={{ marginBottom: "0.55rem" }}>
+              <span
+                style={{
+                  fontSize: "0.68rem",
+                  fontWeight: 600,
+                  backgroundColor: "rgba(245, 158, 11, 0.15)",
+                  color: "#fcd34d",
+                  border: "1px solid rgba(245, 158, 11, 0.3)",
+                  padding: "0.15rem 0.4rem",
+                  borderRadius: "4px",
+                }}
+              >
+                FRP: {maxFrp} MW
+              </span>
+            </div>
           )}
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+            {onViewMap && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onViewMap();
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.35rem",
+                  fontSize: "0.74rem",
+                  fontWeight: 600,
+                  padding: "0.3rem 0.65rem",
+                  borderRadius: "6px",
+                  backgroundColor: isDanger ? "#dc2626" : "#d97706",
+                  color: "#ffffff",
+                  border: "none",
+                  cursor: "pointer",
+                  transition: "background-color 0.15s ease",
+                }}
+              >
+                <span>Lihat di Peta</span>
+                <ExternalLink size={12} />
+              </button>
+            )}
+
+            {firstHotspot && (
+              <a
+                href={firstHotspot.google_maps_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={onClose}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.25rem",
+                  fontSize: "0.74rem",
+                  fontWeight: 600,
+                  padding: "0.3rem 0.6rem",
+                  borderRadius: "6px",
+                  backgroundColor: "rgba(59, 130, 246, 0.2)",
+                  color: "#93c5fd",
+                  border: "1px solid rgba(59, 130, 246, 0.4)",
+                  textDecoration: "none",
+                  transition: "background-color 0.15s ease",
+                }}
+              >
+                <MapPin size={12} />
+                <span>Google Maps</span>
+              </a>
+            )}
+          </div>
         </div>
       </div>
     </div>
