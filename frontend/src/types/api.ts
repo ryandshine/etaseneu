@@ -407,9 +407,9 @@ export interface ApiClient {
     cacheHistoryStatus: string;
     cacheHistoryPrewarm: string;
     geojsonStatus: string;
-    storageStatus: string;
     schedulerMetrics: string;
     schedulerSync: string;
+    notifications: string;
   };
   getHealth: () => Promise<HealthResponse>;
   getLayers: (view?: "preview" | "full") => Promise<LayerListResponse>;
@@ -429,6 +429,12 @@ export interface ApiClient {
   getStorageStatus: () => Promise<StorageStatusResponse>;
   getSchedulerMetrics: () => Promise<SchedulerMetricsResponse>;
   triggerManualSync: (adminKey?: string | null, authToken?: string | null) => Promise<ManualSyncResponse>;
+  getNotifications: (limit?: number) => Promise<NotificationListResponse>;
+  triggerTestNotification: (
+    payload?: { bot_token?: string; chat_id?: string },
+    adminKey?: string | null,
+    authToken?: string | null
+  ) => Promise<{ success: boolean; notification: HotspotNotification; message: string }>;
   getPolygonSurroundingHotspots: (
     polygonId: number,
     params?: {
@@ -438,6 +444,30 @@ export interface ApiClient {
       satellites?: string[];
     }
   ) => Promise<SurroundingHotspotResponse>;
+}
+
+export interface HotspotNotification {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  hotspot_count: number;
+  severity: "info" | "warning" | "danger";
+  metadata?: {
+    provinces?: string[];
+    agencies?: string[];
+    satellites?: string[];
+    max_frp?: number;
+    has_high_confidence?: boolean;
+    synced_at?: string;
+    schedule?: string;
+  };
+  created_at: string;
+}
+
+export interface NotificationListResponse {
+  total: number;
+  notifications: HotspotNotification[];
 }
 
 export interface KpsCatalogItem {

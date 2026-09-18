@@ -20,6 +20,7 @@ from app.api.weather import router as weather_router
 from app.api.early_warning import router as early_warning_router
 from app.api.fire_spread import router as fire_spread_router
 from app.api.kps_catalog import router as kps_catalog_router
+from app.api.notifications import router as notifications_router
 
 
 # Gate baca opsional (flag API_REQUIRE_AUTH). Dipasang di router BACA saja.
@@ -48,6 +49,7 @@ router.include_router(burned_area_router, dependencies=_read_gate)
 router.include_router(early_warning_router, dependencies=_read_gate)
 router.include_router(land_cover_router, dependencies=_read_gate)
 router.include_router(fire_spread_router, dependencies=_read_gate)
+router.include_router(notifications_router, dependencies=_read_gate)
 # TIDAK dipasang _read_gate: ubinnya dimuat Leaflet lewat <img src=...> biasa
 # (bukan authFetch), jadi tidak bisa membawa header Authorization Bearer --
 # kalau digerbang, gambar peta ini akan 401 terus-menerus saat

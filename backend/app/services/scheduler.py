@@ -183,19 +183,27 @@ def _hotspot_fingerprint(hotspot: dict) -> str:
     )
 
 
-def _count_new_hotspots(hotspots: list[dict]) -> int:
+def _extract_new_hotspots(hotspots: list[dict]) -> tuple[int, list[dict]]:
     global _last_hotspot_fingerprints, _last_new_hotspot_count
 
-    fingerprints = {_hotspot_fingerprint(hotspot) for hotspot in hotspots}
+    hotspot_by_fp = {_hotspot_fingerprint(hotspot): hotspot for hotspot in hotspots}
+    fingerprints = set(hotspot_by_fp.keys())
     if _last_hotspot_fingerprints is None:
         _last_hotspot_fingerprints = fingerprints
         _last_new_hotspot_count = 0
-        return 0
+        return 0, []
 
-    new_count = len(fingerprints - _last_hotspot_fingerprints)
+    new_fps = fingerprints - _last_hotspot_fingerprints
+    new_items = [hotspot_by_fp[fp] for fp in new_fps if fp in hotspot_by_fp]
+    new_count = len(new_items)
     _last_hotspot_fingerprints = fingerprints
     _last_new_hotspot_count = new_count
-    return new_count
+    return new_count, new_items
+
+
+def _count_new_hotspots(hotspots: list[dict]) -> int:
+    count, _ = _extract_new_hotspots(hotspots)
+    return count
 
 
 def get_scheduler_metrics_snapshot() -> dict[str, object]:
@@ -290,7 +298,8 @@ async def _run_sync_cycle(service: HotspotService) -> dict:
     try:
         result = await service.fetch_filtered_hotspots(query, bypass_cache=True)
         count = result.get("count", 0)
-        new_hotspot_count = _count_new_hotspots(list(result.get("hotspots", [])))
+        hotspots_list = list(result.get("hotspots", []))
+        new_hotspot_count, new_hotspots = _extract_new_hotspots(hotspots_list)
         logger.info("SCHEDULER: Sync selesai — %d titik hotspot ditemukan/diperbarui.", count)
         
         if service.postgres_store.enabled:
@@ -309,6 +318,14 @@ async def _run_sync_cycle(service: HotspotService) -> dict:
                 )
             except Exception as e:
                 logger.error("SCHEDULER: Gagal membersihkan cache API — %s", e)
+
+            try:
+                from app.services.notification_service import NotificationService
+
+                notif_service = NotificationService(store=service.postgres_store)
+                await notif_service.notify_new_hotspots(new_hotspots, sync_time=now)
+            except Exception as e:
+                logger.error("SCHEDULER: Gagal membuat notifikasi hotspot baru — %s", e)
 
         summary = {
             "success": True,

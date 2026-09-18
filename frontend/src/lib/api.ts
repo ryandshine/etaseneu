@@ -8,10 +8,12 @@ import type {
   GeoJsonStatusResponse,
   HotspotClusterQueryParams,
   HotspotCollectionResponse,
+  HotspotNotification,
   HotspotQueryParams,
   LayerFeature,
   LayerListResponse,
   ManualSyncResponse,
+  NotificationListResponse,
   SchedulerMetricsResponse,
   StatsResponse,
   StorageStatusResponse,
@@ -151,7 +153,8 @@ export async function downloadWithAuth(url: string, filename: string, init?: Req
 async function fetchJson<T>(
   path: string,
   method = "GET",
-  extraHeaders?: Record<string, string>
+  extraHeaders?: Record<string, string>,
+  body?: string
 ): Promise<T> {
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -162,7 +165,7 @@ async function fetchJson<T>(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(path, { method, headers });
+  const response = await fetch(path, { method, headers, body });
 
   if (response.status === 401) {
     // Sesi habis / token invalid -- paksa kembali ke halaman login.
@@ -218,7 +221,8 @@ export function createApiClient(baseUrl = "/api"): ApiClient {
     geojsonStatus: `${baseUrl}/geojson/status`,
     storageStatus: `${baseUrl}/storage/status`,
     schedulerMetrics: `${baseUrl}/scheduler/metrics`,
-    schedulerSync: `${baseUrl}/scheduler/sync`
+    schedulerSync: `${baseUrl}/scheduler/sync`,
+    notifications: `${baseUrl}/notifications`
   } as const;
 
   return {
@@ -259,6 +263,18 @@ export function createApiClient(baseUrl = "/api"): ApiClient {
     getSchedulerMetrics: () => fetchJson<SchedulerMetricsResponse>(endpoints.schedulerMetrics),
     triggerManualSync: (adminKey, authToken) =>
       fetchJson<ManualSyncResponse>(endpoints.schedulerSync, "POST", adminHeaders(adminKey, authToken)),
+    getNotifications: (limit = 50) =>
+      fetchJson<NotificationListResponse>(withQuery(endpoints.notifications, { limit })),
+    triggerTestNotification: (payload, adminKey, authToken) =>
+      fetchJson<{ success: boolean; notification: HotspotNotification; message: string }>(
+        `${endpoints.notifications}/test`,
+        "POST",
+        {
+          ...adminHeaders(adminKey, authToken),
+          "Content-Type": "application/json",
+        },
+        payload ? JSON.stringify(payload) : undefined
+      ),
     getPolygonSurroundingHotspots: (polygonId, params) => {
       const queryRecord: Record<string, QueryValue> = {};
       if (params?.buffer_km !== undefined) queryRecord.buffer_km = params.buffer_km;

@@ -85,6 +85,9 @@ class Settings(BaseSettings):
     # dan Lahan) sebelum memicu /api/burned-area/refresh-klhk -- sama pola
     # dengan SHP_DIR, bukan upload lewat HTTP (filenya bisa ratusan MB).
     klhk_burned_area_dir: str = "../burned_area_klhk"
+    # Notifikasi Telegram Bot untuk peringatan hotspot baru (opsional)
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,

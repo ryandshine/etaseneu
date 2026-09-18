@@ -46,6 +46,7 @@ type SidebarNavProps = {
    * bergantung pada tipe-tipe filter.
    */
   filterSlot?: React.ReactNode;
+  notificationSlot?: React.ReactNode;
 };
 
 function NavButton({
@@ -93,15 +94,17 @@ export function SidebarNav({
   hasLatestHotspot,
   isAdmin,
   mobileOpen,
-  filterSlot
+  filterSlot,
+  notificationSlot
 }: SidebarNavProps) {
   return (
     <aside className={`side-rail${mobileOpen ? " mobile-open" : ""}`}>
-      <div className="side-brand">
+      <div className="side-brand" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div className="side-brand-name">ETAseneu</div>
           <div className="side-brand-sub">KPS Hotspot Monitoring</div>
         </div>
+        {notificationSlot}
       </div>
 
       {/* Navigasi dan filter berbagi satu area yang bisa digulir, sementara

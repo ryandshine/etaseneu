@@ -1,7 +1,15 @@
 import { useState, useEffect, useRef } from "react";
+import { Bell, Volume2 } from "lucide-react";
 import type { AppSession, GeoJsonStatusResponse } from "../types/api";
 import { formatDateTimeWIB } from "../lib/date";
 import { UserManagementPanel } from "./UserManagementPanel";
+import { createApiClient } from "../lib/api";
+import { playHotspotAlertSound } from "../lib/audioAlert";
+import {
+  getNotificationPermission,
+  requestBrowserNotificationPermission,
+  showBrowserHotspotNotification,
+} from "../lib/browserNotification";
 
 type SettingsPanelProps = {
   onRefreshLayers: () => void;
@@ -36,6 +44,40 @@ export function SettingsPanel({ onRefreshLayers, adminKey, session, onLogout }: 
   type LayerAction = "delete" | "deactivate";
   const [pendingAction, setPendingAction] = useState<{ fileName: string; action: LayerAction } | null>(null);
   const [processingFile, setProcessingFile] = useState<string | null>(null);
+
+  const [notifPerm, setNotifPerm] = useState<NotificationPermission>(getNotificationPermission);
+  const [tgBotToken, setTgBotToken] = useState("");
+  const [tgChatId, setTgChatId] = useState("");
+  const [sendingTestNotif, setSendingTestNotif] = useState(false);
+  const [testFeedback, setTestFeedback] = useState<{ tone: "success" | "danger"; msg: string } | null>(null);
+
+  const handleEnableDesktopNotif = async () => {
+    const perm = await requestBrowserNotificationPermission();
+    setNotifPerm(perm);
+    if (perm === "granted") {
+      showBrowserHotspotNotification("Uji Notifikasi Desktop ETASENEU", {
+        body: "Notifikasi desktop berhasil diaktifkan dan siap menerima peringatan hotspot baru.",
+      });
+    }
+  };
+
+  const handleTriggerTestNotif = async () => {
+    setSendingTestNotif(true);
+    setTestFeedback(null);
+    try {
+      const api = createApiClient();
+      const payload: { bot_token?: string; chat_id?: string } = {};
+      if (tgBotToken.trim()) payload.bot_token = tgBotToken.trim();
+      if (tgChatId.trim()) payload.chat_id = tgChatId.trim();
+      const res = await api.triggerTestNotification(payload, adminKey, session?.token);
+      setTestFeedback({ tone: "success", msg: res.message || "Notifikasi uji coba berhasil dibuat!" });
+      playHotspotAlertSound();
+    } catch {
+      setTestFeedback({ tone: "danger", msg: "Gagal mengirim notifikasi uji coba. Pastikan sesi admin aktif." });
+    } finally {
+      setSendingTestNotif(false);
+    }
+  };
 
   const fetchStatus = async () => {
     setLoadingStatus(true);
@@ -627,6 +669,161 @@ export function SettingsPanel({ onRefreshLayers, adminKey, session, onLogout }: 
           >
             {refreshingKawasan ? "Menyegarkan… (± 20 detik)" : "Segarkan Atribusi Kawasan Hutan"}
           </button>
+        </div>
+
+        <div style={{ background: "rgba(17, 24, 39, 0.5)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "12px", padding: "2rem" }}>
+          <h2 style={{ fontSize: "1.25rem", color: "#fff", fontWeight: "600", margin: "0 0 0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <Bell size={20} style={{ color: "#f59e0b" }} />
+            Notifikasi Titik Panas &amp; Integrasi Siaga
+          </h2>
+          <p style={{ fontSize: "0.85rem", color: "#9ca3af", margin: "0 0 1.25rem", lineHeight: 1.6 }}>
+            Kelola peringatan dini saat ada titik panas baru yang beririsan dengan Perhutanan Sosial.
+            Mendukung notifikasi desktop peramban, alarm audio, serta pengiriman pesan otomatis ke grup/kanal Telegram.
+          </p>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
+            {/* Kartu Suara Alarm */}
+            <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "8px", padding: "1rem" }}>
+              <div style={{ fontWeight: 600, color: "#E7E6C2", fontSize: "0.85rem", marginBottom: "0.3rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <Volume2 size={16} style={{ color: "#10b981" }} />
+                Alarm Audio Peramban
+              </div>
+              <p style={{ fontSize: "0.78rem", color: "#9ca3af", margin: "0 0 0.8rem 0" }}>
+                Memutar bunyi harmonis saat titik panas baru terdeteksi di peramban.
+              </p>
+              <button
+                type="button"
+                onClick={() => playHotspotAlertSound()}
+                style={{
+                  background: "rgba(16, 185, 129, 0.15)",
+                  border: "1px solid rgba(16, 185, 129, 0.4)",
+                  color: "#34d399",
+                  padding: "0.35rem 0.75rem",
+                  borderRadius: "6px",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Uji Coba Bunyi Alarm
+              </button>
+            </div>
+
+            {/* Kartu Notifikasi Desktop */}
+            <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "8px", padding: "1rem" }}>
+              <div style={{ fontWeight: 600, color: "#E7E6C2", fontSize: "0.85rem", marginBottom: "0.3rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <Bell size={16} style={{ color: "#3b82f6" }} />
+                Notifikasi Push Desktop
+              </div>
+              <p style={{ fontSize: "0.78rem", color: "#9ca3af", margin: "0 0 0.8rem 0" }}>
+                Status Izin: <strong style={{ color: notifPerm === "granted" ? "#34d399" : "#f87171" }}>
+                  {notifPerm === "granted" ? "Diizinkan" : notifPerm === "denied" ? "Diblokir" : "Belum Diaktifkan"}
+                </strong>
+              </p>
+              <button
+                type="button"
+                onClick={handleEnableDesktopNotif}
+                style={{
+                  background: "rgba(59, 130, 246, 0.15)",
+                  border: "1px solid rgba(59, 130, 246, 0.4)",
+                  color: "#60a5fa",
+                  padding: "0.35rem 0.75rem",
+                  borderRadius: "6px",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                {notifPerm === "granted" ? "Kirim Notifikasi Uji Desktop" : "Aktifkan Notifikasi Desktop"}
+              </button>
+            </div>
+          </div>
+
+          {/* Form Uji Coba Telegram / Notifikasi Sistem */}
+          <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "8px", padding: "1.25rem" }}>
+            <h3 style={{ fontSize: "0.95rem", color: "#fff", fontWeight: 600, margin: "0 0 0.4rem" }}>
+              Uji Coba Notifikasi Sistem &amp; Integrasi Telegram
+            </h3>
+            <p style={{ fontSize: "0.78rem", color: "#9ca3af", margin: "0 0 1rem", lineHeight: 1.5 }}>
+              Picu simulasi notifikasi titik panas baru ke seluruh sistem dan uji kirim pesan ke Telegram Bot.
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.72rem", color: "#9ca3af", textTransform: "uppercase", marginBottom: "0.3rem" }}>
+                  Bot Token Telegram (Opsional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Contoh: 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+                  value={tgBotToken}
+                  onChange={(e) => setTgBotToken(e.target.value)}
+                  style={{
+                    width: "100%",
+                    background: "rgba(0, 0, 0, 0.3)",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
+                    color: "#fff",
+                    padding: "0.45rem 0.65rem",
+                    borderRadius: "6px",
+                    fontSize: "0.8rem",
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.72rem", color: "#9ca3af", textTransform: "uppercase", marginBottom: "0.3rem" }}>
+                  Chat ID / Group ID Telegram (Opsional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Contoh: -100123456789 atau @channel_username"
+                  value={tgChatId}
+                  onChange={(e) => setTgChatId(e.target.value)}
+                  style={{
+                    width: "100%",
+                    background: "rgba(0, 0, 0, 0.3)",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
+                    color: "#fff",
+                    padding: "0.45rem 0.65rem",
+                    borderRadius: "6px",
+                    fontSize: "0.8rem",
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <button
+                type="button"
+                onClick={handleTriggerTestNotif}
+                disabled={sendingTestNotif}
+                style={{
+                  background: sendingTestNotif ? "rgba(255,255,255,0.06)" : "#d97706",
+                  border: "none",
+                  color: "#fff",
+                  padding: "0.5rem 1rem",
+                  borderRadius: "6px",
+                  fontSize: "0.8rem",
+                  fontWeight: 600,
+                  cursor: sendingTestNotif ? "progress" : "pointer",
+                }}
+              >
+                {sendingTestNotif ? "Mengirim Uji Coba..." : "Kirim Notifikasi Uji Coba"}
+              </button>
+
+              {testFeedback && (
+                <span
+                  style={{
+                    fontSize: "0.78rem",
+                    color: testFeedback.tone === "success" ? "#34d399" : "#f87171",
+                    fontWeight: 500,
+                  }}
+                >
+                  {testFeedback.msg}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
 
         {session?.role === "admin" ? (

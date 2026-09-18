@@ -6,6 +6,9 @@ import { FilterPanel } from "./components/FilterPanel";
 import { LoginPage } from "./components/LoginPage";
 import { PasswordGateModal } from "./components/PasswordGateModal";
 import { SidebarNav } from "./components/SidebarNav";
+import { NotificationCenter } from "./components/NotificationCenter";
+import { ToastNotification } from "./components/ToastNotification";
+import { useNotifications } from "./hooks/useNotifications";
 import { useDashboardData } from "./hooks/useDashboardData";
 import { setAuthToken, setUnauthorizedHandler } from "./lib/api";
 import { clearDashboardCache } from "./lib/dashboardPersistence";
@@ -824,6 +827,40 @@ export default function App() {
     return `${hours} jam ${mins} menit`;
   }, [latestHotspot, clockSec]);
 
+  const handleNavigateToMap = useCallback(() => {
+    setTimePreset("24h");
+    commitViewChange("map");
+  }, []);
+
+  const {
+    notifications,
+    unreadCount,
+    readIds,
+    toastNotification,
+    soundEnabled,
+    desktopEnabled,
+    markAsRead,
+    markAllAsRead,
+    toggleSound,
+    toggleDesktopNotification,
+    dismissToast,
+  } = useNotifications(handleNavigateToMap, Boolean(session));
+
+  const notificationElement = (
+    <NotificationCenter
+      notifications={notifications}
+      unreadCount={unreadCount}
+      readIds={readIds}
+      soundEnabled={soundEnabled}
+      desktopEnabled={desktopEnabled}
+      onMarkAsRead={markAsRead}
+      onMarkAllAsRead={markAllAsRead}
+      onToggleSound={toggleSound}
+      onToggleDesktop={toggleDesktopNotification}
+      onNavigateToMap={handleNavigateToMap}
+    />
+  );
+
   if (restoringSession) {
     return (
       <ViewLoader
@@ -840,6 +877,14 @@ export default function App() {
 
   return (
     <div className="app-frame grid-lines">
+      {toastNotification && (
+        <ToastNotification
+          notification={toastNotification}
+          onClose={dismissToast}
+          onViewMap={handleNavigateToMap}
+        />
+      )}
+
       {/* Mobile Hamburger Floating Button:
           Hanya muncul jika drawer navigasi terbuka (tombol 'X' untuk menutup),
           atau saat berada di kanvas Live Map (full-screen canvas tanpa top bar). */}
@@ -888,6 +933,7 @@ export default function App() {
         hasLatestHotspot={!!latestHotspot}
         isAdmin={session?.role === "admin"}
         mobileOpen={mobileMenuOpen}
+        notificationSlot={notificationElement}
         filterSlot={activeView === "map" ? (
           <FilterPanel
             selectedSatellites={selectedSatellites}
@@ -936,7 +982,8 @@ export default function App() {
               </span>
             </div>
           </div>
-          <div className="mobile-app-header__right">
+          <div className="mobile-app-header__right" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            {notificationElement}
             <span
               className={`mobile-app-header__status-badge ${healthStatus === "normal" ? "is-ok" : "is-warn"}`}
               title={healthLabel}
@@ -974,15 +1021,18 @@ export default function App() {
               aria-hidden={!showPanels}
             >
                 
-                <button
-                  type="button"
-                  className="stats-sheet-toggle"
-                  onClick={() => setStatsOpen((open) => !open)}
-                  aria-expanded={statsOpen}
-                  aria-controls="panel-statistik-hotspot"
-                >
-                  {statsOpen ? "Tutup" : `${(selectedWilker ? visibleHotspots.length : stats.hotspotCount).toLocaleString()} hotspot`}
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', pointerEvents: 'auto' }}>
+                  {notificationElement}
+                  <button
+                    type="button"
+                    className="stats-sheet-toggle"
+                    onClick={() => setStatsOpen((open) => !open)}
+                    aria-expanded={statsOpen}
+                    aria-controls="panel-statistik-hotspot"
+                  >
+                    {statsOpen ? "Tutup" : `${(selectedWilker ? visibleHotspots.length : stats.hotspotCount).toLocaleString()} hotspot`}
+                  </button>
+                </div>
 
                 <aside
                   id="panel-statistik-hotspot"
