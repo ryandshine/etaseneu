@@ -130,6 +130,15 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("DAILY_REPORT_SCHEDULER: Dinonaktifkan (DAILY_REPORT_TELEGRAM_ENABLED=false).")
 
+    telegram_bot_task = None
+    telegram_bot_service = None
+    if settings.telegram_bot_interactive_enabled and settings.telegram_bot_token:
+        from app.services.telegram_bot_service import TelegramBotService
+
+        telegram_bot_service = TelegramBotService(settings=settings)
+        telegram_bot_task = telegram_bot_service.start_polling()
+        logger.info("TELEGRAM_BOT: Bot interaktif publik (long-polling) aktif.")
+
     yield  # aplikasi berjalan di sini
 
     if scheduler_start_handle is not None and scheduler_task_holder is not None:
@@ -165,6 +174,15 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("DAILY_REPORT_SCHEDULER: Dihentikan.")
+
+    if telegram_bot_service is not None:
+        telegram_bot_service.stop_polling()
+        if telegram_bot_task is not None:
+            try:
+                await telegram_bot_task
+            except asyncio.CancelledError:
+                pass
+        logger.info("TELEGRAM_BOT: Bot interaktif dihentikan.")
 
 
 def create_app() -> FastAPI:

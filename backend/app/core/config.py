@@ -92,6 +92,8 @@ class Settings(BaseSettings):
     daily_report_telegram_enabled: bool = True
     daily_report_fixed_hour: int = 7
     daily_report_timezone: str = "Asia/Jakarta"
+    # Layanan bot Telegram interaktif dua arah (menjawab chat publik /start, /status, /laporan)
+    telegram_bot_interactive_enabled: bool = True
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
