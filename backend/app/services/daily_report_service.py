@@ -381,7 +381,7 @@ class DailyReportService:
             try:
                 with self.store.connection() as conn:
                     with conn.cursor() as cur:
-                        # 1. Hotspot 24 jam hari ini
+                        # 1. Hotspot 24 jam hari ini - KHUSUS DI DALAM POLIGON KPS
                         cur.execute(
                             """
                             SELECT 
@@ -393,20 +393,22 @@ class DailyReportService:
                                 EXTRACT(HOUR FROM h.detected_at AT TIME ZONE 'Asia/Jakarta')::int as hr
                             FROM hotspot_observations h
                             WHERE h.detected_at >= %s AND h.detected_at < %s
+                              AND (h.agency_name NOT LIKE 'Luar Kawasan%%' AND COALESCE((h.raw_payload->>'is_perimeter')::boolean, false) = false)
                             ORDER BY (h.raw_payload->>'frp')::float DESC NULLS LAST, h.detected_at DESC;
                             """,
                             (start_time, end_time),
                         )
                         raw_rows = [dict(r) for r in cur.fetchall()]
 
-                        # 2. Statistik hari kemarin (H-1)
+                        # 2. Statistik hari kemarin (H-1) - KHUSUS DI DALAM POLIGON KPS
                         cur.execute(
                             """
                             SELECT 
                                 COUNT(*) as total,
                                 COUNT(*) FILTER (WHERE confidence IN ('high', 'h') OR (confidence ~ '^[0-9]+$' AND confidence::int > 80)) as high_count
                             FROM hotspot_observations
-                            WHERE detected_at >= %s AND detected_at < %s;
+                            WHERE detected_at >= %s AND detected_at < %s
+                              AND (agency_name NOT LIKE 'Luar Kawasan%%' AND COALESCE((raw_payload->>'is_perimeter')::boolean, false) = false);
                             """,
                             (start_time_y, end_time_y),
                         )
@@ -415,7 +417,7 @@ class DailyReportService:
                             yesterday_total = int(y_row["total"] or 0)
                             yesterday_high = int(y_row["high_count"] or 0)
 
-                        # 3. Tren 7 hari terakhir
+                        # 3. Tren 7 hari terakhir - KHUSUS DI DALAM POLIGON KPS
                         cur.execute(
                             """
                             SELECT 
@@ -423,6 +425,7 @@ class DailyReportService:
                                 COUNT(*) as total
                             FROM hotspot_observations
                             WHERE detected_at >= %s AND detected_at < %s
+                              AND (agency_name NOT LIKE 'Luar Kawasan%%' AND COALESCE((raw_payload->>'is_perimeter')::boolean, false) = false)
                             GROUP BY day_date
                             ORDER BY day_date;
                             """,
@@ -818,7 +821,7 @@ class DailyReportService:
         p_tit = tf_cov.add_paragraph()
         p_tit.space_after = Pt(8)
         r_tit = p_tit.add_run()
-        r_tit.text = "LAPORAN HARIAN PEMANTAUAN TITIK PANAS (HOTSPOT)"
+        r_tit.text = "LAPORAN HARIAN PEMANTAUAN TITIK PANAS (HOTSPOT) AREAL KPS"
         r_tit.font.name = FONT_FAMILY
         r_tit.font.size = Pt(28)
         r_tit.font.bold = True
@@ -827,7 +830,7 @@ class DailyReportService:
         p_sub = tf_cov.add_paragraph()
         p_sub.space_after = Pt(16)
         r_sub = p_sub.add_run()
-        r_sub.text = "Dashboard Pengambilan Keputusan Satgas Dalkarhutla & Balai Perhutanan Sosial"
+        r_sub.text = "Khusus Titik Panas di Dalam Poligon Perizinan Perhutanan Sosial (KPS)"
         r_sub.font.name = FONT_FAMILY
         r_sub.font.size = Pt(16)
         r_sub.font.color.rgb = SKY
@@ -860,7 +863,7 @@ class DailyReportService:
         r_m1 = p_m1.add_run()
         r_m1.text = (
             f"📅 Periode Data: {data.get('time_window_str', '')}  ·  "
-            f"Total: {data.get('total_hotspots', 0):,} Titik (vs {data.get('yesterday_total', 0):,} H-1)".replace(",", ".")
+            f"Total: {data.get('total_hotspots', 0):,} Titik di Dalam Poligon KPS (vs {data.get('yesterday_total', 0):,} H-1)".replace(",", ".")
         )
         r_m1.font.name = FONT_FAMILY
         r_m1.font.size = Pt(11)
@@ -913,7 +916,7 @@ class DailyReportService:
 
         kpis = [
             (
-                "TOTAL HOTSPOT (24 JAM)",
+                "HOTSPOT DALAM KPS (24 JAM)",
                 f"{data.get('total_hotspots', 0):,}".replace(",", "."),
                 f"Kemarin: {data.get('yesterday_total', 0):,} | {data.get('trend_icon', '➡️')} {data.get('delta_pct', 0.0):+.1f}%",
                 NAVY,

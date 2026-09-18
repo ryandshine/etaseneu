@@ -99,17 +99,29 @@ class NotificationService:
 
         now = sync_time or datetime.now(timezone.utc)
 
-        # Saring HANYA titik panas dengan confidence Sedang (medium/nominal) dan Tinggi (high)
+        # Saring HANYA titik panas yang berada DI DALAM poligon KPS (bukan buffer perimeter)
+        # serta berkeyakinan Sedang (medium/nominal) dan Tinggi (high)
         qualifying_hotspots: list[tuple[dict, str]] = []
         for h in new_hotspots:
+            raw_payload = h.get("raw_payload") or {}
+            is_perimeter = (
+                h.get("is_perimeter") is True
+                or raw_payload.get("is_perimeter") is True
+                or str(raw_payload.get("is_perimeter")).lower() == "true"
+                or str(h.get("layer_id")) == "perimeter_threat"
+                or str(h.get("layer_key")) == "perimeter_threat"
+                or str(h.get("agency_name") or "").startswith("Luar Kawasan")
+            )
+            if is_perimeter:
+                continue
+
             cat = confidence_category(h)
             if cat in ("Tinggi", "Sedang"):
                 qualifying_hotspots.append((h, cat))
 
         if not qualifying_hotspots:
             logger.info(
-                "Semua %d titik panas baru terdeteksi berkeyakinan Rendah (low). Notifikasi disaring/dilewati.",
-                len(new_hotspots),
+                "Tidak ada titik panas baru di dalam poligon KPS berkategori Sedang/Tinggi. Notifikasi dilewati.",
             )
             return {}
 
