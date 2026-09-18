@@ -86,8 +86,8 @@ class Settings(BaseSettings):
     # dengan SHP_DIR, bukan upload lewat HTTP (filenya bisa ratusan MB).
     klhk_burned_area_dir: str = "../burned_area_klhk"
     # Notifikasi Telegram Bot untuk peringatan hotspot baru (opsional)
-    telegram_bot_token: str = ""
-    telegram_chat_id: str = ""
+    telegram_bot_token: str = "8938634389:AAGMUkRlcFPB_eYVQOdp_TnGsTQO-fVBCs8"
+    telegram_chat_id: str = "5718551848"
     # Laporan Harian Paparan PPTX otomatis via Telegram (pukul 07:00 WIB)
     daily_report_telegram_enabled: bool = True
     daily_report_fixed_hour: int = 7
