@@ -1,7 +1,10 @@
 """Layanan pembuatan dan pengiriman Laporan Harian Pemantauan Titik Panas (Hotspot) KPS (.pptx).
 
-Menghasilkan paparan resmi 16:9 berstandar Kementerian Kehutanan & ETASENEU,
-dan mengirimkannya secara otomatis via Telegram Bot API setiap pagi pukul 07:00 WIB.
+Menghasilkan paparan eksekutif 16:9 berstandar Kementerian Kehutanan & ETASENEU yang dilengkapi:
+1. Grafik tren 7 hari & komparasi hari kemarin (H vs H-1) untuk membaca eskalasi risiko.
+2. Grafik distribusi jam deteksi 24 jam (siklus diurnal WIB) untuk panduan waktu patroli.
+3. Matriks keputusan manajemen & arahan ground check lapangan langsung.
+4. Pengiriman otomatis via Telegram Bot API setiap pagi pukul 07:00 WIB.
 """
 
 from __future__ import annotations
@@ -16,6 +19,9 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
@@ -39,6 +45,7 @@ AMBER = RGBColor(217, 119, 6)        # #D97706 - Medium confidence / Waspada
 GREEN = RGBColor(22, 163, 74)        # #16A34A - Prioritas Rendah / Terkendali
 BLUE = RGBColor(37, 99, 235)         # #2563EB - Accent blue
 SKY = RGBColor(56, 189, 248)         # #38BDF8 - Sky blue highlight
+PURPLE = RGBColor(124, 58, 237)      # #7C3AED - Night peat / smoldering
 SLATE = RGBColor(100, 116, 139)      # #64748B - Text slate
 MUTED = RGBColor(148, 163, 184)      # #94A3B8 - Header subdued text
 WHITE = RGBColor(255, 255, 255)
@@ -173,7 +180,6 @@ def _add_slide_header(
     """Header bar kedinasan gelap di bagian atas slide."""
     _add_rect(slide, Inches(0), Inches(0), Inches(13.333), Inches(1.15), fill_color=NAVY)
 
-    # Label Kategori & Judul Utama
     tb = slide.shapes.add_textbox(Inches(0.8), Inches(0.12), Inches(8.5), Inches(0.95))
     tf = tb.text_frame
     tf.word_wrap = True
@@ -196,7 +202,6 @@ def _add_slide_header(
     r1.font.bold = True
     r1.font.color.rgb = WHITE
 
-    # Tanggal dan Jam Stamp (Sisi Kanan)
     if date_stamp:
         tb_right = slide.shapes.add_textbox(Inches(9.2), Inches(0.3), Inches(3.3), Inches(0.55))
         tf_right = tb_right.text_frame
@@ -227,6 +232,114 @@ def _add_slide_footer(slide):
     r.font.color.rgb = SLATE
 
 
+def _generate_trend_chart_image(daily_trend: list[dict[str, Any]], delta_pct: float) -> bytes:
+    """Bangun grafik batang tren 7 hari terakhir + komparasi H-1 vs H dalam resolusi tinggi."""
+    fig, ax = plt.subplots(figsize=(6.2, 3.8), dpi=160)
+    fig.patch.set_facecolor("#FFFFFF")
+    ax.set_facecolor("#FFFFFF")
+
+    labels = [d["label"] for d in daily_trend]
+    totals = [d["total"] for d in daily_trend]
+
+    n = len(totals)
+    colors = []
+    for idx in range(n):
+        if idx == n - 1:  # Hari ini (H)
+            colors.append("#DC2626" if delta_pct >= 0 else "#16A34A")
+        elif idx == n - 2:  # Kemarin (H-1)
+            colors.append("#F59E0B")
+        else:
+            colors.append("#94A3B8")
+
+    bars = ax.bar(labels, totals, color=colors, width=0.55, edgecolor="#CBD5E1", linewidth=0.5)
+
+    max_val = max(totals, default=100)
+    y_offset = max(max_val * 0.03, 10)
+    for bar in bars:
+        h = bar.get_height()
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            h + y_offset,
+            f"{h:,}".replace(",", "."),
+            ha="center",
+            va="bottom",
+            fontsize=7.5,
+            fontweight="bold",
+            color="#1E293B",
+        )
+
+    ax.set_ylim(0, max_val * 1.18)
+    delta_str = f"+{delta_pct:.1f}% NAIK" if delta_pct >= 0 else f"{delta_pct:.1f}% TURUN"
+    ax.set_title(
+        f"Tren Harian 7 Hari & Komparasi H vs H-1 ({delta_str})",
+        fontsize=9.5,
+        fontweight="bold",
+        pad=10,
+        color="#0F172A",
+    )
+    ax.tick_params(labelsize=7.5, colors="#475569")
+    ax.grid(axis="y", linestyle="--", alpha=0.5, color="#E2E8F0")
+
+    # Garis batas visual H-1 dan H
+    for spine in ax.spines.values():
+        spine.set_color("#E2E8F0")
+
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def _generate_hourly_chart_image(hourly_data: list[dict[str, Any]], peak_day: int, peak_night: int) -> bytes:
+    """Bangun grafik distribusi jam deteksi 24 jam (siklus diurnal) dengan highlight waktu rawan."""
+    fig, ax = plt.subplots(figsize=(6.2, 4.6), dpi=160)
+    fig.patch.set_facecolor("#FFFFFF")
+    ax.set_facecolor("#FFFFFF")
+
+    hours = [d["hour"] for d in hourly_data]
+    counts = [d["count"] for d in hourly_data]
+
+    colors = []
+    for h in hours:
+        if 11 <= h <= 14:
+            colors.append("#DC2626")  # Puncak Siang (Flaming/Api Menyala)
+        elif h >= 23 or h <= 2:
+            colors.append("#7C3AED")  # Puncak Dini Hari (Bara Gambut/Smoldering)
+        else:
+            colors.append("#94A3B8")
+
+    ax.bar(hours, counts, color=colors, width=0.68, edgecolor="#CBD5E1", linewidth=0.5)
+
+    ax.set_xticks(range(0, 24, 2))
+    ax.set_xticklabels([f"{h:02d}:00" for h in range(0, 24, 2)], fontsize=7.5)
+    ax.set_title(
+        "Distribusi Jam Deteksi 24 Jam (Siklus Harian WIB)",
+        fontsize=9.5,
+        fontweight="bold",
+        pad=10,
+        color="#0F172A",
+    )
+    ax.tick_params(labelsize=7.5, colors="#475569")
+    ax.grid(axis="y", linestyle="--", alpha=0.5, color="#E2E8F0")
+
+    for spine in ax.spines.values():
+        spine.set_color("#E2E8F0")
+
+    # Keterangan Legenda Visual
+    ax.plot([], [], color="#DC2626", label="Puncak Siang: Api Aktif / Flaming (11:00–14:00)")
+    ax.plot([], [], color="#7C3AED", label="Puncak Malam: Bara Gambut / Smoldering (23:00–02:00)")
+    ax.legend(loc="upper right", fontsize=7.0, frameon=True, facecolor="#F8FAFC", edgecolor="#E2E8F0")
+
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return buf.getvalue()
+
+
 class DailyReportService:
     def __init__(self, store: PostgresStore | None = None) -> None:
         self.settings = get_settings()
@@ -237,7 +350,7 @@ class DailyReportService:
         target_date: date | None = None,
         lookback_hours: int = 24,
     ) -> dict[str, Any]:
-        """Kumpulkan data agregasi titik panas 24 jam terakhir dari database."""
+        """Kumpulkan data agregasi titik panas 24 jam terakhir, perbandingan H-1, tren 7 hari, dan jam deteksi."""
         jakarta_tz = ZoneInfo("Asia/Jakarta")
         now_jkt = datetime.now(jakarta_tz)
 
@@ -253,11 +366,22 @@ class DailyReportService:
         report_date_str = _format_date_indonesian(report_date)
         time_window_str = f"{start_time.strftime('%d/%m/%Y %H:%M')} s.d. {end_time.strftime('%d/%m/%Y %H:%M')} WIB"
 
+        # Rentang waktu H-1 (Kemarin)
+        start_time_y = start_time - timedelta(hours=24)
+        end_time_y = start_time
+        seven_days_start = end_time - timedelta(days=7)
+
         raw_rows: list[dict[str, Any]] = []
+        yesterday_total = 0
+        yesterday_high = 0
+        trend_rows_raw: list[dict[str, Any]] = []
+        hourly_counts: dict[int, int] = defaultdict(int)
+
         if self.store.enabled:
             try:
                 with self.store.connection() as conn:
                     with conn.cursor() as cur:
+                        # 1. Hotspot 24 jam hari ini
                         cur.execute(
                             """
                             SELECT 
@@ -265,14 +389,46 @@ class DailyReportService:
                                 h.satellite, h.source, h.agency_name,
                                 (h.raw_payload->>'frp')::float as frp,
                                 h.raw_payload->>'province_name' as prov,
-                                h.raw_payload->'polygon_metadata' as poly_meta
+                                h.raw_payload->'polygon_metadata' as poly_meta,
+                                EXTRACT(HOUR FROM h.detected_at AT TIME ZONE 'Asia/Jakarta')::int as hr
                             FROM hotspot_observations h
-                            WHERE h.detected_at >= %s AND h.detected_at <= %s
+                            WHERE h.detected_at >= %s AND h.detected_at < %s
                             ORDER BY (h.raw_payload->>'frp')::float DESC NULLS LAST, h.detected_at DESC;
                             """,
                             (start_time, end_time),
                         )
                         raw_rows = [dict(r) for r in cur.fetchall()]
+
+                        # 2. Statistik hari kemarin (H-1)
+                        cur.execute(
+                            """
+                            SELECT 
+                                COUNT(*) as total,
+                                COUNT(*) FILTER (WHERE confidence IN ('high', 'h') OR (confidence ~ '^[0-9]+$' AND confidence::int > 80)) as high_count
+                            FROM hotspot_observations
+                            WHERE detected_at >= %s AND detected_at < %s;
+                            """,
+                            (start_time_y, end_time_y),
+                        )
+                        y_row = cur.fetchone()
+                        if y_row:
+                            yesterday_total = int(y_row["total"] or 0)
+                            yesterday_high = int(y_row["high_count"] or 0)
+
+                        # 3. Tren 7 hari terakhir
+                        cur.execute(
+                            """
+                            SELECT 
+                                (date_trunc('day', detected_at AT TIME ZONE 'Asia/Jakarta'))::date as day_date,
+                                COUNT(*) as total
+                            FROM hotspot_observations
+                            WHERE detected_at >= %s AND detected_at < %s
+                            GROUP BY day_date
+                            ORDER BY day_date;
+                            """,
+                            (seven_days_start, end_time),
+                        )
+                        trend_rows_raw = [dict(r) for r in cur.fetchall()]
             except Exception as e:
                 logger.error("Gagal query hotspot harian dari database: %s", e)
 
@@ -299,6 +455,11 @@ class DailyReportService:
             conf_cat = confidence_category(r)
             confidence_counts[conf_cat] = confidence_counts.get(conf_cat, 0) + 1
 
+            # Hitung distribusi jam
+            hr = r.get("hr")
+            if hr is not None:
+                hourly_counts[int(hr)] += 1
+
             frp = float(r.get("frp") or 0.0)
             if frp > 0:
                 frp_values.append(frp)
@@ -315,7 +476,6 @@ class DailyReportService:
             else:
                 agency = raw_agency
 
-            # Lokasi teks
             loc_parts = []
             if poly_meta.get("NAMA_DESA"):
                 loc_parts.append(f"Desa {poly_meta['NAMA_DESA']}")
@@ -327,7 +487,6 @@ class DailyReportService:
                 loc_parts.append(prov_name)
             wilayah_text = ", ".join(loc_parts) if loc_parts else (prov_name or "Indonesia")
 
-            # Update Balai PS stats
             bps_item = bps_stats[bps_name]
             if conf_cat == "Tinggi":
                 bps_item["high"] += 1
@@ -339,7 +498,6 @@ class DailyReportService:
                 bps_item["max_frp"] = round(frp, 1)
             bps_item["agencies"].add(agency)
 
-            # Update Agency stats
             ag_item = agency_stats[agency]
             if conf_cat == "Tinggi":
                 ag_item["high"] += 1
@@ -355,7 +513,62 @@ class DailyReportService:
             ag_item["bps"] = bps_name
             ag_item["wilayah"] = wilayah_text
 
-        # Olah daftar Balai PS dan skoring prioritas: (HIGH * 2) + (MED * 1)
+        # Komparasi Hari Kemarin (H vs H-1)
+        delta_total = total_hotspots - yesterday_total
+        delta_pct = (delta_total / yesterday_total * 100.0) if yesterday_total else 0.0
+        delta_high = confidence_counts["Tinggi"] - yesterday_high
+        delta_high_pct = (delta_high / yesterday_high * 100.0) if yesterday_high else 0.0
+
+        if delta_pct > 5.0:
+            trend_label = f"ESKALASI NAIK (+{delta_pct:.1f}%)"
+            trend_color = RED
+            trend_icon = "🔺"
+        elif delta_pct < -5.0:
+            trend_label = f"MELANDAI TURUN ({delta_pct:.1f}%)"
+            trend_color = GREEN
+            trend_icon = "🔻"
+        else:
+            trend_label = f"STABIL ({delta_pct:+.1f}%)"
+            trend_color = AMBER
+            trend_icon = "➡️"
+
+        # Susun Tren 7 Hari
+        daily_trend_list = []
+        if trend_rows_raw:
+            for idx, tr in enumerate(trend_rows_raw):
+                d_date = tr["day_date"]
+                d_str = d_date.strftime("%d %b")
+                if idx == len(trend_rows_raw) - 1:
+                    lbl = f"{d_str} (H)"
+                elif idx == len(trend_rows_raw) - 2:
+                    lbl = f"{d_str} (H-1)"
+                else:
+                    lbl = d_str
+                daily_trend_list.append({"label": lbl, "total": int(tr["total"])})
+        else:
+            daily_trend_list = [
+                {"label": "H-2", "total": yesterday_total},
+                {"label": "H-1", "total": yesterday_total},
+                {"label": "H (Hari Ini)", "total": total_hotspots},
+            ]
+
+        # Susun Distribusi Jam
+        hourly_data_list = []
+        peak_day_hour = 13
+        peak_night_hour = 1
+        max_day_val = -1
+        max_night_val = -1
+        for h in range(24):
+            c = hourly_counts[h]
+            hourly_data_list.append({"hour": h, "count": c})
+            if 10 <= h <= 15 and c > max_day_val:
+                max_day_val = c
+                peak_day_hour = h
+            if (h >= 22 or h <= 3) and c > max_night_val:
+                max_night_val = c
+                peak_night_hour = h
+
+        # Balai PS list
         balai_list = []
         for bps_key, stats in bps_stats.items():
             h_count = stats["high"]
@@ -381,11 +594,9 @@ class DailyReportService:
                 "max_frp": stats["max_frp"],
                 "agency_count": len(stats["agencies"]),
             })
-
-        # Urutkan Balai PS berdasarkan skor prioritas tertinggi
         balai_list.sort(key=lambda x: (x["priority_score"], x["high_count"], x["max_frp"]), reverse=True)
 
-        # Olah daftar Top KPS
+        # KPS list
         kps_list = []
         for ag_name, stats in agency_stats.items():
             h_count = stats["high"]
@@ -417,15 +628,13 @@ class DailyReportService:
                 "longitude": round(lon, 6),
                 "google_maps_url": gmaps_url,
             })
-
-        # Urutkan KPS berdasarkan prioritas tertinggi
         kps_list.sort(key=lambda x: (x["priority_score"], x["max_frp"]), reverse=True)
 
         max_frp = max(frp_values, default=0.0)
         avg_frp = (sum(frp_values) / len(frp_values)) if frp_values else 0.0
 
         high_and_med = confidence_counts["Tinggi"] + confidence_counts["Sedang"]
-        if confidence_counts["Tinggi"] >= 5 or max_frp > 100 or high_and_med >= 50:
+        if confidence_counts["Tinggi"] >= 5 or max_frp > 100 or high_and_med >= 50 or delta_pct > 20:
             status_siaga = "SIAGA DARURAT"
             siaga_color = RED
         elif confidence_counts["Tinggi"] >= 1 or max_frp > 30 or high_and_med >= 10:
@@ -447,6 +656,19 @@ class DailyReportService:
             "high_count": confidence_counts["Tinggi"],
             "medium_count": confidence_counts["Sedang"],
             "low_count": confidence_counts["Rendah"],
+            "yesterday_total": yesterday_total,
+            "yesterday_high": yesterday_high,
+            "delta_total": delta_total,
+            "delta_pct": round(delta_pct, 1),
+            "delta_high": delta_high,
+            "delta_high_pct": round(delta_high_pct, 1),
+            "trend_label": trend_label,
+            "trend_color": trend_color,
+            "trend_icon": trend_icon,
+            "daily_trend": daily_trend_list,
+            "hourly_data": hourly_data_list,
+            "peak_day_hour": peak_day_hour,
+            "peak_night_hour": peak_night_hour,
             "max_frp": round(max_frp, 1),
             "avg_frp": round(avg_frp, 1),
             "status_siaga": status_siaga,
@@ -457,31 +679,36 @@ class DailyReportService:
         }
 
     def generate_daily_hotspot_pptx(self, data: dict[str, Any]) -> bytes:
-        """Bangun presentasi PowerPoint 16:9 widescreen berisi 5 slide eksekutif."""
+        """Bangun presentasi PowerPoint 16:9 widescreen berisi visual grafik komparasi & matriks keputusan."""
         prs = Presentation()
         prs.slide_width = Inches(13.333)
         prs.slide_height = Inches(7.5)
 
         blank_layout = prs.slide_layouts[6]
 
+        # Buat grafik gambar (in-memory)
+        trend_img_bytes = _generate_trend_chart_image(data.get("daily_trend", []), data.get("delta_pct", 0.0))
+        hourly_img_bytes = _generate_hourly_chart_image(
+            data.get("hourly_data", []),
+            data.get("peak_day_hour", 13),
+            data.get("peak_night_hour", 1),
+        )
+
         # =====================================================================
-        # SLIDE 1: COVER RESMI (SAMPUL)
+        # SLIDE 1: COVER RESMI & STATUS SIAGA UTAMA
         # =====================================================================
         s1 = prs.slides.add_slide(blank_layout)
         _add_rect(s1, Inches(0), Inches(0), Inches(13.333), Inches(7.5), fill_color=NAVY)
-
-        # Aksen Banner Garis Emas/Biru Atas
         _add_rect(s1, Inches(0), Inches(0), Inches(13.333), Inches(0.12), fill_color=SKY)
 
-        # Kontainer Judul Utama
-        tb_cov = s1.shapes.add_textbox(Inches(1.0), Inches(1.2), Inches(11.333), Inches(3.8))
+        tb_cov = s1.shapes.add_textbox(Inches(1.0), Inches(1.1), Inches(11.333), Inches(3.2))
         tf_cov = tb_cov.text_frame
         tf_cov.word_wrap = True
         tf_cov.margin_left = tf_cov.margin_top = tf_cov.margin_right = tf_cov.margin_bottom = 0
 
-        p_kemenhut = tf_cov.paragraphs[0]
-        p_kemenhut.space_after = Pt(12)
-        r_kem = p_kemenhut.add_run()
+        p_kem = tf_cov.paragraphs[0]
+        p_kem.space_after = Pt(10)
+        r_kem = p_kem.add_run()
         r_kem.text = "KEMENTERIAN KEHUTANAN REPUBLIK INDONESIA"
         r_kem.font.name = FONT_FAMILY
         r_kem.font.size = Pt(13)
@@ -498,58 +725,67 @@ class DailyReportService:
         r_tit.font.color.rgb = WHITE
 
         p_sub = tf_cov.add_paragraph()
-        p_sub.space_after = Pt(18)
+        p_sub.space_after = Pt(16)
         r_sub = p_sub.add_run()
-        r_sub.text = "Areal Persetujuan Perhutanan Sosial (KPS) dan Hutan Adat Seluruh Indonesia"
+        r_sub.text = "Dashboard Pengambilan Keputusan Satgas Dalkarhutla & Balai Perhutanan Sosial"
         r_sub.font.name = FONT_FAMILY
         r_sub.font.size = Pt(16)
         r_sub.font.color.rgb = SKY
 
-        # Metadata Card Gelap di Cover
-        _add_rect(s1, Inches(1.0), Inches(4.3), Inches(11.333), Inches(1.5), fill_color=NAVY_LIGHT, rounded=True)
-        tb_meta = s1.shapes.add_textbox(Inches(1.3), Inches(4.45), Inches(10.7), Inches(1.2))
+        # Card Status Siaga Utama & Sorotan Keputusan
+        _add_rect(s1, Inches(1.0), Inches(4.2), Inches(11.333), Inches(1.8), fill_color=NAVY_LIGHT, rounded=True)
+        tb_meta = s1.shapes.add_textbox(Inches(1.3), Inches(4.35), Inches(10.7), Inches(1.5))
         tf_meta = tb_meta.text_frame
         tf_meta.word_wrap = True
         tf_meta.margin_left = tf_meta.margin_top = tf_meta.margin_right = tf_meta.margin_bottom = 0
 
-        p_m1 = tf_meta.paragraphs[0]
+        p_s = tf_meta.paragraphs[0]
+        p_s.space_after = Pt(4)
+        r_s1 = p_s.add_run()
+        r_s1.text = f"🚨 STATUS SIAGA NASIONAL: {data.get('status_siaga', 'WASPADA')}  |  "
+        r_s1.font.name = FONT_FAMILY
+        r_s1.font.size = Pt(13)
+        r_s1.font.bold = True
+        r_s1.font.color.rgb = data.get("siaga_color") or RED
+
+        r_s2 = p_s.add_run()
+        r_s2.text = f"Tren: {data.get('trend_icon', '➡️')} {data.get('trend_label', 'STABIL')}"
+        r_s2.font.name = FONT_FAMILY
+        r_s2.font.size = Pt(12)
+        r_s2.font.bold = True
+        r_s2.font.color.rgb = WHITE
+
+        p_m1 = tf_meta.add_paragraph()
         p_m1.space_after = Pt(4)
         r_m1 = p_m1.add_run()
-        r_m1.text = f"📅 Periode Pemantauan: {data['time_window_str']}  |  Pukul 07:00 WIB"
+        r_m1.text = (
+            f"📅 Periode Data: {data.get('time_window_str', '')}  ·  "
+            f"Total: {data.get('total_hotspots', 0):,} Titik (vs {data.get('yesterday_total', 0):,} H-1)".replace(",", ".")
+        )
         r_m1.font.name = FONT_FAMILY
-        r_m1.font.size = Pt(12)
-        r_m1.font.bold = True
-        r_m1.font.color.rgb = WHITE
+        r_m1.font.size = Pt(11)
+        r_m1.font.color.rgb = SKY
 
         p_m2 = tf_meta.add_paragraph()
-        p_m2.space_after = Pt(4)
         r_m2 = p_m2.add_run()
-        r_m2.text = (
-            f"🛰️ Satelit Pengamat: NASA FIRMS (VIIRS NOAA-20, NOAA-21, S-NPP & MODIS Terra/Aqua)  ·  "
-            f"Status: {data['status_siaga']}"
-        )
+        top_3_balai = ", ".join([b["name"] for b in data.get("balai_list", [])[:3]]) if data.get("balai_list") else "Nihil"
+        r_m2.text = f"🎯 Fokus Wilayah Intervensi Hari Ini: {top_3_balai} (Alokasi Patroli Prioritas)"
         r_m2.font.name = FONT_FAMILY
-        r_m2.font.size = Pt(11)
-        r_m2.font.color.rgb = SKY
+        r_m2.font.size = Pt(10.5)
+        r_m2.font.bold = True
+        r_m2.font.color.rgb = WHITE
 
-        p_m3 = tf_meta.add_paragraph()
-        r_m3 = p_m3.add_run()
-        r_m3.text = "📡 Disusun oleh: Sistem Informasi ETASENEU untuk Satgas Pengendalian Kebakaran Hutan (Dalkarhutla) & Balai PS"
-        r_m3.font.name = FONT_FAMILY
-        r_m3.font.size = Pt(10)
-        r_m3.font.color.rgb = MUTED
-
-        # Disclaimer Wajib Kedinasan
-        tb_disc = s1.shapes.add_textbox(Inches(1.0), Inches(6.25), Inches(11.333), Inches(0.8))
+        # Disclaimer
+        tb_disc = s1.shapes.add_textbox(Inches(1.0), Inches(6.35), Inches(11.333), Inches(0.7))
         tf_disc = tb_disc.text_frame
         tf_disc.word_wrap = True
         tf_disc.margin_left = tf_disc.margin_top = tf_disc.margin_right = tf_disc.margin_bottom = 0
         p_disc = tf_disc.paragraphs[0]
         r_disc = p_disc.add_run()
         r_disc.text = (
-            "CATATAN KEDINASAN: Indikasi hotspot merupakan anomali termal berbasis satelit penginderaan jauh "
-            "dan BUKAN kejadian kebakaran yang telah terkonfirmasi fisik sebelum verifikasi lapangan (ground check) "
-            "dan Berita Acara Pemeriksaan (BAP). Laporan ini berfungsi sebagai instrumen navigasi patroli & sistem peringatan dini."
+            "CATATAN KEDINASAN: Indikasi hotspot merupakan anomali termal satelit penginderaan jauh (NASA FIRMS) "
+            "sebagai instrumen peringatan dini dan dasar penerbitan Surat Perintah Tugas verifikasi lapangan (ground check). "
+            "Bukan vonis kebakaran sebelum terbit Berita Acara Pemeriksaan (BAP) fisik."
         )
         r_disc.font.name = FONT_FAMILY
         r_disc.font.size = Pt(8.5)
@@ -557,48 +793,48 @@ class DailyReportService:
         r_disc.font.color.rgb = MUTED
 
         # =====================================================================
-        # SLIDE 2: RINGKASAN EKSEKUTIF & INDIKATOR SIAGA 24 JAM
+        # SLIDE 2: PERBANDINGAN HARI KEMARIN (H vs H-1) & TREN 7 HARI
         # =====================================================================
         s2 = prs.slides.add_slide(blank_layout)
         _add_rect(s2, Inches(0), Inches(0), Inches(13.333), Inches(7.5), fill_color=BG_CANVAS)
         _add_slide_header(
             s2,
-            category="Ringkasan Eksekutif",
-            title="Indikator Siaga dan Rekapitulasi Pantauan 24 Jam",
-            date_stamp=f"{data['report_date_str']} • 07:00 WIB",
+            category="Evaluasi Eskalasi Risiko",
+            title="Analisis Tren Harian & Perbandingan Hari Kemarin (H vs H-1)",
+            date_stamp=f"{data.get('report_date_str', '')} • 07:00 WIB",
         )
 
-        # 4 KPI Cards
+        # 4 KPI Cards dengan Delta H vs H-1
         card_w = Inches(2.78)
-        card_h = Inches(1.5)
-        card_y = Inches(1.4)
+        card_h = Inches(1.4)
+        card_y = Inches(1.35)
         gap = Inches(0.2)
         start_x = Inches(0.8)
 
         kpis = [
             (
-                "TOTAL TITIK PANAS (24 JAM)",
-                f"{data['total_hotspots']:,}".replace(",", "."),
-                f"High: {data['high_count']} | Med: {data['medium_count']}",
+                "TOTAL HOTSPOT (24 JAM)",
+                f"{data.get('total_hotspots', 0):,}".replace(",", "."),
+                f"Kemarin: {data.get('yesterday_total', 0):,} | {data.get('trend_icon', '➡️')} {data.get('delta_pct', 0.0):+.1f}%",
                 NAVY,
             ),
             (
-                "KEYAKINAN SEDANG & TINGGI",
-                f"{data['high_count'] + data['medium_count']:,}".replace(",", "."),
-                f"Fokus Utama Ground Check",
-                RED if data['high_count'] > 0 else AMBER,
+                "KEYAKINAN TINGGI (HIGH)",
+                f"{data.get('high_count', 0):,}".replace(",", "."),
+                f"Kemarin: {data.get('yesterday_high', 0):,} | Fokus Utama",
+                RED if data.get("high_count", 0) > 0 else AMBER,
             ),
             (
                 "FRP MAKSIMUM",
-                f"{data['max_frp']} MW",
-                f"Rata-rata: {data['avg_frp']} MW",
-                RED if data['max_frp'] > 30 else AMBER,
+                f"{data.get('max_frp', 0.0)} MW",
+                f"Rata-rata: {data.get('avg_frp', 0.0)} MW",
+                RED if data.get("max_frp", 0.0) > 30 else AMBER,
             ),
             (
                 "STATUS SIAGA HARIAN",
-                data['status_siaga'],
-                f"{len(data['balai_list'])} Balai PS Terindikasi",
-                data.get('siaga_color') or GREEN,
+                data.get("status_siaga", "WASPADA"),
+                f"{len(data.get('balai_list', []))} Balai PS Terindikasi",
+                data.get("siaga_color") or GREEN,
             ),
         ]
 
@@ -607,7 +843,7 @@ class DailyReportService:
             _add_rect(s2, cx, card_y, card_w, card_h, fill_color=CARD_BG, line_color=CARD_BORDER, rounded=True)
             _add_rect(s2, cx, card_y, card_w, Inches(0.08), fill_color=kpi_color, rounded=True)
 
-            tb_k = s2.shapes.add_textbox(cx + Inches(0.15), card_y + Inches(0.16), card_w - Inches(0.3), card_h - Inches(0.25))
+            tb_k = s2.shapes.add_textbox(cx + Inches(0.14), card_y + Inches(0.14), card_w - Inches(0.28), card_h - Inches(0.22))
             tf_k = tb_k.text_frame
             tf_k.word_wrap = True
             tf_k.margin_left = tf_k.margin_top = tf_k.margin_right = tf_k.margin_bottom = 0
@@ -621,12 +857,12 @@ class DailyReportService:
             r_kt.font.color.rgb = SLATE
 
             p_kv = tf_k.add_paragraph()
-            p_kv.space_before = Pt(4)
+            p_kv.space_before = Pt(3)
             p_kv.space_after = Pt(2)
             r_kv = p_kv.add_run()
             r_kv.text = kpi_val
             r_kv.font.name = FONT_FAMILY
-            r_kv.font.size = Pt(20)
+            r_kv.font.size = Pt(19)
             r_kv.font.bold = True
             r_kv.font.color.rgb = kpi_color
 
@@ -637,100 +873,135 @@ class DailyReportService:
             r_ks.font.size = Pt(8.5)
             r_ks.font.color.rgb = SLATE
 
-        # 2 Kartu Konten Bawah: Situasi Pantauan & Mandat Penapisan
-        bottom_y = Inches(3.15)
-        bottom_h = Inches(3.8)
+        # Baris Bawah: Grafik Matplotlib (Kiri) + Rekomendasi Keputusan (Kanan)
+        plot_y = Inches(2.95)
+        plot_w = Inches(6.0)
+        plot_h = Inches(3.9)
 
-        # Kartu Kiri: Analisis Pantauan
-        left_w = Inches(6.8)
-        _add_rect(s2, Inches(0.8), bottom_y, left_w, bottom_h, fill_color=CARD_BG, line_color=CARD_BORDER, rounded=True)
-        tb_left = s2.shapes.add_textbox(Inches(1.05), bottom_y + Inches(0.2), left_w - Inches(0.5), bottom_h - Inches(0.4))
-        tf_left = tb_left.text_frame
-        tf_left.word_wrap = True
-        tf_left.margin_left = tf_left.margin_top = tf_left.margin_right = tf_left.margin_bottom = 0
+        # Sisipkan Gambar Grafik Tren
+        s2.shapes.add_picture(io.BytesIO(trend_img_bytes), Inches(0.8), plot_y, plot_w, plot_h)
 
-        p_ltit = tf_left.paragraphs[0]
-        p_ltit.space_after = Pt(8)
-        r_ltit = p_ltit.add_run()
-        r_ltit.text = "Analisis Spasial dan Situasi Pantauan Harian"
-        r_ltit.font.name = FONT_FAMILY
-        r_ltit.font.size = Pt(13)
-        r_ltit.font.bold = True
-        r_ltit.font.color.rgb = NAVY
+        # Kartu Rekomendasi Keputusan Berdasarkan Tren (Kanan)
+        right_x = Inches(7.05)
+        right_w = Inches(5.48)
+        _add_rect(s2, right_x, plot_y, right_w, plot_h, fill_color=CARD_BG, line_color=CARD_BORDER, rounded=True)
 
-        bullets_left = [
-            f"Deteksi 24 Jam: Sebanyak {data['total_hotspots']:,} titik panas tertangkap di seluruh areal persetujuan KPS dan perimeter penyangga.".replace(",", "."),
-            f"Klasifikasi Keyakinan: {data['high_count']} titik berkeyakinan Tinggi (High) dan {data['medium_count']} titik berkeyakinan Sedang (Nominal/Medium).",
-            f"Titik Rendah (Low): Sebanyak {data['low_count']} titik disaring/dieksklusi dari prioritas verifikasi fisik demi efektivitas sumber daya patroli.",
-            f"Intensitas Panas: Nilai Fire Radiative Power (FRP) tertinggi tercatat {data['max_frp']} MW dengan rerata {data['avg_frp']} MW.",
-            f"Sebaran Terluas: Terdistribusi pada {len(data['balai_list'])} wilayah kerja Balai Perhutanan Sosial di seluruh Indonesia.",
+        tb_dec = s2.shapes.add_textbox(right_x + Inches(0.25), plot_y + Inches(0.2), right_w - Inches(0.5), plot_h - Inches(0.4))
+        tf_dec = tb_dec.text_frame
+        tf_dec.word_wrap = True
+        tf_dec.margin_left = tf_dec.margin_top = tf_dec.margin_right = tf_dec.margin_bottom = 0
+
+        p_dtit = tf_dec.paragraphs[0]
+        p_dtit.space_after = Pt(8)
+        r_dtit = p_dtit.add_run()
+        r_dtit.text = "Rekomendasi Keputusan Berdasarkan Tren"
+        r_dtit.font.name = FONT_FAMILY
+        r_dtit.font.size = Pt(13)
+        r_dtit.font.bold = True
+        r_dtit.font.color.rgb = NAVY
+
+        trend_lbl = data.get("trend_label", "STABIL")
+        delta_p = data.get("delta_pct", 0.0)
+        delta_t = data.get("delta_total", 0)
+        h_cnt = data.get("high_count", 0)
+        delta_h = data.get("delta_high", 0)
+        b_list = data.get("balai_list", [])
+        top_b_name = b_list[0]["name"] if b_list else "Terkait"
+
+        decisions_s2 = [
+            f"Dinamika Risiko: Jumlah deteksi {trend_lbl} sebesar {delta_p:+.1f}% ({delta_t:+d} titik) dibanding hari kemarin.",
+            f"Lonjakan Keyakinan Tinggi: Hotspot berkategori High tercatat {h_cnt} titik (delta: {delta_h:+d} titik). Ini mengindikasikan api berkobar aktif yang butuh intervensi segera.",
+            f"Konsentrasi Wilayah: Wilayah kerja {top_b_name} menyumbang beban pantauan terbesar hari ini.",
+            "Arah Tindakan Komando:\n   • Tingkatkan patroli siaga di KPS rawan eskalasi.\n   • Aktifkan koordinasi lintas sektor (KPH & BPBD/Satgas Karhutla Daops).",
         ]
 
-        for b in bullets_left:
-            p_b = tf_left.add_paragraph()
-            p_b.space_after = Pt(6)
-            r_bullet = p_b.add_run()
-            r_bullet.text = f"•  {b}"
-            r_bullet.font.name = FONT_FAMILY
-            r_bullet.font.size = Pt(10)
-            r_bullet.font.color.rgb = NAVY_LIGHT
-
-        # Kartu Kanan: Formula Penapisan Prioritas & SOP
-        right_x = Inches(7.85)
-        right_w = Inches(4.68)
-        _add_rect(s2, right_x, bottom_y, right_w, bottom_h, fill_color=CARD_BG, line_color=CARD_BORDER, rounded=True)
-        tb_right = s2.shapes.add_textbox(right_x + Inches(0.25), bottom_y + Inches(0.2), right_w - Inches(0.5), bottom_h - Inches(0.4))
-        tf_right = tb_right.text_frame
-        tf_right.word_wrap = True
-        tf_right.margin_left = tf_right.margin_top = tf_right.margin_right = tf_right.margin_bottom = 0
-
-        p_rtit = tf_right.paragraphs[0]
-        p_rtit.space_after = Pt(8)
-        r_rtit = p_rtit.add_run()
-        r_rtit.text = "Indikator Prioritas Monitoring (Internal)"
-        r_rtit.font.name = FONT_FAMILY
-        r_rtit.font.size = Pt(13)
-        r_rtit.font.bold = True
-        r_rtit.font.color.rgb = NAVY
-
-        bullets_right = [
-            "Formula Skoring Kedinasan:\n   Skor = (Jumlah Hotspot HIGH × 2) + (Jumlah Hotspot MEDIUM × 1)",
-            "🔴 Prioritas Tinggi (Skor ≥ 15 atau ≥ 2 HIGH):\n   Wajib verifikasi lapangan (ground check) dalam 1×24 jam oleh Satgas KPH & MPA.",
-            "🟠 Prioritas Sedang (Skor 6 – 14):\n   Komunikasi intensif dengan pendamping KPS dan pemantauan satelit harian.",
-            "🟢 Prioritas Rendah (Skor 1 – 5):\n   Monitoring berkala melalui sistem navigasi dan patroli reguler pencegahan.",
-            "Alat Bantu Operasional: Skor ini adalah panduan internal penapisan lapangan, bukan vonis kebakaran mutlak.",
-        ]
-
-        for b in bullets_right:
-            p_rb = tf_right.add_paragraph()
-            p_rb.space_after = Pt(5)
-            r_rb = p_rb.add_run()
-            r_rb.text = f"•  {b}"
-            r_rb.font.name = FONT_FAMILY
-            r_rb.font.size = Pt(9.5)
-            r_rb.font.color.rgb = NAVY_LIGHT
+        for d in decisions_s2:
+            p_d = tf_dec.add_paragraph()
+            p_d.space_after = Pt(6)
+            r_d = p_d.add_run()
+            r_d.text = f"•  {d}"
+            r_d.font.name = FONT_FAMILY
+            r_d.font.size = Pt(9.5)
+            r_d.font.color.rgb = NAVY_LIGHT
 
         _add_slide_footer(s2)
 
         # =====================================================================
-        # SLIDE 3: REKAPITULASI SPASIAL PER BALAI PERHUTANAN SOSIAL (BPS)
+        # SLIDE 3: DISTRIBUSI JAM DETEKSI & JENDELA WAKTU KRITIS PATROLI
         # =====================================================================
         s3 = prs.slides.add_slide(blank_layout)
         _add_rect(s3, Inches(0), Inches(0), Inches(13.333), Inches(7.5), fill_color=BG_CANVAS)
         _add_slide_header(
             s3,
-            category="Distribusi Spasial Wilayah Kerja",
-            title="Rekapitulasi Deteksi Hotspot per Balai Perhutanan Sosial (BPS)",
+            category="Siklus Harian & Jadwal Patroli",
+            title="Distribusi Jam Deteksi 24 Jam & Jendela Waktu Kritis Patroli",
             date_stamp=f"{data['report_date_str']} • 07:00 WIB",
+        )
+
+        # Sisipkan Gambar Grafik Distribusi Jam (Kiri)
+        s3_plot_y = Inches(1.4)
+        s3_plot_w = Inches(6.0)
+        s3_plot_h = Inches(5.4)
+        s3.shapes.add_picture(io.BytesIO(hourly_img_bytes), Inches(0.8), s3_plot_y, s3_plot_w, s3_plot_h)
+
+        # Panduan Taktis Jadwal Operasi Lapangan (Kanan)
+        s3_right_x = Inches(7.05)
+        s3_right_w = Inches(5.48)
+        _add_rect(s3, s3_right_x, s3_plot_y, s3_right_w, s3_plot_h, fill_color=CARD_BG, line_color=CARD_BORDER, rounded=True)
+
+        tb_hr = s3.shapes.add_textbox(s3_right_x + Inches(0.25), s3_plot_y + Inches(0.22), s3_right_w - Inches(0.5), s3_plot_h - Inches(0.44))
+        tf_hr = tb_hr.text_frame
+        tf_hr.word_wrap = True
+        tf_hr.margin_left = tf_hr.margin_top = tf_hr.margin_right = tf_hr.margin_bottom = 0
+
+        p_htit = tf_hr.paragraphs[0]
+        p_htit.space_after = Pt(8)
+        r_htit = p_htit.add_run()
+        r_htit.text = "Pedoman Jam Operasi Lapangan Satgas"
+        r_htit.font.name = FONT_FAMILY
+        r_htit.font.size = Pt(13)
+        r_htit.font.bold = True
+        r_htit.font.color.rgb = NAVY
+
+        pk_day = data.get("peak_day_hour", 13)
+        pk_night = data.get("peak_night_hour", 1)
+        hour_guidance = [
+            f"☀️ Puncak Siang (11:00 – 14:00 WIB) — Api Aktif / Flaming:\n   Puncak deteksi termal satelit terjadi pada pukul {pk_day:02d}:00 WIB. Suhu lingkungan mencapai titik tertinggi dan kelembapan rendah. Api sangat rentan menyebar cepat.",
+            f"🌙 Puncak Dini Hari (23:00 – 02:00 WIB) — Bara Gambut / Smoldering:\n   Terdeteksi anomali persisten pada pukul {pk_night:02d}:00 WIB. Ini mencirikan api bawah tanah (gambut) yang membara tanpa nyala terbuka dan menghasilkan kabut asap pekat.",
+            "⏰ Waktu Efektif Pengerahan Personel:\n   Regu patroli terpadu wajib diberangkatkan maksimal pukul 08:30 WIB agar tiba dan mendirikan pos sekat bakar sebelum jam penyalaan puncak tengah hari.",
+            "🚁 Operasi Pemantauan Drone:\n   Jadwal terbaik penerbangan drone thermal: pukul 10:00 – 13:00 WIB untuk deteksi perimeter asap awal.",
+        ]
+
+        for g in hour_guidance:
+            p_g = tf_hr.add_paragraph()
+            p_g.space_after = Pt(7)
+            r_g = p_g.add_run()
+            r_g.text = f"•  {g}"
+            r_g.font.name = FONT_FAMILY
+            r_g.font.size = Pt(9.5)
+            r_g.font.color.rgb = NAVY_LIGHT
+
+        _add_slide_footer(s3)
+
+        # =====================================================================
+        # SLIDE 4: REKAPITULASI SPASIAL BALAI PERHUTANAN SOSIAL (BPS)
+        # =====================================================================
+        s4 = prs.slides.add_slide(blank_layout)
+        _add_rect(s4, Inches(0), Inches(0), Inches(13.333), Inches(7.5), fill_color=BG_CANVAS)
+        _add_slide_header(
+            s4,
+            category="Pemetaan Wilayah Kerja",
+            title="Rekapitulasi Spasial per Balai Perhutanan Sosial (BPS)",
+            date_stamp=f"{data.get('report_date_str', '')} • 07:00 WIB",
         )
 
         table_y = Inches(1.4)
         table_w = Inches(11.733)
         table_h = Inches(5.4)
 
-        balai_rows = data["balai_list"][:9]  # Tampilkan hingga 9 Balai PS teratas
+        balai_rows = data.get("balai_list", [])[:9]
         num_rows = max(len(balai_rows) + 1, 2)
-        tbl_shape = s3.shapes.add_table(num_rows, 8, Inches(0.8), table_y, table_w, table_h)
+        tbl_shape = s4.shapes.add_table(num_rows, 8, Inches(0.8), table_y, table_w, table_h)
         tbl = tbl_shape.table
 
         col_widths = [
@@ -805,210 +1076,113 @@ class DailyReportService:
                     r.font.bold = (col_idx in (1, 6, 7))
                     r.font.color.rgb = text_color
 
-        _add_slide_footer(s3)
-
-        # =====================================================================
-        # SLIDE 4: DAFTAR PRIORITAS UNIT PERHUTANAN SOSIAL (KPS) TERINDIKASI
-        # =====================================================================
-        s4 = prs.slides.add_slide(blank_layout)
-        _add_rect(s4, Inches(0), Inches(0), Inches(13.333), Inches(7.5), fill_color=BG_CANVAS)
-        _add_slide_header(
-            s4,
-            category="Unit KPS Prioritas",
-            title="Daftar Unit KPS Terindikasi Memerlukan Verifikasi Lapangan",
-            date_stamp=f"{data['report_date_str']} • 07:00 WIB",
-        )
-
-        table_kps_rows = data["kps_list"][:9]
-        num_kps_rows = max(len(table_kps_rows) + 1, 2)
-        tbl_kps_shape = s4.shapes.add_table(num_kps_rows, 8, Inches(0.8), table_y, table_w, table_h)
-        tbl_kps = tbl_kps_shape.table
-
-        kps_col_widths = [
-            Inches(0.5),   # No
-            Inches(2.8),   # Nama Lembaga KPS
-            Inches(1.8),   # Balai PS
-            Inches(2.533), # Wilayah Administrasi
-            Inches(0.9),   # High/Med
-            Inches(1.0),   # FRP Maks
-            Inches(1.1),   # Koordinat
-            Inches(1.1),   # Peta / Link
-        ]
-        for idx, w in enumerate(kps_col_widths):
-            tbl_kps.columns[idx].width = w
-
-        kps_headers = [
-            "NO",
-            "NAMA LEMBAGA KPS",
-            "BALAI PS",
-            "LOKASI ADMINISTRATIF",
-            "TITIK",
-            "FRP MAKS",
-            "KOORDINAT",
-            "NAVIGASI",
-        ]
-        for col_idx, h_text in enumerate(kps_headers):
-            cell = tbl_kps.cell(0, col_idx)
-            cell.fill.solid()
-            cell.fill.fore_color.rgb = NAVY
-            cell.vertical_anchor = MSO_ANCHOR.MIDDLE
-            p = cell.text_frame.paragraphs[0]
-            p.alignment = PP_ALIGN.CENTER if col_idx not in (1, 2, 3) else PP_ALIGN.LEFT
-            r = p.add_run()
-            r.text = h_text
-            r.font.name = FONT_FAMILY
-            r.font.size = Pt(9.5)
-            r.font.bold = True
-            r.font.color.rgb = WHITE
-
-        if not table_kps_rows:
-            cell = tbl_kps.cell(1, 1)
-            p = cell.text_frame.paragraphs[0]
-            r = p.add_run()
-            r.text = "Tidak terdapat unit KPS dengan indikasi titik panas dalam 24 jam terakhir."
-            r.font.name = FONT_FAMILY
-            r.font.size = Pt(10)
-            r.font.italic = True
-        else:
-            for row_idx, item in enumerate(table_kps_rows, 1):
-                bg_c = CARD_BG if row_idx % 2 == 1 else RGBColor(241, 245, 249)
-                coords_text = f"{item['latitude']:.4f}, {item['longitude']:.4f}"
-                titik_text = f"{item['high_count']}H / {item['medium_count']}M"
-
-                # Cells
-                row_items = [
-                    (str(row_idx), PP_ALIGN.CENTER, NAVY, False, None),
-                    (item["name"], PP_ALIGN.LEFT, NAVY, True, None),
-                    (item["bps"], PP_ALIGN.LEFT, SLATE, False, None),
-                    (item["wilayah"], PP_ALIGN.LEFT, NAVY_LIGHT, False, None),
-                    (titik_text, PP_ALIGN.CENTER, RED if item["high_count"] > 0 else AMBER, True, None),
-                    (f"{item['max_frp']} MW", PP_ALIGN.CENTER, RED if item["max_frp"] > 30 else NAVY, True, None),
-                    (coords_text, PP_ALIGN.CENTER, SLATE, False, None),
-                    ("Buka Google Maps", PP_ALIGN.CENTER, BLUE, True, item["google_maps_url"]),
-                ]
-
-                for col_idx, (text_val, align, text_color, is_bold, link_url) in enumerate(row_items):
-                    cell = tbl_kps.cell(row_idx, col_idx)
-                    cell.fill.solid()
-                    cell.fill.fore_color.rgb = bg_c
-                    cell.vertical_anchor = MSO_ANCHOR.MIDDLE
-                    p = cell.text_frame.paragraphs[0]
-                    p.alignment = align
-                    r = p.add_run()
-                    r.text = text_val
-                    r.font.name = FONT_FAMILY
-                    r.font.size = Pt(9)
-                    r.font.bold = is_bold
-                    r.font.color.rgb = text_color
-                    if link_url:
-                        r.hyperlink.address = link_url
-                        r.font.underline = True
-
         _add_slide_footer(s4)
 
         # =====================================================================
-        # SLIDE 5: PROTOKOL TINDAK LANJUT & ARAHAN GROUND CHECK SATGAS
+        # SLIDE 5: MATRIKS KEPUTUSAN & INSTRUKSI LAPANGAN SATGAS HARI INI
         # =====================================================================
         s5 = prs.slides.add_slide(blank_layout)
         _add_rect(s5, Inches(0), Inches(0), Inches(13.333), Inches(7.5), fill_color=BG_CANVAS)
         _add_slide_header(
             s5,
-            category="Standar Operasional Prosedur (SOP)",
-            title="Protokol Penanganan Cepat & Arahan Ground Check Satgas Dalkarhutla",
-            date_stamp=f"{data['report_date_str']} • 07:00 WIB",
+            category="Instruksi Operasional",
+            title="Matriks Keputusan & Instruksi Lapangan Satgas Hari Ini",
+            date_stamp=f"{data.get('report_date_str', '')} • 07:00 WIB",
         )
 
-        step_w = Inches(2.78)
-        step_h = Inches(5.2)
-        step_y = Inches(1.5)
+        step_w = Inches(3.75)
+        step_h = Inches(5.4)
+        step_y = Inches(1.4)
+        step_gap = Inches(0.24)
+        step_start_x = Inches(0.8)
 
-        steps = [
+        # Data top 3 KPS untuk kartu keputusan langsung
+        top_3_kps = data.get("kps_list", [])[:3]
+        kps_decision_text = []
+        for idx, kps in enumerate(top_3_kps, 1):
+            kps_decision_text.append(
+                f"{idx}. {kps['name']} ({kps['bps']})\n"
+                f"   • Titik: {kps['high_count']} High / {kps['medium_count']} Med\n"
+                f"   • FRP: {kps['max_frp']} MW | Koordinat: {kps['latitude']:.4f}, {kps['longitude']:.4f}"
+            )
+
+        b_list_s5 = data.get("balai_list", [])
+        b1_name = b_list_s5[0]["name"] if b_list_s5 else "Balai Terkait"
+        b2_name = b_list_s5[1]["name"] if len(b_list_s5) > 1 else "Balai Kedua"
+        hi_cnt = data.get("high_count", 0)
+
+        instructions = [
             (
-                "01. PENAPISAN & DISPOSISI",
-                "Satgas Balai PS & KPH",
+                "01. PENETAPAN STATUS KOMANDO",
+                "Keputusan Manajemen & Pimpinan",
+                RED if hi_cnt > 10 else AMBER,
+                [
+                    f"Tetapkan Status Siaga: {data.get('status_siaga', 'WASPADA')} untuk seluruh unit pelaksana teknis (UPT).",
+                    f"Aktivasi Posko Darurat: Prioritas di {b1_name} dan {b2_name}.",
+                    "Penyekatan Kanal: Instruksikan pengelola KPS lahan gambut membuka pintu pembasahan sekat kanal.",
+                    "Logistik & Armada: Siagakan pompa jinjing dan tangki air di titik kumpul posko terdekat.",
+                ],
+            ),
+            (
+                "02. DISPOSISI GROUND CHECK 3 KPS",
+                "Perintah Tugas Lapangan Hari Ini",
                 BLUE,
                 [
-                    "Identifikasi unit KPS kategori Prioritas Tinggi pada laporan ini.",
-                    "Disposisikan data koordinat ke KPH dan Pendamping PS setempat.",
-                    "Lakukan overlay batas perizinan persetujuan PS vs area buffer luar.",
-                    "Siapkan peta kerja ground check berbasis Google Maps presisi.",
-                ],
+                    "Terbitkan Surat Perintah Tugas (SPT) verifikasi darat untuk 3 KPS prioritas tertinggi hari ini:",
+                ] + (kps_decision_text if kps_decision_text else ["Nihil unit KPS kritis hari ini."]),
             ),
             (
-                "02. PATROLI & GROUND CHECK",
-                "Satgas Dalkarhutla & MPA",
-                RED,
-                [
-                    "Pengerahan regu patroli terdekat dalam rentang waktu maksimal 1×24 jam.",
-                    "Libatkan Masyarakat Peduli Api (MPA) dan pengurus kelompok KPS.",
-                    "Gunakan tautan koordinat pada slide 4 untuk navigasi GPS lapangan.",
-                    "Pastikan keselamatan personil dan ketersediaan peralatan pemadaman.",
-                ],
-            ),
-            (
-                "03. PEMBUKTIAN & BAP FISIK",
-                "Tim Verifikasi Lapangan",
-                AMBER,
-                [
-                    "Verifikasi tipe anomali: kebakaran aktif, bekas tebasan, atau panas industri.",
-                    "Pengukuran luas indikasi terbakar menggunakan GPS tracking.",
-                    "Pengambilan dokumentasi foto geotagged dari 4 penjuru mata angin.",
-                    "Penyusunan Berita Acara Pemeriksaan (BAP) bermeterai resmi.",
-                ],
-            ),
-            (
-                "04. PELAPORAN BERJENJANG",
-                "Direktorat & Ditjen Terkait",
+                "03. PENYUSUNAN BAP & LEGALITAS",
+                "Standar Penegakan Aturan Lapangan",
                 GREEN,
                 [
-                    "Input Berita Acara & foto lapangan ke platform ETASENEU.",
-                    "Status hotspot dimutakhirkan dari indikasi menjadi terkonfirmasi/padam.",
-                    "Laporan berkala disampaikan kepada Direktur PKTHA & Dirjen PSKL.",
-                    "Evaluasi kepatuhan tata kelola pencegahan kebakaran kelompok KPS.",
+                    "Dokumentasi Wajib: Ambil foto geotagged 4 penjuru mata angin pada titik koordinat anomali.",
+                    "Uji Fisik Lapangan: Pastikan apakah indikasi merupakan api berkobar, sisa abu, atau panas atap/industri.",
+                    "Berita Acara (BAP): Susun BAP verifikasi lapangan bersama ketua kelompok KPS dan pendamping.",
+                    "Input Sistem: Laporkan hasil BAP langsung ke aplikasi ETASENEU dalam kurun waktu 1×24 jam.",
                 ],
             ),
         ]
 
-        for idx, (s_title, s_sub, s_color, s_points) in enumerate(steps):
-            sx = start_x + (idx * (step_w + gap))
-            _add_rect(s5, sx, step_y, step_w, step_h, fill_color=CARD_BG, line_color=CARD_BORDER, rounded=True)
-            _add_rect(s5, sx, step_y, step_w, Inches(0.1), fill_color=s_color, rounded=True)
+        for idx, (ins_title, ins_sub, ins_color, ins_points) in enumerate(instructions):
+            ix = step_start_x + (idx * (step_w + step_gap))
+            _add_rect(s5, ix, step_y, step_w, step_h, fill_color=CARD_BG, line_color=CARD_BORDER, rounded=True)
+            _add_rect(s5, ix, step_y, step_w, Inches(0.1), fill_color=ins_color, rounded=True)
 
-            tb_s = s5.shapes.add_textbox(sx + Inches(0.18), step_y + Inches(0.2), step_w - Inches(0.36), step_h - Inches(0.35))
-            tf_s = tb_s.text_frame
-            tf_s.word_wrap = True
-            tf_s.margin_left = tf_s.margin_top = tf_s.margin_right = tf_s.margin_bottom = 0
+            tb_i = s5.shapes.add_textbox(ix + Inches(0.2), step_y + Inches(0.2), step_w - Inches(0.4), step_h - Inches(0.4))
+            tf_i = tb_i.text_frame
+            tf_i.word_wrap = True
+            tf_i.margin_left = tf_i.margin_top = tf_i.margin_right = tf_i.margin_bottom = 0
 
-            p_h = tf_s.paragraphs[0]
+            p_h = tf_i.paragraphs[0]
             r_h = p_h.add_run()
-            r_h.text = s_title
+            r_h.text = ins_title
             r_h.font.name = FONT_FAMILY
             r_h.font.size = Pt(11)
             r_h.font.bold = True
-            r_h.font.color.rgb = s_color
+            r_h.font.color.rgb = ins_color
 
-            p_sub = tf_s.add_paragraph()
+            p_sub = tf_i.add_paragraph()
             p_sub.space_before = Pt(2)
-            p_sub.space_after = Pt(12)
+            p_sub.space_after = Pt(10)
             r_sub = p_sub.add_run()
-            r_sub.text = s_sub
+            r_sub.text = ins_sub
             r_sub.font.name = FONT_FAMILY
             r_sub.font.size = Pt(9)
             r_sub.font.bold = True
             r_sub.font.color.rgb = SLATE
 
-            for pt in s_points:
-                p_p = tf_s.add_paragraph()
-                p_p.space_after = Pt(8)
+            for pt in ins_points:
+                p_p = tf_i.add_paragraph()
+                p_p.space_after = Pt(7)
                 r_p = p_p.add_run()
                 r_p.text = f"• {pt}"
                 r_p.font.name = FONT_FAMILY
-                r_p.font.size = Pt(9.5)
+                r_p.font.size = Pt(9)
                 r_p.font.color.rgb = NAVY_LIGHT
 
         _add_slide_footer(s5)
 
-        # Simpan ke byte stream
         buf = io.BytesIO()
         prs.save(buf)
         buf.seek(0)
@@ -1058,7 +1232,7 @@ class DailyReportService:
         target_date: date | None = None,
         force: bool = False,
     ) -> dict[str, Any]:
-        """Generate paparan .pptx dan kirimkan sebagai lampiran dokumen via Telegram Bot."""
+        """Generate paparan .pptx dengan grafik visual dan kirimkan via Telegram Bot."""
         token = (self.settings.telegram_bot_token if bot_token is None else bot_token).strip()
         target_chat = (self.settings.telegram_chat_id if chat_id is None else chat_id).strip()
 
@@ -1082,13 +1256,11 @@ class DailyReportService:
                 "message": f"Laporan harian {date_str_key} sudah pernah terkirim hari ini.",
             }
 
-        # Kumpulkan data pantauan
         data = self.collect_daily_hotspot_data(target_date=effective_date)
         pptx_bytes = self.generate_daily_hotspot_pptx(data)
         filename = f"Laporan_Harian_Hotspot_KPS_{date_iso}_0700WIB.pptx"
 
-        # Susun caption Telegram ringkas (maks 1024 karakter sesuai limit Bot API)
-        top_balai_str = ", ".join([b["name"] for b in data["balai_list"][:3]]) if data["balai_list"] else "Nihil"
+        top_balai_str = ", ".join([b["name"] for b in data["balai_list"][:2]]) if data["balai_list"] else "Nihil"
         top_kps_lines = []
         for idx, kps in enumerate(data["kps_list"][:3], 1):
             short_name = kps["name"][:35]
@@ -1103,15 +1275,15 @@ class DailyReportService:
             "📊 <b>LAPORAN HARIAN HOTSPOT KPS (07:00 WIB)</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📅 <b>Tanggal</b>: {data['report_date_str']}\n"
-            f"🚨 <b>Status</b>: <b>{data['status_siaga']}</b>\n"
-            f"🔥 <b>Total Hotspot 24 Jam</b>: <b>{data['total_hotspots']:,}</b> titik\n"
-            f"   • 🔴 High: <b>{data['high_count']}</b> | 🟠 Med: <b>{data['medium_count']}</b> | ⚪ Low: {data['low_count']}\n"
-            f"⚡ <b>FRP Maks</b>: <b>{data['max_frp']} MW</b> (Rata-rata: {data['avg_frp']} MW)\n"
-            f"🏢 <b>Balai Utama</b>: {top_balai_str}\n\n"
-            "<b>Unit Prioritas Ground Check:</b>\n"
+            f"🚨 <b>Status Siaga</b>: <b>{data['status_siaga']}</b>\n"
+            f"📈 <b>Tren H vs H-1</b>: <b>{data['total_hotspots']:,} titik</b> (vs {data['yesterday_total']:,} kemarin, <b>{data['trend_icon']} {data['delta_pct']:+.1f}%</b>)\n"
+            f"⏰ <b>Puncak Jam Rawan</b>: Siang Pkl {data['peak_day_hour']:02d}:00 & Dini Hari Pkl {data['peak_night_hour']:02d}:00 WIB\n"
+            f"⚡ <b>FRP Maks</b>: <b>{data['max_frp']} MW</b> (Rerata: {data['avg_frp']} MW)\n"
+            f"🏢 <b>Fokus Balai</b>: {top_balai_str}\n\n"
+            "<b>🎯 3 KPS Intervensi Prioritas:</b>\n"
             f"{top_kps_block}\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "📎 <i>Dokumen paparan resmi (.pptx) terlampir.</i>\n"
+            "📎 <i>Paparan resmi (.pptx) terlampir memuat grafik tren H-1, siklus jam deteksi, & arahan keputusan.</i>\n"
             f"🔗 <a href=\"{self.settings.frontend_origin}\">Buka Dashboard ETASENEU</a>"
         )
 
@@ -1174,7 +1346,6 @@ async def daily_report_scheduler_loop() -> None:
             now_jkt = datetime.now(jakarta_tz)
             today_str = now_jkt.strftime("%Y-%m-%d")
 
-            # Cek apakah jam sudah mencapai atau melampaui target_hour (misal 07:00)
             if now_jkt.hour >= target_hour:
                 service = DailyReportService()
                 if not service.is_daily_report_already_sent(today_str):
@@ -1184,8 +1355,6 @@ async def daily_report_scheduler_loop() -> None:
                     )
                     await service.send_daily_telegram_report(force=False)
 
-            # Hitung waktu tunggu hingga esok hari pada jam target_hour:00:05 WIB
-            # (atau tunggu 60 detik jika belum jam 7 hari ini)
             now_jkt = datetime.now(jakarta_tz)
             if now_jkt.hour < target_hour:
                 next_check = datetime.combine(now_jkt.date(), time(target_hour, 0, 5), tzinfo=jakarta_tz)
@@ -1197,7 +1366,6 @@ async def daily_report_scheduler_loop() -> None:
                 )
 
             sleep_seconds = max(10.0, (next_check - now_jkt).total_seconds())
-            # Batasi tidur maksimal 300 detik (5 menit) agar responsif terhadap perubahan jam atau reload
             sleep_duration = min(sleep_seconds, 300.0)
             await asyncio.sleep(sleep_duration)
 
