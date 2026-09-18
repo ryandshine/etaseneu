@@ -200,12 +200,22 @@ class TelegramBotService:
         top_balai = ", ".join([b["name"].replace("Balai PS ", "") for b in data.get("balai_list", [])[:2]]) or "Nihil"
         ew_sum = data.get("early_warning_summary", {})
 
+        inside_cnt = data.get("inside_kps_count", 0)
+        buffer_cnt = data.get("buffer_kps_count", 0)
+        breakdown_line = ""
+        if inside_cnt > 0 or buffer_cnt > 0:
+            breakdown_line = (
+                f"   • 🏛️ <b>Inti Dalam KPS</b>: <b>{inside_cnt:,}</b> titik\n"
+                f"   • 🛡️ <b>Buffer Perimeter (s.d. 5 km)</b>: <b>{buffer_cnt:,}</b> titik\n"
+            )
+
         text = (
             "📊 <b>STATUS PEMANTAUAN HOTSPOT KPS HARI INI</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📅 <b>Tanggal</b>: {data['report_date_str']}\n"
             f"🚨 <b>Status Siaga</b>: <b>{data['status_siaga']}</b>\n"
-            f"📈 <b>Total Hotspot</b>: <b>{data['total_hotspots']:,} titik</b>\n"
+            f"📈 <b>Total Hotspot Terpantau</b>: <b>{data['total_hotspots']:,} titik</b>\n"
+            f"{breakdown_line}"
             f"   • High (Tinggi): <b>{data['high_count']}</b> titik\n"
             f"   • Medium (Sedang): <b>{data['medium_count']}</b> titik\n"
             f"   • Low (Rendah): <b>{data['low_count']}</b> titik\n\n"

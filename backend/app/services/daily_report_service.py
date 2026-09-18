@@ -451,6 +451,9 @@ class DailyReportService:
 
         frp_values: list[float] = []
 
+        inside_kps_count = 0
+        buffer_kps_count = 0
+
         for r in raw_rows:
             conf_cat = confidence_category(r)
             confidence_counts[conf_cat] = confidence_counts.get(conf_cat, 0) + 1
@@ -473,8 +476,10 @@ class DailyReportService:
             if raw_agency.startswith("Luar Kawasan (") and raw_agency.endswith(")"):
                 inner_agency = raw_agency[len("Luar Kawasan ("):-1].strip()
                 agency = f"{inner_agency} (Buffer Keliling)"
+                buffer_kps_count += 1
             else:
                 agency = raw_agency
+                inside_kps_count += 1
 
             loc_parts = []
             if poly_meta.get("NAMA_DESA"):
@@ -741,6 +746,8 @@ class DailyReportService:
             "report_time_str": "07:00 WIB",
             "time_window_str": time_window_str,
             "total_hotspots": total_hotspots,
+            "inside_kps_count": inside_kps_count,
+            "buffer_kps_count": buffer_kps_count,
             "high_count": confidence_counts["Tinggi"],
             "medium_count": confidence_counts["Sedang"],
             "low_count": confidence_counts["Rendah"],
