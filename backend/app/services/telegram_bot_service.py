@@ -205,6 +205,7 @@ class TelegramBotService:
             "<i>(Khusus Titik Panas di Dalam Poligon Definitif KPS)</i>\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📅 <b>Tanggal</b>: {data['report_date_str']}\n"
+            f"⏱️ <b>Jendela Pantauan</b>: <code>{data['time_window_str']}</code> (24 Jam Terakhir)\n"
             f"🚨 <b>Status Siaga</b>: <b>{data['status_siaga']}</b>\n"
             f"📈 <b>Total Hotspot di Dalam KPS</b>: <b>{data['total_hotspots']:,} titik</b>\n"
             f"   • High (Tinggi): <b>{data['high_count']}</b> titik\n"
