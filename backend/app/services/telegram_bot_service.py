@@ -206,6 +206,7 @@ class TelegramBotService:
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📅 <b>Tanggal</b>: {data['report_date_str']}\n"
             f"⏱️ <b>Jendela Pantauan</b>: <code>{data['time_window_str']}</code> (24 Jam Terakhir)\n"
+            "ℹ️ <i>Keterangan: Akumulasi 24 jam ke belakang dari saat ini, khusus titik api yang berada tepat di dalam batas poligon KPS (bukan buffer/luar kawasan).</i>\n\n"
             f"🚨 <b>Status Siaga</b>: <b>{data['status_siaga']}</b>\n"
             f"📈 <b>Total Hotspot di Dalam KPS</b>: <b>{data['total_hotspots']:,} titik</b>\n"
             f"   • High (Tinggi): <b>{data['high_count']}</b> titik\n"
@@ -337,10 +338,12 @@ class TelegramBotService:
 
         caption = (
             f"📊 <b>Laporan Harian Titik Panas KPS</b>\n"
-            f"📅 {data['report_date_str']}\n"
-            f"🚨 Status: <b>{data['status_siaga']}</b> | Total: <b>{data['total_hotspots']:,} titik</b>\n\n"
-            "<i>Presentasi 10 slide widescreen memuat grafik tren H vs H-1, siklus jam patroli, "
-            "seluruh 27 KPS terbakar ulang, dan matriks keputusan satgas.</i>"
+            f"📅 <b>Tanggal</b>: {data['report_date_str']}\n"
+            f"⏱️ <b>Jendela Pantauan</b>: <code>{data['time_window_str']}</code> (24 Jam)\n"
+            "📍 <b>Lingkup Spasial</b>: Khusus titik panas di dalam poligon definitif KPS (luar kawasan/buffer ditiadakan)\n"
+            f"🚨 <b>Status Siaga</b>: <b>{data['status_siaga']}</b> | Total: <b>{data['total_hotspots']:,} titik</b>\n\n"
+            "<i>Presentasi 10 slide widescreen memuat grafik tren H vs H-1, jam kritis patroli, "
+            "daftar seluruh KPS terbakar ulang, dan matriks keputusan satgas.</i>"
         )
 
         await self.send_document(

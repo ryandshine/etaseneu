@@ -203,7 +203,7 @@ def _add_slide_header(
     r1.font.color.rgb = WHITE
 
     if date_stamp:
-        tb_right = slide.shapes.add_textbox(Inches(9.2), Inches(0.3), Inches(3.3), Inches(0.55))
+        tb_right = slide.shapes.add_textbox(Inches(6.8), Inches(0.2), Inches(5.7), Inches(0.75))
         tf_right = tb_right.text_frame
         tf_right.word_wrap = True
         tf_right.margin_left = tf_right.margin_top = tf_right.margin_right = tf_right.margin_bottom = 0
@@ -212,7 +212,7 @@ def _add_slide_header(
         r_right = p_right.add_run()
         r_right.text = date_stamp
         r_right.font.name = FONT_FAMILY
-        r_right.font.size = Pt(11)
+        r_right.font.size = Pt(9.5)
         r_right.font.bold = True
         r_right.font.color.rgb = MUTED
 
@@ -224,8 +224,8 @@ def _add_slide_footer(slide):
     p = tf.paragraphs[0]
     r = p.add_run()
     r.text = (
-        "Kementerian Kehutanan Republik Indonesia  ·  Sistem Informasi ETASENEU  ·  "
-        "Laporan Harian Pemantauan Titik Panas (07:00 WIB)"
+        "Kementerian Kehutanan RI  ·  ETASENEU  ·  "
+        "Khusus Titik Panas di Dalam Poligon KPS  ·  Akumulasi 24 Jam Kedinasan (Pukul 07:00 H-1 s.d. 07:00 H)"
     )
     r.font.name = FONT_FAMILY
     r.font.size = Pt(8)
@@ -836,14 +836,14 @@ class DailyReportService:
         r_sub.font.color.rgb = SKY
 
         # Card Status Siaga Utama & Sorotan Keputusan
-        _add_rect(s1, Inches(1.0), Inches(4.2), Inches(11.333), Inches(1.8), fill_color=NAVY_LIGHT, rounded=True)
-        tb_meta = s1.shapes.add_textbox(Inches(1.3), Inches(4.35), Inches(10.7), Inches(1.5))
+        _add_rect(s1, Inches(1.0), Inches(4.1), Inches(11.333), Inches(2.05), fill_color=NAVY_LIGHT, rounded=True)
+        tb_meta = s1.shapes.add_textbox(Inches(1.3), Inches(4.2), Inches(10.7), Inches(1.85))
         tf_meta = tb_meta.text_frame
         tf_meta.word_wrap = True
         tf_meta.margin_left = tf_meta.margin_top = tf_meta.margin_right = tf_meta.margin_bottom = 0
 
         p_s = tf_meta.paragraphs[0]
-        p_s.space_after = Pt(4)
+        p_s.space_after = Pt(3)
         r_s1 = p_s.add_run()
         r_s1.text = f"🚨 STATUS SIAGA NASIONAL: {data.get('status_siaga', 'WASPADA')}  |  "
         r_s1.font.name = FONT_FAMILY
@@ -859,24 +859,33 @@ class DailyReportService:
         r_s2.font.color.rgb = WHITE
 
         p_m1 = tf_meta.add_paragraph()
-        p_m1.space_after = Pt(4)
+        p_m1.space_after = Pt(3)
         r_m1 = p_m1.add_run()
         r_m1.text = (
-            f"📅 Periode Data: {data.get('time_window_str', '')}  ·  "
-            f"Total: {data.get('total_hotspots', 0):,} Titik di Dalam Poligon KPS (vs {data.get('yesterday_total', 0):,} H-1)".replace(",", ".")
+            f"⏱️ Jendela Waktu: {data.get('time_window_str', '')} (Akumulasi 24 Jam Kedinasan)  ·  "
+            f"Total: {data.get('total_hotspots', 0):,} Titik di Dalam KPS (vs {data.get('yesterday_total', 0):,} H-1)".replace(",", ".")
         )
         r_m1.font.name = FONT_FAMILY
-        r_m1.font.size = Pt(11)
+        r_m1.font.size = Pt(10.5)
+        r_m1.font.bold = True
         r_m1.font.color.rgb = SKY
+
+        p_m_lingkup = tf_meta.add_paragraph()
+        p_m_lingkup.space_after = Pt(3)
+        r_m_lingkup = p_m_lingkup.add_run()
+        r_m_lingkup.text = "📍 Lingkup Spasial: Khusus titik panas yang berada tepat DI DALAM batas definitif poligon KPS (area luar/buffer keliling tidak dihitung)."
+        r_m_lingkup.font.name = FONT_FAMILY
+        r_m_lingkup.font.size = Pt(9.5)
+        r_m_lingkup.font.color.rgb = WHITE
 
         p_m2 = tf_meta.add_paragraph()
         r_m2 = p_m2.add_run()
         top_3_balai = ", ".join([b["name"] for b in data.get("balai_list", [])[:3]]) if data.get("balai_list") else "Nihil"
         r_m2.text = f"🎯 Fokus Wilayah Intervensi Hari Ini: {top_3_balai} (Alokasi Patroli Prioritas)"
         r_m2.font.name = FONT_FAMILY
-        r_m2.font.size = Pt(10.5)
+        r_m2.font.size = Pt(10)
         r_m2.font.bold = True
-        r_m2.font.color.rgb = WHITE
+        r_m2.font.color.rgb = MUTED
 
         # Disclaimer
         tb_disc = s1.shapes.add_textbox(Inches(1.0), Inches(6.35), Inches(11.333), Inches(0.7))
@@ -886,9 +895,9 @@ class DailyReportService:
         p_disc = tf_disc.paragraphs[0]
         r_disc = p_disc.add_run()
         r_disc.text = (
-            "CATATAN KEDINASAN: Indikasi hotspot merupakan anomali termal satelit penginderaan jauh (NASA FIRMS) "
-            "sebagai instrumen peringatan dini dan dasar penerbitan Surat Perintah Tugas verifikasi lapangan (ground check). "
-            "Bukan vonis kebakaran sebelum terbit Berita Acara Pemeriksaan (BAP) fisik."
+            "CATATAN KEDINASAN: Data hotspot disaring khusus di dalam poligon izin Perhutanan Sosial (KPS) "
+            "berdasarkan rekaman sensor satelit NASA FIRMS selama 24 jam buku harian kedinasan (pukul 07:00 WIB H-1 s.d. 07:00 WIB H). "
+            "Titik panas merupakan anomali termal untuk verifikasi lapangan (ground check) dan dasar komando patroli Satgas."
         )
         r_disc.font.name = FONT_FAMILY
         r_disc.font.size = Pt(8.5)
