@@ -338,17 +338,20 @@ class TelegramBotService:
         pptx_bytes = self.report_service.generate_daily_hotspot_pptx(data)
 
         jakarta_tz = ZoneInfo("Asia/Jakarta")
-        date_iso = datetime.now(jakarta_tz).strftime("%Y%m%d")
-        filename = f"Laporan_Harian_Hotspot_KPS_{date_iso}_0700WIB.pptx"
+        now_dt = datetime.now(jakarta_tz)
+        date_iso = now_dt.strftime("%Y%m%d")
+        time_iso = now_dt.strftime("%H%MWIB")
+        filename = f"Laporan_Harian_Hotspot_KPS_{date_iso}_{time_iso}.pptx"
 
+        tot_burned = len(data.get("burned_kps_list", []))
         caption = (
             f"📊 <b>Laporan Harian Titik Panas KPS</b>\n"
             f"📅 <b>Tanggal</b>: {data['report_date_str']}\n"
             f"⏱️ <b>Jendela Pantauan</b>: <code>{data.get('time_window_str', '24 Jam')}</code> (24 Jam)\n"
             "📍 <b>Lingkup Spasial</b>: Khusus titik panas di dalam poligon definitif KPS (luar kawasan/buffer ditiadakan)\n"
             f"🚨 <b>Status Siaga</b>: <b>{data['status_siaga']}</b> | Total: <b>{data['total_hotspots']:,} titik</b>\n\n"
-            "<i>Presentasi 10 slide widescreen memuat grafik tren H vs H-1, jam kritis patroli, "
-            "daftar seluruh KPS terbakar ulang, dan matriks keputusan satgas.</i>"
+            f"<i>Presentasi 16:9 widescreen memuat tren H vs H-1, jam kritis patroli, "
+            f"rekapitulasi seluruh Balai PS, {tot_burned} KPS terbakar ulang/ekspansi, dan matriks keputusan satgas.</i>"
         )
 
         await self.send_document(

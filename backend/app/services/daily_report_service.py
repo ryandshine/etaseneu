@@ -375,6 +375,7 @@ class DailyReportService:
         yesterday_total = 0
         yesterday_high = 0
         trend_rows_raw: list[dict[str, Any]] = []
+        ew_raw_rows: list[dict[str, Any]] = []
         hourly_counts: dict[int, int] = defaultdict(int)
 
         if self.store.enabled:
@@ -417,21 +418,113 @@ class DailyReportService:
                             yesterday_total = int(y_row["total"] or 0)
                             yesterday_high = int(y_row["high_count"] or 0)
 
-                        # 3. Tren 7 hari terakhir - KHUSUS DI DALAM POLIGON KPS
+                        # 3. Tren 7 siklus 24 jam berturut-turut - KHUSUS DI DALAM POLIGON KPS
                         cur.execute(
                             """
+                            WITH periods AS (
+                                SELECT 
+                                    k,
+                                    (%s::timestamptz - (k * INTERVAL '24 hours')) as p_end,
+                                    (%s::timestamptz - ((k + 1) * INTERVAL '24 hours')) as p_start
+                                FROM generate_series(0, 6) as k
+                            )
                             SELECT 
-                                (date_trunc('day', detected_at AT TIME ZONE 'Asia/Jakarta'))::date as day_date,
-                                COUNT(*) as total
-                            FROM hotspot_observations
-                            WHERE detected_at >= %s AND detected_at < %s
-                              AND (agency_name NOT LIKE 'Luar Kawasan%%' AND COALESCE((raw_payload->>'is_perimeter')::boolean, false) = false)
-                            GROUP BY day_date
-                            ORDER BY day_date;
+                                p.k,
+                                p.p_start AT TIME ZONE 'Asia/Jakarta' as p_start_jkt,
+                                p.p_end AT TIME ZONE 'Asia/Jakarta' as p_end_jkt,
+                                COUNT(h.id) as total
+                            FROM periods p
+                            LEFT JOIN hotspot_observations h 
+                                ON h.detected_at >= p.p_start AND h.detected_at < p.p_end
+                               AND (h.agency_name NOT LIKE 'Luar Kawasan%%' AND COALESCE((h.raw_payload->>'is_perimeter')::boolean, false) = false)
+                            GROUP BY p.k, p.p_start, p.p_end
+                            ORDER BY p.k DESC;
                             """,
-                            (seven_days_start, end_time),
+                            (end_time, end_time),
                         )
                         trend_rows_raw = [dict(r) for r in cur.fetchall()]
+
+                        # 4. Analisis KPS Ancaman 24 Jam (Re-burn, Ekspansi, dan Peringatan Dini Baru)
+                        month_start = datetime(end_time.year, end_time.month, 1, tzinfo=jakarta_tz)
+                        year_start = datetime(end_time.year, 1, 1, tzinfo=jakarta_tz)
+                        cur.execute(
+                            """
+                            WITH polygon_burned AS (
+                                SELECT 
+                                    polygon_metadata_id,
+                                    SUM(burned_area_ha) as total_burned_ha,
+                                    COUNT(DISTINCT (year, month)) as burn_frequency,
+                                    MAX(make_date(year, month, 1)) as latest_burned_month,
+                                    ST_Union(geometry) FILTER (WHERE geometry IS NOT NULL) as burned_geom
+                                FROM burned_area_summary
+                                WHERE burned_area_ha > 0
+                                GROUP BY polygon_metadata_id
+                            ),
+                            polygon_hotspots AS (
+                                SELECT 
+                                    p.id as polygon_id,
+                                    COUNT(h.id) FILTER (WHERE h.detected_at >= %s AND h.detected_at < %s) as h_window,
+                                    COUNT(h.id) FILTER (
+                                        WHERE h.detected_at >= %s AND h.detected_at < %s
+                                          AND b.burned_geom IS NOT NULL
+                                          AND ST_Contains(b.burned_geom, h.geom)
+                                    ) as h_window_strict_reburn,
+                                    COUNT(h.id) FILTER (WHERE h.detected_at >= %s AND h.detected_at < %s) as h_yesterday,
+                                    COUNT(h.id) FILTER (WHERE h.detected_at >= %s AND h.detected_at < %s) as h_7d,
+                                    COUNT(h.id) FILTER (WHERE h.detected_at >= %s AND h.detected_at < %s) as h_month,
+                                    COUNT(h.id) FILTER (WHERE h.detected_at >= %s AND h.detected_at < %s) as h_year,
+                                    MAX((h.raw_payload->>'frp')::float) FILTER (WHERE h.detected_at >= %s AND h.detected_at < %s) as frp_max_window,
+                                    MIN(
+                                        CASE 
+                                            WHEN h.detected_at >= %s AND h.detected_at < %s
+                                                 AND b.burned_geom IS NOT NULL
+                                                 AND NOT ST_Contains(b.burned_geom, h.geom)
+                                            THEN ST_Distance(h.geom::geography, b.burned_geom::geography) / 1000.0
+                                            ELSE NULL
+                                        END
+                                    ) as min_distance_km_window
+                                FROM polygon_metadata p
+                                LEFT JOIN polygon_burned b ON p.id = b.polygon_metadata_id
+                                JOIN hotspot_observations h ON ST_Contains(p.geometry, h.geom)
+                                WHERE p.is_active = TRUE
+                                  AND (h.agency_name NOT LIKE 'Luar Kawasan%%' AND COALESCE((h.raw_payload->>'is_perimeter')::boolean, false) = false)
+                                GROUP BY p.id
+                            )
+                            SELECT 
+                                p.id, p.lembaga, p.nama_desa, p.nama_kec, p.nama_kab, p.nama_prov, p.wilker_bps, p.skema, p.luas_sk,
+                                ST_Y(ST_Centroid(p.geometry)) as lat,
+                                ST_X(ST_Centroid(p.geometry)) as lon,
+                                COALESCE(b.total_burned_ha, 0) as total_burned_ha,
+                                COALESCE(b.burn_frequency, 0) as burn_frequency,
+                                COALESCE(h.h_window, 0) as h_window,
+                                COALESCE(h.h_window_strict_reburn, 0) as h_window_strict_reburn,
+                                COALESCE(h.h_yesterday, 0) as h_yesterday,
+                                COALESCE(h.h_7d, 0) as h_7d,
+                                COALESCE(h.h_month, 0) as h_month,
+                                COALESCE(h.h_year, 0) as h_year,
+                                COALESCE(h.frp_max_window, 0) as frp_max_window,
+                                h.min_distance_km_window
+                            FROM polygon_metadata p
+                            LEFT JOIN polygon_burned b ON p.id = b.polygon_metadata_id
+                            JOIN polygon_hotspots h ON p.id = h.polygon_id
+                            WHERE p.is_active = TRUE AND COALESCE(h.h_window, 0) > 0
+                            ORDER BY 
+                                (COALESCE(h.h_window_strict_reburn, 0) > 0) DESC,
+                                COALESCE(h.h_window, 0) DESC,
+                                COALESCE(b.total_burned_ha, 0) DESC;
+                            """,
+                            (
+                                start_time, end_time,
+                                start_time, end_time,
+                                start_time_y, start_time,
+                                seven_days_start, end_time,
+                                month_start, end_time,
+                                year_start, end_time,
+                                start_time, end_time,
+                                start_time, end_time,
+                            ),
+                        )
+                        ew_raw_rows = [dict(r) for r in cur.fetchall()]
             except Exception as e:
                 logger.error("Gagal query hotspot harian dari database: %s", e)
 
@@ -540,15 +633,16 @@ class DailyReportService:
             trend_color = AMBER
             trend_icon = "➡️"
 
-        # Susun Tren 7 Hari
+        # Susun Tren 7 Hari (Akumulasi 24 Jam per Siklus Harian)
         daily_trend_list = []
         if trend_rows_raw:
-            for idx, tr in enumerate(trend_rows_raw):
-                d_date = tr["day_date"]
-                d_str = d_date.strftime("%d %b")
-                if idx == len(trend_rows_raw) - 1:
+            for tr in trend_rows_raw:
+                k = int(tr.get("k", 0))
+                p_end_dt = tr.get("p_end_jkt")
+                d_str = p_end_dt.strftime("%d %b") if p_end_dt else f"H-{k}"
+                if k == 0:
                     lbl = f"{d_str} (H)"
-                elif idx == len(trend_rows_raw) - 2:
+                elif k == 1:
                     lbl = f"{d_str} (H-1)"
                 else:
                     lbl = d_str
@@ -641,93 +735,111 @@ class DailyReportService:
         max_frp = max(frp_values, default=0.0)
         avg_frp = (sum(frp_values) / len(frp_values)) if frp_values else 0.0
 
-        # Ambil data dari Menu Peringatan Dini (Early Warning Service & FTRI)
+        # Analisis Peringatan Dini (Early Warning & FTRI) berbasis jendela 24 jam kedinasan
         early_warning_kps_list = []
-        ew_summary_data = {
-            "strict_reburn_kps": 0,
-            "expanding_kps": 0,
-            "ew_new_kps": 0,
-            "total_burned_ha": 0.0,
-        }
+        burned_kps_list = []
+        ew_new_list = []
+
         try:
-            from app.services.early_warning_service import EarlyWarningService
+            from app.services.early_warning_service import compute_ftri_score
 
-            ew_svc = EarlyWarningService(store=self.store)
-            ew_summary = ew_svc.get_summary_metrics()
-            b_stats = ew_summary.get("burned_area_stats", {})
-            e_stats = ew_summary.get("early_warning_stats", {})
+            for r in ew_raw_rows:
+                h_win = int(r.get("h_window") or 0)
+                h_strict = int(r.get("h_window_strict_reburn") or 0)
+                total_burned_ha = float(r.get("total_burned_ha") or 0.0)
+                burn_freq = int(r.get("burn_frequency") or 0)
+                luas_sk = float(r.get("luas_sk") or 100.0) if r.get("luas_sk") else 100.0
 
-            ew_summary_data = {
-                "strict_reburn_kps": int(b_stats.get("strict_reburn_kps_today", 0)),
-                "expanding_kps": int(b_stats.get("active_today", 0)),
-                "ew_new_kps": int(e_stats.get("active_today", 0)),
-                "total_burned_ha": round(float(b_stats.get("total_burned_ha", 0.0)), 1),
-            }
+                ftri_val = compute_ftri_score(
+                    h_today=h_win,
+                    h_yesterday=int(r.get("h_yesterday") or 0),
+                    h_7d=int(r.get("h_7d") or 0),
+                    h_aug=int(r.get("h_month") or 0),
+                    h_total_2026=int(r.get("h_year") or 0),
+                    total_burned_ha=total_burned_ha,
+                    burn_frequency=burn_freq,
+                    luas_sk=luas_sk,
+                    h_today_strict_reburn=h_strict,
+                )
 
-            # 1. KPS dari kategori Terbakar Kembali (Re-burn & Ekspansi) - AMBIL SEMUA
-            burned_active_items = ew_svc.get_kps_analysis_list(category="burned_active_today", limit=500)
-            burned_kps_list = []
-            for it in burned_active_items:
-                is_strict = it.get("hotspots_today_strict_reburn", 0) > 0
-                cat_label = "Strict Re-burn" if is_strict else "Ekspansi Bara"
-                it_copy = dict(it)
-                it_copy["ew_category"] = cat_label
-                burned_kps_list.append(it_copy)
+                ftri_lbl = (
+                    "Ekstrem" if ftri_val >= 70
+                    else ("Tinggi" if ftri_val >= 50
+                    else ("Sedang" if ftri_val >= 30 else "Rendah"))
+                )
 
+                lat = float(r.get("lat") or 0.0)
+                lon = float(r.get("lon") or 0.0)
+                gmaps_url = f"https://www.google.com/maps?q={lat:.6f},{lon:.6f}"
+
+                prov_name = (r.get("nama_prov") or "").strip()
+                raw_bps = r.get("wilker_bps")
+                bps_name = _resolve_bps(raw_bps, prov_name)
+
+                item = {
+                    "id": r.get("id"),
+                    "lembaga": r.get("lembaga") or "Areal KPS",
+                    "nama_desa": r.get("nama_desa"),
+                    "nama_kec": r.get("nama_kec"),
+                    "nama_kab": r.get("nama_kab"),
+                    "nama_prov": r.get("nama_prov"),
+                    "wilker_bps": bps_name,
+                    "skema": r.get("skema") or "PS",
+                    "total_burned_ha": round(total_burned_ha, 1),
+                    "hotspots_today": h_win,
+                    "hotspots_today_strict_reburn": h_strict,
+                    "hotspots_today_expanding": max(0, h_win - h_strict),
+                    "ftri_score": ftri_val,
+                    "ftri_label": ftri_lbl,
+                    "latitude": round(lat, 6),
+                    "longitude": round(lon, 6),
+                    "google_maps_url": gmaps_url,
+                }
+
+                if total_burned_ha > 0:
+                    cat_label = "Strict Re-burn" if h_strict > 0 else "Ekspansi Bara"
+                    item["ew_category"] = cat_label
+                    burned_kps_list.append(item)
+                else:
+                    item["ew_category"] = "Peringatan Dini Baru"
+                    ew_new_list.append(item)
+
+            # Prioritas urutan burned: strict re-burn dulu, lalu volume titik 24 jam DESC, lalu FTRI DESC
             burned_kps_list.sort(
                 key=lambda x: (
-                    1 if x.get("hotspots_today_strict_reburn", 0) > 0 else 0,
-                    x.get("hotspots_today") or 0,
-                    x.get("ftri_score") or 0.0,
+                    1 if x["hotspots_today_strict_reburn"] > 0 else 0,
+                    x["hotspots_today"],
+                    x["ftri_score"],
                 ),
                 reverse=True,
             )
 
-            # 2. KPS dari kategori Peringatan Dini Baru (early_warning_today) - AMBIL SEMUA
-            ew_active_items = ew_svc.get_kps_analysis_list(category="early_warning_today", limit=500)
-            ew_new_list = []
-            for it in ew_active_items:
-                it_copy = dict(it)
-                it_copy["ew_category"] = "Peringatan Dini Baru"
-                ew_new_list.append(it_copy)
-
+            # Prioritas urutan ew_new: skor FTRI ancaman tertinggi DESC, lalu volume titik 24 jam DESC
             ew_new_list.sort(
                 key=lambda x: (
-                    x.get("ftri_score") or 0.0,
-                    x.get("hotspots_today") or 0,
+                    x["ftri_score"],
+                    x["hotspots_today"],
                 ),
                 reverse=True,
             )
 
             early_warning_kps_list = burned_kps_list + ew_new_list
-
-            # Query titik centroid poligon untuk Google Maps presisi
-            poly_ids = [k["id"] for k in early_warning_kps_list if k.get("id")]
-            if poly_ids and self.store.enabled:
-                with self.store.connection() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            """
-                            SELECT id, ST_Y(ST_Centroid(geometry)) as lat, ST_X(ST_Centroid(geometry)) as lon
-                            FROM polygon_metadata
-                            WHERE id = ANY(%s);
-                            """,
-                            (poly_ids,),
-                        )
-                        coords_map = {r["id"]: (float(r["lat"]), float(r["lon"])) for r in cur.fetchall()}
-
-                for k in early_warning_kps_list:
-                    lat, lon = coords_map.get(k["id"], (0.0, 0.0))
-                    k["latitude"] = round(lat, 6)
-                    k["longitude"] = round(lon, 6)
-                    k["google_maps_url"] = f"https://www.google.com/maps?q={lat:.6f},{lon:.6f}"
-                    ftri = float(k.get("ftri_score") or 0.0)
-                    k["ftri_label"] = "Ekstrem" if ftri >= 70 else ("Tinggi" if ftri >= 50 else ("Sedang" if ftri >= 30 else "Rendah"))
-
         except Exception as e:
-            logger.error("Gagal mengambil daftar KPS menu peringatan dini: %s", e)
+            logger.error("Gagal menyusun daftar KPS ancaman 24 jam: %s", e)
             burned_kps_list = []
             ew_new_list = []
+            early_warning_kps_list = []
+
+        strict_cnt = len([k for k in burned_kps_list if k["hotspots_today_strict_reburn"] > 0])
+        exp_cnt = len([k for k in burned_kps_list if k["hotspots_today_strict_reburn"] == 0])
+        tot_burned_ha = round(sum(k["total_burned_ha"] for k in burned_kps_list), 1)
+
+        ew_summary_data = {
+            "strict_reburn_kps": strict_cnt,
+            "expanding_kps": exp_cnt,
+            "ew_new_kps": len(ew_new_list),
+            "total_burned_ha": tot_burned_ha,
+        }
 
         high_and_med = confidence_counts["Tinggi"] + confidence_counts["Sedang"]
         if confidence_counts["Tinggi"] >= 5 or max_frp > 100 or high_and_med >= 50 or delta_pct > 20:
@@ -743,10 +855,12 @@ class DailyReportService:
             status_siaga = "TERKENDALI / AMAN"
             siaga_color = GREEN
 
+        report_time_str = "07:00 WIB" if target_date is not None else f"{now_jkt.strftime('%H:%M')} WIB"
+
         return {
             "report_date": report_date.isoformat(),
             "report_date_str": report_date_str,
-            "report_time_str": "07:00 WIB",
+            "report_time_str": report_time_str,
             "time_window_str": time_window_str,
             "total_hotspots": total_hotspots,
             "inside_kps_count": inside_kps_count,
@@ -913,7 +1027,7 @@ class DailyReportService:
             s2,
             category="Evaluasi Eskalasi Risiko",
             title="Analisis Tren Harian & Perbandingan Hari Kemarin (H vs H-1)",
-            date_stamp=f"{data.get('report_date_str', '')} • 07:00 WIB",
+            date_stamp=f"{data.get('report_date_str', '')} • {data.get('report_time_str', '07:00 WIB')}",
         )
 
         # 4 KPI Cards dengan Delta H vs H-1
@@ -1047,7 +1161,7 @@ class DailyReportService:
             s3,
             category="Siklus Harian & Jadwal Patroli",
             title="Distribusi Jam Deteksi 24 Jam & Jendela Waktu Kritis Patroli",
-            date_stamp=f"{data['report_date_str']} • 07:00 WIB",
+            date_stamp=f"{data.get('report_date_str', '')} • {data.get('report_time_str', '07:00 WIB')}",
         )
 
         # Sisipkan Gambar Grafik Distribusi Jam (Kiri)
@@ -1115,9 +1229,9 @@ class DailyReportService:
                 Inches(0.5),   # No
                 Inches(2.6),   # Nama Lembaga KPS & Skema
                 Inches(1.8),   # Balai PS
-                Inches(2.133), # Wilayah Administrasi
+                Inches(2.033), # Wilayah Administrasi
                 Inches(1.4),   # Kategori Ancaman
-                Inches(0.9),   # Hotspot Hari Ini
+                Inches(1.0),   # Hotspot 24 Jam
                 Inches(1.1),   # Skor FTRI
                 Inches(1.3),   # Navigasi
             ]
@@ -1130,7 +1244,7 @@ class DailyReportService:
                 "BALAI PS",
                 "WILAYAH",
                 "KATEGORI ANCAMAN",
-                "HARI INI",
+                "HOTSPOT 24 JAM",
                 "SKOR FTRI",
                 "NAVIGASI",
             ]
@@ -1144,7 +1258,7 @@ class DailyReportService:
                 r = p.add_run()
                 r.text = h_text
                 r.font.name = FONT_FAMILY
-                r.font.size = Pt(9.5)
+                r.font.size = Pt(8.5) if col_idx == 5 else Pt(9.5)
                 r.font.bold = True
                 r.font.color.rgb = WHITE
 
@@ -1243,7 +1357,7 @@ class DailyReportService:
                 s_burn,
                 category="Sistem Peringatan Dini • Areal Bekas Terbakar",
                 title=f"Daftar KPS Terbakar Kembali & Ekspansi Bara{p_label}",
-                date_stamp=f"{data.get('report_date_str', '')} • 07:00 WIB",
+                date_stamp=f"{data.get('report_date_str', '')} • {data.get('report_time_str', '07:00 WIB')}",
             )
 
             if p_idx == 0:
@@ -1315,7 +1429,7 @@ class DailyReportService:
                 s_ew,
                 category=f"Sistem Peringatan Dini • Potensi Kebakaran Baru (Total {len(ew_new_list)} KPS Aktif)",
                 title=f"Daftar KPS Peringatan Dini Baru — Ancaman FTRI Ekstrem{e_label}",
-                date_stamp=f"{data.get('report_date_str', '')} • 07:00 WIB",
+                date_stamp=f"{data.get('report_date_str', '')} • {data.get('report_time_str', '07:00 WIB')}",
             )
 
             _render_kps_table_on_slide(
@@ -1337,27 +1451,27 @@ class DailyReportService:
             s5,
             category="Pemetaan Wilayah Kerja",
             title="Rekapitulasi Spasial per Balai Perhutanan Sosial (BPS)",
-            date_stamp=f"{data.get('report_date_str', '')} • 07:00 WIB",
+            date_stamp=f"{data.get('report_date_str', '')} • {data.get('report_time_str', '07:00 WIB')}",
         )
 
         table_y = Inches(1.4)
         table_w = Inches(11.733)
         table_h = Inches(5.4)
 
-        balai_rows = data.get("balai_list", [])[:9]
+        balai_rows = data.get("balai_list", [])
         num_rows = max(len(balai_rows) + 1, 2)
         tbl_shape = s5.shapes.add_table(num_rows, 8, Inches(0.8), table_y, table_w, table_h)
         tbl = tbl_shape.table
 
         col_widths = [
-            Inches(0.6),   # No
-            Inches(3.333), # Balai PS
-            Inches(1.1),   # High
-            Inches(1.1),   # Medium
-            Inches(1.3),   # Total Pantau
+            Inches(0.5),   # No
+            Inches(3.4),   # Balai PS
+            Inches(0.95),  # High
+            Inches(0.95),  # Medium
+            Inches(0.95),  # Low
+            Inches(1.1),   # Total
             Inches(1.3),   # Max FRP
-            Inches(1.4),   # Skor Prioritas
-            Inches(1.6),   # Status Prioritas
+            Inches(2.483), # Status Prioritas
         ]
         for idx, w in enumerate(col_widths):
             tbl.columns[idx].width = w
@@ -1365,11 +1479,11 @@ class DailyReportService:
         headers = [
             "NO",
             "WILAYAH KERJA BALAI PS",
-            "HIGH",
-            "MEDIUM",
-            "TOTAL PANTAU",
+            "TINGGI",
+            "SEDANG",
+            "RENDAH",
+            "TOTAL",
             "FRP MAKS",
-            "SKOR PRIORITAS",
             "STATUS PRIORITAS",
         ]
         for col_idx, h_text in enumerate(headers):
@@ -1382,7 +1496,7 @@ class DailyReportService:
             r = p.add_run()
             r.text = h_text
             r.font.name = FONT_FAMILY
-            r.font.size = Pt(9.5)
+            r.font.size = Pt(9)
             r.font.bold = True
             r.font.color.rgb = WHITE
 
@@ -1395,16 +1509,18 @@ class DailyReportService:
             r.font.size = Pt(10)
             r.font.italic = True
         else:
+            font_sz = Pt(8.5) if len(balai_rows) > 9 else Pt(9.5)
             for row_idx, item in enumerate(balai_rows, 1):
                 bg_c = CARD_BG if row_idx % 2 == 1 else RGBColor(241, 245, 249)
+                tot_hs = item["high_count"] + item["medium_count"] + item.get("low_count", 0)
                 row_data = [
                     (str(row_idx), PP_ALIGN.CENTER, NAVY),
                     (item["name"], PP_ALIGN.LEFT, NAVY),
                     (str(item["high_count"]), PP_ALIGN.CENTER, RED if item["high_count"] > 0 else SLATE),
                     (str(item["medium_count"]), PP_ALIGN.CENTER, AMBER if item["medium_count"] > 0 else SLATE),
-                    (str(item["total_priority"]), PP_ALIGN.CENTER, NAVY),
+                    (str(item.get("low_count", 0)), PP_ALIGN.CENTER, SLATE),
+                    (str(tot_hs), PP_ALIGN.CENTER, NAVY),
                     (f"{item['max_frp']} MW", PP_ALIGN.CENTER, RED if item["max_frp"] > 30 else NAVY),
-                    (str(item["priority_score"]), PP_ALIGN.CENTER, NAVY),
                     (item["priority_status"], PP_ALIGN.CENTER, RED if item["priority_status"] == "Prioritas Tinggi" else (AMBER if item["priority_status"] == "Prioritas Sedang" else GREEN)),
                 ]
                 for col_idx, (val_text, align, text_color) in enumerate(row_data):
@@ -1417,8 +1533,8 @@ class DailyReportService:
                     r = p.add_run()
                     r.text = val_text
                     r.font.name = FONT_FAMILY
-                    r.font.size = Pt(9.5)
-                    r.font.bold = (col_idx in (1, 6, 7))
+                    r.font.size = font_sz
+                    r.font.bold = (col_idx in (1, 5, 7))
                     r.font.color.rgb = text_color
 
         _add_slide_footer(s5)
@@ -1432,7 +1548,7 @@ class DailyReportService:
             s6,
             category="Instruksi Operasional",
             title="Matriks Keputusan & Instruksi Lapangan Satgas Hari Ini",
-            date_stamp=f"{data.get('report_date_str', '')} • 07:00 WIB",
+            date_stamp=f"{data.get('report_date_str', '')} • {data.get('report_time_str', '07:00 WIB')}",
         )
 
         step_w = Inches(3.75)
@@ -1652,7 +1768,7 @@ class DailyReportService:
             "<b>🚨 KPS TERBAKAR ULANG (PRIORITAS 1):</b>\n"
             f"{strict_block}\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "📎 <i>Semua 27 KPS Terbakar Ulang & Top FTRI termuat di .pptx.</i>\n"
+            f"📎 <i>Seluruh {len(data.get('burned_kps_list', []))} KPS Terbakar Ulang / Ekspansi & Top FTRI termuat di .pptx.</i>\n"
             f"🔗 <a href=\"{self.settings.frontend_origin}\">Unduh Excel {tot_ew} KPS di ETASENEU</a>"
         )
         if len(caption) > 1020:
