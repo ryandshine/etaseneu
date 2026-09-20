@@ -31,26 +31,36 @@ function ensurePane(map: L.Map, name: string, zIndex: number): string {
  * Citra satelit asap: true color VIIRS dari NASA GIBS. Diambil lewat proxy
  * backend (`/api/smoke/imagery/...`) yang meng-cache ubin -- semua pengguna
  * berbagi cache dan browser tidak pernah menembak server NASA langsung.
+ *
+ * "Hari ini" ditumpuk DI ATAS citra kemarin. Citra harian GIBS baru terisi
+ * seiring satelit lewat: siang hari WIB, Indonesia sering belum terekam hari
+ * itu (yang sudah hanya sebuah jalur sempit). Backend mengubah piksel tanpa
+ * data jadi transparan, sehingga celahnya menampilkan citra kemarin alih-alih
+ * peta kosong. Memilih "Kemarin" secara eksplisit hanya menampilkan kemarin.
  */
 function SmokeImageryLayer({ day }: { day: SmokeImageryDay }) {
   const map = useMap();
 
   useEffect(() => {
     const pane = ensurePane(map, IMAGERY_PANE, 250);
-    const layer = L.tileLayer(smokeImageryUrlTemplate(smokeImageryDate(day)), {
-      pane,
-      opacity: 0.85,
-      maxNativeZoom: 9, // batas TileMatrixSet GIBS Level9; di atasnya diperbesar
-      maxZoom: 20,
-      attribution: "Citra &copy; NASA GIBS / VIIRS",
-      // Citra bisa belum ada untuk hari ini: jangan blokir render peta.
-      updateWhenIdle: true,
-      updateWhenZooming: false,
-      keepBuffer: 1,
-    });
-    layer.addTo(map);
+    const days: SmokeImageryDay[] = day === "today" ? ["yesterday", "today"] : ["yesterday"];
+    const layers = days.map((d, index) =>
+      L.tileLayer(smokeImageryUrlTemplate(smokeImageryDate(d)), {
+        pane,
+        zIndex: index + 1, // yang lebih baru di atas
+        opacity: 0.85,
+        maxNativeZoom: 9, // batas TileMatrixSet GIBS Level9; di atasnya diperbesar
+        maxZoom: 20,
+        attribution: "Citra &copy; NASA GIBS / VIIRS",
+        // Citra bisa belum ada untuk hari ini: jangan blokir render peta.
+        updateWhenIdle: true,
+        updateWhenZooming: false,
+        keepBuffer: 1,
+      }),
+    );
+    layers.forEach((layer) => layer.addTo(map));
     return () => {
-      map.removeLayer(layer);
+      layers.forEach((layer) => map.removeLayer(layer));
     };
   }, [map, day]);
 

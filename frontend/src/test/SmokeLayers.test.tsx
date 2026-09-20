@@ -77,14 +77,36 @@ describe("SmokeMapLayers", () => {
   });
 
   it("adds the satellite imagery tiles through OUR proxy, for the chosen UTC day", () => {
-    const { rerender } = render(<SmokeMapLayers smoke={smokeState({ imagery: true, imageryDay: "today" })} />);
-    const today = smokeImageryDate("today");
-    expect(tileUrls(realMap)).toEqual([expect.stringContaining(`/${today}/{z}/{x}/{y}`)]);
-    expect(tileUrls(realMap)[0].startsWith("/api/smoke/imagery/")).toBe(true);
-
-    rerender(<SmokeMapLayers smoke={smokeState({ imagery: true, imageryDay: "yesterday" })} />);
+    const { rerender } = render(<SmokeMapLayers smoke={smokeState({ imagery: true, imageryDay: "yesterday" })} />);
     const yesterday = smokeImageryDate("yesterday");
     expect(tileUrls(realMap)).toEqual([expect.stringContaining(`/${yesterday}/{z}/{x}/{y}`)]);
+    expect(tileUrls(realMap)[0].startsWith("/api/smoke/imagery/")).toBe(true);
+    expect(tileUrls(realMap).every((u) => !u.startsWith("http"))).toBe(true); // tak pernah langsung ke NASA
+
+    rerender(<SmokeMapLayers smoke={smokeState({ imagery: true, imageryDay: "today" })} />);
+    expect(tileUrls(realMap).length).toBeGreaterThan(0);
+  });
+
+  it("stacks TODAY on top of yesterday, so gaps not yet recorded today show yesterday's imagery", () => {
+    // Kasus nyata 2026-09-20 siang: citra hari ini belum merekam Indonesia. Tanpa
+    // lapisan kemarin di bawahnya, Indonesia tampak kosong (hanya sebuah jalur
+    // sempit di Pasifik yang sudah terekam).
+    render(<SmokeMapLayers smoke={smokeState({ imagery: true, imageryDay: "today" })} />);
+    const today = smokeImageryDate("today");
+    const yesterday = smokeImageryDate("yesterday");
+
+    const tiles = layersOf(realMap).filter(
+      (l) => typeof (l as unknown as { _url?: string })._url === "string" && (l as unknown as { _url: string })._url.includes("/api/smoke/imagery/"),
+    ) as unknown as Array<{ _url: string; options: { zIndex: number } }>;
+
+    expect(tiles.map((t) => t._url.split("/")[5])).toEqual([yesterday, today]);
+    const [under, over] = tiles;
+    expect(over.options.zIndex).toBeGreaterThan(under.options.zIndex);
+  });
+
+  it("does not add a second layer when the user explicitly picks yesterday", () => {
+    render(<SmokeMapLayers smoke={smokeState({ imagery: true, imageryDay: "yesterday" })} />);
+    expect(tileUrls(realMap)).toHaveLength(1);
   });
 
   it("puts imagery in its own non-interactive pane so clicks still reach KPS polygons", () => {
@@ -96,7 +118,7 @@ describe("SmokeMapLayers", () => {
 
   it("removes the imagery layer when switched off", () => {
     const { rerender } = render(<SmokeMapLayers smoke={smokeState({ imagery: true })} />);
-    expect(tileUrls(realMap)).toHaveLength(1);
+    expect(tileUrls(realMap)).toHaveLength(2); // hari ini + kemarin (pengisi celah)
     rerender(<SmokeMapLayers smoke={smokeState({ imagery: false })} />);
     expect(tileUrls(realMap)).toHaveLength(0);
   });

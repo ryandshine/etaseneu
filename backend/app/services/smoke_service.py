@@ -17,12 +17,14 @@ Modul ini murni (tanpa cache/HTTP framework); cache & rute ada di
 
 from __future__ import annotations
 
+import io
 import logging
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
+from PIL import Image, ImageChops
 
 from app.services.weather_service import AIR_QUALITY_BASE, build_axis
 
@@ -66,6 +68,39 @@ async def fetch_imagery_tile(
         return None
     resp.raise_for_status()
     return resp.content
+
+
+# Piksel "tanpa data" pada citra harian GIBS (area yang belum dilewati satelit
+# hari itu, celah antar-lintasan) dikirim sebagai HITAM PEKAT dalam JPEG -- bukan
+# transparan. Tanpa penanganan, ubin itu menutupi seluruh peta di bawahnya
+# (kasus nyata 2026-09-20 siang: citra hari ini belum merekam Indonesia, jadi
+# Indonesia tertutup hitam). Ambang kecil menyisakan sedikit derau kompresi JPEG
+# di tepi jalur; laut gelap sungguhan (biru tua) tetap jauh di atas ambang ini.
+NODATA_MAX_CHANNEL = 10
+
+
+def make_nodata_transparent(content: bytes) -> bytes:
+    """JPEG GIBS -> PNG dengan alpha 0 di piksel tanpa data.
+
+    Ubin tanpa piksel kosong dikembalikan APA ADANYA (tetap JPEG, tidak
+    di-encode ulang). Konten yang tidak bisa di-decode juga dikembalikan apa
+    adanya -- lebih baik ubin apa adanya daripada error.
+    """
+    try:
+        rgb = Image.open(io.BytesIO(content)).convert("RGB")
+    except Exception:  # noqa: BLE001 -- bukan gambar valid: teruskan saja
+        return content
+
+    r, g, b = rgb.split()
+    brightest = ImageChops.lighter(ImageChops.lighter(r, g), b)
+    alpha = brightest.point(lambda v: 0 if v <= NODATA_MAX_CHANNEL else 255)
+    if alpha.getextrema()[0] == 255:
+        return content  # semua piksel berisi citra
+
+    rgb.putalpha(alpha)
+    out = io.BytesIO()
+    rgb.save(out, "PNG", optimize=True)
+    return out.getvalue()
 
 
 # ---------------------------------------------------------------------------

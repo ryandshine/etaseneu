@@ -13,8 +13,11 @@ import os
 import time
 from datetime import datetime, timedelta, timezone
 
+import io
+
 import httpx
 import pytest
+from PIL import Image
 from fastapi.testclient import TestClient
 
 from app.api import smoke as smoke_api
@@ -132,6 +135,62 @@ def test_imagery_url_is_built_for_gibs_wmtscompatible_level9():
         "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/"
         f"{LAYER}/default/2026-09-19/GoogleMapsCompatible_Level9/5/16/25.jpg"
     )  # urutan GIBS: {z}/{row=y}/{col=x}
+
+# --------------------------------------------------------------------------
+# Piksel "tanpa data" GIBS (hitam murni) harus jadi TRANSPARAN
+# --------------------------------------------------------------------------
+# Kasus nyata (2026-09-20 12.30 WIB): citra hari ini belum merekam Indonesia,
+# tapi GIBS mengirim JPEG hitam pekat -> menutupi seluruh peta di bawahnya.
+
+
+def _jpeg(left_black: bool = True, all_black: bool = False) -> bytes:
+    img = Image.new("RGB", (256, 256), (0, 0, 0) if all_black else (200, 180, 150))
+    if left_black and not all_black:
+        img.paste((0, 0, 0), (0, 0, 128, 256))
+    out = io.BytesIO()
+    img.save(out, "JPEG", quality=90)
+    return out.getvalue()
+
+
+def _serve(monkeypatch, content: bytes):
+    async def fake_fetch(*args, **kwargs):
+        return content
+
+    monkeypatch.setattr(smoke_service, "fetch_imagery_tile", fake_fetch)
+
+
+def test_black_nodata_pixels_become_transparent_png(client, monkeypatch):
+    _serve(monkeypatch, _jpeg())
+    resp = client.get(f"/api/smoke/imagery/{LAYER}/{_today_utc()}/5/25/16")
+    assert resp.headers["content-type"] == "image/png"
+    img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+    assert img.getpixel((10, 128))[3] == 0, "sisi hitam (tanpa data) harus transparan"
+    assert img.getpixel((245, 128))[3] == 255, "sisi berisi citra harus tetap pekat"
+
+
+def test_fully_black_tile_becomes_fully_transparent(client, monkeypatch):
+    _serve(monkeypatch, _jpeg(all_black=True))
+    resp = client.get(f"/api/smoke/imagery/{LAYER}/{_today_utc()}/5/25/16")
+    assert resp.headers["content-type"] == "image/png"
+    alpha = Image.open(io.BytesIO(resp.content)).convert("RGBA").getchannel("A")
+    assert alpha.getextrema() == (0, 0)
+
+
+def test_tile_with_real_imagery_everywhere_stays_untouched_jpeg(client, monkeypatch):
+    original = _jpeg(left_black=False)
+    _serve(monkeypatch, original)
+    resp = client.get(f"/api/smoke/imagery/{LAYER}/{_today_utc()}/5/25/16")
+    assert resp.headers["content-type"] == "image/jpeg"
+    assert resp.content == original, "tanpa piksel kosong tidak perlu di-encode ulang"
+
+
+def test_processed_transparent_tile_is_cached_with_correct_type(client, monkeypatch):
+    _serve(monkeypatch, _jpeg())
+    url = f"/api/smoke/imagery/{LAYER}/{_today_utc()}/5/25/16"
+    assert client.get(url).headers["x-tile-cache"] == "miss"
+    again = client.get(url)
+    assert again.headers["x-tile-cache"] == "hit"
+    assert again.headers["content-type"] == "image/png"
 
 
 # --------------------------------------------------------------------------

@@ -471,12 +471,19 @@ tidak di-persist) + fungsi murni `lib/smoke.ts`.
 
 - **Citra satelit (NASA GIBS WMTS, true color VIIRS)** — pengamatan harian (hari UTC), tertutup awan, tanpa nilai angka.
   Diproksi + di-cache backend: `GET /api/smoke/imagery/{layer}/{date}/{z}/{x}/{y}` (`app/api/smoke.py::tile_router`,
-  cache `resolved_cache_dir/smoke/*.jpg`: 1 jam untuk hari ini, 24 jam lainnya, prune >3 hari, cache basi disajikan saat
+  cache `resolved_cache_dir/smoke/*.tile` (JPEG utuh ATAU PNG, dibedakan lewat magic bytes): 1 jam untuk hari ini, 24 jam lainnya, prune >3 hari, cache basi disajikan saat
   GIBS down, ubin 404 GIBS → PNG transparan). **Sengaja TIDAK digerbang `_read_gate`** (Leaflet memuat via `<img src>` tanpa
   header Authorization — alasan sama dengan `/api/kawasan-hutan/tile`). Whitelist layer (`smoke_service.IMAGERY_LAYERS`,
   3 VIIRS) + validasi tanggal (maks 30 hari lalu) + zoom ≤ 9 (TileMatrixSet `GoogleMapsCompatible_Level9`, di atasnya
   diperbesar Leaflet) supaya endpoint bukan proxy terbuka. Tidak ada layer bernama "smoke" di GIBS — asap dilihat lewat true
   color. Pane `smoke-imagery` z250.
+  **Piksel "tanpa data" GIBS = HITAM PEKAT dalam JPEG (bukan transparan)** — area yang belum dilewati satelit hari itu.
+  Tanpa penanganan ubin itu menutupi seluruh peta (bug nyata 2026-09-20 siang: Indonesia tertutup hitam karena citra
+  hari ini belum merekam Indonesia; hanya jalur sempit di Pasifik yang sudah ada). Karena itu
+  `smoke_service.make_nodata_transparent()` (Pillow, ambang kanal ≤10) mengubahnya jadi PNG beralpha; ubin tanpa piksel
+  kosong dikembalikan apa adanya (JPEG). Frontend menumpuk **"Hari ini" di atas citra kemarin** (`zIndex` 2 vs 1) supaya celah
+  hari ini menampilkan kemarin; memilih "Kemarin" hanya menampilkan kemarin. `Pillow` sekarang eksplisit di
+  `requirements.txt` (sebelumnya cuma dependency turunan reportlab/weasyprint/matplotlib).
 - **Prakiraan PM2.5 (CAMS via Open-Meteo Air Quality)** — model global, per jam, 72 jam. `GET /api/smoke/pm25?offset_hours=0..48`
   (digerbang `_read_gate`, lewat `authFetch`). Grid **1,5° = 462 titik** (`smoke_service.GRID_POINTS`, lat 7.5→-12, lon 94→142;
   resolusi ±165 km — CAMS sendiri ~0,4°, jadi INDIKATIF regional, bukan skala kecamatan). Satu "kubus" 72 jam × 462 sel

@@ -60,7 +60,7 @@ def _cache_dir() -> Path:
 
 
 def tile_cache_filename(layer: str, date: str, z: int, x: int, y: int) -> str:
-    return f"{layer}_{date}_{z}_{x}_{y}.jpg"
+    return f"{layer}_{date}_{z}_{x}_{y}.tile"
 
 
 def _utc_today() -> datetime:
@@ -88,6 +88,11 @@ def _validate_tile_request(layer: str, date: str, z: int, x: int, y: int) -> dat
     return day
 
 
+def _media_type(content: bytes) -> str:
+    # Ubin tersimpan bisa JPEG (utuh) atau PNG (piksel kosong dibuat transparan).
+    return "image/png" if content.startswith(b"\x89PNG") else "image/jpeg"
+
+
 def _tile_ttl(day: datetime) -> int:
     return TILE_TTL_TODAY_SECONDS if day >= _utc_today() else TILE_TTL_PAST_SECONDS
 
@@ -100,7 +105,8 @@ def _prune_old_tiles(directory: Path) -> None:
         return
     _last_prune = now
     cutoff = now - TILE_PRUNE_AFTER_DAYS * 24 * 3600
-    for path in directory.glob("*.jpg"):
+    # "*.jpg" = cache versi lama (sebelum ubin diproses); "*.tile" = sekarang.
+    for path in [*directory.glob("*.tile"), *directory.glob("*.jpg")]:
         try:
             if path.stat().st_mtime < cutoff:
                 path.unlink()
@@ -115,9 +121,10 @@ async def get_smoke_imagery_tile(layer: str, date: str, z: int, x: int, y: int) 
     cache_path = _cache_dir() / tile_cache_filename(layer, date, z, x, y)
 
     if cache_path.exists() and (time.time() - cache_path.stat().st_mtime) < ttl:
+        cached_tile = cache_path.read_bytes()
         return Response(
-            content=cache_path.read_bytes(),
-            media_type="image/jpeg",
+            content=cached_tile,
+            media_type=_media_type(cached_tile),
             headers={"Cache-Control": f"public, max-age={min(ttl, 900)}", "X-Tile-Cache": "hit"},
         )
 
@@ -126,9 +133,10 @@ async def get_smoke_imagery_tile(layer: str, date: str, z: int, x: int, y: int) 
     except httpx.HTTPError as exc:
         logger.warning("Gagal ambil ubin citra asap dari GIBS: %s", exc)
         if cache_path.exists():
+            stale_tile = cache_path.read_bytes()
             return Response(
-                content=cache_path.read_bytes(),
-                media_type="image/jpeg",
+                content=stale_tile,
+                media_type=_media_type(stale_tile),
                 headers={"Cache-Control": "no-cache", "X-Tile-Cache": "stale"},
             )
         raise HTTPException(status_code=502, detail="Gagal mengambil citra satelit asap.") from exc
@@ -140,6 +148,8 @@ async def get_smoke_imagery_tile(layer: str, date: str, z: int, x: int, y: int) 
             headers={"Cache-Control": "public, max-age=600", "X-Tile-Cache": "empty"},
         )
 
+    content = smoke_service.make_nodata_transparent(content)
+
     try:
         cache_path.write_bytes(content)
         _prune_old_tiles(cache_path.parent)
@@ -148,7 +158,7 @@ async def get_smoke_imagery_tile(layer: str, date: str, z: int, x: int, y: int) 
 
     return Response(
         content=content,
-        media_type="image/jpeg",
+        media_type=_media_type(content),
         headers={"Cache-Control": f"public, max-age={min(ttl, 900)}", "X-Tile-Cache": "miss"},
     )
 

@@ -72,7 +72,8 @@ export function SmokeControl({ smoke, defaultOpen = false, className = "" }: Smo
                 </button>
               </div>
               <p className="smoke-control__note">
-                Asap tampak sebagai semburan abu-abu/cokelat. Citra harian, tertutup awan; hari ini bisa belum lengkap.
+                Asap tampak sebagai semburan abu-abu/cokelat. Citra harian dan tertutup awan. Hari ini: bagian yang
+                belum terekam satelit diisi citra kemarin.
               </p>
             </div>
           ) : null}
