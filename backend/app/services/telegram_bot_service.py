@@ -38,10 +38,41 @@ class TelegramBotService:
         self._running = False
         self._poll_task: asyncio.Task | None = None
         self._last_offset = 0
+        self._user_rate_limits: dict[int | str, list[float]] = {}
+        self._last_laporan_time: dict[int | str, float] = {}
 
     @property
     def is_configured(self) -> bool:
         return bool(self.token)
+
+    @property
+    def masked_token(self) -> str:
+        """Sensor token untuk logging aman (mencegah token leak)."""
+        if not self.token:
+            return "(belum disetel)"
+        if len(self.token) <= 10:
+            return "***"
+        return f"{self.token[:6]}...{self.token[-4:]}"
+
+    def is_admin(self, user_id: int | str) -> bool:
+        """Cek apakah user_id terdaftar dalam konfigurasi telegram_admin_ids atau telegram_chat_id."""
+        admin_ids_raw = getattr(self.settings, "telegram_admin_ids", "") or ""
+        admin_set = {x.strip() for x in admin_ids_raw.split(",") if x.strip()}
+        if self.settings.telegram_chat_id:
+            admin_set.add(str(self.settings.telegram_chat_id).strip())
+        return str(user_id).strip() in admin_set
+
+    def _check_rate_limit(self, chat_id: int | str) -> bool:
+        """Memeriksa batas frekuensi permintaan per menit (Anti-Flood / Anti-DoS)."""
+        now = asyncio.get_event_loop().time()
+        max_rpm = getattr(self.settings, "telegram_rate_limit_rpm", 20)
+        timestamps = [t for t in self._user_rate_limits.get(chat_id, []) if now - t < 60.0]
+        if len(timestamps) >= max_rpm:
+            self._user_rate_limits[chat_id] = timestamps
+            return False
+        timestamps.append(now)
+        self._user_rate_limits[chat_id] = timestamps
+        return True
 
     # =========================================================================
     # TELEGRAM HTTP API HELPERS
@@ -326,6 +357,20 @@ class TelegramBotService:
 
     async def handle_laporan(self, chat_id: int | str) -> None:
         """Menghasilkan berkas .pptx dan mengirimkannya langsung ke pengguna."""
+        # Proteksi Anti-Spam / CPU Exhaustion (Cooldown 25 detik per pengguna)
+        now_ts = asyncio.get_event_loop().time()
+        last_req = self._last_laporan_time.get(chat_id, 0.0)
+        cooldown_seconds = 25.0
+        if now_ts - last_req < cooldown_seconds:
+            remaining = int(cooldown_seconds - (now_ts - last_req))
+            await self.send_message(
+                chat_id,
+                f"⏳ <i>Mohon tunggu {remaining} detik sebelum meminta dokumen presentasi PPTX kembali (Anti-Spam Cooldown).</i>",
+                reply_markup=self._get_main_keyboard(),
+            )
+            return
+        self._last_laporan_time[chat_id] = now_ts
+
         await self.send_chat_action(chat_id, "upload_document")
 
         # Kirim notifikasi awal proses
@@ -458,7 +503,8 @@ class TelegramBotService:
 
     async def handle_search_kps(self, chat_id: int | str, query: str) -> None:
         """Menangani pencarian data KPS dan menampilkan profil, koordinat, dan hotspot terkini."""
-        clean_q = query.strip()
+        # Sanitasi query (maksimal 60 karakter & filter karakter non-printable)
+        clean_q = "".join(c for c in (query or "") if c.isprintable()).strip()[:60]
         if not clean_q:
             guide_text = (
                 "🔍 <b>PENCARIAN DATA KPS (PERHUTANAN SOSIAL)</b>\n"
@@ -633,6 +679,13 @@ class TelegramBotService:
             if not chat_id or not cb_data:
                 return
 
+            if not self._check_rate_limit(chat_id):
+                await self.send_message(
+                    chat_id,
+                    "⚠️ <i>Terlalu banyak permintaan interaktif. Mohon tunggu beberapa saat (Anti-Flood Protection).</i>",
+                )
+                return
+
             if cb_data == "cmd_status":
                 await self.handle_status(chat_id)
             elif cb_data == "cmd_ew":
@@ -657,6 +710,13 @@ class TelegramBotService:
             text = (msg.get("text") or "").strip()
 
             if not chat_id or not text:
+                return
+
+            if not self._check_rate_limit(chat_id):
+                await self.send_message(
+                    chat_id,
+                    "⚠️ <i>Terlalu banyak pesan dalam waktu singkat. Mohon tunggu beberapa saat sebelum mengirim perintah baru (Anti-Flood Protection).</i>",
+                )
                 return
 
             # Perintah berbasis Command
@@ -693,7 +753,7 @@ class TelegramBotService:
             logger.info("TELEGRAM_BOT: Bot token belum disetel, polling dinonaktifkan.")
             return
 
-        logger.info("TELEGRAM_BOT: Memulai long-polling listener untuk publik...")
+        logger.info("TELEGRAM_BOT: Memulai long-polling listener untuk publik (token: %s)...", self.masked_token)
         self._running = True
 
         backoff = 1.0
