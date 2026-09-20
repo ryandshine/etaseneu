@@ -14,6 +14,7 @@ from app.api.metrics import router as metrics_router
 from app.api.point_match import router as point_match_router
 from app.api.polygons import router as polygons_router
 from app.api.scheduler import router as scheduler_router
+from app.api.smoke import router as smoke_router, tile_router as smoke_tile_router
 from app.api.stats import router as stats_router
 from app.api.wind import router as wind_router
 from app.api.weather import router as weather_router
@@ -57,6 +58,11 @@ router.include_router(notifications_router, dependencies=_read_gate)
 # publik pemerintah tanpa autentikasi (tidak ada data ETASENEU yang bocor
 # lewat sini) -- sama alasannya dengan /api/health & /api/metrics di bawah.
 router.include_router(kawasan_hutan_router)
+# Lapisan asap: grid PM2.5 digerbang seperti router cuaca/angin; ubin citra
+# satelit (<img src>, tak bisa bawa Authorization) TIDAK -- alasan sama dengan
+# kawasan_hutan di atas, sumbernya data publik NASA GIBS.
+router.include_router(smoke_router, dependencies=_read_gate)
+router.include_router(smoke_tile_router)
 api_router = router
 
 

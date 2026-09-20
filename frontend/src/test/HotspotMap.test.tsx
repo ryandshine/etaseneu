@@ -19,7 +19,7 @@ const mapZoomMock = vi.fn(() => 5);
 const geoJsonPropsMock = vi.fn();
 const circleMarkerPropsMock = vi.fn();
 
-// Overlay Fungsi Kawasan Hutan (default nyala sejak 2026-09-04, lihat
+// Overlay Fungsi Kawasan Hutan (default MATI sejak 2026-09-20, lihat
 // HotspotMap.tsx) manipulasi L.Map asli (getPane/createPane/addLayer) lewat
 // useMap() -- di luar jangkauan mock react-leaflet ringan di bawah. Diganti
 // no-op supaya render map tetap bisa diuji tanpa mensimulasikan Leaflet penuh.
@@ -493,5 +493,32 @@ describe("Hotspot map integration", () => {
     fireEvent.click(toggle);
     expect(await screen.findByRole("group", { name: /pemutar waktu hotspot/i })).toBeInTheDocument();
     expect(screen.getByRole("slider", { name: /posisi waktu/i })).toBeInTheDocument();
+  });
+
+  it("keeps the Fungsi Kawasan Hutan overlay OFF by default every time the map opens", async () => {
+    render(<App />);
+    await loginThroughUI();
+    await screen.findByTestId("leaflet-map", {}, { timeout: 5000 });
+
+    const toggle = await screen.findByRole("button", { name: /fungsi kawasan hutan/i });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    // Legenda kawasan hanya muncul saat lapisannya nyala.
+    expect(screen.queryByText(/KWSHUTAN 1:250K/i)).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText(/KWSHUTAN 1:250K/i)).toBeInTheDocument();
+  });
+
+  it("offers the smoke layers on the live map, all OFF by default", async () => {
+    render(<App />);
+    await loginThroughUI();
+    await screen.findByTestId("leaflet-map", {}, { timeout: 5000 });
+
+    const head = await screen.findByRole("button", { name: /lapisan asap/i });
+    expect(head).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(head);
+    expect(screen.getByRole("button", { name: /citra satelit asap/i })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /prakiraan pm2\.5/i })).toHaveAttribute("aria-pressed", "false");
   });
 });

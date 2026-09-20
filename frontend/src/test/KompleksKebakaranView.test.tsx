@@ -438,4 +438,28 @@ describe("KompleksKebakaranView", () => {
     await waitFor(() => expect(getListPanel()).toBeInTheDocument());
     expect(screen.queryByText("Lihat Detail KPS →")).not.toBeInTheDocument();
   });
+
+  it("offers the smoke layers on the fire-complex map, all OFF by default", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          count: 0,
+          clusters: [],
+          points: [],
+          stats: { total_hotspots_in_range: 0, clustered_hotspots: 0, unclustered_hotspots: 0 },
+          sensitivity: "sedang",
+          range_start: "2026-08-01T00:00:00Z",
+          range_end: "2026-08-24T00:00:00Z"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    render(<KompleksKebakaranView />);
+    await waitFor(() => expect(screen.getByTestId("zoom-control")).toBeInTheDocument());
+    const head = await screen.findByRole("button", { name: /lapisan asap/i });
+    expect(head).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(head);
+    expect(screen.getByRole("button", { name: /citra satelit asap/i })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /prakiraan pm2\.5/i })).toHaveAttribute("aria-pressed", "false");
+  });
 });

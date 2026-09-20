@@ -43,6 +43,9 @@ import type { BurnedAreaOverlayFeature } from "../hooks/useBurnedAreaOverlay";
 import { useS2BurnedAreaOverlay } from "../hooks/useS2BurnedAreaOverlay";
 import type { S2BurnedAreaFeature } from "../hooks/useS2BurnedAreaOverlay";
 import { KawasanHutanLayer } from "./KawasanHutanLayer";
+import { SmokeControl } from "./SmokeControl";
+import { SmokeMapLayers } from "./SmokeLayers";
+import { useSmokeLayers } from "../hooks/useSmokeLayers";
 import { PolygonInfoLayer } from "./PolygonInfoLayer";
 import { KAWASAN_HUTAN_LEGEND } from "../constants/kawasanHutan";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -492,10 +495,15 @@ export function HotspotMap({
 
   // Overlay fungsi kawasan hutan (KWSHUTAN_AR_250K) diambil LIVE dari layanan
   // ArcGIS resmi Ditjen Planologi Kehutanan (lihat KawasanHutanLayer).
-  // Default NYALA (mobile & desktop) atas permintaan eksplisit -- sebelumnya
-  // mati karena cakupan nasional bisa menutupi peta; tombolnya tetap ada
-  // untuk yang mau menyembunyikannya.
-  const [showKawasan, setShowKawasan] = useState(true);
+  // Default MATI (mobile & desktop) TIAP KALI peta dibuka (permintaan
+  // eksplisit 2026-09-20; sempat default nyala sejak 2026-09-04). Sengaja
+  // TIDAK dipersist ke localStorage: cakupan nasional menutupi peta dan isian
+  // poligon KPS (dimatikan saat lapisan ini nyala), jadi setiap pengguna
+  // mulai dari tampilan bersih dan menyalakannya sendiri lewat tombolnya.
+  const [showKawasan, setShowKawasan] = useState(false);
+
+  // Lapisan asap (citra satelit VIIRS + prakiraan PM2.5): semua MATI di awal.
+  const smoke = useSmokeLayers();
 
   // Mobile: kontrol mengambang (legenda, toggle lapisan, peralihan basemap)
   // digantikan satu bottom sheet + kolom FAB ringkas. Lihat MapSheet /
@@ -784,6 +792,10 @@ export function HotspotMap({
         </div>
 
         <div className="overlay-group">
+          <SmokeControl smoke={smoke} className="smoke-control--stack" />
+        </div>
+
+        <div className="overlay-group">
           <button
             type="button"
             className={`burned-toggle burned-toggle--timeline${timelineOn ? " burned-toggle--active" : ""}`}
@@ -928,6 +940,7 @@ export function HotspotMap({
             </Popup>
           </Marker>
         ))}
+        <SmokeMapLayers smoke={smoke} />
         {showKawasan ? <KawasanHutanLayer opacity={0.9} /> : null}
         <Pane name="batas-kps" style={{ zIndex: 400 }}>
           {layers
@@ -1098,6 +1111,7 @@ export function HotspotMap({
             s2Burned={s2Burned}
             showKawasan={showKawasan}
             onToggleKawasan={() => setShowKawasan((current) => !current)}
+            smoke={smoke}
             timelineOn={timelineOn}
             onToggleTimeline={() => setTimelineOn((current) => !current)}
             timelineDisabled={hotspots.length === 0}

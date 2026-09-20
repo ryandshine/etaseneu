@@ -23,6 +23,9 @@ import {
   Minimize2
 } from "lucide-react";
 import { CircleMarker, GeoJSON, MapContainer, Polyline, Popup, TileLayer, ZoomControl, useMap } from "react-leaflet";
+import { SmokeControl } from "./SmokeControl";
+import { SmokeMapLayers } from "./SmokeLayers";
+import { useSmokeLayers } from "../hooks/useSmokeLayers";
 import L from "leaflet";
 import { authFetch, downloadWithAuth } from "../lib/api";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -253,6 +256,8 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
   const [loadingDetail, setLoadingDetail] = useState<boolean>(false);
 
   const [basemap, setBasemap] = useState<BasemapKey>("hybrid");
+  // Lapisan asap: semua MATI di awal (opt-in).
+  const smoke = useSmokeLayers();
   const [focusTrigger, setFocusTrigger] = useState<number>(0);
   const [copiedCoords, setCopiedCoords] = useState<boolean>(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(() => {
@@ -1225,6 +1230,8 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
               )}
             </aside>
 
+            <SmokeControl smoke={smoke} className="smoke-control--siaga" />
+
             <MapContainer
               center={mapCenter}
               zoom={11}
@@ -1255,6 +1262,8 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                   maxZoom={activeBasemap.maxZoom}
                 />
               )}
+
+              <SmokeMapLayers smoke={smoke} />
 
               {/* Viewport controller: Auto fly ke poligon KPS & hotspot */}
               <MapViewportController

@@ -41,7 +41,7 @@ Sebelum menjalankan skrip satu-kali (migrasi data, backfill, dsb.) terhadap DB i
 ```
 api/            # satu file per domain: hotspots, hotspot_clusters, layers, polygons,
                 # burned_area, land_cover, export, point_match, scheduler, stats, weather,
-                # wind, cache, metrics, auth. router.py merakit semuanya ke api_router (prefix /api).
+                # wind, smoke, cache, metrics, auth. router.py merakit semuanya ke api_router (prefix /api).
 core/           # config.py (Settings via pydantic-settings), auth.py (admin API key + JWT multi-user)
 models/         # Pydantic models: hotspots, layers, polygons, query (HotspotQuery)
 services/       # logika bisnis (lihat di bawah)
@@ -429,7 +429,8 @@ BUKAN lewat migrasi app:
   `/api/metrics`. `constants/kawasanHutan.ts` sekarang cuma dipakai untuk salinan legenda (konstanta
   `KAWASAN_HUTAN_MAPSERVER` sudah tidak dipakai frontend, URL aslinya sekarang di
   `kawasan_hutan.py::ARCGIS_EXPORT_URL`). Tombol "Fungsi Kawasan Hutan" di
-  `HotspotMap.tsx` **default NYALA** (mobile & desktop, sejak 2026-09-04 — sebelumnya mati),
+  `HotspotMap.tsx` **default MATI setiap kali peta dibuka** (mobile & desktop; permintaan user 2026-09-20 —
+  sempat default nyala sejak 2026-09-04; TIDAK dipersist, tiap pengguna mulai bersih),
   pane `kawasan-hutan` z360. Saat menyala, isian poligon KPS
   (`batas-kps`) dimatikan (garis batas saja) supaya warna kawasan tidak ketutup tint hijau KPS.
   BUKAN dari file geojson — file KWSHUTAN 1:250k JANGAN ditaruh di `SHP_DIR` (pernah bikin
@@ -439,6 +440,56 @@ BUKAN lewat migrasi app:
   `SHP_DIR/fungsi_kawasan_hutan.geojson.raw` (di luar glob) sebagai arsip user.
   nginx `/api/layers` cache dipangkas 1 jam+SWR24jam → 120 dtk supaya daftar layer yang dihapus
   tidak nyangkut lama di browser/CDN.
+
+### Layer Gambut FEG (Fungsi Ekosistem Gambut 1:250.000) — HANYA di database (2026-09-20)
+
+Dimuat manual ke DB (BUKAN lewat migrasi app, tidak ada `_ensure_*`, tidak ada API/frontend/`SHP_DIR`) dari
+`/data/storage/shp/FEG (Gambut 250k)/FEG.shp` (SSD kedua `/data`, DBF 2022-10-12, WGS84, 11.059 poligon nasional).
+Alasan tidak ditaruh di `SHP_DIR`: sama seperti KWSHUTAN, `sync_all()` akan menulis ribuan `polygon_metadata` palsu.
+
+- **`ref_gambut_feg`** — `id, nama_khg, kode_khg, status_khg, kubah_gmbt` (`Kubah Gambut`/`Non Kubah Gambut`),
+  `feg_kghltr` (`Indikatif Fungsi Lindung E.G.`/`Indikatif Fungsi Budidaya E.G.`), `geom` MultiPolygon 4326 (GiST),
+  plus `luas_ha` (dihitung ulang geodesik — kolom `luas__ha` asli shp bernilai 0 di poligon kecil, JANGAN dipakai) dan
+  `fungsi` (`Lindung`/`Budidaya`, turunan dari `feg_kghltr`). Total 24,15 juta ha (Lindung ±12,07 jt, Budidaya ±12,08 jt).
+  Geometri sudah divalidasi (`-makevalid`, 0 invalid). Dimuat dengan `ogr2ogr -nlt MULTIPOLYGON -t_srs EPSG:4326`.
+- **`polygon_gambut_overlay`** (turunan) — `polygon_metadata_id × kode_khg × fungsi × kubah_gmbt → luas_ha` untuk poligon
+  KPS/Hutan Adat AKTIF (1.694 baris, 797 KPS bergambut nasional; 102 di Kalbar). **Statis** — bangun ulang bila
+  `polygon_metadata` (sync layer baru) atau `ref_gambut_feg` berubah (58 poligon KPS punya geometri invalid → pakai
+  `ST_MakeValid` di dalam query saja, data asli tidak diubah). Pola sama seperti `burned_kawasan_hutan`.
+- Cara pakai: hotspot di atas gambut = `ST_Intersects(o.geom, f.geom)` ke `ref_gambut_feg` (tanpa `::geography` supaya GiST
+  terpakai). Untuk laporan/strategi: KPS terparah di Ketapang/Kayong Utara/Kubu Raya hampir 100% bergambut (Sunan Bersatu
+  100%, Pematang Gadung 98%, Sungai Besar-Ketapang 93%), sedangkan Mio Lestari (Nanga Tayap) tidak.
+- Rollback: `DROP TABLE polygon_gambut_overlay; DROP TABLE ref_gambut_feg;` — tidak ada tabel lain yang bergantung.
+
+### Lapisan Asap (2026-09-20) — citra satelit + prakiraan PM2.5
+
+Dua lapisan OPSIONAL, **semua MATI di awal**, tanpa API key, tanpa menyentuh DB. Dipasang di SEMUA peta yang relevan:
+Live Map (`HotspotMap` — tumpukan kiri desktop + `MapSheet` mobile), Detail KPS, Kompleks Kebakaran, Siaga Rambatan Api
+(TIDAK di Tutupan Lahan / Cek Titik: asap tidak relevan di sana). Satu kontrol bersama `SmokeControl.tsx` (tombol "Asap",
+`aria-label="Lapisan asap"`) + `SmokeMapLayers` (di dalam `<MapContainer>`) + hook `useSmokeLayers` (state LOKAL per peta,
+tidak di-persist) + fungsi murni `lib/smoke.ts`.
+
+- **Citra satelit (NASA GIBS WMTS, true color VIIRS)** — pengamatan harian (hari UTC), tertutup awan, tanpa nilai angka.
+  Diproksi + di-cache backend: `GET /api/smoke/imagery/{layer}/{date}/{z}/{x}/{y}` (`app/api/smoke.py::tile_router`,
+  cache `resolved_cache_dir/smoke/*.jpg`: 1 jam untuk hari ini, 24 jam lainnya, prune >3 hari, cache basi disajikan saat
+  GIBS down, ubin 404 GIBS → PNG transparan). **Sengaja TIDAK digerbang `_read_gate`** (Leaflet memuat via `<img src>` tanpa
+  header Authorization — alasan sama dengan `/api/kawasan-hutan/tile`). Whitelist layer (`smoke_service.IMAGERY_LAYERS`,
+  3 VIIRS) + validasi tanggal (maks 30 hari lalu) + zoom ≤ 9 (TileMatrixSet `GoogleMapsCompatible_Level9`, di atasnya
+  diperbesar Leaflet) supaya endpoint bukan proxy terbuka. Tidak ada layer bernama "smoke" di GIBS — asap dilihat lewat true
+  color. Pane `smoke-imagery` z250.
+- **Prakiraan PM2.5 (CAMS via Open-Meteo Air Quality)** — model global, per jam, 72 jam. `GET /api/smoke/pm25?offset_hours=0..48`
+  (digerbang `_read_gate`, lewat `authFetch`). Grid **1,5° = 462 titik** (`smoke_service.GRID_POINTS`, lat 7.5→-12, lon 94→142;
+  resolusi ±165 km — CAMS sendiri ~0,4°, jadi INDIKATIF regional, bukan skala kecamatan). Satu "kubus" 72 jam × 462 sel
+  di-cache 3 jam (`smoke_pm25_cube.json`), semua `offset_hours` dilayani dari kubus yang sama (jangan tembak Open-Meteo per
+  permintaan: batas gratis 10.000 panggilan/hari BERSAMA lapisan angin/cuaca; ±5 batch × 462 titik per refresh). Cache basi
+  disajikan bila upstream gagal. Frontend menginterpolasi bilinear di ruang Mercator ke `L.imageOverlay` (data-URI PNG; CSP
+  `img-src` sudah mengizinkan `data:`). Warna & ambang mengikuti kategori BMKG (Baik ≤15,5 … Berbahaya >250,4). Pane `smoke-pm25` z260.
+- Nilai model bisa meleset dari pengamatan (mis. puncak per jam ratusan µg/m³) — cocokkan dengan BMKG
+  (`bmkg.go.id/kualitas-udara/pm25`, hanya pengamatan stasiun) sebelum dijadikan angka resmi.
+- Tes: `backend/app/tests/test_smoke_api.py` (tanpa jaringan/DB; upstream di-monkeypatch), `frontend/src/test/smoke.test.ts`,
+  `SmokeControl.test.tsx`, `SmokeLayers.test.tsx` (pakai Leaflet ASLI di jsdom), `MapSheet.test.tsx`.
+  Kalau menambah peta baru: pasang `useSmokeLayers` + `<SmokeControl className="smoke-control--…">` (beri posisi di
+  index.css di sudut yang kosong) + `<SmokeMapLayers>` di dalam MapContainer.
 
 ## ⚠️ Bahaya #2: GEE sudah digantikan data Kementerian Kehutanan untuk luas bekas terbakar
 

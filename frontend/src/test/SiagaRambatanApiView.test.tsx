@@ -237,4 +237,16 @@ describe("SiagaRambatanApiView", () => {
       expect(apiModule.authFetch).toHaveBeenCalledWith(expect.stringContaining("wilker=BPSKL+Kalimantan"));
     });
   });
+
+  it("offers the smoke layers on the spread-threat map, all OFF by default", async () => {
+    render(<SiagaRambatanApiView />);
+    await waitFor(() => {
+      expect(screen.getByText("Siaga Rambatan Api (Deteksi Ancaman Luar KPS)")).toBeInTheDocument();
+    });
+    const head = await screen.findByRole("button", { name: /lapisan asap/i });
+    expect(head).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(head);
+    expect(screen.getByRole("button", { name: /citra satelit asap/i })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /prakiraan pm2\.5/i })).toHaveAttribute("aria-pressed", "false");
+  });
 });

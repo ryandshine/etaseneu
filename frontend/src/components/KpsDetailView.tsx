@@ -1,6 +1,9 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ChevronLeft, Clock, Download, Film, Info, ShieldAlert, X } from "lucide-react";
 import { CircleMarker, GeoJSON, LayerGroup, MapContainer, Pane, Popup, TileLayer, ZoomControl, useMap } from "react-leaflet";
+import { SmokeControl } from "./SmokeControl";
+import { SmokeMapLayers } from "./SmokeLayers";
+import { useSmokeLayers } from "../hooks/useSmokeLayers";
 import { canvas as buildLeafletCanvas, circleMarker as buildLeafletCircleMarker, geoJSON as buildLeafletGeoJSON } from "leaflet";
 import type { CircleMarker as LCircleMarker, LayerGroup as LLayerGroup } from "leaflet";
 
@@ -919,6 +922,8 @@ export function KpsDetailView({
 
   const [timelineOn, setTimelineOn] = useState(false);
   const [mapStyle, setMapStyle] = useState<"dark" | "satellite">("dark");
+  // Lapisan asap: semua MATI di awal (opt-in).
+  const smoke = useSmokeLayers();
   // Panel info kiri sekarang mengambang DI ATAS peta full-bleed, bukan
   // kolom grid terpisah (redesign ala Apple Maps Directions, diskusi user
   // 2026-09-12) -- bisa ditutup total supaya peta dapat seluruh lebar/
@@ -1525,6 +1530,7 @@ export function KpsDetailView({
               </button>
             </div>
           </div>
+          <SmokeControl smoke={smoke} className="smoke-control--kps" />
           <MapContainer
             center={[-2.5, 118]}
             zoom={5}
@@ -1558,6 +1564,7 @@ export function KpsDetailView({
                 />
               </>
             )}
+            <SmokeMapLayers smoke={smoke} />
             {detail ? (
               <>
                 <FitToPolygon geometry={detail.geometry} />

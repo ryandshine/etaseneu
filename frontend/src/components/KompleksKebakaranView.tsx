@@ -16,6 +16,9 @@ import {
   useMap,
   ZoomControl
 } from "react-leaflet";
+import { SmokeControl } from "./SmokeControl";
+import { SmokeMapLayers } from "./SmokeLayers";
+import { useSmokeLayers } from "../hooks/useSmokeLayers";
 import { authFetch, createApiClient } from "../lib/api";
 import { SMOOTH_ZOOM_MAP_PROPS } from "../constants/map";
 import type { ClusterCollectionResponse, ClusterPoint, ClusterRecord, ClusterSensitivity } from "../types/api";
@@ -396,6 +399,8 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
   const [timeRangeDays, setTimeRangeDays] = useState(30);
   const [sensitivity, setSensitivity] = useState<ClusterSensitivity>("sedang");
   const [mapStyle, setMapStyle] = useState<"dark" | "satellite">("dark");
+  // Lapisan asap: semua MATI di awal (opt-in).
+  const smoke = useSmokeLayers();
   const [data, setData] = useState<ClusterCollectionResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -691,6 +696,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                   Satelit
                 </button>
               </div>
+              <SmokeControl smoke={smoke} className="smoke-control--kompleks" />
               <div
                 className={`kompleks-map-legend ${isLegendOpen ? "kompleks-map-legend--open" : ""}`}
                 aria-label="Legenda peta kompleks"
@@ -786,6 +792,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                     />
                   </>
                 )}
+                <SmokeMapLayers smoke={smoke} />
                 <ZoomControl position="bottomleft" />
                 <ScaleControl position="bottomright" metric imperial={false} maxWidth={160} />
                 <FlyToCluster cluster={selectedCluster} />

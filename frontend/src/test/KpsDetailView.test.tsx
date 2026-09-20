@@ -307,5 +307,22 @@ describe("KpsDetailView", () => {
 
     expect(await screen.findByText("Riau")).toBeInTheDocument();
   });
-});
 
+  it("offers the smoke layers on the KPS detail map, all OFF by default", async () => {
+    render(
+      <KpsDetailView
+        agency="LD LINGAT"
+        hotspots={[buildHotspot()]}
+        onClose={() => undefined}
+        onExportPdf={() => undefined}
+        isExportingPdf={false}
+      />
+    );
+    await screen.findByText("1 titik");
+    const head = await screen.findByRole("button", { name: /lapisan asap/i });
+    expect(head).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(head);
+    expect(screen.getByRole("button", { name: /citra satelit asap/i })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /prakiraan pm2\.5/i })).toHaveAttribute("aria-pressed", "false");
+  });
+});

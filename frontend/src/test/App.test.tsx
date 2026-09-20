@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { loginThroughUI } from "./testHelpers";
 
-// Overlay Fungsi Kawasan Hutan (default nyala sejak 2026-09-04, lihat
+// Overlay Fungsi Kawasan Hutan (default MATI sejak 2026-09-20, lihat
 // HotspotMap.tsx) manipulasi L.Map asli (getPane/createPane/addLayer) lewat
 // useMap() -- di luar jangkauan mock react-leaflet ringan di bawah. Diganti
 // no-op supaya render map tetap bisa diuji tanpa mensimulasikan Leaflet penuh.

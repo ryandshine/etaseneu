@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Clock, Flame, Map as MapIcon, Satellite, Trees } from "lucide-react";
 import { formatHectares } from "../lib/hotspotDisplay";
 import { KAWASAN_HUTAN_LEGEND } from "../constants/kawasanHutan";
+import { SmokeControl } from "./SmokeControl";
+import type { SmokeLayersState } from "../hooks/useSmokeLayers";
 
 type HotspotLike = {
   source: string;
@@ -32,6 +34,8 @@ type MapSheetProps = {
   s2Burned: OverlayLike<S2Summary>;
   showKawasan: boolean;
   onToggleKawasan: () => void;
+  // Lapisan asap (state milik HotspotMap); opsional supaya pemakai lama tetap jalan.
+  smoke?: SmokeLayersState;
   timelineOn?: boolean;
   onToggleTimeline?: () => void;
   timelineDisabled?: boolean;
@@ -138,6 +142,7 @@ export function MapSheet({
   s2Burned,
   showKawasan,
   onToggleKawasan,
+  smoke,
   timelineOn = false,
   onToggleTimeline,
   timelineDisabled = false,
@@ -262,6 +267,8 @@ export function MapSheet({
                 </ul>
               ) : null}
             </LayerRow>
+
+            {smoke ? <SmokeControl smoke={smoke} defaultOpen className="smoke-control--sheet" /> : null}
 
             {onToggleTimeline ? (
               <LayerRow

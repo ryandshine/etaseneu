@@ -14173,3 +14173,192 @@ input.kps-search-input:focus {
 
 
 
+
+/* ==========================================================================
+   Lapisan asap (SmokeControl) -- dipakai bersama HotspotMap, Detail KPS,
+   Kompleks Kebakaran & Siaga Rambatan Api. Komponen: components/SmokeControl.tsx
+   ========================================================================== */
+.smoke-control {
+  position: relative;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--color-cream, #f5efe6);
+}
+
+.smoke-control__head {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.7rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(22, 14, 10, 0.94);
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  cursor: pointer;
+}
+
+.smoke-control__head:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.smoke-control__head--active {
+  border-color: rgba(148, 163, 184, 0.75);
+  background: rgba(51, 65, 85, 0.92);
+}
+
+.smoke-control__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 15.5rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.55rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(22, 14, 10, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.smoke-control__toggle {
+  width: 100%;
+  min-height: 30px;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.smoke-control__toggle:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.smoke-control__toggle--active {
+  border-color: rgba(148, 163, 184, 0.85);
+  background: rgba(100, 116, 139, 0.35);
+}
+
+.smoke-control__options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0 0.15rem 0.25rem;
+}
+
+.smoke-control__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.smoke-control__chips button {
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.smoke-control__chips button.smoke-control__chip--active {
+  background: rgba(148, 163, 184, 0.35);
+  border-color: rgba(148, 163, 184, 0.85);
+  font-weight: 700;
+}
+
+.smoke-control__legend {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.smoke-control__legend li {
+  display: grid;
+  grid-template-columns: 0.8rem 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.66rem;
+}
+
+.smoke-control__swatch {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 0.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.smoke-control__range {
+  color: rgba(245, 239, 230, 0.6);
+  font-variant-numeric: tabular-nums;
+}
+
+.smoke-control__note {
+  margin: 0;
+  font-size: 0.64rem;
+  line-height: 1.35;
+  color: rgba(245, 239, 230, 0.66);
+}
+
+/* Di tumpukan kiri HotspotMap: mengalir sebagai anak flex biasa. */
+.smoke-control--stack .smoke-control__panel {
+  width: 100%;
+}
+
+/* Di bottom sheet mobile: selebar sheet, tanpa gaya kartu ganda. */
+.smoke-control--sheet {
+  width: 100%;
+  margin: 0.5rem 0;
+}
+.smoke-control--sheet .smoke-control__head {
+  display: none;
+}
+.smoke-control--sheet .smoke-control__panel {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Peta lain: mengambang di sudut yang kosong, panel jatuh ke bawah tombol. */
+.smoke-control--kps,
+.smoke-control--kompleks,
+.smoke-control--siaga {
+  position: absolute;
+}
+.smoke-control--kps {
+  top: 3.4rem;
+  right: 0.65rem;
+  align-items: flex-end;
+}
+.smoke-control--kompleks {
+  top: 3.6rem;
+  left: 4.25rem;
+}
+.smoke-control--siaga {
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 900;
+}
