@@ -261,6 +261,10 @@ async def fetch_grid_data(parameter: str, timeout_seconds: float = 30.0) -> dict
                 "longitude": lon_param,
                 "current": om_vars,
                 "timezone": "Asia/Jakarta",
+                # calculate_cbi_val() mengasumsikan wind_speed_ms (m/s) -- tanpa ini
+                # Open-Meteo balas km/h dan CBI overlay jadi tidak sejalan dengan
+                # CBI di fetch_spot_weather() (yang sudah minta "ms").
+                "wind_speed_unit": "ms",
             },
         )
         response.raise_for_status()

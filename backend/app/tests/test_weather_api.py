@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -47,3 +49,50 @@ def test_weather_grid_invalid_parameter():
 
     resp = client.get("/api/weather/grid?parameter=invalid_param")
     assert resp.status_code == 400
+
+
+def test_fetch_grid_data_requests_wind_speed_in_meters_per_second(monkeypatch):
+    """Regresi: calculate_cbi_val() mengasumsikan m/s. Tanpa wind_speed_unit=ms,
+    Open-Meteo balas km/h dan CBI overlay peta jadi tidak sejalan dengan CBI di
+    fetch_spot_weather() (kartu cuaca titik), yang sudah minta "ms"."""
+
+    captured: dict = {}
+
+    class _FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self):
+            return self._payload
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc) -> bool:
+            return False
+
+        async def get(self, url, params=None):
+            captured["params"] = params
+            item = {
+                "current": {
+                    "temperature_2m": 30.0,
+                    "relative_humidity_2m": 40.0,
+                    "wind_speed_10m": 5.0,
+                    "precipitation": 0.0,
+                    "soil_moisture_0_to_10cm": 0.2,
+                }
+            }
+            return _FakeResponse([item] * len(weather_service.SAMPLE_POINTS))
+
+    monkeypatch.setattr(weather_service.httpx, "AsyncClient", _FakeAsyncClient)
+
+    asyncio.run(weather_service.fetch_grid_data("fwi"))
+
+    assert captured["params"]["wind_speed_unit"] == "ms"
