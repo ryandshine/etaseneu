@@ -7,6 +7,13 @@ import { KompleksKebakaranView } from "../components/KompleksKebakaranView";
 
 const flyToMock = vi.fn();
 
+// MapScaleRatio pakai L.Control/L.DomUtil asli lewat useMap() -- di luar
+// jangkauan mock react-leaflet ringan di bawah (pola sama seperti
+// KawasanHutanLayer di HotspotMap.test.tsx/App.test.tsx).
+vi.mock("../components/MapScaleRatio", () => ({
+  MapScaleRatio: () => null
+}));
+
 vi.mock("react-leaflet", () => ({
   CircleMarker: ({ children, eventHandlers }: { children?: ReactNode; eventHandlers?: { click?: () => void } }) => (
     <div data-testid="cluster-bubble" onClick={() => eventHandlers?.click?.()}>
@@ -18,7 +25,6 @@ vi.mock("react-leaflet", () => ({
   GeoJSON: () => <div data-testid="geojson-layer" />,
   Pane: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Popup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  ScaleControl: () => <div data-testid="scale-control" />,
   TileLayer: () => <div data-testid="tile-layer" />,
   Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   ZoomControl: () => <div data-testid="zoom-control" />,

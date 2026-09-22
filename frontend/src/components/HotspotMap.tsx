@@ -7,6 +7,7 @@ import { useHotspotTimeline } from "../hooks/useHotspotTimeline";
 import { opacityForBucket } from "../lib/hotspotTimeline";
 import { applyMarkerOpacity, type HotspotMarkerLayer } from "../lib/leafletMarkerOpacity";
 import { HotspotTimelineControl } from "./HotspotTimelineControl";
+import { MapScaleRatio } from "./MapScaleRatio";
 import { WindLayer } from "./WindLayer";
 import { WeatherOverlay } from "./WeatherOverlay";
 import {
@@ -25,7 +26,6 @@ import {
   Pane,
   Popup,
   Marker,
-  ScaleControl,
   TileLayer,
   useMap,
   ZoomControl
@@ -884,7 +884,7 @@ export function HotspotMap({
           </>
         )}
         {!isMobile && showChrome ? <ZoomControl position="bottomleft" /> : null}
-        <ScaleControl position="bottomleft" imperial={false} />
+        <MapScaleRatio position="bottomleft" />
         <MapViewport hotspots={hotspots} layers={layers} selectedProvince={selectedProvince} />
         <PolygonInfoLayer layers={layers} showKawasan={showKawasan} hotspots={hotspots} />
         <WindLayer visible={showWind ?? false} />

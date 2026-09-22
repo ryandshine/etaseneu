@@ -14,6 +14,12 @@ vi.mock("../components/KawasanHutanLayer", () => ({
   KawasanHutanLayer: () => null
 }));
 
+// MapScaleRatio pakai L.Control/L.DomUtil asli lewat useMap() -- di luar
+// jangkauan mock react-leaflet ringan di bawah.
+vi.mock("../components/MapScaleRatio", () => ({
+  MapScaleRatio: () => null
+}));
+
 vi.mock("react-leaflet", () => ({
   CircleMarker: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   GeoJSON: ({ children }: { children?: ReactNode }) => (
@@ -36,7 +42,6 @@ vi.mock("react-leaflet", () => ({
   Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   TileLayer: () => <div data-testid="tile-layer" />,
   ZoomControl: () => <div data-testid="zoom-control" />,
-  ScaleControl: () => <div data-testid="scale-control" />,
   useMap: () => ({ fitBounds: vi.fn(), getZoom: () => 5 }),
   useMapEvents: () => ({})
 }));
@@ -506,6 +511,10 @@ describe("App", () => {
     expect(await screen.findByTestId("leaflet-map")).toBeInTheDocument();
     // Nilainya kini cukup "online"; kata "database" sudah jadi labelnya.
     expect(await screen.findByText(/^online$/i)).toBeInTheDocument();
+    // Regresi 2026-09-22: bel notifikasi mengambang di panels-toggle-layer
+    // (Live Map) dulu tidak digerbang isMobile, jadi tampil berdampingan
+    // dengan bel milik SidebarNav di desktop. Harus cuma satu.
+    expect(screen.getAllByLabelText(/^Notifikasi Hotspot/i).length).toBe(1);
     fireEvent.click(screen.getByLabelText(/tampilkan angin/i));
     expect(screen.queryByText(/angin:/i)).not.toBeInTheDocument();
     expect(screen.getAllByText("Sinkronisasi NASA").length).toBeGreaterThanOrEqual(1);

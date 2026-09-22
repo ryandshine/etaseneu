@@ -10,12 +10,12 @@ import {
   Pane,
   Polyline,
   Popup,
-  ScaleControl,
   TileLayer,
   Tooltip,
   useMap,
   ZoomControl
 } from "react-leaflet";
+import { MapScaleRatio } from "./MapScaleRatio";
 import { SmokeControl } from "./SmokeControl";
 import { SmokeMapLayers } from "./SmokeLayers";
 import { useSmokeLayers } from "../hooks/useSmokeLayers";
@@ -794,7 +794,7 @@ export function KompleksKebakaranView({ onOpenKpsDetail, layers = [] }: Kompleks
                 )}
                 <SmokeMapLayers smoke={smoke} />
                 <ZoomControl position="bottomleft" />
-                <ScaleControl position="bottomright" metric imperial={false} maxWidth={160} />
+                <MapScaleRatio position="bottomright" />
                 <FlyToCluster cluster={selectedCluster} />
                 <Pane name="kompleks-footprint" style={{ zIndex: 405, pointerEvents: "none" }}>
                   {selectedCluster?.footprint ? (

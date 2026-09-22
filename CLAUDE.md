@@ -708,9 +708,35 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               action"). Sekarang × cuma memanggil `setShowPanels(false)`, sama
               persis dengan tombol global; tombol "reopen" (`stats-panel-reopen`)
               dihapus karena sudah berlebih dengan "Tampilkan UI".
-              `<ScaleControl>` (react-leaflet, metrik) dirender di SEMUA lebar.
-              Mock `react-leaflet` di test WAJIB ekspor `ScaleControl`
-              (App.test.tsx, HotspotMap.test.tsx sudah).
+              **Bel notifikasi TIDAK boleh dobel di `panels-toggle-layer` (bug nyata 2026-09-22)**:
+              `App.tsx` merender `notificationElement` (dari `useNotifications`) di TIGA tempat —
+              `SidebarNav` (`notificationSlot`, selalu tampil di `.side-rail`), header mobile
+              non-map (`activeView !== "map"`), DAN baris `panels-toggle-layer` peta bareng
+              `.stats-sheet-toggle` (LIVE MAP). Yang ketiga dulu TIDAK digerbang `isMobile`, jadi di
+              desktop/tablet (`.side-rail` selalu terlihat dari 640px ke atas, cuma off-canvas di
+              bawah 639px — lihat breakpoint sama di `hooks/useIsMobile.ts`) dua bel tampil
+              berdampingan (satu di brand sidebar, satu mengambang di atas peta). Sekarang
+              `App.tsx` panggil `useIsMobile()` dan bel di `panels-toggle-layer` di-gate
+              `{isMobile ? notificationElement : null}` — bel itu memang cuma perlu di mobile
+              (tempat sidebar tersembunyi di balik hamburger); `.stats-sheet-toggle` di
+              sebelahnya sendiri sudah `display:none` di ATAS 639px lewat aturan CSS terpisah
+              (komentarnya: "panel statistik sudah tampil permanen"). Test regresi:
+              `App.test.tsx` "renders the frontend shell heading" — `getAllByLabelText(/^Notifikasi
+              Hotspot/i).length` harus `1`.
+              **Skala peta = rasio kartografi ("1:250.000"), bukan lagi bar jarak** (`<ScaleControl>`
+              react-leaflet dilepas 2026-09-22, keputusan user — lebih familiar buat konteks
+              pemetaan kehutanan, mis. peta KWSHUTAN_AR_250K resmi yang namanya sendiri pakai skala
+              1:250.000). `components/MapScaleRatio.tsx`: kontrol Leaflet imperatif (`L.Control` +
+              `L.DomUtil`, pola sama seperti `WindLayer.tsx` — manipulasi `L.Map` asli lewat
+              `useMap()`, DI LUAR jangkauan mock `react-leaflet` ringan, jadi WAJIB di-mock no-op di
+              test yang me-render peta: `vi.mock("../components/MapScaleRatio", () => ({
+              MapScaleRatio: () => null }))`, pola sama seperti `KawasanHutanLayer`). Rumus &
+              pembulatan "rapi" (deret 1-2-2,5-5-10 × 10ⁿ, spt skala peta cetak) ada di
+              `lib/mapScale.ts` (diuji terpisah tanpa Leaflet, `test/mapScale.test.ts`) — resolusi
+              Web Mercator di lintang tengah peta (`EARTH_CIRCUMFERENCE_M * cos(lat) / 2^(zoom+8)`)
+              dibagi ukuran piksel layar standar OGC 0,28 mm. Dipakai di `HotspotMap.tsx`
+              (bottomleft) & `KompleksKebakaranView.tsx` (bottomright); styling dark theme di
+              `.map-frame .map-scale-ratio` / `.kompleks-map .map-scale-ratio` (index.css).
               **Pemutar waktu "Timeline"** (toggle default mati; desktop di deret
               `burned-control`, mobile baris di `MapSheet` via prop
               `onToggleTimeline`): `hooks/useHotspotTimeline.ts` + fungsi murni

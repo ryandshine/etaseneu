@@ -10,6 +10,7 @@ import { NotificationCenter } from "./components/NotificationCenter";
 import { ToastNotification } from "./components/ToastNotification";
 import { useNotifications } from "./hooks/useNotifications";
 import { useDashboardData } from "./hooks/useDashboardData";
+import { useIsMobile } from "./hooks/useIsMobile";
 import { setAuthToken, setUnauthorizedHandler } from "./lib/api";
 import { clearDashboardCache } from "./lib/dashboardPersistence";
 import { getTodayWIB, formatDateTimeWIB } from "./lib/date";
@@ -282,6 +283,12 @@ function ViewLoader({
 }
 
 export default function App() {
+  // Dipakai untuk menyembunyikan bel notifikasi mengambang di peta Live Map
+  // pada desktop -- di sana sidebar (SidebarNav) SELALU terlihat dan sudah
+  // punya bel sendiri, jadi dua bel tampil berdampingan (bug nyata 2026-09-22).
+  // Bel mengambang itu cuma perlu di mobile, tempat sidebar tersembunyi di
+  // balik hamburger. Lihat pemakaian di notificationSlot map (bawah).
+  const isMobile = useIsMobile();
   const [selectedProvince, setSelectedProvince] = useState<string>("");
   const [selectedWilker, setSelectedWilker] = useState<string>("");
   const [showWind, setShowWind] = useState(false);
@@ -1024,7 +1031,7 @@ export default function App() {
             >
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', pointerEvents: 'auto' }}>
-                  {notificationElement}
+                  {isMobile ? notificationElement : null}
                   <button
                     type="button"
                     className="stats-sheet-toggle"

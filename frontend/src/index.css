@@ -9483,6 +9483,22 @@ textarea {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
+/* Skala rasio kartografi -- lihat components/MapScaleRatio.tsx & aturan
+   .map-frame .map-scale-ratio yang senada (peta Live Map). */
+.kompleks-map .map-scale-ratio {
+  margin: 0 0.5rem 0 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.35rem;
+  background: rgba(26, 15, 9, 0.92);
+  backdrop-filter: blur(8px);
+  color: var(--color-cream);
+  font-size: 0.62rem;
+  line-height: 1.35;
+  padding: 2px 7px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+}
+
 .kompleks-map-legend {
   position: absolute;
   left: 3.4rem;
@@ -10761,6 +10777,22 @@ textarea {
   border-top: 1px solid rgba(231, 230, 194, 0.55);
   border-bottom: none;
   margin-top: -1px;
+}
+
+/* Skala rasio kartografi ("1:250.000") -- lihat components/MapScaleRatio.tsx.
+   Gaya sama seperti .leaflet-control-scale-line di atas supaya menyatu,
+   tapi kotak tunggal (tanpa varian metrik/imperial dua baris). */
+.map-frame .map-scale-ratio {
+  margin: 0 0 0 0.5rem;
+  border: 1px solid rgba(231, 230, 194, 0.55);
+  background: rgba(26, 15, 9, 0.72);
+  backdrop-filter: blur(6px);
+  color: var(--color-cream);
+  font-size: 0.62rem;
+  line-height: 1.35;
+  padding: 1px 6px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+  white-space: nowrap;
 }
 
 /* ============================================================================

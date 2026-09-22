@@ -27,6 +27,12 @@ vi.mock("../components/KawasanHutanLayer", () => ({
   KawasanHutanLayer: () => null
 }));
 
+// MapScaleRatio pakai L.Control/L.DomUtil asli lewat useMap() -- sama seperti
+// KawasanHutanLayer di atas, di luar jangkauan mock react-leaflet ringan.
+vi.mock("../components/MapScaleRatio", () => ({
+  MapScaleRatio: () => null
+}));
+
 vi.mock("react-leaflet", () => ({
   // forwardRef: HotspotMarkersLayer memasang callback-ref per marker untuk
   // driver timeline animasi -- tanpa forwardRef React memuntahkan warning.
@@ -57,7 +63,6 @@ vi.mock("react-leaflet", () => ({
   Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   TileLayer: () => <div data-testid="tile-layer" />,
   ZoomControl: () => <div data-testid="zoom-control" />,
-  ScaleControl: () => <div data-testid="scale-control" />,
   useMap: () => ({ fitBounds: fitBoundsMock, getZoom: mapZoomMock }),
   useMapEvents: () => ({})
 }));
