@@ -354,6 +354,19 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   (`degrees(ST_Azimuth(ST_Centroid(poly.geometry), obs.geom))`) dan titik gerbang terdekat batas
   poligon (`ST_ClosestPoint`). Endpoint: `GET /api/fire-spread/summary`, `GET /api/fire-spread/threats`,
   `GET /api/fire-spread/detail`, `GET /api/fire-spread/export.xlsx`.
+- `wind_service.py` & `api/wind.py` — grid U/V angin untuk animasi partikel `leaflet-velocity` di
+  `WindLayer.tsx` (toggle "Angin", default mati). **Grid & sampel DIPERSEMPIT ke Indonesia+buffer**
+  (lat 10..-14, lon 90..146), bukan lagi seluruh dunia (2026-09-22, keputusan user) — versi lama
+  cuma 45 titik sampel Open-Meteo untuk SELURUH DUNIA (jarak antar titik 40-45°) supaya hemat kuota,
+  tapi Indonesia (±17° lintang × 46° bujur) lebih kecil dari satu sel sampling itu sehingga animasi
+  terlihat generik/tidak nyata (cuma interpolasi dari beberapa titik jauh). Sekarang 195 titik sampel
+  (spasi ~2° lintang / ~4° bujur, satu panggilan HTTP — Open-Meteo mengizinkan hingga ~1000 lokasi per
+  panggilan) diinterpolasi (`weather_service.bilinear_interpolate`, dipakai bersama) ke grid keluaran
+  1° (1.425 titik) — pola sama seperti grid Indonesia `weather_service.py`, cuma lebih rapat karena
+  animasi partikel butuh detail lokal, bukan cuma satu angka per titik. Cache 1 jam
+  (`resolved_cache_dir/wind_data.json`), fallback ke cache basi lalu ke "tenang" (semua nol) kalau
+  Open-Meteo gagal. Konsekuensi: peta di luar bbox Indonesia (kalau di-pan/zoom keluar) tidak lagi
+  menampilkan animasi angin — dianggap OK karena seluruh app memang berfokus KPS/Hutan Adat Indonesia.
 
 ### Atribusi Fungsi Kawasan Hutan (KWSHUTAN_AR_250K Kementerian Kehutanan)
 

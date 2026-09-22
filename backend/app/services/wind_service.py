@@ -1,4 +1,15 @@
-"""Service untuk kalkulasi angin global (U/V komponen) dan interpolasi Open-Meteo."""
+"""Service untuk kalkulasi angin (U/V komponen) dan interpolasi Open-Meteo.
+
+Grid & sampel DIPERSEMPIT ke Indonesia+buffer (bukan seluruh dunia lagi, lihat riwayat
+git untuk versi global) — animasi partikel `leaflet-velocity` di frontend butuh medan
+U/V yang cukup rapat supaya terlihat mengikuti pola angin lokal (angin darat-laut,
+konvergensi monsun dll). Versi lama sengaja hemat kuota Open-Meteo dengan cuma 45 titik
+sampel untuk SELURUH DUNIA (jarak antar titik 40-45°) — Indonesia (±17° lintang × 46°
+bujur) jauh lebih kecil dari satu sel sampling itu, jadi medan angin yang tampil di sini
+sebenarnya cuma hasil interpolasi dari 4 titik jauh, terlihat generik/tidak nyata.
+Open-Meteo mengizinkan hingga ~1000 lokasi per panggilan (lihat dokumentasi resmi), jadi
+195 titik sampel di sini masih jauh di bawah batas itu meski satu kali panggilan HTTP.
+"""
 
 from __future__ import annotations
 
@@ -16,13 +27,13 @@ from app.services.weather_service import (
 logger = logging.getLogger("wind.service")
 
 # ---------------------------------------------------------------------------
-# Grid definition covering the entire world
+# Grid definition covering Indonesia + buffer (bukan lagi seluruh dunia)
 # ---------------------------------------------------------------------------
-LAT_START = 85.0
-LAT_END = -85.0
-LON_START = -180.0
-LON_END = 180.0
-STEP = 5.0
+LAT_START = 10.0
+LAT_END = -14.0
+LON_START = 90.0
+LON_END = 146.0
+STEP = 1.0
 
 _lats = build_axis(LAT_START, LAT_END, STEP, descending=True)
 _lons = build_axis(LON_START, LON_END, STEP)
@@ -34,8 +45,8 @@ GRID_POINTS: list[tuple[float, float]] = [
     (lat, lon) for lat in _lats for lon in _lons
 ]
 
-SAMPLE_LAT_POINTS = [80.0, 40.0, 0.0, -40.0, -80.0]
-SAMPLE_LON_POINTS = [-180.0, -135.0, -90.0, -45.0, 0.0, 45.0, 90.0, 135.0, 180.0]
+SAMPLE_LAT_POINTS = build_axis(LAT_START, LAT_END, 2.0, descending=True)
+SAMPLE_LON_POINTS = build_axis(LON_START, LON_END, 4.0)
 SAMPLE_POINTS: list[tuple[float, float]] = [
     (lat, lon) for lat in SAMPLE_LAT_POINTS for lon in SAMPLE_LON_POINTS
 ]

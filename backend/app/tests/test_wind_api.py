@@ -13,12 +13,14 @@ from fastapi import HTTPException
 def test_wind_grid_stays_within_open_meteo_limits() -> None:
     from app.api import wind
 
-    assert len(wind.SAMPLE_POINTS) <= 100
+    # Open-Meteo mengizinkan hingga ~1000 lokasi per panggilan; grid regional
+    # Indonesia+buffer jauh di bawah itu.
+    assert len(wind.SAMPLE_POINTS) <= 300
     assert len(wind.GRID_POINTS) > len(wind.SAMPLE_POINTS)
-    assert wind.LAT_START == 85.0
-    assert wind.LAT_END == -85.0
-    assert wind.LON_START == -180.0
-    assert wind.LON_END == 180.0
+    assert wind.LAT_START == 10.0
+    assert wind.LAT_END == -14.0
+    assert wind.LON_START == 90.0
+    assert wind.LON_END == 146.0
 
 
 def test_wind_endpoint_writes_fresh_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -92,12 +94,12 @@ def test_wind_endpoint_returns_calm_fallback_when_upstream_fails(
     assert set(result[1]["data"]) == {0.0}
 
 
-def test_wind_header_covers_worldwide_bounds() -> None:
+def test_wind_header_covers_indonesia_bounds() -> None:
     from app.api import wind
 
     header = wind._build_header(2)
 
-    assert header["lo1"] == -180.0
-    assert header["la1"] == 85.0
-    assert header["lo2"] == 180.0
-    assert header["la2"] == -85.0
+    assert header["lo1"] == 90.0
+    assert header["la1"] == 10.0
+    assert header["lo2"] == 146.0
+    assert header["la2"] == -14.0
