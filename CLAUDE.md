@@ -106,13 +106,21 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
 - `burned_area_service.py` — jalur GEE/MODIS/VIIRS **lama, sudah tidak dipakai** (lihat bahaya #2).
 - `burned_area_s2_service.py` — **analisis MANDIRI** bekas terbakar dari Sentinel-2 L2A dNBR via GEE,
   supaya tidak perlu menunggu rekap Kementerian Kehutanan. Dijalankan **manual lewat skrip**
-  (`BurnedAreaS2Service().analyze_month(year, month)`), TIDAK ada endpoint admin/tombol UI/scheduler —
+  (`BurnedAreaS2Service().analyze_month(year, month, provinces=None)`, `provinces` opsional untuk
+  membatasi refresh ke provinsi tertentu — dipakai 2026-09-23 untuk refresh Kalimantan Tengah saja,
+  lebih cepat & aman daripada nasional penuh), TIDAK ada endpoint admin/tombol UI/scheduler —
   frekuensinya ikut terbitnya rekap Kementerian Kehutanan. Endpoint yang ada cuma `GET /api/burned-area/s2-overlay`
   (baca hasil untuk lapisan peta). Menyasar SEMUA poligon aktif
   (`psagustus2026` + `HUTAN_ADAT_APR26`), hotspot = penanda keyakinan bukan filter. Formula
   divalidasi: `dNBR = median(NBR pre) − median(NBR post)` (BUKAN max/min — ekstrem + ambang longgar
   menghasilkan ~20× angka Kementerian Kehutanan), mask `dNBR≥0.40 AND dNDVI≥0.15 AND NDVI_pre≥0.30 AND MNDWI<−0.05 AND
-  nobs≥2`, lalu `connectedPixelCount≥25` (~1 ha @ 20 m). Diproses per-provinsi (1 komposit raster per
+  nobs≥2`, lalu `connectedPixelCount≥25` (~1 ha @ 20 m). **Fusi SAR (`enable_sar_fusion=True` default,
+  `_sar_mask()`)** — Sentinel-1 C-Band VH (`COPERNICUS/S1_GRD`), `deltaVH = median(VH pre) −
+  median(VH post) ≥ 2.0` lalu `connectedPixelCount≥25` juga; hasilnya CUMA dipakai menambah piksel di
+  mana optik kurang observasi (`scar_c.Or(sar_c.And(nobs < NOBS_MIN))`) — bukan AND/OR penuh ke
+  seluruh area, supaya radar (tembus awan/asap) menyelamatkan area yang optik-nya terhalang, tanpa
+  mengubah angka di area yang datanya sudah cukup dari S2 sendiri. Ini bagian dari formula yang SAMA
+  dipakai semua poligon sejak awal, bukan opsi terpisah. Diproses per-provinsi (1 komposit raster per
   bbox provinsi + `reduceRegions` batched). Hasil disimpan di tabel **TERPISAH `s2_burned_area`**
   (mixin `postgres_store/_s2_burned_area.py`), TIDAK dicampur ke `burned_area_summary` — angkanya
   estimasi belum terverifikasi. Dua tempat tampil di frontend: lapisan peta utama "Estimasi
@@ -120,7 +128,11 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   `GET /api/burned-area/s2-overlay`), DAN bagian "Estimasi bekas terbakar (Sentinel-2)" di kartu
   Detail KPS (`KpsDetailView.tsx` → `GET /api/burned-area/s2-summary?polygon_ids=...`), terpisah dari
   angka Kementerian Kehutanan di kartu yang sama. Analisis dijalankan `analyze_month()` (butuh env GEE); menampilkan
-  hasilnya TIDAK butuh env — cuma baca tabel.
+  hasilnya TIDAK butuh env — cuma baca tabel. **Peringatan kuota GEE terlihat 2026-09-23** ("Your
+  project has exceeded the compute quota of its noncommercial tier and is currently in restricted
+  mode") saat menjalankan `analyze_month` — run tetap selesai (327 poligon, ~3,7 menit), tapi kalau
+  run berikutnya gagal/timeout tanpa sebab jelas, cek dulu status kuota GEE project ini sebelum
+  curiga ke kode.
   **Di kartu Detail KPS, luas & poligon bekas terbakar (S2 DAN Kementerian Kehutanan) SENGAJA tidak
   ikut saringan rentang waktu** (keputusan user) — dulu `effectiveS2*`/`effectiveBurned*` di
   `KpsDetailView.tsx` menyaring baris/fitur ke `customStartDate..customEndDate` lewat `isPeriodInRange`
