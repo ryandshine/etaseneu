@@ -52,6 +52,9 @@ MIN_REPORT_HA = 1.0
 
 # reduceRegions per panggilan -- geometry dikirim inline, jaga ukuran request.
 _BATCH_SIZE = 150
+# Fallback reduceToVectors per provinsi (lihat _vectorize_burned_union) kalau
+# satu panggilan penuh mentok limit >5000 elemen getInfo() GEE.
+_VECTORIZE_BATCH_SIZE = 30
 # Hari jendela "pra-kebakaran" sebelum awal bulan target.
 _PRE_WINDOW_DAYS = 46
 _MAX_CLOUD = 80
@@ -212,17 +215,11 @@ class BurnedAreaS2Service:
 
         return scar_c, dnbr
 
-    def _vectorize_burned_union(self, ee, scar_c, burned_polys: list[dict]):
-        """SATU `reduceToVectors` untuk semua poligon terbakar di provinsi ini.
+    def _vectorize_chunk(self, ee, scar_c, burned_polys: list[dict]):
+        """SATU `reduceToVectors` untuk sekelompok poligon terbakar.
 
-        Memvektorkan piksel scar HANYA di dalam gabungan geometri poligon
-        terbakar (bukan seluruh bbox provinsi), lalu mengembalikan satu
-        shapely (Multi)Polygon gabungan. Pemanggil meng-`intersection` per
-        poligon. Satu round-trip GEE per provinsi, bukan satu per poligon --
-        yang terakhir itu membuat run nasional makan berjam-jam.
-
-        Return shapely geometry, atau None kalau gagal (non-fatal: angka luas
-        tetap tersimpan tanpa bentuk peta).
+        Return shapely (Multi)Polygon gabungan dari batch ini, atau None
+        kalau gagal (mis. `getInfo()` GEE mentok >5000 elemen).
         """
         try:
             region = ee.FeatureCollection(
@@ -241,7 +238,9 @@ class BurnedAreaS2Service:
                 .getInfo()
             )
         except Exception as exc:  # noqa: BLE001 -- non-fatal
-            logger.warning("S2_BURNED: reduceToVectors gagal — %s", exc)
+            logger.warning(
+                "S2_BURNED: reduceToVectors gagal (%d poligon) — %s", len(burned_polys), exc
+            )
             return None
 
         try:
@@ -256,6 +255,47 @@ class BurnedAreaS2Service:
         except Exception as exc:  # noqa: BLE001
             logger.warning("S2_BURNED: union geometry gagal — %s", exc)
             return None
+
+    def _vectorize_burned_union(self, ee, scar_c, burned_polys: list[dict]):
+        """Vektorkan piksel scar HANYA di dalam gabungan geometri poligon
+        terbakar (bukan seluruh bbox provinsi), lalu mengembalikan satu
+        shapely (Multi)Polygon gabungan. Pemanggil meng-`intersection` per
+        poligon.
+
+        Coba SATU round-trip GEE untuk seluruh provinsi dulu (jalur cepat --
+        satu panggilan per provinsi, bukan satu per poligon, supaya run
+        nasional tidak makan berjam-jam). Kalau itu gagal (provinsi dengan
+        bercak terbakar sangat terfragmentasi bisa menghasilkan >5000 elemen
+        vektor -- batas keras `getInfo()` GEE, ditemukan 2026-09-24 di
+        Kalimantan Barat & Papua Selatan, SELURUH provinsi kehilangan
+        geometri sekaligus meski angka luasnya tetap benar), pecah jadi
+        sub-batch `_VECTORIZE_BATCH_SIZE` poligon dan gabungkan hasilnya --
+        lebih banyak round-trip tapi provinsi besar tidak lagi all-or-nothing.
+
+        Return shapely geometry, atau None kalau tetap gagal (non-fatal:
+        angka luas tetap tersimpan tanpa bentuk peta).
+        """
+        whole = self._vectorize_chunk(ee, scar_c, burned_polys)
+        if whole is not None:
+            return whole
+
+        if len(burned_polys) <= _VECTORIZE_BATCH_SIZE:
+            return None
+
+        logger.info(
+            "S2_BURNED: reduceToVectors penuh gagal, coba per-batch (%d poligon, batch %d)",
+            len(burned_polys),
+            _VECTORIZE_BATCH_SIZE,
+        )
+        parts = []
+        for start in range(0, len(burned_polys), _VECTORIZE_BATCH_SIZE):
+            chunk = burned_polys[start : start + _VECTORIZE_BATCH_SIZE]
+            chunk_result = self._vectorize_chunk(ee, scar_c, chunk)
+            if chunk_result is not None:
+                parts.append(chunk_result)
+        if not parts:
+            return None
+        return unary_union(parts)
 
     @staticmethod
     def _clip_to_polygon(burned_union, polygon_geojson) -> dict | None:

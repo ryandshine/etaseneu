@@ -52,6 +52,64 @@ def test_iter_coords_handles_polygon_and_multipolygon() -> None:
     assert list(_iter_coords({"type": "Point", "coordinates": [0, 0]})) == []
 
 
+def test_vectorize_burned_union_falls_back_to_batches_when_full_set_fails(monkeypatch) -> None:
+    """Regresi 2026-09-24: Kalimantan Barat & Papua Selatan kehilangan geometri
+    UNTUK SELURUH provinsi (angka luas tetap tersimpan) karena satu
+    reduceToVectors provinsi penuh mentok limit >5000 elemen getInfo() GEE.
+    _vectorize_burned_union sekarang coba full-set dulu (jalur cepat), lalu
+    pecah ke sub-batch _VECTORIZE_BATCH_SIZE kalau itu gagal."""
+    from shapely.geometry import Point
+
+    from app.services.burned_area_s2_service import _VECTORIZE_BATCH_SIZE
+
+    svc = _svc()
+    call_sizes: list[int] = []
+
+    def fake_chunk(ee, scar_c, burned_polys):
+        call_sizes.append(len(burned_polys))
+        if len(burned_polys) > _VECTORIZE_BATCH_SIZE:
+            return None  # simulasikan panggilan penuh mentok limit GEE
+        return Point(0, 0).buffer(1)
+
+    monkeypatch.setattr(svc, "_vectorize_chunk", fake_chunk)
+
+    burned_polys = [
+        {"id": i, "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}}
+        for i in range(75)
+    ]
+    result = svc._vectorize_burned_union(None, None, burned_polys)
+
+    assert result is not None
+    # Panggilan pertama untuk 75 poligon sekaligus (gagal), lalu 3 sub-batch
+    # (30, 30, 15) yang masing-masing berhasil.
+    assert call_sizes == [75, 30, 30, 15]
+
+
+def test_vectorize_burned_union_returns_none_when_all_batches_fail(monkeypatch) -> None:
+    svc = _svc()
+    monkeypatch.setattr(svc, "_vectorize_chunk", lambda ee, scar_c, polys: None)
+
+    burned_polys = [{"id": i, "geometry": {}} for i in range(40)]
+    assert svc._vectorize_burned_union(None, None, burned_polys) is None
+
+
+def test_vectorize_burned_union_skips_batching_for_small_sets(monkeypatch) -> None:
+    """Provinsi kecil (di bawah _VECTORIZE_BATCH_SIZE) yang gagal di jalur
+    cepat tidak perlu dicoba lagi per-batch -- hasilnya akan sama saja."""
+    svc = _svc()
+    call_sizes: list[int] = []
+
+    def fake_chunk(ee, scar_c, burned_polys):
+        call_sizes.append(len(burned_polys))
+        return None
+
+    monkeypatch.setattr(svc, "_vectorize_chunk", fake_chunk)
+
+    burned_polys = [{"id": i, "geometry": {}} for i in range(5)]
+    assert svc._vectorize_burned_union(None, None, burned_polys) is None
+    assert call_sizes == [5]
+
+
 def test_enabled_false_without_credentials(monkeypatch) -> None:
     from app.core.config import get_settings
 
