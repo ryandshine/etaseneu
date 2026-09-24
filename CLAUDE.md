@@ -466,9 +466,9 @@ BUKAN lewat migrasi app:
   nginx `/api/layers` cache dipangkas 1 jam+SWR24jam → 120 dtk supaya daftar layer yang dihapus
   tidak nyangkut lama di browser/CDN.
 
-### Layer Gambut FEG (Fungsi Ekosistem Gambut 1:250.000) — HANYA di database (2026-09-20)
+### Layer Gambut FEG (Fungsi Ekosistem Gambut 1:250.000)
 
-Dimuat manual ke DB (BUKAN lewat migrasi app, tidak ada `_ensure_*`, tidak ada API/frontend/`SHP_DIR`) dari
+Data dimuat manual ke DB (BUKAN lewat migrasi app, tidak ada `_ensure_*`, tidak ada `SHP_DIR`) dari
 `/data/storage/shp/FEG (Gambut 250k)/FEG.shp` (SSD kedua `/data`, DBF 2022-10-12, WGS84, 11.059 poligon nasional).
 Alasan tidak ditaruh di `SHP_DIR`: sama seperti KWSHUTAN, `sync_all()` akan menulis ribuan `polygon_metadata` palsu.
 
@@ -485,6 +485,14 @@ Alasan tidak ditaruh di `SHP_DIR`: sama seperti KWSHUTAN, `sync_all()` akan menu
   terpakai). Untuk laporan/strategi: KPS terparah di Ketapang/Kayong Utara/Kubu Raya hampir 100% bergambut (Sunan Bersatu
   100%, Pematang Gadung 98%, Sungai Besar-Ketapang 93%), sedangkan Mio Lestari (Nanga Tayap) tidak.
 - Rollback: `DROP TABLE polygon_gambut_overlay; DROP TABLE ref_gambut_feg;` — tidak ada tabel lain yang bergantung.
+- **Atribusi di Detail KPS (2026-09-24)** — `postgres_store/_gambut.py::read_gambut_summary(polygon_id)` baca
+  `polygon_gambut_overlay` (SATU SELECT ringan, tabel sudah statis di atas — TANPA `_ensure_*`, TANPA operasi spasial
+  baru), kembalikan `None` kalau poligon tidak beririsan gambut (mayoritas KPS) atau `{total_ha, by_fungsi, khg[]}`.
+  Ditempel sebagai field `gambut` di `PolygonDetail` (`models/polygons.py`) lewat `PolygonService.get_polygon_detail()`
+  **dan** `get_polygon_detail_by_agency()` — jadi ikut di `GET /api/polygons/{id}` yang sudah dipakai Detail KPS, TIDAK
+  ada endpoint baru. Frontend: `KpsDetailView.tsx` render kartu "Kawasan gambut (FEG)" HANYA kalau `detail.gambut` ada
+  (persentase dari `luas_final`, breakdown Lindung/Budidaya). **Sengaja TIDAK ada lapisan peta/toggle** (keputusan user
+  2026-09-24) — beda dari pola KWSHUTAN (`KawasanHutanLayer.tsx` + `/api/kawasan-hutan/tile`), murni atribusi tekstual.
 
 ### Lapisan Asap (2026-09-20) — citra satelit + prakiraan PM2.5
 

@@ -97,7 +97,22 @@ export interface PolygonDetail {
   ps_id: string | null;
   luas_final: string | null;
   jml_kk: string | null;
+  gambut: PolygonGambutSummary | null;
   geometry: Record<string, unknown>;
+}
+
+/** Irisan gambut FEG (Fungsi Ekosistem Gambut) -- null kalau KPS ini tidak
+ * beririsan gambut sama sekali (mayoritas kasus). Lihat postgres_store/_gambut.py. */
+export interface PolygonGambutSummary {
+  total_ha: number;
+  by_fungsi: Record<string, number>;
+  khg: Array<{
+    kode_khg: string;
+    nama_khg: string;
+    fungsi: string;
+    kubah_gmbt: string;
+    luas_ha: number;
+  }>;
 }
 
 export interface HotspotQueryParams {

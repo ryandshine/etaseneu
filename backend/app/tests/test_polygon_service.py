@@ -5,17 +5,22 @@ class FakePostgresStore:
     def __init__(self) -> None:
         self.enabled = True
         self.rows: dict[int, dict[str, object]] = {}
+        self.gambut: dict[int, dict[str, object]] = {}
 
     def read_polygon_detail(self, polygon_metadata_id: int, *, tolerance: float | None = 0.0001):
         self.last_tolerance = tolerance
-        return self.rows.get(polygon_metadata_id)
+        row = self.rows.get(polygon_metadata_id)
+        return dict(row) if row is not None else None
 
     def read_polygon_detail_by_agency(self, agency: str, *, tolerance: float | None = 0.0001):
         self.last_tolerance = tolerance
         for row in self.rows.values():
             if row.get("lembaga") == agency:
-                return row
+                return dict(row)
         return None
+
+    def read_gambut_summary(self, polygon_metadata_id: int):
+        return self.gambut.get(polygon_metadata_id)
 
 
 def _sample_row(polygon_metadata_id: int) -> dict[str, object]:
@@ -117,3 +122,61 @@ def test_get_polygon_detail_by_agency_not_found() -> None:
     service.postgres_store = fake
 
     assert service.get_polygon_detail_by_agency("NON_EXISTENT") is None
+
+
+def test_get_polygon_detail_attaches_gambut_summary_when_present() -> None:
+    from app.services.polygon_service import PolygonService
+
+    service = PolygonService("postgresql://demo")
+    fake = FakePostgresStore()
+    fake.rows[42] = _sample_row(42)
+    fake.gambut[42] = {
+        "total_ha": 60.25,
+        "by_fungsi": {"Lindung": 40.0, "Budidaya": 20.25},
+        "khg": [
+            {
+                "kode_khg": "KHG.61.06.02",
+                "nama_khg": "KHG Sungai Embalon - Sungai Palin",
+                "fungsi": "Lindung",
+                "kubah_gmbt": "Non Kubah Gambut",
+                "luas_ha": 40.0,
+            }
+        ],
+    }
+    service.postgres_store = fake
+
+    detail = service.get_polygon_detail(42)
+
+    assert detail is not None
+    assert detail.gambut == fake.gambut[42]
+
+
+def test_get_polygon_detail_gambut_none_when_polygon_not_peat() -> None:
+    """Mayoritas KPS -- tidak beririsan gambut sama sekali -- gambut harus None,
+    bukan objek kosong, supaya frontend gampang cek `if (detail.gambut)`."""
+    from app.services.polygon_service import PolygonService
+
+    service = PolygonService("postgresql://demo")
+    fake = FakePostgresStore()
+    fake.rows[42] = _sample_row(42)
+    service.postgres_store = fake
+
+    detail = service.get_polygon_detail(42)
+
+    assert detail is not None
+    assert detail.gambut is None
+
+
+def test_get_polygon_detail_by_agency_attaches_gambut_summary() -> None:
+    from app.services.polygon_service import PolygonService
+
+    service = PolygonService("postgresql://demo")
+    fake = FakePostgresStore()
+    fake.rows[10] = _sample_row(10)
+    fake.gambut[10] = {"total_ha": 5.0, "by_fungsi": {"Lindung": 5.0}, "khg": []}
+    service.postgres_store = fake
+
+    detail = service.get_polygon_detail_by_agency("LPHD SEBUBUS")
+
+    assert detail is not None
+    assert detail.gambut == fake.gambut[10]

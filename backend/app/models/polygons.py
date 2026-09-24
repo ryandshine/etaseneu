@@ -20,4 +20,5 @@ class PolygonDetail(BaseModel):
     ps_id: str | None = None
     luas_final: str | None = None
     jml_kk: str | None = None
+    gambut: dict[str, Any] | None = None
     geometry: dict[str, Any]

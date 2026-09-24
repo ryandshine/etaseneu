@@ -1198,6 +1198,32 @@ export function KpsDetailView({
             <p className="help-copy">Polygon KPS ini belum terhubung ke data spasial.</p>
           )}
 
+          {detail?.gambut && (
+            <div
+              className="kps-detail-gambut-card"
+              style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "1px solid rgba(255,255,255,0.08)" }}
+            >
+              <div className="control-metric">
+                <span>Kawasan gambut (FEG):</span>
+                <strong style={{ color: "#22c55e" }}>
+                  {formatNumber(Math.round(detail.gambut.total_ha * 10) / 10)} Ha
+                  {detail.luas_final
+                    ? ` (${Math.min(100, Math.round((detail.gambut.total_ha / Number(detail.luas_final)) * 100))}%)`
+                    : ""}
+                </strong>
+              </div>
+              <p className="help-copy" style={{ marginTop: "0.35rem" }}>
+                {Object.entries(detail.gambut.by_fungsi)
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([fungsi, ha]) => `${fungsi} ${formatNumber(Math.round(ha * 10) / 10)} Ha`)
+                  .join(" · ")}
+              </p>
+              <p className="help-copy" style={{ marginTop: "0.3rem", fontSize: "0.72rem" }}>
+                Sumber: Peta Fungsi Ekosistem Gambut (FEG) 1:250.000, KLHK.
+              </p>
+            </div>
+          )}
+
           {/* Panel Kontrol Hotspot Sekitar Kawasan (Buffer) */}
           <div className="kps-detail-buffer-card">
             <div className="kps-detail-buffer-header">

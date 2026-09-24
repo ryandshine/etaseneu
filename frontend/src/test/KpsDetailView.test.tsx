@@ -53,6 +53,7 @@ const polygonDetail = {
   ps_id: null,
   luas_final: null,
   jml_kk: null,
+  gambut: null,
   geometry: { type: "Polygon", coordinates: [] }
 };
 
@@ -262,6 +263,54 @@ describe("KpsDetailView", () => {
     const link = await screen.findByText("Belum dianalisis →");
     fireEvent.click(link.closest("button") as HTMLButtonElement);
     expect(onOpenTutupanLahan).toHaveBeenCalledWith(292425);
+  });
+
+  it("shows the peat (gambut) info card only when the polygon overlaps a KHG", async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith("/api/polygons/")) {
+        return jsonResponse({
+          ...polygonDetail,
+          luas_final: "1430.0",
+          gambut: {
+            total_ha: 1429.47,
+            by_fungsi: { Lindung: 1429.47 },
+            khg: [
+              {
+                kode_khg: "KHG.61.06.02",
+                nama_khg: "KHG Sungai Embalon - Sungai Palin",
+                fungsi: "Lindung",
+                kubah_gmbt: "Non Kubah Gambut",
+                luas_ha: 1429.47
+              }
+            ]
+          }
+        });
+      }
+      if (url.startsWith("/api/burned-area/summary")) return jsonResponse({ rows: [], unique_ha: null });
+      if (url.startsWith("/api/burned-area/geometry")) return jsonResponse({ type: "FeatureCollection", features: [] });
+      if (url.startsWith("/api/burned-area/s2-summary")) return jsonResponse({ rows: [] });
+      if (url.startsWith("/api/land-cover/status")) {
+        return jsonResponse({ state: "idle", step: null, error: null, computed_at: null });
+      }
+      if (url.startsWith("/api/hotspots")) return jsonResponse({ count: 0, hotspots: [], stats: { total: 0, by_source: {}, by_layer: {} } });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    render(
+      <KpsDetailView
+        agency="LD LINGAT"
+        hotspots={[buildHotspot()]}
+        onClose={() => undefined}
+        onExportPdf={() => undefined}
+        isExportingPdf={false}
+      />
+    );
+
+    expect(await screen.findByText("Kawasan gambut (FEG):")).toBeInTheDocument();
+    // 1429.47 dari 1430 ha -> dibulatkan 100%.
+    expect(screen.getByText(/1429\.50 Ha \(100%\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Lindung 1429\.50 Ha/)).toBeInTheDocument();
   });
 
   it("loads polygon detail by agency when hotspots array is empty (0 hotspot)", async () => {

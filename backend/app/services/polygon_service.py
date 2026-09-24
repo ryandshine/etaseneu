@@ -25,6 +25,7 @@ class PolygonService:
         if row is None:
             return None
 
+        row["gambut"] = self.postgres_store.read_gambut_summary(polygon_metadata_id)
         return PolygonDetail(**row)
 
     def get_polygon_detail_by_agency(
@@ -39,6 +40,7 @@ class PolygonService:
         if row is None:
             return None
 
+        row["gambut"] = self.postgres_store.read_gambut_summary(row["id"])
         return PolygonDetail(**row)
 
     def get_surrounding_hotspots(
