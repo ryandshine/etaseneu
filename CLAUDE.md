@@ -120,7 +120,23 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   mana optik kurang observasi (`scar_c.Or(sar_c.And(nobs < NOBS_MIN))`) — bukan AND/OR penuh ke
   seluruh area, supaya radar (tembus awan/asap) menyelamatkan area yang optik-nya terhalang, tanpa
   mengubah angka di area yang datanya sudah cukup dari S2 sendiri. Ini bagian dari formula yang SAMA
-  dipakai semua poligon sejak awal, bukan opsi terpisah. Diproses per-provinsi (1 komposit raster per
+  dipakai semua poligon sejak awal, bukan opsi terpisah.
+  **Ambang cluster gambut-aware (`enable_gambut_cluster_relax=True` default, 2026-09-24)** — di dalam
+  poligon gambut (`ref_gambut_feg`, lihat bagian "Layer Gambut FEG" di bawah), ambang minimum cluster
+  diperkecil ke `MIN_CLUSTER_PX_GAMBUT=12` piksel (~0,48 ha) dari `MIN_CLUSTER_PX=25` (~1 ha) di luar
+  gambut — kebakaran gambut sering membara di bawah permukaan dan meninggalkan bercak lebih kecil/
+  terpecah dibanding kebakaran lahan mineral. **BEDA dari formula inti di atas: ambang ini BELUM
+  divalidasi terhadap rekap Kementerian Kehutanan** (tidak ada data lapangan gambut-vs-non-gambut
+  untuk kalibrasi) — nilai literatur remote sensing kebakaran gambut tropis, sengaja konservatif
+  (separuh ambang normal, bukan ekstrem). `_gambut_mask()`: geometri gambut diambil per-bbox provinsi
+  lewat `postgres_store/_gambut.py::read_gambut_mask_geometry()` (UNION dulu baru
+  `ST_SimplifyPreserveTopology` ~110 m — union 2.263 poligon Kalbar/±625rb titik jadi satu geometri
+  gabungan sebelum disederhanakan, baru ±15rb titik, cukup ringan buat satu `ee.Feature` inline),
+  dirasterisasi ke mask biner via `ee.Image(0).paint(fc, 1)`; non-fatal (log warning, ambang normal
+  dipakai) kalau gagal atau provinsi tidak punya gambut sama sekali. Dampak terukur di Kalimantan
+  Barat (re-analisis 2026-09-24): Agustus 115→120 poligon (+34 ha), September tetap 28 poligon (+25
+  ha) — kenaikan moderat, bukan lonjakan drastis, konsisten dengan tujuan "menangkap bercak kecil
+  yang sebelumnya terbuang", bukan melonggarkan semua ambang. Diproses per-provinsi (1 komposit raster per
   bbox provinsi + `reduceRegions` batched). Hasil disimpan di tabel **TERPISAH `s2_burned_area`**
   (mixin `postgres_store/_s2_burned_area.py`), TIDAK dicampur ke `burned_area_summary` — angkanya
   estimasi belum terverifikasi. Dua tempat tampil di frontend: lapisan peta utama "Estimasi

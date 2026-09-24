@@ -50,6 +50,24 @@ NOBS_MIN = 2
 MIN_CLUSTER_PX = 25  # @ 20 m ~= 1 ha
 MIN_REPORT_HA = 1.0
 
+# Ambang cluster minimum KHUSUS di dalam poligon gambut (ref_gambut_feg),
+# 2026-09-24 (permintaan user setelah layer gambut FEG masuk DB). BEDA dari
+# ambang di atas: bukan hasil validasi terhadap rekap Kementerian Kehutanan
+# (belum ada data lapangan gambut-vs-non-gambut untuk kalibrasi), melainkan
+# nilai yang wajar menurut literatur remote sensing kebakaran gambut tropis
+# -- kebakaran gambut sering membara di bawah permukaan (smoldering) dan
+# meninggalkan bercak lebih kecil & terpecah-pecah dibanding kebakaran lahan
+# mineral yang menyebar cepat (flaming front), sehingga MMU (minimum mapping
+# unit) 1 ha di atas berisiko membuang bercak gambut asli yang lebih kecil.
+# ~12 piksel @ 20 m = 0,48 ha, kira-kira separuh ambang non-gambut -- pilihan
+# tengah yang konservatif, bukan ekstrem. TANDAI jelas di hasil (lewat log)
+# kalau relaksasi ini aktif, supaya angka Kalbar pasca-perubahan ini mudah
+# dibedakan dari run sebelumnya saat dibandingkan.
+MIN_CLUSTER_PX_GAMBUT = 12  # @ 20 m ~= 0,48 ha -- BELUM tervalidasi lapangan
+# Toleransi simplifikasi geometri gambut sebelum dikirim ke GEE (derajat,
+# ~110 m) -- lihat postgres_store/_gambut.py::read_gambut_mask_geometry.
+_GAMBUT_SIMPLIFY_TOLERANCE = 0.001
+
 # reduceRegions per panggilan -- geometry dikirim inline, jaga ukuran request.
 _BATCH_SIZE = 150
 # Fallback reduceToVectors per provinsi (lihat _vectorize_burned_union) kalau
@@ -89,12 +107,15 @@ class BurnedAreaS2Service:
         self,
         postgres_store: PostgresStore | None = None,
         enable_sar_fusion: bool = True,
+        enable_gambut_cluster_relax: bool = True,
     ) -> None:
         settings = get_settings()
         self.settings = settings
         self.postgres_store = postgres_store or PostgresStore(settings.database_url)
         self._ee_initialized = False
         self.enable_sar_fusion = enable_sar_fusion
+        self.enable_gambut_cluster_relax = enable_gambut_cluster_relax
+        self._current_bbox: tuple[float, float, float, float] | None = None
 
     @property
     def enabled(self) -> bool:
@@ -167,6 +188,28 @@ class BurnedAreaS2Service:
             logger.warning("S1_SAR: Gagal memproses radar C-Band — %s", exc)
             return None
 
+    def _gambut_mask(self, ee, region_geom):
+        """Mask biner (1 = di dalam poligon gambut FEG) untuk bbox provinsi
+        berjalan (`self._current_bbox`, diisi `_province_bbox`). Dipakai
+        `_scar_mask` untuk melonggarkan ambang cluster minimum di area gambut
+        -- lihat MIN_CLUSTER_PX_GAMBUT. Non-fatal: None kalau gagal ATAU
+        provinsi ini tidak punya gambut sama sekali (mask biasa dipakai).
+        """
+        bbox = getattr(self, "_current_bbox", None)
+        if bbox is None:
+            return None
+        try:
+            geometry = self.postgres_store.read_gambut_mask_geometry(
+                bbox, simplify_tolerance=_GAMBUT_SIMPLIFY_TOLERANCE
+            )
+            if geometry is None:
+                return None
+            fc = ee.FeatureCollection([ee.Feature(ee.Geometry(geometry))])
+            return ee.Image(0).paint(fc, 1).clip(region_geom)
+        except Exception as exc:  # noqa: BLE001 -- non-fatal, jatuh ke ambang biasa
+            logger.warning("S2_BURNED: gagal bangun mask gambut — %s", exc)
+            return None
+
     def _scar_mask(self, ee, region_geom):
         """Bangun mask bekas terbakar (scar_c) untuk satu bbox region."""
         pre_start, pre_end, post_start, post_end = self._pre_post
@@ -206,7 +249,24 @@ class BurnedAreaS2Service:
             .And(nobs.gte(NOBS_MIN))
         )
         cpc = scar.selfMask().connectedPixelCount(MIN_CLUSTER_PX + 5, True)
-        scar_c = scar.And(cpc.gte(MIN_CLUSTER_PX))
+
+        cluster_ok = cpc.gte(MIN_CLUSTER_PX)
+        if getattr(self, "enable_gambut_cluster_relax", True):
+            gambut_mask = self._gambut_mask(ee, region_geom)
+            if gambut_mask is not None:
+                is_gambut = gambut_mask.eq(1)
+                # cpc dihitung sampai MIN_CLUSTER_PX+5 -- masih valid dibanding
+                # MIN_CLUSTER_PX_GAMBUT (12) karena 12 < 25+5, lihat docstring
+                # connectedPixelCount di atas.
+                cluster_ok = cpc.gte(MIN_CLUSTER_PX_GAMBUT).And(is_gambut).Or(
+                    cpc.gte(MIN_CLUSTER_PX).And(is_gambut.Not())
+                )
+                logger.info(
+                    "S2_BURNED: ambang cluster gambut aktif (%d px, non-gambut tetap %d px)",
+                    MIN_CLUSTER_PX_GAMBUT,
+                    MIN_CLUSTER_PX,
+                )
+        scar_c = scar.And(cluster_ok)
 
         if getattr(self, "enable_sar_fusion", True):
             sar_c = self._sar_mask(ee, region_geom)
@@ -458,7 +518,12 @@ class BurnedAreaS2Service:
         }
 
     def _province_bbox(self, ee, prov_polys: list[dict]):
-        """Rectangle EE yang membungkus semua poligon di satu provinsi (+ pad kecil)."""
+        """Rectangle EE yang membungkus semua poligon di satu provinsi (+ pad kecil).
+
+        Juga menyimpan bbox mentah ke `self._current_bbox` (pola sama seperti
+        `self._pre_post`) -- dipakai `_gambut_mask` buat query Postgres,
+        supaya tidak perlu `.getInfo()` balik dari ee.Geometry.
+        """
         minx = miny = 1e9
         maxx = maxy = -1e9
         for poly in prov_polys:
@@ -466,6 +531,7 @@ class BurnedAreaS2Service:
                 minx, miny = min(minx, x), min(miny, y)
                 maxx, maxy = max(maxx, x), max(maxy, y)
         pad = 0.01
+        self._current_bbox = (minx - pad, miny - pad, maxx + pad, maxy + pad)
         return ee.Geometry.Rectangle(
             [minx - pad, miny - pad, maxx + pad, maxy + pad], None, False
         )

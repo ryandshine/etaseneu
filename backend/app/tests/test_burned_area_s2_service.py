@@ -148,6 +148,9 @@ def test_ensure_ee_raises_when_not_configured(monkeypatch) -> None:
 class _FakeImg:
     """Mendukung rantai method EE yang dipakai service, semuanya no-op."""
 
+    def __init__(self, *_a, **_k):
+        pass
+
     def __getattr__(self, _name):
         return lambda *a, **k: self
 
@@ -213,6 +216,10 @@ class _FakeImg:
     def reduceToVectors(self, **_k):
         return _FakeGetInfo({"features": []})
 
+    @staticmethod
+    def pixelArea():
+        return _FakeImg()
+
 
 class _FakeGetInfo:
     def __init__(self, payload):
@@ -245,15 +252,19 @@ class _FakeColl:
 class _FakeFC:
     def __init__(self, features):
         # features: list of _FakeFeature
-        self._per_pid = {f._pid: f._pid_sqm for f in features}
+        self._per_pid = {f._pid: f._pid_sqm for f in features if f._pid is not None}
 
 
 class _FakeFeature:
     # per_pid_sqm diinjeksi lewat closure di test
     _lookup: dict[int, float] = {}
 
-    def __init__(self, geom, props):
-        self._pid = props["pid"]
+    def __init__(self, geom, props=None):
+        # props None -- dipakai _gambut_mask (ee.Feature(ee.Geometry(geom)),
+        # tanpa properties) beda dari batch reduceRegions poligon KPS/HA yang
+        # selalu kasih {"pid": ...}.
+        props = props or {}
+        self._pid = props.get("pid")
         self._pid_sqm = _FakeFeature._lookup.get(self._pid, 0.0)
 
 
@@ -279,11 +290,7 @@ class _FakeEE:
     Geometry = _FakeGeom
     Feature = _FakeFeature
     FeatureCollection = _FakeFC
-
-    class Image:
-        @staticmethod
-        def pixelArea():
-            return _FakeImg()
+    Image = _FakeImg
 
 
 class _FakeStore:
@@ -291,6 +298,8 @@ class _FakeStore:
         self._polygons = polygons
         self.cleared = None
         self.upserted: list[dict] = []
+        self.gambut_geometry = None
+        self.gambut_calls: list[tuple] = []
 
     def read_active_polygons_for_s2(self, provinces=None):
         return self._polygons
@@ -305,6 +314,85 @@ class _FakeStore:
     def upsert_s2_burned_area(self, rows):
         self.upserted = list(rows)
         return len(rows)
+
+    def read_gambut_mask_geometry(self, bbox, *, simplify_tolerance=0.001):
+        self.gambut_calls.append((bbox, simplify_tolerance))
+        return self.gambut_geometry
+
+
+def test_gambut_mask_returns_none_without_current_bbox() -> None:
+    svc = _svc()
+    svc.postgres_store = _FakeStore([])
+    # _current_bbox sengaja tidak diset (mis. _province_bbox belum dipanggil).
+    assert svc._gambut_mask(_FakeEE(), _FakeGeom()) is None
+
+
+def test_gambut_mask_returns_none_when_no_gambut_in_bbox() -> None:
+    svc = _svc()
+    store = _FakeStore([])
+    store.gambut_geometry = None  # tidak ada gambut di provinsi ini
+    svc.postgres_store = store
+    svc._current_bbox = (109.0, -3.0, 114.0, 2.0)
+
+    assert svc._gambut_mask(_FakeEE(), _FakeGeom()) is None
+    assert store.gambut_calls == [((109.0, -3.0, 114.0, 2.0), 0.001)]
+
+
+def test_gambut_mask_builds_image_when_geometry_present() -> None:
+    svc = _svc()
+    store = _FakeStore([])
+    store.gambut_geometry = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
+    svc.postgres_store = store
+    svc._current_bbox = (109.0, -3.0, 114.0, 2.0)
+
+    result = svc._gambut_mask(_FakeEE(), _FakeGeom())
+
+    assert result is not None
+    assert isinstance(result, _FakeImg)
+
+
+def test_gambut_mask_non_fatal_when_store_raises() -> None:
+    svc = _svc()
+
+    class _RaisingStore:
+        def read_gambut_mask_geometry(self, *a, **k):
+            raise RuntimeError("boom")
+
+    svc.postgres_store = _RaisingStore()
+    svc._current_bbox = (109.0, -3.0, 114.0, 2.0)
+
+    assert svc._gambut_mask(_FakeEE(), _FakeGeom()) is None
+
+
+def test_scar_mask_skips_gambut_lookup_when_relax_disabled(monkeypatch) -> None:
+    """enable_gambut_cluster_relax=False -> postgres_store.read_gambut_mask_geometry
+    tidak boleh terpanggil sama sekali (hemat query + GEE call kalau user matikan)."""
+    svc = _svc()
+    store = _FakeStore([])
+    svc.postgres_store = store
+    svc.enable_sar_fusion = False
+    svc.enable_gambut_cluster_relax = False
+    svc._current_bbox = (109.0, -3.0, 114.0, 2.0)
+    svc._pre_post = ("2026-06-01", "2026-08-01", "2026-08-01", "2026-09-01")
+
+    svc._scar_mask(_FakeEE(), _FakeGeom())
+
+    assert store.gambut_calls == []
+
+
+def test_scar_mask_calls_gambut_lookup_when_relax_enabled(monkeypatch) -> None:
+    svc = _svc()
+    store = _FakeStore([])
+    store.gambut_geometry = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
+    svc.postgres_store = store
+    svc.enable_sar_fusion = False
+    svc.enable_gambut_cluster_relax = True
+    svc._current_bbox = (109.0, -3.0, 114.0, 2.0)
+    svc._pre_post = ("2026-06-01", "2026-08-01", "2026-08-01", "2026-09-01")
+
+    svc._scar_mask(_FakeEE(), _FakeGeom())
+
+    assert len(store.gambut_calls) == 1
 
 
 def test_analyze_month_upserts_only_polygons_over_one_hectare(monkeypatch) -> None:

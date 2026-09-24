@@ -15,6 +15,46 @@ from typing import Any
 
 
 class _GambutMixin:
+    def read_gambut_mask_geometry(
+        self,
+        bbox: tuple[float, float, float, float],
+        *,
+        simplify_tolerance: float = 0.001,
+    ) -> dict[str, Any] | None:
+        """Geometri gabungan (union) seluruh poligon `ref_gambut_feg` yang
+        beririsan bbox, disederhanakan -- dipakai `burned_area_s2_service.py`
+        untuk membangun mask gambut biner di GEE (bukan tampilan/peta).
+
+        Union dulu baru simplify: union sendiri sudah memangkas ~2.300 poligon
+        Kalbar (±625rb titik) jadi satu geometri gabungan (±215rb titik),
+        simplify di atasnya turun lagi ke puluhan ribu titik -- payload yang
+        cukup ringan buat dikirim sebagai satu ee.Feature inline. Toleransi
+        default 0,001 derajat (~110 m) jauh lebih kasar dari resolusi piksel
+        Sentinel-2 (20 m) -- cukup untuk keputusan "piksel/cluster ini gambut
+        atau tidak", TIDAK untuk presisi batas.
+
+        None kalau tidak ada gambut sama sekali di bbox itu (union kosong).
+        """
+        minx, miny, maxx, maxy = bbox
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT ST_AsGeoJSON(
+                        ST_SimplifyPreserveTopology(ST_Union(geom), %s)
+                    )::json AS geometry
+                    FROM ref_gambut_feg
+                    WHERE ST_Intersects(geom, ST_MakeEnvelope(%s, %s, %s, %s, 4326))
+                    """,
+                    (simplify_tolerance, minx, miny, maxx, maxy),
+                )
+                row = cur.fetchone()
+
+        if row is None or row.get("geometry") is None:
+            return None
+        return row["geometry"]
+
+
     def read_gambut_summary(self, polygon_metadata_id: int) -> dict[str, Any] | None:
         """None kalau poligon ini tidak beririsan gambut sama sekali (mayoritas
         KPS -- cuma 797 dari ~8.600 poligon aktif nasional yang bergambut)."""
