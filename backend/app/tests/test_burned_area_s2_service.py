@@ -10,12 +10,22 @@ from datetime import date
 
 import pytest
 
+from shapely.geometry import MultiPolygon, Polygon
+
 from app.services.burned_area_s2_service import (
     BurnedAreaS2Error,
     BurnedAreaS2Service,
+    _clean_burned_polygon,
     _iter_coords,
     _month_bounds,
 )
+
+# 1 derajat ~= 111.000 m (sama seperti pendekatan di burned_area_s2_service.py sendiri)
+_M_PER_DEG = 111000.0
+
+
+def _square_ha(side_m: float) -> float:
+    return (side_m * side_m) / 10000.0
 
 
 def _svc() -> BurnedAreaS2Service:
@@ -50,6 +60,44 @@ def test_iter_coords_handles_polygon_and_multipolygon() -> None:
     }
     assert (2, 2) in list(_iter_coords(multi))
     assert list(_iter_coords({"type": "Point", "coordinates": [0, 0]})) == []
+
+
+def _square(side_m: float, offset_m: tuple[float, float] = (0.0, 0.0)) -> list[tuple[float, float]]:
+    s = side_m / _M_PER_DEG
+    ox, oy = offset_m[0] / _M_PER_DEG, offset_m[1] / _M_PER_DEG
+    return [(ox, oy), (ox + s, oy), (ox + s, oy + s), (ox, oy + s), (ox, oy)]
+
+
+def test_clean_burned_polygon_drops_tiny_fragment_keeps_big_one() -> None:
+    big = Polygon(_square(300))  # 9 ha, jauh di atas _MIN_FRAGMENT_HA (0.3 ha)
+    tiny = Polygon(_square(20, offset_m=(1000, 1000)))  # 0,04 ha -- 1 piksel
+    result = _clean_burned_polygon(MultiPolygon([big, tiny]))
+    assert result is not None
+    assert len(result.geoms) == 1
+    kept_ha = result.geoms[0].area * _M_PER_DEG * _M_PER_DEG / 10000
+    # toleransi longgar -- Chaikin memotong sudut kotak sederhana (4 titik) jauh lebih
+    # agresif drpd bentuk bekas terbakar nyata yang bervertex banyak; yang penting di
+    # sini cuma "tidak hilang total / tidak melonjak", bukan presisi luas pasca-smooth.
+    assert kept_ha == pytest.approx(_square_ha(300), rel=0.15)
+
+
+def test_clean_burned_polygon_returns_none_when_everything_too_small() -> None:
+    tiny = Polygon(_square(20))
+    assert _clean_burned_polygon(MultiPolygon([tiny])) is None
+
+
+def test_clean_burned_polygon_fills_small_hole_keeps_big_hole() -> None:
+    outer = _square(500)  # 25 ha
+    small_hole = list(reversed(_square(20, offset_m=(50, 50))))  # 0,04 ha -- ditutup
+    big_hole = list(reversed(_square(150, offset_m=(250, 250))))  # 2,25 ha -- dipertahankan
+    poly = Polygon(outer, [small_hole, big_hole])
+    result = _clean_burned_polygon(MultiPolygon([poly]))
+    assert result is not None
+    cleaned = result.geoms[0]
+    # lubang kecil ditutup (interior berkurang), lubang besar tetap ada
+    assert len(cleaned.interiors) == 1
+    remaining_hole_ha = Polygon(cleaned.interiors[0]).area * _M_PER_DEG * _M_PER_DEG / 10000
+    assert remaining_hole_ha == pytest.approx(_square_ha(150), rel=0.15)
 
 
 def test_vectorize_burned_union_falls_back_to_batches_when_full_set_fails(monkeypatch) -> None:

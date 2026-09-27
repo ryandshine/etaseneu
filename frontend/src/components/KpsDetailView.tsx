@@ -1212,14 +1212,29 @@ export function KpsDetailView({
                     : ""}
                 </strong>
               </div>
-              <p className="help-copy" style={{ marginTop: "0.35rem" }}>
+              <p className="help-copy" style={{ marginTop: "0.35rem", display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
                 {Object.entries(detail.gambut.by_fungsi)
                   .sort(([, a], [, b]) => b - a)
-                  .map(([fungsi, ha]) => `${fungsi} ${formatNumber(Math.round(ha * 10) / 10)} Ha`)
-                  .join(" · ")}
+                  .map(([fungsi, ha]) => (
+                    <span key={fungsi} style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+                      <span
+                        style={{
+                          width: "0.6rem",
+                          height: "0.6rem",
+                          borderRadius: "9999px",
+                          background: fungsi === "Lindung" ? "#14b8a6" : "#a16207",
+                          display: "inline-block"
+                        }}
+                      />
+                      {fungsi} {formatNumber(Math.round(ha * 10) / 10)} Ha
+                    </span>
+                  ))}
               </p>
               <p className="help-copy" style={{ marginTop: "0.3rem", fontSize: "0.72rem" }}>
-                Sumber: Peta Fungsi Ekosistem Gambut (FEG) 1:250.000, KLHK.
+                {detail.gambut.geometry
+                  ? "Bentuk kawasan ditampilkan di peta (warna sesuai fungsi di atas)."
+                  : "Bentuk kawasan tidak tersedia untuk ditampilkan di peta."}
+                {" "}Sumber: Peta Fungsi Ekosistem Gambut (FEG) 1:250.000, KLHK.
               </p>
             </div>
           )}
@@ -1610,6 +1625,21 @@ export function KpsDetailView({
                     interactive: false
                   }}
                 />
+                {detail.gambut?.geometry && detail.gambut.geometry.features.length > 0 && (
+                  <GeoJSON
+                    // Murni tampilan (keputusan user 2026-09-27) -- tidak ada
+                    // popup/klik, sama seperti batas KPS di atas. Warna beda
+                    // per fungsi (Lindung/Budidaya) supaya sejalan dengan
+                    // rincian teks di kartu "Kawasan gambut (FEG)".
+                    key={`gambut-${polygonId}`}
+                    data={detail.gambut.geometry as never}
+                    style={(feature) => {
+                      const fungsi = (feature?.properties as { fungsi?: string } | undefined)?.fungsi;
+                      const color = fungsi === "Lindung" ? "#14b8a6" : "#a16207";
+                      return { color, weight: 1.5, fillColor: color, fillOpacity: 0.22, interactive: false };
+                    }}
+                  />
+                )}
               </>
             ) : null}
             {/* Polygon bekas terbakar + titik hotspot BERBAGI satu Pane (lihat

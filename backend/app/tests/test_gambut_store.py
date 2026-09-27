@@ -87,3 +87,53 @@ def test_read_gambut_summary_merges_same_fungsi_across_multiple_khg():
 
     assert result["by_fungsi"] == {"Lindung": 25.0}
     assert result["total_ha"] == 25.0
+
+
+def test_read_gambut_geometry_returns_none_when_no_overlap():
+    store = _Store([])
+    assert store.read_gambut_geometry(999) is None
+
+
+def test_read_gambut_geometry_builds_feature_collection():
+    rows = [
+        {
+            "kode_khg": "KHG.61.06.02",
+            "nama_khg": "KHG Sungai Embalon - Sungai Palin",
+            "fungsi": "Lindung",
+            "kubah_gmbt": "Non Kubah Gambut",
+            "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
+        },
+        {
+            "kode_khg": "KHG.61.06.03",
+            "nama_khg": "KHG Lain",
+            "fungsi": "Budidaya",
+            "kubah_gmbt": "Kubah Gambut",
+            "geometry": {"type": "MultiPolygon", "coordinates": [[[[0, 0], [1, 0], [1, 1], [0, 0]]]]},
+        },
+    ]
+    store = _Store(rows)
+
+    result = store.read_gambut_geometry(287644)
+
+    assert result is not None
+    assert result["type"] == "FeatureCollection"
+    assert len(result["features"]) == 2
+    assert result["features"][0]["properties"]["fungsi"] == "Lindung"
+    assert result["features"][1]["geometry"]["type"] == "MultiPolygon"
+
+
+def test_read_gambut_geometry_skips_rows_with_null_or_non_polygon_geometry():
+    rows = [
+        {"kode_khg": "A", "nama_khg": "A", "fungsi": "Lindung", "kubah_gmbt": "Kubah Gambut", "geometry": None},
+        {
+            "kode_khg": "B",
+            "nama_khg": "B",
+            "fungsi": "Lindung",
+            "kubah_gmbt": "Kubah Gambut",
+            # ST_Intersection kadang menghasilkan GeometryCollection (dimensi campur)
+            "geometry": {"type": "GeometryCollection", "geometries": []},
+        },
+    ]
+    store = _Store(rows)
+
+    assert store.read_gambut_geometry(1) is None

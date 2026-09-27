@@ -6,6 +6,8 @@ class FakePostgresStore:
         self.enabled = True
         self.rows: dict[int, dict[str, object]] = {}
         self.gambut: dict[int, dict[str, object]] = {}
+        self.gambut_geometry: dict[int, dict[str, object]] = {}
+        self.gambut_geometry_calls: list[int] = []
 
     def read_polygon_detail(self, polygon_metadata_id: int, *, tolerance: float | None = 0.0001):
         self.last_tolerance = tolerance
@@ -20,7 +22,12 @@ class FakePostgresStore:
         return None
 
     def read_gambut_summary(self, polygon_metadata_id: int):
-        return self.gambut.get(polygon_metadata_id)
+        gambut = self.gambut.get(polygon_metadata_id)
+        return dict(gambut) if gambut is not None else None
+
+    def read_gambut_geometry(self, polygon_metadata_id: int):
+        self.gambut_geometry_calls.append(polygon_metadata_id)
+        return self.gambut_geometry.get(polygon_metadata_id)
 
 
 def _sample_row(polygon_metadata_id: int) -> dict[str, object]:
@@ -143,17 +150,25 @@ def test_get_polygon_detail_attaches_gambut_summary_when_present() -> None:
             }
         ],
     }
+    fake.gambut_geometry[42] = {
+        "type": "FeatureCollection",
+        "features": [{"type": "Feature", "properties": {"fungsi": "Lindung"}, "geometry": {"type": "Polygon", "coordinates": []}}],
+    }
     service.postgres_store = fake
 
     detail = service.get_polygon_detail(42)
 
     assert detail is not None
-    assert detail.gambut == fake.gambut[42]
+    assert detail.gambut["total_ha"] == 60.25
+    assert detail.gambut["geometry"] == fake.gambut_geometry[42]
+    assert fake.gambut_geometry_calls == [42]
 
 
 def test_get_polygon_detail_gambut_none_when_polygon_not_peat() -> None:
     """Mayoritas KPS -- tidak beririsan gambut sama sekali -- gambut harus None,
-    bukan objek kosong, supaya frontend gampang cek `if (detail.gambut)`."""
+    bukan objek kosong, supaya frontend gampang cek `if (detail.gambut)`. Query
+    geometri gambut TIDAK boleh jalan sama sekali (lihat docstring
+    `PolygonService._attach_gambut_geometry`)."""
     from app.services.polygon_service import PolygonService
 
     service = PolygonService("postgresql://demo")
@@ -165,6 +180,26 @@ def test_get_polygon_detail_gambut_none_when_polygon_not_peat() -> None:
 
     assert detail is not None
     assert detail.gambut is None
+    assert fake.gambut_geometry_calls == []
+
+
+def test_get_polygon_detail_gambut_geometry_none_when_no_intersection_shape() -> None:
+    """Summary bilang bergambut tapi geometry query gagal/kosong (mis. hasil
+    ST_Intersection cuma GeometryCollection) -- geometry jadi None, summary
+    lain (total_ha dkk) tetap ada."""
+    from app.services.polygon_service import PolygonService
+
+    service = PolygonService("postgresql://demo")
+    fake = FakePostgresStore()
+    fake.rows[42] = _sample_row(42)
+    fake.gambut[42] = {"total_ha": 60.25, "by_fungsi": {"Lindung": 60.25}, "khg": []}
+    service.postgres_store = fake
+
+    detail = service.get_polygon_detail(42)
+
+    assert detail is not None
+    assert detail.gambut["total_ha"] == 60.25
+    assert detail.gambut["geometry"] is None
 
 
 def test_get_polygon_detail_by_agency_attaches_gambut_summary() -> None:
@@ -174,9 +209,11 @@ def test_get_polygon_detail_by_agency_attaches_gambut_summary() -> None:
     fake = FakePostgresStore()
     fake.rows[10] = _sample_row(10)
     fake.gambut[10] = {"total_ha": 5.0, "by_fungsi": {"Lindung": 5.0}, "khg": []}
+    fake.gambut_geometry[10] = {"type": "FeatureCollection", "features": []}
     service.postgres_store = fake
 
     detail = service.get_polygon_detail_by_agency("LPHD SEBUBUS")
 
     assert detail is not None
-    assert detail.gambut == fake.gambut[10]
+    assert detail.gambut["total_ha"] == 5.0
+    assert detail.gambut["geometry"] == fake.gambut_geometry[10]

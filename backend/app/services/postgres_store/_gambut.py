@@ -94,3 +94,58 @@ class _GambutMixin:
                 for r in rows
             ],
         }
+
+    def read_gambut_geometry(self, polygon_metadata_id: int) -> dict[str, Any] | None:
+        """GeoJSON (FeatureCollection) irisan `ref_gambut_feg` x poligon KPS ini --
+        dipakai frontend 2026-09-27 untuk menampilkan BENTUK gambutnya di peta
+        Detail KPS (sebelumnya cuma atribusi teks lewat `read_gambut_summary`).
+
+        Panggil method ini HANYA setelah `read_gambut_summary()` sudah memastikan
+        poligon ini memang bergambut -- untuk 90%+ poligon (tidak bergambut),
+        `PolygonService` tidak pernah sampai ke query spasial di sini sama sekali,
+        sesuai filosofi modul ini (baca docstring atas: query ringan per poligon).
+
+        `ST_MakeValid` di KEDUA sisi (gambut & KPS) -- 58 poligon KPS diketahui
+        invalid (lihat `read_gambut_mask_geometry`), sebagian poligon FEG nasional
+        juga. Simplify ringan (~55 m, lebih presisi dari mask GEE 110 m karena ini
+        utk tampilan, bukan cuma keputusan biner) supaya payload GeoJSON wajar.
+        """
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT g.kode_khg, g.nama_khg, g.fungsi, g.kubah_gmbt,
+                           ST_AsGeoJSON(
+                               ST_SimplifyPreserveTopology(
+                                   ST_Intersection(ST_MakeValid(g.geom), ST_MakeValid(k.geometry)),
+                                   0.0005
+                               )
+                           )::json AS geometry
+                    FROM ref_gambut_feg g
+                    JOIN polygon_metadata k ON k.id = %s
+                    WHERE ST_Intersects(g.geom, k.geometry)
+                    """,
+                    (polygon_metadata_id,),
+                )
+                rows = cur.fetchall()
+
+        features = []
+        for r in rows:
+            geom = r.get("geometry")
+            if not geom or geom.get("type") not in ("Polygon", "MultiPolygon"):
+                continue
+            features.append(
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "kode_khg": r["kode_khg"],
+                        "nama_khg": r["nama_khg"],
+                        "fungsi": r["fungsi"],
+                        "kubah_gmbt": r["kubah_gmbt"],
+                    },
+                    "geometry": geom,
+                }
+            )
+        if not features:
+            return None
+        return {"type": "FeatureCollection", "features": features}

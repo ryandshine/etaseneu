@@ -113,7 +113,21 @@ export interface PolygonGambutSummary {
     kubah_gmbt: string;
     luas_ha: number;
   }>;
+  /** Bentuk irisan gambut x poligon KPS ini (2026-09-27) -- null kalau query
+   * spasialnya gagal/kosong walau `total_ha` di atas > 0 (mis. hasil irisan
+   * cuma GeometryCollection). Satu Feature per KHG, properti sama seperti
+   * satu entri `khg[]` di atas. */
+  geometry: PolygonGambutFeatureCollection | null;
 }
+
+export type PolygonGambutFeatureCollection = {
+  type: "FeatureCollection";
+  features: Array<{
+    type: "Feature";
+    geometry: Record<string, unknown>;
+    properties: { kode_khg: string; nama_khg: string; fungsi: string; kubah_gmbt: string };
+  }>;
+};
 
 export interface HotspotQueryParams {
   start_at: string;

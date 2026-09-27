@@ -117,10 +117,41 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   nobs≥2`, lalu `connectedPixelCount≥25` (~1 ha @ 20 m). **Fusi SAR (`enable_sar_fusion=True` default,
   `_sar_mask()`)** — Sentinel-1 C-Band VH (`COPERNICUS/S1_GRD`), `deltaVH = median(VH pre) −
   median(VH post) ≥ 2.0` lalu `connectedPixelCount≥25` juga; hasilnya CUMA dipakai menambah piksel di
-  mana optik kurang observasi (`scar_c.Or(sar_c.And(nobs < NOBS_MIN))`) — bukan AND/OR penuh ke
-  seluruh area, supaya radar (tembus awan/asap) menyelamatkan area yang optik-nya terhalang, tanpa
-  mengubah angka di area yang datanya sudah cukup dari S2 sendiri. Ini bagian dari formula yang SAMA
-  dipakai semua poligon sejak awal, bukan opsi terpisah.
+  mana optik kurang observasi (`scar_c.unmask(0).Or(sar_c.And(nobs < NOBS_MIN).unmask(0))`) — bukan
+  AND/OR penuh ke seluruh area, supaya radar (tembus awan/asap) menyelamatkan area yang optik-nya
+  terhalang, tanpa mengubah angka di area yang datanya sudah cukup dari S2 sendiri. Ini bagian dari
+  formula yang SAMA dipakai semua poligon sejak awal, bukan opsi terpisah.
+  **Bug `.unmask(0)` ditemukan & diperbaiki 2026-09-27** (analisis ad hoc tile Sentinel-2 T52MGS
+  Kepulauan Tanimbar, di luar cakupan poligon KPS/Hutan Adat — dibandingkan ke data manual akurasi
+  H/M Kementerian Kehutanan): sebelum perbaikan, `.Or()` dipanggil TANPA `.unmask(0)` dulu. Piksel GEE
+  yang gagal gerbang ditandai **masked** (bukan `0`), dan `.Or()` antara dua citra yang sama-sama
+  masked di luar wilayah kandidatnya masing-masing **TIDAK menyatukan wilayahnya** — hasilnya cuma
+  valid di irisan keduanya. Terbukti nyata di tile itu: `scar_c.Or(...)` (versi lama) = 1.138,7 ha,
+  padahal `scar_c` SENDIRIAN (tanpa SAR sama sekali) = 1.605,5 ha — menambah jalur deteksi SAR justru
+  MENGURANGI luas, mustahil untuk union yang benar. Setelah `.unmask(0)`: 1.787,0 ha (naik +57%,
+  mendekati rekap manual Kementerian Kehutanan 1.833–1.919 ha di tile yang sama). Karena fusi SAR
+  aktif default sejak awal, bug ini kemungkinan meremehkan hasil di SEMUA analisis S2 sebelumnya yang
+  memakai fusi SAR (termasuk yang jadi rujukan validasi Kalbar) — bukan cuma Tanimbar. Baris lama di
+  tabel `s2_burned_area` TIDAK otomatis dihitung ulang (`analyze_month` manual per provinsi/bulan);
+  perlu dijalankan ulang kalau ingin angka historis ikut terkoreksi.
+  **SAR sbg bukti independen, `DNBR_SAR_FLOOR=0.15`** (2026-09-27, sesudah bug fix di atas) — beda dari
+  fallback `nobs<NOBS_MIN` di atas (yang cuma jalan saat data optik KURANG), jalur ini mengevaluasi SAR
+  TERLEPAS dari nobs. Ditemukan dari 2 kasus nyata terpisah (poligon 61,5 ha tile Tanimbar T52MGS, dan
+  titik di KPS LPHD Kalibandung Kubu Raya Kalbar): SAR kuat (deltaVH 2,0–3,1, DI ATAS ambang 2,0) tidak
+  pernah dicek karena `nobs>=2` (data optik cukup) — padahal dNBR di kedua kasus dekat-tapi-di-bawah
+  ambang (0,28–0,35 vs 0,40) dan NDVI jelas menurun juga. `sar_c.And(dnbr.gte(DNBR_SAR_FLOOR)).And(nobs.gte(NOBS_MIN))`
+  — syarat dNBR (jauh di bawah `DNBR_MIN`) menjaga arah supaya bukan SAR sendirian yang bisa salah
+  tangkap perubahan non-kebakaran (logging, banjir, angin kencang). Dampak terukur Kalibandung Agustus
+  2026: 440,99→479,16 ha (+8,7%, wajar — 4 bercak kecil baru, bukan lonjakan).
+  **Pembersihan vektor pasca-`reduceToVectors`** (`_clean_burned_polygon`, sama tanggal) — raster 20 m
+  yang divektorkan mentah menghasilkan fragmen sekecil 1 piksel (0,04 ha, bikin bingung petugas QC)
+  dan "lubang donat" di tengah poligon besar (piksel yang gagal gerbang di antara piksel yang lolos).
+  Sekarang dibersihkan di `_clip_to_polygon`: fragmen & lubang **kecil** (`_MIN_FRAGMENT_HA=0.3`,
+  `_MIN_HOLE_HA=0.2`, MMU sama seperti ambang cluster) dibuang/ditutup, lubang **besar** (mis. badan air
+  nyata di tengah area terbakar) SENGAJA dipertahankan. Smoothing pakai **Chaikin corner-cutting**
+  (`_chaikin_ring`), BUKAN `buffer(+r).buffer(-r)` — dicoba lebih dulu, terbukti bisa menggembungkan
+  luas sampai 2,6× lipat (dua kali dilatasi lalu erosi tidak konservasi luas untuk bentuk kompleks),
+  Chaikin hampir tidak mengubah luas.
   **Ambang cluster gambut-aware (`enable_gambut_cluster_relax=True` default, 2026-09-24)** — di dalam
   poligon gambut (`ref_gambut_feg`, lihat bagian "Layer Gambut FEG" di bawah), ambang minimum cluster
   diperkecil ke `MIN_CLUSTER_PX_GAMBUT=12` piksel (~0,48 ha) dari `MIN_CLUSTER_PX=25` (~1 ha) di luar
@@ -507,8 +538,21 @@ Alasan tidak ditaruh di `SHP_DIR`: sama seperti KWSHUTAN, `sync_all()` akan menu
   Ditempel sebagai field `gambut` di `PolygonDetail` (`models/polygons.py`) lewat `PolygonService.get_polygon_detail()`
   **dan** `get_polygon_detail_by_agency()` — jadi ikut di `GET /api/polygons/{id}` yang sudah dipakai Detail KPS, TIDAK
   ada endpoint baru. Frontend: `KpsDetailView.tsx` render kartu "Kawasan gambut (FEG)" HANYA kalau `detail.gambut` ada
-  (persentase dari `luas_final`, breakdown Lindung/Budidaya). **Sengaja TIDAK ada lapisan peta/toggle** (keputusan user
-  2026-09-24) — beda dari pola KWSHUTAN (`KawasanHutanLayer.tsx` + `/api/kawasan-hutan/tile`), murni atribusi tekstual.
+  (persentase dari `luas_final`, breakdown Lindung/Budidaya).
+  **Lapisan peta ditambahkan 2026-09-27** (user berubah pikiran dari keputusan 2026-09-24 di atas — sebelumnya sengaja
+  tekstual saja) — `postgres_store/_gambut.py::read_gambut_geometry(polygon_id)` query BARU (beda dari
+  `read_gambut_summary` yang cuma baca tabel statis): `ST_Intersection(ST_MakeValid(ref_gambut_feg.geom),
+  ST_MakeValid(polygon_metadata.geometry))` per KHG yang beririsan, `ST_SimplifyPreserveTopology` ~55 m (lebih presisi
+  dari toleransi mask GEE 110 m karena ini untuk tampilan, bukan keputusan biner), balikan `None` kalau hasil irisan
+  bukan Polygon/MultiPolygon (mis. GeometryCollection dari intersection dimensi campur). **Dipanggil HANYA kalau
+  `read_gambut_summary` sudah non-None** (`PolygonService._attach_gambut_geometry`) — mayoritas KPS (tidak bergambut)
+  tetap secepat sebelumnya, query spasial yang lebih berat ini tidak pernah jalan untuk kasus umum. Field baru
+  `gambut.geometry` (FeatureCollection, satu Feature per KHG, properti sama seperti satu entri `khg[]`) — TETAP field
+  yang sama `gambut`, bukan endpoint/response terpisah. `KpsDetailView.tsx`: `<GeoJSON>` non-interactive (pola sama
+  seperti batas KPS — tanpa popup/klik), warna per `fungsi` (Lindung `#14b8a6` teal, Budidaya `#a16207` coklat), kartu
+  teks dapat swatch bulat warna senada di tiap baris breakdown + kalimat "Bentuk kawasan ditampilkan di peta" atau
+  "...tidak tersedia" (kalau `geometry` null walau `total_ha`>0). Beda dari pola KWSHUTAN (`KawasanHutanLayer.tsx` +
+  `/api/kawasan-hutan/tile`, live proxy raster ArcGIS) — ini vektor dari DB langsung, tidak ada tile cache terpisah.
 
 ### Lapisan Asap (2026-09-20) — citra satelit + prakiraan PM2.5
 

@@ -50,6 +50,17 @@ NOBS_MIN = 2
 MIN_CLUSTER_PX = 25  # @ 20 m ~= 1 ha
 MIN_REPORT_HA = 1.0
 
+# Jalur SAR sbg BUKTI INDEPENDEN (2026-09-27, sesudah perbaikan bug .unmask di atas) --
+# beda dari `sar_c.And(nobs.lt(NOBS_MIN))` yang cuma jadi cadangan SAAT data optik
+# kurang. Ditemukan 2 kasus nyata terpisah (tile Tanimbar T52MGS & KPS LPHD Kalibandung
+# Kalbar) di mana SAR jelas kuat (deltaVH 2,0-3,1, DI ATAS ambang normal) tapi TIDAK
+# PERNAH dicek karena data optik sudah cukup (nobs>=2) -- padahal sinyalnya independen
+# & meyakinkan (dNBR di kedua kasus 0,28-0,35, dekat tapi di bawah 0,40, dNVDI/NDVI
+# jelas menurun juga). `DNBR_SAR_FLOOR` (jauh di bawah `DNBR_MIN`) jadi penjaga arah --
+# dNBR harus tetap POSITIF & searah (vegetasi memang menurun), bukan cuma SAR sendirian
+# yang bisa salah tangkap perubahan non-kebakaran (logging, banjir, angin kencang).
+DNBR_SAR_FLOOR = 0.15
+
 # Ambang cluster minimum KHUSUS di dalam poligon gambut (ref_gambut_feg),
 # 2026-09-24 (permintaan user setelah layer gambut FEG masuk DB). BEDA dari
 # ambang di atas: bukan hasil validasi terhadap rekap Kementerian Kehutanan
@@ -64,6 +75,22 @@ MIN_REPORT_HA = 1.0
 # kalau relaksasi ini aktif, supaya angka Kalbar pasca-perubahan ini mudah
 # dibedakan dari run sebelumnya saat dibandingkan.
 MIN_CLUSTER_PX_GAMBUT = 12  # @ 20 m ~= 0,48 ha -- BELUM tervalidasi lapangan
+
+# Pembersihan vektor pasca-`reduceToVectors` (ditambahkan 2026-09-27, analisis ad hoc
+# Tanimbar) -- raster 20 m yang divektorkan apa adanya menghasilkan (1) fragmen sangat
+# kecil (sampai 1 piksel = 0,04 ha) yang bikin bingung petugas QC dan (2) "lubang donat"
+# di tengah poligon besar (piksel yang gagal gerbang di antara piksel yang lolos --
+# bayangan awan, atau memang ada bagian kecil yang tak terbakar). Keduanya dibuang kalau
+# kecil (MMU sama seperti ambang cluster non-gambut di atas), TAPI lubang besar (mis.
+# danau/badan air nyata di tengah area terbakar) SENGAJA dipertahankan -- bukan asal
+# ditutup semua. Smoothing Chaikin (corner-cutting) dipakai, BUKAN buffer(+r).buffer(-r)
+# -- buffer dilatasi-erosi terbukti bisa menggembungkan luas sampai 2,6x lipat (dicoba &
+# dibuang), Chaikin hampir tidak mengubah luas.
+_MIN_FRAGMENT_HA = 0.3
+_MIN_HOLE_HA = 0.2
+_CHAIKIN_ITER = 2
+_CHAIKIN_RATIO = 0.22
+_SIMPLIFY_TOLERANCE_DEG = 0.00003  # ~3 m, cuma buang titik redundan sisa Chaikin
 # Toleransi simplifikasi geometri gambut sebelum dikirim ke GEE (derajat,
 # ~110 m) -- lihat postgres_store/_gambut.py::read_gambut_mask_geometry.
 _GAMBUT_SIMPLIFY_TOLERANCE = 0.001
@@ -271,7 +298,31 @@ class BurnedAreaS2Service:
         if getattr(self, "enable_sar_fusion", True):
             sar_c = self._sar_mask(ee, region_geom)
             if sar_c is not None:
-                scar_c = scar_c.Or(sar_c.And(nobs.lt(NOBS_MIN)))
+                # BUG NYATA ditemukan & diperbaiki 2026-09-27 (analisis ad hoc tile
+                # T52MGS Tanimbar, dibandingkan ke data manual Kementerian Kehutanan):
+                # `scar_c` masked (bukan 0) di piksel yang gagal gerbang awal, dan
+                # `sar_c.And(nobs.lt(NOBS_MIN))` masked di piksel yang gagal gerbang
+                # SAR-nya sendiri. Operator `.Or()` GEE TIDAK menyatukan wilayah dua
+                # citra yang sama-sama masked di luar wilayahnya masing-masing --
+                # hasilnya cuma valid di IRISAN keduanya, bukan gabungan. Terverifikasi
+                # dgn eksperimen: `scar_c.Or(...)` menghasilkan luas LEBIH KECIL
+                # daripada `scar_c` sendirian (1.138,7 ha vs 1.605,5 ha optik-saja di
+                # tile Tanimbar) -- padahal menambah jalur deteksi harusnya menambah
+                # luas, bukan menguranginya. `.unmask(0)` dulu sebelum `.Or()` supaya
+                # union bekerja benar (hasil terkoreksi: 1.787,0 ha). Fusi SAR sudah
+                # aktif sejak awal (`enable_sar_fusion=True` default) jadi bug ini
+                # kemungkinan meremehkan hasil di SEMUA analisis S2 sebelumnya yang
+                # memakai fusi SAR, tidak cuma Tanimbar.
+                scar_c = scar_c.unmask(0).Or(sar_c.And(nobs.lt(NOBS_MIN)).unmask(0))
+
+                # Jalur BARU (2026-09-27): SAR sbg bukti independen, dievaluasi TERLEPAS
+                # dari nobs -- lihat docstring `DNBR_SAR_FLOOR` di atas. `sar_c` sendiri
+                # sudah lolos gerbang cluster (>=MIN_CLUSTER_PX) di `_sar_mask`, jadi di
+                # sini cuma tambah syarat dNBR searah + `unmask(0)` sebelum `.Or()`
+                # (pelajaran dari bug di atas: jangan pernah `.Or()` dua citra sparse
+                # tanpa unmask keduanya).
+                sar_independent = sar_c.And(dnbr.gte(DNBR_SAR_FLOOR)).And(nobs.gte(NOBS_MIN))
+                scar_c = scar_c.Or(sar_independent.unmask(0))
 
         return scar_c, dnbr
 
@@ -359,7 +410,11 @@ class BurnedAreaS2Service:
 
     @staticmethod
     def _clip_to_polygon(burned_union, polygon_geojson) -> dict | None:
-        """Potong gabungan piksel terbakar ke batas satu poligon -> GeoJSON."""
+        """Potong gabungan piksel terbakar ke batas satu poligon -> GeoJSON.
+
+        Sejak 2026-09-27 hasilnya dibersihkan (`_clean_burned_polygon`) sebelum
+        dikembalikan -- lihat konstanta `_MIN_FRAGMENT_HA`/`_MIN_HOLE_HA` di atas.
+        """
         if burned_union is None:
             return None
         try:
@@ -375,7 +430,10 @@ class BurnedAreaS2Service:
             if not polys:
                 return None
             clipped = ShapelyMultiPolygon(polys)
-        return mapping(clipped)
+        cleaned = _clean_burned_polygon(clipped)
+        if cleaned is None:
+            return None
+        return mapping(cleaned)
 
     # -- orkestrasi ---------------------------------------------------------------
 
@@ -535,6 +593,72 @@ class BurnedAreaS2Service:
         return ee.Geometry.Rectangle(
             [minx - pad, miny - pad, maxx + pad, maxy + pad], None, False
         )
+
+
+def _chaikin_ring(coords, iterations: int = _CHAIKIN_ITER, ratio: float = _CHAIKIN_RATIO):
+    """Corner-cutting Chaikin -- halus, hampir tidak mengubah luas (beda dari
+    buffer(+r).buffer(-r) yang bisa menggembungkan luas sampai 2,6x lipat)."""
+    pts = list(coords)
+    if pts[0] == pts[-1]:
+        pts = pts[:-1]
+    for _ in range(iterations):
+        new_pts = []
+        n = len(pts)
+        for i in range(n):
+            p0, p1 = pts[i], pts[(i + 1) % n]
+            q = (p0[0] + ratio * (p1[0] - p0[0]), p0[1] + ratio * (p1[1] - p0[1]))
+            r = (p0[0] + (1 - ratio) * (p1[0] - p0[0]), p0[1] + (1 - ratio) * (p1[1] - p0[1]))
+            new_pts.extend([q, r])
+        pts = new_pts
+    pts.append(pts[0])
+    return pts
+
+
+def _smooth_ring_polygon(poly: ShapelyPolygon) -> ShapelyPolygon:
+    ext = _chaikin_ring(list(poly.exterior.coords))
+    ints = [_chaikin_ring(list(r.coords)) for r in poly.interiors]
+    try:
+        smoothed = ShapelyPolygon(ext, ints).buffer(0)
+    except Exception:  # noqa: BLE001 -- ring gagal dibentuk, pakai poligon asli
+        return poly
+    if smoothed.is_empty or not isinstance(smoothed, ShapelyPolygon):
+        return poly
+    return smoothed
+
+
+def _clean_burned_polygon(multi: ShapelyMultiPolygon) -> ShapelyMultiPolygon | None:
+    """Halus + buang fragmen & lubang kecil dari hasil `reduceToVectors` mentah.
+
+    Lihat `_MIN_FRAGMENT_HA`/`_MIN_HOLE_HA` -- MMU sama seperti ambang cluster
+    (bukan angka baru), supaya konsisten dengan apa yang sudah dianggap "signifikan"
+    di tahap deteksi piksel.
+    """
+    cleaned: list[ShapelyPolygon] = []
+    for part in multi.geoms:
+        if not isinstance(part, ShapelyPolygon) or part.is_empty:
+            continue
+        if part.area * 111000 * 111000 / 10000 < _MIN_FRAGMENT_HA:
+            continue
+        smoothed = _smooth_ring_polygon(part)
+        try:
+            smoothed = smoothed.simplify(_SIMPLIFY_TOLERANCE_DEG, preserve_topology=True)
+        except Exception:  # noqa: BLE001
+            pass
+        if smoothed.is_empty or not isinstance(smoothed, ShapelyPolygon):
+            continue
+        kept_holes = [
+            ring for ring in smoothed.interiors
+            if ShapelyPolygon(ring).area * 111000 * 111000 / 10000 >= _MIN_HOLE_HA
+        ]
+        try:
+            final_poly = ShapelyPolygon(smoothed.exterior, kept_holes)
+        except Exception:  # noqa: BLE001
+            final_poly = smoothed
+        if not final_poly.is_empty:
+            cleaned.append(final_poly)
+    if not cleaned:
+        return None
+    return ShapelyMultiPolygon(cleaned)
 
 
 def _iter_coords(geojson: dict):

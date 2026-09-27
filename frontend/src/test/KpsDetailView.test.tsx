@@ -283,7 +283,8 @@ describe("KpsDetailView", () => {
                 kubah_gmbt: "Non Kubah Gambut",
                 luas_ha: 1429.47
               }
-            ]
+            ],
+            geometry: null
           }
         });
       }
@@ -311,6 +312,57 @@ describe("KpsDetailView", () => {
     // 1429.47 dari 1430 ha -> dibulatkan 100%.
     expect(screen.getByText(/1429\.50 Ha \(100%\)/)).toBeInTheDocument();
     expect(screen.getByText(/Lindung 1429\.50 Ha/)).toBeInTheDocument();
+    // geometry: null -> kartu bilang bentuknya tidak tersedia, bukan diam-diam tampil kosong.
+    expect(screen.getByText(/Bentuk kawasan tidak tersedia untuk ditampilkan di peta\./)).toBeInTheDocument();
+  });
+
+  it("tells the user the peat shape is shown on the map when geometry is present", async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith("/api/polygons/")) {
+        return jsonResponse({
+          ...polygonDetail,
+          luas_final: "1430.0",
+          gambut: {
+            total_ha: 1429.47,
+            by_fungsi: { Lindung: 1000.0, Budidaya: 429.47 },
+            khg: [],
+            geometry: {
+              type: "FeatureCollection",
+              features: [
+                {
+                  type: "Feature",
+                  properties: { kode_khg: "KHG.61.06.02", nama_khg: "KHG A", fungsi: "Lindung", kubah_gmbt: "Non Kubah Gambut" },
+                  geometry: { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] }
+                }
+              ]
+            }
+          }
+        });
+      }
+      if (url.startsWith("/api/burned-area/summary")) return jsonResponse({ rows: [], unique_ha: null });
+      if (url.startsWith("/api/burned-area/geometry")) return jsonResponse({ type: "FeatureCollection", features: [] });
+      if (url.startsWith("/api/burned-area/s2-summary")) return jsonResponse({ rows: [] });
+      if (url.startsWith("/api/land-cover/status")) {
+        return jsonResponse({ state: "idle", step: null, error: null, computed_at: null });
+      }
+      if (url.startsWith("/api/hotspots")) return jsonResponse({ count: 0, hotspots: [], stats: { total: 0, by_source: {}, by_layer: {} } });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    render(
+      <KpsDetailView
+        agency="LD LINGAT"
+        hotspots={[buildHotspot()]}
+        onClose={() => undefined}
+        onExportPdf={() => undefined}
+        isExportingPdf={false}
+      />
+    );
+
+    expect(await screen.findByText("Kawasan gambut (FEG):")).toBeInTheDocument();
+    expect(screen.getByText(/Bentuk kawasan ditampilkan di peta/)).toBeInTheDocument();
+    expect(screen.getByText(/Lindung 1000\.00 Ha/)).toBeInTheDocument();
   });
 
   it("loads polygon detail by agency when hotspots array is empty (0 hotspot)", async () => {

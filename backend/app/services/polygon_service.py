@@ -25,7 +25,9 @@ class PolygonService:
         if row is None:
             return None
 
-        row["gambut"] = self.postgres_store.read_gambut_summary(polygon_metadata_id)
+        row["gambut"] = self._attach_gambut_geometry(
+            self.postgres_store.read_gambut_summary(polygon_metadata_id), polygon_metadata_id
+        )
         return PolygonDetail(**row)
 
     def get_polygon_detail_by_agency(
@@ -40,8 +42,22 @@ class PolygonService:
         if row is None:
             return None
 
-        row["gambut"] = self.postgres_store.read_gambut_summary(row["id"])
+        row["gambut"] = self._attach_gambut_geometry(
+            self.postgres_store.read_gambut_summary(row["id"]), row["id"]
+        )
         return PolygonDetail(**row)
+
+    def _attach_gambut_geometry(
+        self, gambut: dict[str, Any] | None, polygon_metadata_id: int
+    ) -> dict[str, Any] | None:
+        """Tempel bentuk irisan gambut (2026-09-27) -- CUMA query spasial kalau
+        `gambut` sudah non-None (poligon ini memang bergambut), supaya mayoritas
+        KPS (tidak bergambut) tetap secepat sebelumnya. Lihat
+        `postgres_store/_gambut.py::read_gambut_geometry` untuk alasan lengkap."""
+        if gambut is None:
+            return None
+        gambut["geometry"] = self.postgres_store.read_gambut_geometry(polygon_metadata_id)
+        return gambut
 
     def get_surrounding_hotspots(
         self,
