@@ -193,6 +193,27 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   `properties` kini bawa `year`/`month`. Beri `year`+`month` di query untuk satu periode saja.
   Toggle overlay di `HotspotMap.tsx` (`showS2Burned`) tetap **default mati** (keputusan user: Live
   Map manual, tempat lain seperti Detail KPS otomatis).
+  **Dedup overlap antar-periode di mode gabungan (2026-09-27)** — poligon yang terbakar di >1 bulan
+  (mis. Agustus DAN September) sering beririsan spasial secara signifikan, BUKAN karena kebakaran
+  baru, tapi karena `analyze_month` per bulan independen dan jendela pra-kebakaran bulan N+1 (46
+  hari sebelum awal bulan) tumpang tindih bulan N — bekas Agustus yang belum "terserap" jadi
+  baseline September ikut terdeteksi lagi. Ditemukan lewat kasus nyata LPHD Kalibandung (Kubu Raya,
+  Kalbar): 137 ha dari 483 ha Agustus & 678 ha September ternyata beririsan, sementara hotspot di
+  zona irisan itu anjlok 85→6 (indikasi kuat bukan reburn aktif). `read_s2_burned_area_overlay`
+  (`postgres_store/_s2_burned_area.py`) sekarang: (1) tiap fitur di mode gabungan dapat properti
+  `overlap_ha` (irisan geometri dengan periode LAIN milik poligon yang sama) + `overlap_periods`;
+  (2) `meta.total_ha` dikoreksi (dikurangi overlap, dibagi 2 karena simetris di kedua sisi pasangan
+  — eksak untuk maks 2 periode/poligon seperti sekarang, under-correction ringan kalau nanti ada
+  3+ periode beririsan tiga arah) — TIDAK lagi sum mentah; `meta.total_ha_raw_sum` tetap ada untuk
+  perbandingan/debug tapi jangan ditampilkan sebagai "total" ke pengguna. `area_ha` per fitur (angka
+  raster GEE) TIDAK diubah — tetap presisi untuk KPS Detail per-bulan. **Perf**: overlap HANYA
+  dihitung untuk poligon yang benar-benar py>1 periode (query kedua di-scope lewat CTE `multi`) —
+  menjalankan `ST_Intersection` ke SEMUA baris (termasuk yang jelas tidak beririsan) sempat bikin
+  endpoint ini 18 detik (diukur langsung), sekarang ~4 detik nasional. Frontend: popup "Estimasi
+  Bekas Terbakar" (`HotspotMap.tsx`) menampilkan baris peringatan kalau `overlap_ha > 0`, sebut
+  `overlap_periods`-nya. `KpsDetailView.tsx` (`s2BurnedStats.accumulatedHa`) SENGAJA TIDAK ikut
+  dedup — beda dari layer overlay Live Map, kartu Detail KPS sudah punya komentar eksplisit
+  mengakui keterbatasan ini ("sama batasannya dengan akumulasi KLHK"), belum diubah.
 - `land_cover_service.py` — **analisis tutupan lahan per poligon** KPS/Hutan Adat, 2021–2025 (5
   tahun, dipersempit dari 2020–2025 semula), dari
   Sentinel-2 L2A via GEE + Random Forest (`ee.Classifier.smileRandomForest`, guru label Google

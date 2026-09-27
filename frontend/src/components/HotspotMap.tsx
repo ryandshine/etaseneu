@@ -1001,6 +1001,17 @@ export function HotspotMap({
                 const kawasanNote = props.kawasan_dominan
                   ? `<div>Fungsi kawasan (dominan): <strong>${props.kawasan_dominan}</strong></div>`
                   : "";
+                // Poligon ini juga terdeteksi terbakar di periode lain -- karena
+                // tiap bulan dianalisis independen (jendela pra-kebakaran bulan
+                // berikutnya tumpang tindih bulan ini), area yang beririsan
+                // BUKAN otomatis berarti "terbakar lagi". Lihat catatan proyek.
+                const overlapNote = props.overlap_ha > 0
+                  ? `<div style="margin-top:4px;color:#fdba74;font-size:11px">
+                       ⚠ ${formatNumber(Math.round(props.overlap_ha * 10) / 10)} Ha dari area ini
+                       juga tercatat di periode ${props.overlap_periods.join(", ")} —
+                       kemungkinan bekas lama yang belum "terserap" baseline, bukan otomatis kebakaran baru.
+                     </div>`
+                  : "";
                 layer.bindPopup(
                   `<div style="font-size:12px;font-family:sans-serif;min-width:200px">
                      <strong style="color:#b45309">Estimasi Bekas Terbakar</strong>
@@ -1012,6 +1023,7 @@ export function HotspotMap({
                      )} Ha</strong></div>
                      ${hotspotNote}
                      ${kawasanNote}
+                     ${overlapNote}
                      <div style="margin-top:6px;color:#fbbf24;font-size:11px">
                        Analisis mandiri Sentinel-2 dNBR — estimasi, belum terverifikasi Kementerian Kehutanan.
                      </div>

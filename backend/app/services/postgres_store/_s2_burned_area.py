@@ -262,6 +262,28 @@ class _S2BurnedAreaMixin:
         (atau keduanya) None -> SEMUA periode yang tersimpan digabung (tiap
         poligon bisa muncul >1 kali kalau terbakar di beberapa bulan). Live Map
         memanggil tanpa argumen supaya Agustus + September tampil sekaligus.
+
+        Mode gabungan: dua periode untuk poligon yang sama sering beririsan
+        secara spasial -- bukan berarti kebakaran baru, karena `analyze_month`
+        dihitung independen per bulan dan jendela pra-kebakaran bulan N+1
+        (46 hari sebelum awal bulan) tumpang tindih dengan bulan N (lihat
+        catatan proyek). Kalau di-SUM apa adanya, `total_ha` gabungan
+        menghitung ganda irisan itu. Jadi tiap fitur di mode gabungan dapat
+        properti tambahan `overlap_ha` (irisan dengan periode LAIN milik
+        poligon yang sama, dari geometri hasil vektorisasi) + `overlap_periods`,
+        dan `meta.total_ha` dikoreksi dengan mengurangi overlap itu dari sum
+        `area_ha` mentah (`total_ha_raw_sum`). `area_ha` per fitur TETAP angka
+        mentah tersimpan (raster GEE, tidak diubah) -- itu tetap angka valid
+        untuk KPS Detail per-bulan, cuma tidak boleh dijumlah naif lintas
+        periode untuk satu poligon yang sama.
+
+        Perf: overlap HANYA dihitung untuk poligon yang benar-benar py>1
+        periode (biasanya segelintir dari ratusan baris) -- ST_Intersection
+        atas geometri hasil vektorisasi (bisa >10rb vertex) mahal, jadi
+        menjalankannya ke SEMUA baris (termasuk yang jelas tidak beririsan)
+        pernah bikin endpoint ini 18 detik (diukur 2026-09-27). Query kedua
+        di-scope lewat CTE `multi` supaya cuma poligon yang perlu saja yang
+        kena operasi spasial mahal.
         """
         single_period = year is not None and month is not None
         period_filter = "AND s.year = %s AND s.month = %s" if single_period else ""
@@ -271,8 +293,8 @@ class _S2BurnedAreaMixin:
             with conn.cursor() as cur:
                 cur.execute(
                     f"""
-                    SELECT s.polygon_metadata_id, s.year, s.month, s.area_ha, s.dnbr_mean,
-                           s.hotspot_count_month, s.has_hotspot, s.computed_at,
+                    SELECT s.id, s.polygon_metadata_id, s.year, s.month, s.area_ha,
+                           s.dnbr_mean, s.hotspot_count_month, s.has_hotspot, s.computed_at,
                            pm.lembaga, pm.nama_prov, pm.nama_kab,
                            ST_AsGeoJSON(s.geometry)::json AS geometry_json,
                            khutan.rincian AS kawasan_rincian,
@@ -300,6 +322,43 @@ class _S2BurnedAreaMixin:
                     params,
                 )
                 rows = cur.fetchall()
+
+                # Overlap: cuma dihitung untuk mode gabungan, dan cuma untuk
+                # poligon yang punya >1 baris (>1 periode) -- mayoritas baris
+                # tidak beririsan dengan apa pun, jadi tidak perlu operasi
+                # spasial sama sekali.
+                overlap_by_id: dict[int, tuple[float, list[str]]] = {}
+                if not single_period:
+                    cur.execute(
+                        """
+                        WITH multi AS (
+                            SELECT polygon_metadata_id FROM s2_burned_area
+                            WHERE geometry IS NOT NULL
+                            GROUP BY polygon_metadata_id HAVING COUNT(*) > 1
+                        ),
+                        cand AS (
+                            SELECT s.id, s.polygon_metadata_id, s.year, s.month, s.geometry
+                            FROM s2_burned_area s
+                            JOIN multi m ON m.polygon_metadata_id = s.polygon_metadata_id
+                            WHERE s.geometry IS NOT NULL
+                        )
+                        SELECT cand.id,
+                               ST_Area(ST_Intersection(cand.geometry, other.geometry)::geography)
+                                   / 10000 AS overlap_ha,
+                               other.year AS other_year, other.month AS other_month
+                        FROM cand
+                        JOIN cand other
+                          ON other.polygon_metadata_id = cand.polygon_metadata_id
+                         AND other.id <> cand.id
+                         AND ST_Intersects(cand.geometry, other.geometry)
+                        """
+                    )
+                    for r in cur.fetchall():
+                        rid = int(r["id"])
+                        ha, periods_list = overlap_by_id.get(rid, (0.0, []))
+                        ha += float(r["overlap_ha"] or 0.0)
+                        periods_list = periods_list + [f"{int(r['other_year']):04d}-{int(r['other_month']):02d}"]
+                        overlap_by_id[rid] = (ha, periods_list)
         features = [
             {
                 "type": "Feature",
@@ -318,11 +377,21 @@ class _S2BurnedAreaMixin:
                     "computed_at": r["computed_at"].isoformat() if r.get("computed_at") else None,
                     "kawasan_rincian": r.get("kawasan_rincian") or [],
                     "kawasan_dominan": r.get("kawasan_dominan"),
+                    "overlap_ha": round(overlap_by_id.get(int(r["id"]), (0.0, []))[0], 1),
+                    "overlap_periods": sorted(overlap_by_id.get(int(r["id"]), (0.0, []))[1]),
                 },
             }
             for r in rows
         ]
-        total_ha = round(sum(f["properties"]["area_ha"] for f in features), 1)
+        raw_sum_ha = round(sum(f["properties"]["area_ha"] for f in features), 1)
+        # Koreksi inclusion-exclusion: tiap pasangan overlap muncul di KEDUA baris
+        # (simetris), jadi dibagi 2 supaya cuma dikurangi sekali dari total.
+        # Eksak untuk maksimal 2 periode per poligon (kondisi saat ini, Agustus+
+        # September) -- kalau nanti ada 3+ periode yang beririsan tiga arah
+        # sekaligus, ini jadi under-correction ringan (tidak pernah over-correct),
+        # cukup untuk kebutuhan tampilan (data mentah per-periode tetap presisi).
+        total_overlap_ha = sum(f["properties"]["overlap_ha"] for f in features) / 2
+        total_ha = raw_sum_ha if single_period else round(raw_sum_ha - total_overlap_ha, 1)
         periods = sorted({(f["properties"]["year"], f["properties"]["month"]) for f in features})
         return {
             "type": "FeatureCollection",
@@ -333,6 +402,7 @@ class _S2BurnedAreaMixin:
                 "periods": [f"{y:04d}-{m:02d}" for y, m in periods],
                 "polygons": len(features),
                 "total_ha": total_ha,
+                "total_ha_raw_sum": raw_sum_ha,
                 "no_hotspot_but_burned": sum(
                     1 for f in features if not f["properties"]["has_hotspot"]
                 ),

@@ -4,8 +4,20 @@ import contextlib
 
 
 class FakeCursor:
-    def __init__(self, fetchall_result=None, fetchone_result=None, rowcount: int = 0) -> None:
+    def __init__(
+        self,
+        fetchall_result=None,
+        fetchall_results=None,
+        fetchone_result=None,
+        rowcount: int = 0,
+    ) -> None:
         self._fetchall_result = fetchall_result or []
+        # `fetchall_results`: hasil BERBEDA per panggilan `execute()` berurutan
+        # (dipop satu-satu) -- dipakai kalau satu method melakukan >1 query
+        # (mis. `read_s2_burned_area_overlay` mode gabungan: query utama lalu
+        # query overlap terpisah). Kalau None, tiap `fetchall()` mengembalikan
+        # `fetchall_result` yang sama seperti sebelumnya (tidak mengubah test lama).
+        self._fetchall_queue = list(fetchall_results) if fetchall_results is not None else None
         self._fetchone_result = fetchone_result
         self.executed: list[tuple[str, object]] = []
         self.executemany_calls: list[tuple[str, list]] = []
@@ -24,6 +36,10 @@ class FakeCursor:
         self.executemany_calls.append((query, list(params_list)))
 
     def fetchall(self):
+        if self._fetchall_queue is not None:
+            if self._fetchall_queue:
+                return self._fetchall_queue.pop(0)
+            return []
         return self._fetchall_result
 
     def fetchone(self):
@@ -374,6 +390,7 @@ def test_read_s2_burned_area_for_polygons_attaches_kawasan_breakdown(monkeypatch
 def test_read_s2_burned_area_overlay_puts_kawasan_dominan_in_properties(monkeypatch) -> None:
     fake_rows = [
         {
+            "id": 501,
             "polygon_metadata_id": 49463,
             "year": 2026,
             "month": 8,
@@ -398,14 +415,20 @@ def test_read_s2_burned_area_overlay_puts_kawasan_dominan_in_properties(monkeypa
 
     assert result["features"][0]["properties"]["kawasan_dominan"] == "Lindung"
     assert result["features"][0]["properties"]["month"] == 8
+    # satu periode -> tidak ada overlap (query kedua ke-skip sepenuhnya)
+    assert result["features"][0]["properties"]["overlap_ha"] == 0.0
+    assert result["features"][0]["properties"]["overlap_periods"] == []
     assert "LEFT JOIN LATERAL" in cursor.executed[-1][0]
-    # year+month diberikan -> query difilter ke satu periode
+    # year+month diberikan -> query difilter ke satu periode, dan query
+    # overlap (CTE "multi") tidak pernah dijalankan sama sekali
     assert "s.year = %s AND s.month = %s" in cursor.executed[-1][0]
+    assert not any("multi AS" in q for q, _ in cursor.executed)
 
 
 def test_read_s2_burned_area_overlay_without_period_returns_all(monkeypatch) -> None:
-    fake_rows = [
+    base_rows = [
         {
+            "id": 10,
             "polygon_metadata_id": 1,
             "year": 2026,
             "month": 8,
@@ -422,6 +445,7 @@ def test_read_s2_burned_area_overlay_without_period_returns_all(monkeypatch) -> 
             "kawasan_dominan": None,
         },
         {
+            "id": 11,
             "polygon_metadata_id": 1,
             "year": 2026,
             "month": 9,
@@ -438,15 +462,36 @@ def test_read_s2_burned_area_overlay_without_period_returns_all(monkeypatch) -> 
             "kawasan_dominan": None,
         },
     ]
-    store, cursor = _store_with_fake_cursor(monkeypatch, fetchall_result=fake_rows)
+    # Poligon 1 muncul di 2 periode yang beririsan 3 ha (simetris di kedua sisi)
+    # -- query kedua (khusus poligon multi-periode) mengembalikan ini.
+    overlap_rows = [
+        {"id": 10, "overlap_ha": 3.0, "other_year": 2026, "other_month": 9},
+        {"id": 11, "overlap_ha": 3.0, "other_year": 2026, "other_month": 8},
+    ]
+    store, cursor = _store_with_fake_cursor(
+        monkeypatch, fetchall_results=[base_rows, overlap_rows]
+    )
 
     result = store.read_s2_burned_area_overlay()
 
     assert result["meta"]["periods"] == ["2026-08", "2026-09"]
     assert result["meta"]["year"] is None
     assert len(result["features"]) == 2
-    # tanpa periode -> tidak ada filter year/month di query
-    assert "s.year = %s" not in cursor.executed[-1][0]
+    # tanpa periode -> query utama tidak difilter year/month, dan query
+    # overlap (CTE "multi") memang dijalankan (beda dari mode satu periode)
+    overlap_queries = [q for q, _ in cursor.executed if "multi AS" in q]
+    assert len(overlap_queries) == 1
+    assert not any("s.year = %s" in q for q, _ in cursor.executed)
+
+    by_month = {f["properties"]["month"]: f["properties"] for f in result["features"]}
+    assert by_month[8]["overlap_ha"] == 3.0
+    assert by_month[8]["overlap_periods"] == ["2026-09"]
+    assert by_month[9]["overlap_ha"] == 3.0
+    assert by_month[9]["overlap_periods"] == ["2026-08"]
+    # total_ha dikoreksi (bukan sum mentah 10+5=15): overlap dihitung SEKALI
+    # (bukan dua kali dari kedua sisi), jadi 15 - 3 = 12.
+    assert result["meta"]["total_ha_raw_sum"] == 15.0
+    assert result["meta"]["total_ha"] == 12.0
 
 
 def test_read_burned_area_by_kawasan_maps_rows_and_omits_province_filter(monkeypatch) -> None:

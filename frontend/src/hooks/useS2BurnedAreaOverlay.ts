@@ -17,6 +17,14 @@ export type S2BurnedAreaFeature = {
     has_hotspot: boolean;
     computed_at: string | null;
     kawasan_dominan: string | null;
+    // Luas (ha) yang JUGA tercatat di periode lain milik poligon yang sama
+    // (0 kalau tidak beririsan). Lihat `overlap_periods` untuk periode mana.
+    // Ini bukan berarti "kebakaran baru dua kali" -- lebih sering bekas
+    // periode sebelumnya yang belum "terserap" jadi baseline bulan berikutnya
+    // (`analyze_month` per bulan independen, jendela pra-kebakaran tumpang
+    // tindih). Cuma terisi di mode gabungan (tanpa year/month).
+    overlap_ha: number;
+    overlap_periods: string[];
   };
 };
 
@@ -30,7 +38,13 @@ export type S2BurnedAreaOverlay = {
     month: number | null;
     periods: string[];
     polygons: number;
+    // Footprint riil (union geometri, sudah dikoreksi dobel-hitung irisan
+    // antar-periode) -- pakai ini untuk ringkasan/statistik, BUKAN
+    // `total_ha_raw_sum`.
     total_ha: number;
+    // Sum `area_ha` mentah per fitur TANPA koreksi overlap -- cuma untuk
+    // perbandingan/debug, jangan ditampilkan sebagai "total" ke pengguna.
+    total_ha_raw_sum: number;
     no_hotspot_but_burned: number;
   };
 };
