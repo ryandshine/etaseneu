@@ -20,6 +20,7 @@ import type { DashboardHotspot, PolygonDetail, SurroundingHotspotItem } from "..
 import { ExportAnimationModal } from "./ExportAnimationModal";
 import { exportToGif, exportToVideo, downloadBlob, extensionForExportBlob } from "../lib/exportAnimation";
 import { HotspotPopupContent } from "./HotspotPopupContent";
+import { periodKey, periodLabel, periodsFromPieces, s2PeriodColor, s2PieceStyle } from "../lib/s2Periods";
 import { HotspotTimelineControl } from "./HotspotTimelineControl";
 import { WeatherConditionCard } from "./WeatherConditionCard";
 import {
@@ -74,12 +75,25 @@ type S2BurnedRow = {
   computed_at: string | null;
 };
 
+// KPS yang terbakar di >1 bulan: backend memecah geometrinya jadi potongan
+// tak-tumpang-tindih per BULAN PERTAMA TERDETEKSI (`year`/`month`), dengan
+// `redetected_in` = bulan belakangan yang mendeteksinya lagi -- sama seperti
+// Live Map, lihat lib/s2Periods.ts. `area_ha` = luas seluruh bulan itu,
+// `piece_ha` = luas potongan yang digambar.
 type S2BurnedFeatureCollection = {
   type: "FeatureCollection";
   features: Array<{
     type: "Feature";
     geometry: Record<string, unknown>;
-    properties: { year: number; month: number; area_ha: number; hotspot_count_month: number; has_hotspot: boolean };
+    properties: {
+      year: number;
+      month: number;
+      area_ha: number;
+      hotspot_count_month: number;
+      has_hotspot: boolean;
+      redetected_in?: string[];
+      piece_ha?: number;
+    };
   }>;
 };
 
@@ -679,6 +693,9 @@ export function KpsDetailView({
   // Estimasi mandiri Sentinel-2 untuk KPS ini (lihat S2BurnedRow).
   const [s2BurnedRows, setS2BurnedRows] = useState<S2BurnedRow[]>([]);
   const [s2BurnedGeometry, setS2BurnedGeometry] = useState<S2BurnedFeatureCollection | null>(null);
+  // Footprint Sentinel-2 lintas bulan tanpa hitung ganda (server) -- padanan
+  // `uniqueHa` rekap Kementerian Kehutanan di atas.
+  const [s2UniqueHa, setS2UniqueHa] = useState<number | null>(null);
 
   useEffect(() => {
     if (polygonId === null) {
@@ -687,6 +704,7 @@ export function KpsDetailView({
       setBurnedGeometry(null);
       setS2BurnedRows([]);
       setS2BurnedGeometry(null);
+      setS2UniqueHa(null);
       return;
     }
 
@@ -721,13 +739,16 @@ export function KpsDetailView({
     // belum dihitung / benar-benar tidak terbakar adalah kondisi normal.
     authFetch(`/api/burned-area/s2-summary?polygon_ids=${polygonId}`)
       .then((response) => (response.ok ? response.json() : null))
-      .then((payload: { rows?: S2BurnedRow[]; geometry?: S2BurnedFeatureCollection } | null) => {
-        if (!active || !payload) {
-          return;
+      .then(
+        (payload: { rows?: S2BurnedRow[]; geometry?: S2BurnedFeatureCollection; unique_ha?: number | null } | null) => {
+          if (!active || !payload) {
+            return;
+          }
+          setS2BurnedRows(payload.rows ?? []);
+          setS2BurnedGeometry(payload.geometry?.features?.length ? payload.geometry : null);
+          setS2UniqueHa(payload.unique_ha ?? null);
         }
-        setS2BurnedRows(payload.rows ?? []);
-        setS2BurnedGeometry(payload.geometry?.features?.length ? payload.geometry : null);
-      })
+      )
       .catch(() => {
         /* diamkan */
       });
@@ -749,20 +770,32 @@ export function KpsDetailView({
       return null;
     }
     const sorted = [...effectiveS2Burned].sort((a, b) => b.year - a.year || b.month - a.month);
-    // Angka bulanan dijumlah (lahan yang terbakar >1 bulan terhitung ganda) --
-    // sama batasannya dengan akumulasi KLHK. Untuk Agustus 2026 cuma ada satu
-    // bulan jadi tidak jadi soal; label tetap "akumulasi" biar jujur.
+    // Jumlah mentah per bulan menghitung ganda area yang terdeteksi di >1
+    // bulan (bekas Agustus yang masih terlihat di September, dst.) -- jadi
+    // tampilkan footprint dari server (`unique_ha`, potongan per bulan-pertama-
+    // terdeteksi), sama seperti kartu Kemenhut memakai `uniqueHa`. Jumlah
+    // mentah cuma jadi cadangan kalau server belum mengirim `unique_ha`.
     const accumulatedHa = effectiveS2Burned.reduce((sum, row) => sum + (row.area_ha ?? 0), 0);
+    const displayHa = s2UniqueHa !== null ? s2UniqueHa : accumulatedHa;
     const totalHotspot = effectiveS2Burned.reduce((sum, row) => sum + (row.hotspot_count_month ?? 0), 0);
     return {
       accumulatedHa,
+      displayHa,
+      doubleCountedHa: Math.max(0, accumulatedHa - displayHa),
       latest: sorted[0],
       months: sorted,
       anyHotspot: effectiveS2Burned.some((row) => row.has_hotspot),
       totalHotspot,
       multiMonth: new Set(effectiveS2Burned.map((row) => `${row.year}-${row.month}`)).size > 1
     };
-  }, [effectiveS2Burned]);
+  }, [effectiveS2Burned, s2UniqueHa]);
+
+  // Periode yang tampil di peta Detail KPS -- dasar warna per bulan
+  // (lib/s2Periods.ts), SAMA dengan warna di Live Map.
+  const s2Periods = useMemo(
+    () => periodsFromPieces(effectiveS2Burned.map((row) => ({ year: row.year, month: row.month }))),
+    [effectiveS2Burned]
+  );
 
   // Rekap resmi Kementerian Kehutanan: seluruh riwayat, tanpa saringan rentang
   // (lihat catatan di effectiveS2Burned). Angka & poligon selalu penuh.
@@ -1454,7 +1487,7 @@ export function KpsDetailView({
                 <div className="control-metric">
                   <span>Estimasi bekas terbakar (Sentinel-2):</span>
                   <strong style={{ color: "#f59e0b" }}>
-                    {formatNumber(Math.round(s2BurnedStats.accumulatedHa * 10) / 10)} Ha
+                    {formatNumber(Math.round(s2BurnedStats.displayHa * 10) / 10)} Ha
                   </strong>
                 </div>
                 <p className="help-copy" style={{ marginTop: "0.4rem" }}>
@@ -1472,10 +1505,29 @@ export function KpsDetailView({
                         key={`s2-${row.year}-${row.month}`}
                         style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", color: "#9ca3af" }}
                       >
-                        <span>{MONTH_LABELS[row.month - 1]} {row.year}</span>
+                        <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              display: "inline-block",
+                              width: "9px",
+                              height: "9px",
+                              background: s2PeriodColor(periodKey(row.year, row.month)),
+                              borderRadius: "2px"
+                            }}
+                          />
+                          {MONTH_LABELS[row.month - 1]} {row.year}
+                        </span>
                         <span>{formatNumber(Math.round(row.area_ha * 10) / 10)} Ha</span>
                       </div>
                     ))}
+                    {s2BurnedStats.doubleCountedHa >= 0.1 && (
+                      <p className="help-copy" style={{ marginTop: "0.25rem", fontSize: "0.72rem" }}>
+                        Total di atas = luas gabungan: ±
+                        {formatNumber(Math.round(s2BurnedStats.doubleCountedHa * 10) / 10)} Ha terdeteksi di lebih dari
+                        satu bulan dan dihitung sekali (kemungkinan bekas lama yang masih terlihat, bukan kebakaran baru).
+                      </p>
+                    )}
                   </div>
                 )}
                 {effectiveS2Geometry && effectiveS2Geometry.features.length > 0 && (
@@ -1485,12 +1537,14 @@ export function KpsDetailView({
                         display: "inline-block",
                         width: "12px",
                         height: "12px",
-                        background: "rgba(245,158,11,0.35)",
-                        border: "1px dashed #f59e0b",
+                        background: `${s2PeriodColor(s2Periods[0] ?? "")}59`,
+                        border: `1px dashed ${s2PeriodColor(s2Periods[0] ?? "")}`,
                         flexShrink: 0
                       }}
                     />
-                    Area oranye putus-putus di peta = estimasi Sentinel-2.
+                    {s2Periods.length > 1
+                      ? "Warna di peta = bulan pertama terdeteksi; tepi tebal = terdeteksi lagi bulan berikutnya."
+                      : "Area putus-putus di peta = estimasi Sentinel-2."}
                   </p>
                 )}
                 <p className="help-copy" style={{ marginTop: "0.5rem", fontSize: "0.72rem", color: "#f59e0b" }}>
@@ -1653,35 +1707,40 @@ export function KpsDetailView({
             <Pane name="kps-interaktif" style={{ zIndex: 420 }}>
               {effectiveS2Geometry && effectiveS2Geometry.features.length > 0 && (
                 <GeoJSON
-                  key={`s2burned-${polygonId}`}
+                  // key ikut jumlah fitur: GeoJSON react-leaflet tidak mendiff data
+                  key={`s2burned-${polygonId}-${effectiveS2Geometry.features.length}`}
                   data={effectiveS2Geometry as never}
                   {...fireRendererProp}
-                  style={{
-                    color: "#f59e0b",
-                    weight: 1.2,
-                    dashArray: "5 3",
-                    fillColor: "#f59e0b",
-                    fillOpacity: 0.32,
+                  // Warna per bulan pertama terdeteksi -- sama dengan Live Map
+                  // (lib/s2Periods.ts).
+                  style={(feature) => ({
+                    ...s2PieceStyle(feature?.properties as S2BurnedFeatureCollection["features"][number]["properties"]),
                     interactive: true
-                  }}
+                  })}
                   onEachFeature={(feature, layer) => {
-                    const props = feature.properties as {
-                      year: number;
-                      month: number;
-                      area_ha: number;
-                      hotspot_count_month: number;
-                      has_hotspot: boolean;
-                    };
+                    const props = feature.properties as S2BurnedFeatureCollection["features"][number]["properties"];
+                    const multi = s2Periods.length > 1;
+                    const redetected = props.redetected_in ?? [];
                     const hsLine = props.has_hotspot
-                      ? `Hotspot bulan ini: ${props.hotspot_count_month}`
+                      ? `Hotspot ${MONTH_LABELS[props.month - 1]}: ${props.hotspot_count_month}`
                       : "Tidak ada hotspot terdeteksi";
+                    const redetectLine = redetected.length
+                      ? `<div style="margin-top:4px;color:#c2410c;font-size:11px">Terdeteksi lagi di ${redetected
+                          .map(periodLabel)
+                          .join(", ")} — kemungkinan bekas ${periodLabel(
+                          periodKey(props.year, props.month)
+                        )} yang masih terlihat, bukan otomatis kebakaran baru.</div>`
+                      : "";
                     layer.bindPopup(
                       `<div style="font-size:12px;font-family:sans-serif;min-width:190px">
                          <strong style="color:#b45309">Estimasi Bekas Terbakar</strong>
-                         <div style="margin-top:6px">${MONTH_LABELS[props.month - 1]} ${props.year}</div>
-                         <div style="margin-top:4px">Luas estimasi: <strong>${formatNumber(
-                           Math.round(props.area_ha * 10) / 10
+                         <div style="margin-top:6px">${multi ? "Pertama terdeteksi: " : ""}${
+                           MONTH_LABELS[props.month - 1]
+                         } ${props.year}</div>
+                         <div style="margin-top:4px">Luas ${multi ? "area ini" : "estimasi"}: <strong>${formatNumber(
+                           Math.round((props.piece_ha ?? props.area_ha) * 10) / 10
                          )} Ha</strong></div>
+                         ${redetectLine}
                          <div style="color:#9ca3af">${hsLine}</div>
                          <div style="margin-top:6px;color:#b45309;font-size:11px">Sentinel-2 dNBR — belum terverifikasi.</div>
                        </div>`,

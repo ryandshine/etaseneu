@@ -199,21 +199,39 @@ Karena `connection()` pakai `autocommit=True`, temp table butuh `ON COMMIT PRESE
   hari sebelum awal bulan) tumpang tindih bulan N — bekas Agustus yang belum "terserap" jadi
   baseline September ikut terdeteksi lagi. Ditemukan lewat kasus nyata LPHD Kalibandung (Kubu Raya,
   Kalbar): 137 ha dari 483 ha Agustus & 678 ha September ternyata beririsan, sementara hotspot di
-  zona irisan itu anjlok 85→6 (indikasi kuat bukan reburn aktif). `read_s2_burned_area_overlay`
-  (`postgres_store/_s2_burned_area.py`) sekarang: (1) tiap fitur di mode gabungan dapat properti
-  `overlap_ha` (irisan geometri dengan periode LAIN milik poligon yang sama) + `overlap_periods`;
-  (2) `meta.total_ha` dikoreksi (dikurangi overlap, dibagi 2 karena simetris di kedua sisi pasangan
-  — eksak untuk maks 2 periode/poligon seperti sekarang, under-correction ringan kalau nanti ada
-  3+ periode beririsan tiga arah) — TIDAK lagi sum mentah; `meta.total_ha_raw_sum` tetap ada untuk
-  perbandingan/debug tapi jangan ditampilkan sebagai "total" ke pengguna. `area_ha` per fitur (angka
-  raster GEE) TIDAK diubah — tetap presisi untuk KPS Detail per-bulan. **Perf**: overlap HANYA
-  dihitung untuk poligon yang benar-benar py>1 periode (query kedua di-scope lewat CTE `multi`) —
-  menjalankan `ST_Intersection` ke SEMUA baris (termasuk yang jelas tidak beririsan) sempat bikin
-  endpoint ini 18 detik (diukur langsung), sekarang ~4 detik nasional. Frontend: popup "Estimasi
-  Bekas Terbakar" (`HotspotMap.tsx`) menampilkan baris peringatan kalau `overlap_ha > 0`, sebut
-  `overlap_periods`-nya. `KpsDetailView.tsx` (`s2BurnedStats.accumulatedHa`) SENGAJA TIDAK ikut
-  dedup — beda dari layer overlay Live Map, kartu Detail KPS sudah punya komentar eksplisit
-  mengakui keterbatasan ini ("sama batasannya dengan akumulasi KLHK"), belum diubah.
+  zona irisan itu anjlok 85→6 (indikasi kuat bukan reburn aktif).
+  **Potongan per "bulan pertama terdeteksi" (2026-09-28, menggantikan versi `overlap_ha` 09-27)** —
+  `_s2_period_pieces` (`postgres_store/_s2_burned_area.py`) memecah footprint poligon multi-periode
+  jadi potongan TAK-tumpang-tindih: per (poligon, periode P) urut kronologis,
+  `own(P) = geom(P) − union(periode < P)`, lalu `own ∩ union(periode > P)` = potongan
+  "terdeteksi ulang" (`redetected_in` = periode belakangan itu) dan `own − union(periode > P)` =
+  potongan biasa. Semua potongan mempartisi union → jumlah `piece_ha` = footprint riil; berlaku
+  berapa pun jumlah bulan. Dipakai DUA tempat: (1) `GET /s2-overlay` mode gabungan (poligon
+  multi-periode diganti potongan; `year`/`month` fitur = bulan pertama terdeteksi; properti baru
+  `redetected_in`/`piece_ha`/`footprint_ha`/`periods_breakdown`; `meta.total_ha` = area_ha poligon
+  satu-periode + Σ `piece_ha` multi-periode; `meta.total_ha_raw_sum` cuma debug; `meta.polygons` =
+  jumlah POLIGON bukan fitur), (2) `GET /s2-summary` (Detail KPS: geometri jadi potongan + field
+  baru `unique_ha` = footprint, padanan `unique_ha` Kemenhut; `rows` tetap per bulan). Mode satu
+  periode (`year`+`month`) TIDAK berubah. `area_ha` raster per bulan TIDAK diubah, formula inti TIDAK
+  disentuh. Kalibandung: Agustus-saja 346 ha, Agustus-terdeteksi-ulang-September 137 ha,
+  September-saja 540 ha → footprint 1.024 ha (bukan 481+697=1.178). Serpihan < 0,1 ha sisa operasi
+  overlay dibuang. **Perf + cache**: versi nasional ~15 detik (151 poligon multi-periode, geometri
+  s/d 12rb vertex) → di-cache di `api_cache_entries` (`_s2_period_pieces_all_cached`, key = sidik
+  jari `COUNT(*)` + `MAX(computed_at)` tabel → otomatis basi saat ada upsert baru, TTL 30 hari),
+  hit ~1,4 detik; `analyze_month` memanggil `read_s2_burned_area_overlay()` di akhir untuk
+  memanaskan cache (non-fatal). Per-KPS (`s2-summary`) ~0,3 detik tanpa cache. **Bug lama ikut
+  diperbaiki**: `_cache.py::write_cache_entry` memakai `json` tanpa `import json` → tier DB
+  `api_cache_entries` TIDAK PERNAH menulis sejak refactor mixin (`CacheService` diam-diam jatuh ke
+  cache file saja); sekarang aktif lagi sesuai rancangan (TTL sama dgn tier file). Frontend
+  `lib/s2Periods.ts`: warna TETAP per bulan kalender (`s2PeriodColor("YYYY-MM")`, Agustus 2026 =
+  kuning `#facc15`, September = oranye `#f97316`, bulan berurutan selalu beda) supaya Live Map &
+  Detail KPS konsisten; `s2PieceStyle` = isian warna bulan pertama + tepi putus-putus, potongan
+  `redetected_in` = isian lebih pekat + tepi SOLID tebal warna bulan berikutnya. Legenda per bulan
+  di chip "Estimasi Sentinel-2" (`.s2-period-legend`, cuma kalau >1 periode). Kartu Detail KPS
+  menampilkan `unique_ha` (bukan jumlah mentah lagi) + catatan "±N Ha terdeteksi di lebih dari satu
+  bulan dan dihitung sekali". **Test API yang memanggil `/s2-summary` WAJIB me-monkeypatch
+  `PostgresStore.read_s2_burned_area_pieces` juga** — tanpa itu endpoint menembak DB produksi
+  (Bahaya #1).
 - `land_cover_service.py` — **analisis tutupan lahan per poligon** KPS/Hutan Adat, 2021–2025 (5
   tahun, dipersempit dari 2020–2025 semula), dari
   Sentinel-2 L2A via GEE + Random Forest (`ee.Classifier.smileRandomForest`, guru label Google

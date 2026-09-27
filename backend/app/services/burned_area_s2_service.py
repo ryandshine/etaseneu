@@ -566,6 +566,15 @@ class BurnedAreaS2Service:
             year,
             month,
         )
+        # Panaskan cache potongan overlay Live Map (lihat
+        # `_s2_period_pieces_all_cached`) -- sidik jari tabel baru saja berubah,
+        # jadi tanpa ini pengguna pertama yang membuka peta menunggu ~15 detik.
+        # Non-fatal: cuma optimasi tampilan, bukan bagian analisis.
+        try:
+            self.postgres_store.read_s2_burned_area_overlay()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("S2_BURNED: gagal memanaskan cache overlay — %s", exc)
+
         return {
             "year": year,
             "month": month,

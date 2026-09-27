@@ -245,30 +245,55 @@ async def burned_area_s2_summary(
 ) -> dict[str, object]:
     """Estimasi bekas terbakar Sentinel-2 untuk satu/beberapa KPS (semua
     bulan) + geometri poligonnya, untuk kartu Detail KPS. Terpisah dari
-    `/burned-area/summary` (rekap resmi KLHK)."""
+    `/burned-area/summary` (rekap resmi KLHK).
+
+    KPS yang terbakar di >1 periode: geometri dipecah jadi potongan
+    tak-tumpang-tindih per bulan-pertama-terdeteksi (sama seperti Live Map,
+    lihat `_s2_period_pieces`), dan `unique_ha` = footprint riil tanpa hitung
+    ganda irisan antar-bulan (padanan `unique_ha` rekap Kementerian Kehutanan).
+    `rows` tetap per bulan apa adanya."""
     if not polygon_ids:
-        return {"rows": [], "geometry": {"type": "FeatureCollection", "features": []}}
-    rows = store.read_s2_burned_area_for_polygons(polygon_ids)
-    features = [
-        {
-            "type": "Feature",
-            "geometry": row["geometry_json"],
-            "properties": {
-                "polygon_metadata_id": row["polygon_metadata_id"],
-                "year": row["year"],
-                "month": row["month"],
-                "area_ha": row["area_ha"],
-                "hotspot_count_month": row["hotspot_count_month"],
-                "has_hotspot": row["has_hotspot"],
-                "kawasan_dominan": row.get("kawasan_dominan"),
-            },
+        return {
+            "rows": [],
+            "geometry": {"type": "FeatureCollection", "features": []},
+            "unique_ha": None,
         }
+    rows = store.read_s2_burned_area_for_polygons(polygon_ids)
+    pieces = store.read_s2_burned_area_pieces(polygon_ids)
+    multi_pids = {p["polygon_metadata_id"] for p in pieces}
+    row_by_key = {(r["polygon_metadata_id"], r["year"], r["month"]): r for r in rows}
+
+    def _props(row: dict, piece: dict | None) -> dict[str, object]:
+        return {
+            "polygon_metadata_id": row["polygon_metadata_id"],
+            "year": row["year"],
+            "month": row["month"],
+            "area_ha": row["area_ha"],
+            "hotspot_count_month": row["hotspot_count_month"],
+            "has_hotspot": row["has_hotspot"],
+            "kawasan_dominan": row.get("kawasan_dominan"),
+            "redetected_in": piece["redetected_in"] if piece else [],
+            "piece_ha": round(piece["piece_ha"], 2) if piece else row["area_ha"],
+        }
+
+    features = [
+        {"type": "Feature", "geometry": row["geometry_json"], "properties": _props(row, None)}
         for row in rows
-        if row["geometry_json"]
+        if row["geometry_json"] and row["polygon_metadata_id"] not in multi_pids
     ]
+    for piece in pieces:
+        row = row_by_key.get((piece["polygon_metadata_id"], piece["year"], piece["month"]))
+        if row is None:
+            continue
+        features.append({"type": "Feature", "geometry": piece["geometry_json"], "properties": _props(row, piece)})
+
+    unique_ha = sum(r["area_ha"] for r in rows if r["polygon_metadata_id"] not in multi_pids) + sum(
+        p["piece_ha"] for p in pieces
+    )
     return {
         "rows": [{k: v for k, v in row.items() if k != "geometry_json"} for row in rows],
         "geometry": {"type": "FeatureCollection", "features": features},
+        "unique_ha": round(unique_ha, 2) if rows else None,
     }
 
 

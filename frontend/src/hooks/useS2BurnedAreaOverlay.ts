@@ -17,14 +17,19 @@ export type S2BurnedAreaFeature = {
     has_hotspot: boolean;
     computed_at: string | null;
     kawasan_dominan: string | null;
-    // Luas (ha) yang JUGA tercatat di periode lain milik poligon yang sama
-    // (0 kalau tidak beririsan). Lihat `overlap_periods` untuk periode mana.
-    // Ini bukan berarti "kebakaran baru dua kali" -- lebih sering bekas
-    // periode sebelumnya yang belum "terserap" jadi baseline bulan berikutnya
-    // (`analyze_month` per bulan independen, jendela pra-kebakaran tumpang
-    // tindih). Cuma terisi di mode gabungan (tanpa year/month).
-    overlap_ha: number;
-    overlap_periods: string[];
+    // Mode gabungan: poligon yang terbakar di >1 bulan dipecah backend jadi
+    // potongan tak-tumpang-tindih per BULAN PERTAMA TERDETEKSI (`year`/`month`
+    // di atas = bulan itu). `redetected_in` = periode "YYYY-MM" belakangan yang
+    // mendeteksi potongan ini lagi (kosong = cuma terdeteksi sekali) -- lebih
+    // sering bekas lama yang belum "terserap" baseline bulan berikutnya
+    // (`analyze_month` per bulan independen), bukan kebakaran baru.
+    redetected_in: string[];
+    // Luas potongan yang tampil (geometri). `area_ha` = luas raster GEE
+    // seluruh bulan itu untuk poligon ini, bukan luas potongan.
+    piece_ha: number;
+    // Footprint poligon lintas semua periode, tanpa hitung ganda.
+    footprint_ha: number;
+    periods_breakdown: Array<{ year: number; month: number; area_ha: number }>;
   };
 };
 
@@ -37,6 +42,7 @@ export type S2BurnedAreaOverlay = {
     year: number | null;
     month: number | null;
     periods: string[];
+    // Jumlah poligon KPS/Hutan Adat (bukan jumlah fitur/potongan).
     polygons: number;
     // Footprint riil (union geometri, sudah dikoreksi dobel-hitung irisan
     // antar-periode) -- pakai ini untuk ringkasan/statistik, BUKAN

@@ -416,8 +416,8 @@ def test_read_s2_burned_area_overlay_puts_kawasan_dominan_in_properties(monkeypa
     assert result["features"][0]["properties"]["kawasan_dominan"] == "Lindung"
     assert result["features"][0]["properties"]["month"] == 8
     # satu periode -> tidak ada overlap (query kedua ke-skip sepenuhnya)
-    assert result["features"][0]["properties"]["overlap_ha"] == 0.0
-    assert result["features"][0]["properties"]["overlap_periods"] == []
+    assert result["features"][0]["properties"]["redetected_in"] == []
+    assert result["features"][0]["properties"]["piece_ha"] == 20.0
     assert "LEFT JOIN LATERAL" in cursor.executed[-1][0]
     # year+month diberikan -> query difilter ke satu periode, dan query
     # overlap (CTE "multi") tidak pernah dijalankan sama sekali
@@ -463,35 +463,67 @@ def test_read_s2_burned_area_overlay_without_period_returns_all(monkeypatch) -> 
         },
     ]
     # Poligon 1 muncul di 2 periode yang beririsan 3 ha (simetris di kedua sisi)
-    # -- query kedua (khusus poligon multi-periode) mengembalikan ini.
-    overlap_rows = [
-        {"id": 10, "overlap_ha": 3.0, "other_year": 2026, "other_month": 9},
-        {"id": 11, "overlap_ha": 3.0, "other_year": 2026, "other_month": 8},
+    # -- query potongan (khusus poligon multi-periode) memecahnya jadi 3
+    # potongan tak-tumpang-tindih: Agustus saja 7, Agustus-terdeteksi-ulang-
+    # di-September 3, September saja 2 (footprint 12, bukan 10+5=15).
+    base_rows.append(
+        {
+            "id": 12,
+            "polygon_metadata_id": 2,
+            "year": 2026,
+            "month": 9,
+            "area_ha": 4.0,
+            "dnbr_mean": None,
+            "hotspot_count_month": 2,
+            "has_hotspot": True,
+            "computed_at": None,
+            "lembaga": "B",
+            "nama_prov": "P",
+            "nama_kab": "K",
+            "geometry_json": {"type": "MultiPolygon", "coordinates": []},
+            "kawasan_rincian": None,
+            "kawasan_dominan": None,
+        }
+    )
+    geom = {"type": "MultiPolygon", "coordinates": []}
+    piece_rows = [
+        {"pid": 1, "year": 2026, "month": 8, "redetected_in": [], "piece_ha": 7.0, "geometry_json": geom},
+        {"pid": 1, "year": 2026, "month": 8, "redetected_in": ["2026-09"], "piece_ha": 3.0, "geometry_json": geom},
+        {"pid": 1, "year": 2026, "month": 9, "redetected_in": [], "piece_ha": 2.0, "geometry_json": geom},
     ]
     store, cursor = _store_with_fake_cursor(
-        monkeypatch, fetchall_results=[base_rows, overlap_rows]
+        monkeypatch, fetchall_results=[base_rows, piece_rows]
     )
 
     result = store.read_s2_burned_area_overlay()
 
     assert result["meta"]["periods"] == ["2026-08", "2026-09"]
     assert result["meta"]["year"] is None
-    assert len(result["features"]) == 2
+    # meta.polygons = jumlah poligon (2), bukan jumlah fitur (3 potongan + 1)
+    assert result["meta"]["polygons"] == 2
+    assert len(result["features"]) == 4
     # tanpa periode -> query utama tidak difilter year/month, dan query
-    # overlap (CTE "multi") memang dijalankan (beda dari mode satu periode)
-    overlap_queries = [q for q, _ in cursor.executed if "multi AS" in q]
-    assert len(overlap_queries) == 1
+    # potongan (CTE "multi") memang dijalankan (beda dari mode satu periode)
+    assert len([q for q, _ in cursor.executed if "multi AS" in q]) == 1
     assert not any("s.year = %s" in q for q, _ in cursor.executed)
 
-    by_month = {f["properties"]["month"]: f["properties"] for f in result["features"]}
-    assert by_month[8]["overlap_ha"] == 3.0
-    assert by_month[8]["overlap_periods"] == ["2026-09"]
-    assert by_month[9]["overlap_ha"] == 3.0
-    assert by_month[9]["overlap_periods"] == ["2026-08"]
-    # total_ha dikoreksi (bukan sum mentah 10+5=15): overlap dihitung SEKALI
-    # (bukan dua kali dari kedua sisi), jadi 15 - 3 = 12.
-    assert result["meta"]["total_ha_raw_sum"] == 15.0
-    assert result["meta"]["total_ha"] == 12.0
+    poly1 = [f["properties"] for f in result["features"] if f["properties"]["polygon_metadata_id"] == 1]
+    assert sorted((p["month"], tuple(p["redetected_in"]), p["piece_ha"]) for p in poly1) == [
+        (8, (), 7.0),
+        (8, ("2026-09",), 3.0),
+        (9, (), 2.0),
+    ]
+    assert all(p["footprint_ha"] == 12.0 for p in poly1)
+    assert poly1[0]["periods_breakdown"] == [
+        {"year": 2026, "month": 8, "area_ha": 10.0},
+        {"year": 2026, "month": 9, "area_ha": 5.0},
+    ]
+    # poligon satu periode tetap satu fitur utuh apa adanya
+    poly2 = [f["properties"] for f in result["features"] if f["properties"]["polygon_metadata_id"] == 2]
+    assert len(poly2) == 1 and poly2[0]["piece_ha"] == 4.0 and poly2[0]["redetected_in"] == []
+    # total = footprint poligon 1 (12) + poligon 2 (4), bukan sum mentah 19
+    assert result["meta"]["total_ha_raw_sum"] == 19.0
+    assert result["meta"]["total_ha"] == 16.0
 
 
 def test_read_burned_area_by_kawasan_maps_rows_and_omits_province_filter(monkeypatch) -> None:

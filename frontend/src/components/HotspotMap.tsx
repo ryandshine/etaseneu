@@ -42,6 +42,7 @@ import { useBurnedAreaOverlay } from "../hooks/useBurnedAreaOverlay";
 import type { BurnedAreaOverlayFeature } from "../hooks/useBurnedAreaOverlay";
 import { useS2BurnedAreaOverlay } from "../hooks/useS2BurnedAreaOverlay";
 import type { S2BurnedAreaFeature } from "../hooks/useS2BurnedAreaOverlay";
+import { periodKey, periodLabel, s2PeriodColor, s2PieceStyle } from "../lib/s2Periods";
 import { KawasanHutanLayer } from "./KawasanHutanLayer";
 import { SmokeControl } from "./SmokeControl";
 import { SmokeMapLayers } from "./SmokeLayers";
@@ -754,6 +755,34 @@ export function HotspotMap({
               <p className="burned-summary-chip__source">
                 {formatS2Periods(s2Burned.data.meta.periods)} · analisis mandiri Sentinel-2 · estimasi
               </p>
+              {s2Burned.data.meta.periods.length > 1 ? (
+                <ul className="s2-period-legend" aria-label="Warna per bulan pertama terdeteksi">
+                  {s2Burned.data.meta.periods.map((key) => {
+                    const color = s2PeriodColor(key);
+                    return (
+                      <li key={key}>
+                        <span
+                          className="s2-period-legend__swatch"
+                          style={{ background: `${color}59`, borderColor: color }}
+                        />
+                        {periodLabel(key)}
+                      </li>
+                    );
+                  })}
+                  <li>
+                    <span
+                      className="s2-period-legend__swatch s2-period-legend__swatch--redetected"
+                      style={{
+                        background: `${s2PeriodColor(s2Burned.data.meta.periods[0])}99`,
+                        borderColor: s2PeriodColor(
+                          s2Burned.data.meta.periods[s2Burned.data.meta.periods.length - 1]
+                        )
+                      }}
+                    />
+                    Tepi tebal = terdeteksi lagi bulan berikutnya (bukan otomatis kebakaran baru)
+                  </li>
+                </ul>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -986,44 +1015,63 @@ export function HotspotMap({
               key={`s2-burned-${s2Burned.data.meta.periods.join("_") || "none"}-${s2Burned.data.meta.polygons}`}
               data={s2Burned.data as never}
               {...fireRendererProp}
-              style={{
-                color: "#f59e0b",
-                weight: 1.5,
-                dashArray: "5 3",
-                fillColor: "#f59e0b",
-                fillOpacity: 0.35
-              }}
+              // Warna per BULAN PERTAMA TERDETEKSI (lihat lib/s2Periods.ts);
+              // potongan yang terdeteksi lagi di bulan berikutnya: isian bulan
+              // pertama + garis tepi solid warna bulan berikutnya.
+              style={(feature) => s2PieceStyle(feature?.properties as S2BurnedAreaFeature["properties"])}
               onEachFeature={(feature, layer) => {
                 const props = feature.properties as S2BurnedAreaFeature["properties"];
+                const ownKey = periodKey(props.year, props.month);
                 const hotspotNote = props.has_hotspot
-                  ? `<div>Hotspot bulan ini: <strong>${props.hotspot_count_month}</strong></div>`
+                  ? `<div>Hotspot ${MONTH_LABELS[props.month - 1]}: <strong>${props.hotspot_count_month}</strong></div>`
                   : `<div style="color:#fca5a5">Tidak ada hotspot terdeteksi — terbakar tetap terekam citra.</div>`;
                 const kawasanNote = props.kawasan_dominan
                   ? `<div>Fungsi kawasan (dominan): <strong>${props.kawasan_dominan}</strong></div>`
                   : "";
-                // Poligon ini juga terdeteksi terbakar di periode lain -- karena
-                // tiap bulan dianalisis independen (jendela pra-kebakaran bulan
-                // berikutnya tumpang tindih bulan ini), area yang beririsan
-                // BUKAN otomatis berarti "terbakar lagi". Lihat catatan proyek.
-                const overlapNote = props.overlap_ha > 0
+                const redetected = props.redetected_in ?? [];
+                // Area ini pertama terdeteksi di bulan X lalu terdeteksi lagi
+                // di bulan berikutnya -- tiap bulan dianalisis independen dan
+                // jendela pra-kebakaran bulan berikutnya tumpang tindih bulan
+                // ini, jadi BUKAN otomatis "terbakar lagi".
+                const redetectNote = redetected.length
                   ? `<div style="margin-top:4px;color:#fdba74;font-size:11px">
-                       ⚠ ${formatNumber(Math.round(props.overlap_ha * 10) / 10)} Ha dari area ini
-                       juga tercatat di periode ${props.overlap_periods.join(", ")} —
-                       kemungkinan bekas lama yang belum "terserap" baseline, bukan otomatis kebakaran baru.
+                       ⚠ Terdeteksi lagi di ${redetected.map(periodLabel).join(", ")} — kemungkinan bekas
+                       ${periodLabel(ownKey)} yang masih terlihat, bukan otomatis kebakaran baru.
                      </div>`
                   : "";
+                const breakdown = props.periods_breakdown ?? [];
+                const breakdownNote =
+                  breakdown.length > 1
+                    ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(148,163,184,0.3);font-size:11px">
+                         <div style="color:#9ca3af">Rincian KPS ini:</div>
+                         ${breakdown
+                           .map((b) => {
+                             const color = s2PeriodColor(periodKey(b.year, b.month));
+                             return `<div><span style="display:inline-block;width:8px;height:8px;background:${color};margin-right:4px"></span>${
+                               MONTH_LABELS[b.month - 1]
+                             } ${b.year}: ${formatNumber(Math.round(b.area_ha * 10) / 10)} Ha</div>`;
+                           })
+                           .join("")}
+                         <div style="margin-top:2px">Luas gabungan (tanpa hitung ganda): <strong>${formatNumber(
+                           Math.round(props.footprint_ha * 10) / 10
+                         )} Ha</strong></div>
+                       </div>`
+                    : "";
                 layer.bindPopup(
                   `<div style="font-size:12px;font-family:sans-serif;min-width:200px">
                      <strong style="color:#b45309">Estimasi Bekas Terbakar</strong>
                      <div style="margin-top:6px;font-weight:600">${props.lembaga ?? "-"}</div>
                      <div style="color:#9ca3af;font-size:11px">${props.nama_kab ?? "-"} · ${props.nama_prov ?? "-"}</div>
-                     <div style="margin-top:6px">Periode: <strong>${MONTH_LABELS[props.month - 1]} ${props.year}</strong></div>
-                     <div style="margin-top:4px">Luas estimasi: <strong>${formatNumber(
-                       Math.round(props.area_ha * 10) / 10
+                     <div style="margin-top:6px">${
+                       breakdown.length > 1 ? "Pertama terdeteksi" : "Periode"
+                     }: <strong>${MONTH_LABELS[props.month - 1]} ${props.year}</strong></div>
+                     <div style="margin-top:4px">Luas ${breakdown.length > 1 ? "area ini" : "estimasi"}: <strong>${formatNumber(
+                       Math.round(props.piece_ha * 10) / 10
                      )} Ha</strong></div>
+                     ${redetectNote}
                      ${hotspotNote}
                      ${kawasanNote}
-                     ${overlapNote}
+                     ${breakdownNote}
                      <div style="margin-top:6px;color:#fbbf24;font-size:11px">
                        Analisis mandiri Sentinel-2 dNBR — estimasi, belum terverifikasi Kementerian Kehutanan.
                      </div>

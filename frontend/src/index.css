@@ -3789,6 +3789,40 @@ code {
   overflow-wrap: anywhere;
 }
 
+/* Legenda warna "Estimasi Sentinel-2" per bulan pertama terdeteksi
+   (lib/s2Periods.ts). Cuma tampil kalau >1 periode. */
+.s2-period-legend {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0.35rem 0 0;
+  border-top: 1px solid rgba(231, 230, 194, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.66rem;
+  color: rgba(231, 230, 194, 0.8);
+}
+
+.s2-period-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.s2-period-legend__swatch {
+  flex-shrink: 0;
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 1.5px dashed;
+  border-radius: 2px;
+}
+
+/* warna isian/tepi diisi inline dari lib/s2Periods.ts */
+.s2-period-legend__swatch--redetected {
+  border-width: 2.5px;
+  border-style: solid;
+}
+
 /* Baris pertama .map-left-stack (2026-09-05): Lokasi Saya + peralihan
    Peta/Satelit berdampingan. Sengaja jadi anak flex row biasa (bukan
    `position:absolute` masing-masing) -- lihat .map-left-stack. */

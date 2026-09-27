@@ -427,6 +427,8 @@ def test_s2_summary_returns_rows_and_geometry(monkeypatch) -> None:
     monkeypatch.setattr(
         PostgresStore, "read_s2_burned_area_for_polygons", lambda self, ids: fake_rows
     )
+    # WAJIB di-mock juga -- tanpa ini endpoint menembak DB produksi (Bahaya #1)
+    monkeypatch.setattr(PostgresStore, "read_s2_burned_area_pieces", lambda self, ids: [])
 
     client = _client(monkeypatch)
     response = client.get("/api/burned-area/s2-summary?polygon_ids=42")
@@ -436,10 +438,60 @@ def test_s2_summary_returns_rows_and_geometry(monkeypatch) -> None:
     assert body["rows"][0]["area_ha"] == 12.3
     assert "geometry_json" not in body["rows"][0]
     assert body["geometry"]["features"][0]["properties"]["has_hotspot"] is True
+    # satu periode -> fitur utuh, footprint = luas bulan itu
+    assert body["geometry"]["features"][0]["properties"]["redetected_in"] == []
+    assert body["unique_ha"] == 12.3
+
+
+def test_s2_summary_splits_multi_period_kps_into_pieces(monkeypatch) -> None:
+    from app.services.postgres_store import PostgresStore
+
+    def _row(month: int, area: float) -> dict:
+        return {
+            "polygon_metadata_id": 42,
+            "layer_key": "psagustus2026",
+            "year": 2026,
+            "month": month,
+            "area_ha": area,
+            "hotspot_count_month": 1,
+            "has_hotspot": True,
+            "computed_at": None,
+            "geometry_json": {"type": "MultiPolygon", "coordinates": []},
+        }
+
+    geom = {"type": "MultiPolygon", "coordinates": []}
+    pieces = [
+        {"polygon_metadata_id": 42, "year": 2026, "month": 8, "redetected_in": [], "piece_ha": 7.0, "geometry_json": geom},
+        {"polygon_metadata_id": 42, "year": 2026, "month": 8, "redetected_in": ["2026-09"], "piece_ha": 3.0, "geometry_json": geom},
+        {"polygon_metadata_id": 42, "year": 2026, "month": 9, "redetected_in": [], "piece_ha": 2.0, "geometry_json": geom},
+    ]
+    monkeypatch.setattr(
+        PostgresStore, "read_s2_burned_area_for_polygons", lambda self, ids: [_row(9, 5.0), _row(8, 10.0)]
+    )
+    monkeypatch.setattr(PostgresStore, "read_s2_burned_area_pieces", lambda self, ids: pieces)
+
+    client = _client(monkeypatch)
+    body = client.get("/api/burned-area/s2-summary?polygon_ids=42").json()
+
+    # rows tetap per bulan apa adanya
+    assert [r["area_ha"] for r in body["rows"]] == [5.0, 10.0]
+    # geometri = 3 potongan (bukan 2 poligon utuh bertumpuk)
+    feats = [f["properties"] for f in body["geometry"]["features"]]
+    assert sorted((p["month"], tuple(p["redetected_in"]), p["piece_ha"]) for p in feats) == [
+        (8, (), 7.0),
+        (8, ("2026-09",), 3.0),
+        (9, (), 2.0),
+    ]
+    # footprint riil, bukan 10 + 5
+    assert body["unique_ha"] == 12.0
 
 
 def test_s2_summary_empty_without_polygon_ids(monkeypatch) -> None:
     client = _client(monkeypatch)
     response = client.get("/api/burned-area/s2-summary")
     assert response.status_code == 200
-    assert response.json() == {"rows": [], "geometry": {"type": "FeatureCollection", "features": []}}
+    assert response.json() == {
+        "rows": [],
+        "geometry": {"type": "FeatureCollection", "features": []},
+        "unique_ha": None,
+    }

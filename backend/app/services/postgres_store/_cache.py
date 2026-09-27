@@ -1,5 +1,6 @@
 """Cache generik berbasis tabel (dipakai endpoint yang mahal dihitung ulang)."""
 
+import json
 from datetime import datetime, timedelta, timezone
 
 from ._base import Json, _safe_json
