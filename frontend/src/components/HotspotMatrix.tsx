@@ -708,6 +708,28 @@ export function HotspotMatrix({
   const [activeTab, setActiveTab] = useState<"table" | "analytics">("table");
   const [filtersExpanded, setFiltersExpanded] = useState(false);
 
+  // Jaring pengaman TAMBAHAN untuk bug chart Wilker/Tren kosong di tab Analitik
+  // (lihat catatan di ResponsiveContainer chart Wilker) -- selain memasang
+  // ulang ResponsiveContainer lewat `key`, picu juga event `resize` global
+  // sesaat setelah tab Analitik dibuka. recharts (dan beberapa versi browser)
+  // kadang tidak langsung memicu ResizeObserver ketika elemen berpindah dari
+  // display:none ke terlihat dalam satu commit React yang sama; event resize
+  // eksplisit ini memaksa SEMUA pengamat ukuran di halaman mengukur ulang,
+  // termasuk ResponsiveContainer yang baru saja dipasang.
+  useEffect(() => {
+    if (activeTab !== "analytics") return;
+    const raf = requestAnimationFrame(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    const timeout = window.setTimeout(() => {
+      window.dispatchEvent(new Event("resize"));
+    }, 150);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timeout);
+    };
+  }, [activeTab]);
+
   const activeSecondaryFilterCount = useMemo(() => {
     return [wilkerFilter, confidenceFilter, skemaFilter, provinceFilter].filter(Boolean).length;
   }, [wilkerFilter, confidenceFilter, skemaFilter, provinceFilter]);
@@ -1427,15 +1449,22 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
 
                 {topWilker.length === 0 ? (
                   <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '320px' }}>Data hotspot tidak tersedia</div>
+                ) : activeTab !== "analytics" ? (
+                  // JANGAN pasang ResponsiveContainer sama sekali selagi panel
+                  // Analitik masih disembunyikan (CSS display:none, bukan unmount
+                  // -- lihat komentar di matrix-tab-pane). recharts mengukur
+                  // dirinya sendiri saat dipasang; kalau dipasang sedari awal
+                  // dalam keadaan display:none ia terlanjur terkunci ke 0x0 dan
+                  // tidak semua versi browser memicu ResizeObserver saat
+                  // display:none->block terjadi dalam satu commit React yang
+                  // sama. Placeholder statis di sini TIDAK PERNAH memicu
+                  // recharts, jadi begitu tab dibuka (elemen ini di-unmount,
+                  // lalu blok di bawah baru dipasang) pengukuran pertamanya
+                  // sudah pasti dalam keadaan terlihat.
+                  <div style={{ width: '100%', height: '320px', flex: 1 }} aria-hidden="true" data-testid="wilker-chart-placeholder" />
                 ) : (
                   <div style={{ width: '100%', height: '320px', position: 'relative', flex: 1 }}>
-                    {/* key={activeTab}: panel Analitik dirender terus tapi disembunyikan
-                        lewat CSS display:none (bukan unmount), jadi ResponsiveContainer
-                        recharts sempat mengukur diri 0x0 saat masih tersembunyi dan tidak
-                        pernah mengukur ulang begitu tab dibuka (chart tampil kosong). Ganti
-                        key saat activeTab berubah -> React memasang ulang ResponsiveContainer
-                        persis saat panelnya sudah terlihat, jadi ukurannya benar. */}
-                    <ResponsiveContainer key={activeTab} width="100%" height="100%">
+                    <ResponsiveContainer key={activeTab} width="100%" height="100%" minWidth={0} minHeight={0}>
                       <BarChart data={topWilker} layout="horizontal" margin={{ top: 28, right: 32, left: 36, bottom: 58 }} onClick={(state) => {
                         if (state && state.activeLabel) {
                           const label = String(state.activeLabel);
@@ -1482,10 +1511,12 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                     <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '320px', color: '#9ca3af' }}>
                       Belum tersedia data untuk rentang waktu yang dipilih.
                     </div>
+                  ) : activeTab !== "analytics" ? (
+                    // Lihat catatan sama di chart Wilker di atas.
+                    <div style={{ width: '100%', height: '320px', flex: 1 }} aria-hidden="true" data-testid="trend-chart-placeholder" />
                   ) : (
                     <div style={{ width: '100%', height: '320px', position: 'relative', flex: 1 }}>
-                      {/* key={activeTab}: lihat catatan sama di chart Wilker di atas. */}
-                      <ResponsiveContainer key={activeTab} width="100%" height="100%">
+                      <ResponsiveContainer key={activeTab} width="100%" height="100%" minWidth={0} minHeight={0}>
                         <AreaChart data={dailyTrend} margin={{ top: 28, right: 38, left: 4, bottom: 8 }} onClick={(state) => {
                           if (state && state.activeLabel) {
                             const label = String(state.activeLabel);

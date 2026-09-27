@@ -368,5 +368,34 @@ describe("HotspotMatrix", () => {
     fireEvent.click(tableTabBtn);
     expect(tableTabBtn).toHaveClass("is-active");
   });
+
+  // Regresi: chart Wilker & Tren Harian sempat tampil kosong (judul kartu
+  // ada, area grafik 0x0) karena ResponsiveContainer sempat dipasang saat
+  // panel Analitik masih display:none. Sebelum tab dibuka, placeholder
+  // statis (bukan recharts) yang harus ada; begitu tab dibuka, SVG chart
+  // yang sebenarnya harus muncul.
+  it("only mounts the Wilker/Tren charts after the Analitik tab is opened", async () => {
+    render(<HotspotMatrix {...baseProps} />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    const analyticsTabBtn = screen.getByRole("tab", { name: /Visualisasi & Analitik/i });
+
+    // Tab Tabel aktif (default) -> ResponsiveContainer BELUM dipasang sama
+    // sekali (placeholder statis dulu yang ada). jsdom tidak punya layout
+    // engine (getBoundingClientRect selalu 0), jadi recharts sendiri tidak
+    // pernah benar-benar merender SVG di test ini -- yang diuji di sini
+    // adalah CABANG KODE-nya (placeholder vs ResponsiveContainer), bukan
+    // hasil ukur recharts.
+    expect(screen.getByTestId("wilker-chart-placeholder")).toBeInTheDocument();
+    expect(screen.getByTestId("trend-chart-placeholder")).toBeInTheDocument();
+
+    fireEvent.click(analyticsTabBtn);
+
+    // Tab Analitik aktif -> placeholder diganti ResponsiveContainer sungguhan.
+    await waitFor(() => {
+      expect(screen.queryByTestId("wilker-chart-placeholder")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("trend-chart-placeholder")).not.toBeInTheDocument();
+    });
+  });
 });
 
