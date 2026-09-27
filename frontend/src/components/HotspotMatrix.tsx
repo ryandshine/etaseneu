@@ -1429,7 +1429,13 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                   <div className="matrix-empty matrix-empty--card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '320px' }}>Data hotspot tidak tersedia</div>
                 ) : (
                   <div style={{ width: '100%', height: '320px', position: 'relative', flex: 1 }}>
-                    <ResponsiveContainer width="100%" height="100%">
+                    {/* key={activeTab}: panel Analitik dirender terus tapi disembunyikan
+                        lewat CSS display:none (bukan unmount), jadi ResponsiveContainer
+                        recharts sempat mengukur diri 0x0 saat masih tersembunyi dan tidak
+                        pernah mengukur ulang begitu tab dibuka (chart tampil kosong). Ganti
+                        key saat activeTab berubah -> React memasang ulang ResponsiveContainer
+                        persis saat panelnya sudah terlihat, jadi ukurannya benar. */}
+                    <ResponsiveContainer key={activeTab} width="100%" height="100%">
                       <BarChart data={topWilker} layout="horizontal" margin={{ top: 28, right: 32, left: 36, bottom: 58 }} onClick={(state) => {
                         if (state && state.activeLabel) {
                           const label = String(state.activeLabel);
@@ -1478,7 +1484,8 @@ function matchWilker(a?: string | null, b?: string | null): boolean {
                     </div>
                   ) : (
                     <div style={{ width: '100%', height: '320px', position: 'relative', flex: 1 }}>
-                      <ResponsiveContainer width="100%" height="100%">
+                      {/* key={activeTab}: lihat catatan sama di chart Wilker di atas. */}
+                      <ResponsiveContainer key={activeTab} width="100%" height="100%">
                         <AreaChart data={dailyTrend} margin={{ top: 28, right: 38, left: 4, bottom: 8 }} onClick={(state) => {
                           if (state && state.activeLabel) {
                             const label = String(state.activeLabel);
