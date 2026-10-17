@@ -15651,3 +15651,90 @@ input.kps-search-input:focus {
   }
 }
 
+/* ==========================================================================
+   ANIMASI RAMBATAN API (FIRE SPREAD MARCHING ANTS & PULSING BEACONS)
+   ========================================================================== */
+
+@keyframes marchingRambatan {
+  from {
+    stroke-dashoffset: 28;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animated-rambatan-vector {
+  stroke-dasharray: 8 6 !important;
+  animation: marchingRambatan 0.8s linear infinite !important;
+}
+
+.animated-sub-vector {
+  stroke-dasharray: 5 4 !important;
+  animation: marchingRambatan 1.4s linear infinite !important;
+}
+
+@keyframes pulseRambatanBeacon {
+  0% {
+    r: 6;
+    stroke-width: 2;
+    opacity: 0.95;
+  }
+  50% {
+    r: 15;
+    stroke-width: 3.5;
+    opacity: 0.45;
+  }
+  100% {
+    r: 22;
+    stroke-width: 1;
+    opacity: 0;
+  }
+}
+
+.rambatan-fire-beacon {
+  animation: pulseRambatanBeacon 1.6s ease-out infinite;
+  transform-origin: center;
+}
+
+@keyframes pulseBreachAlert {
+  0% {
+    transform: scale(0.9);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.6);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+.rambatan-breach-pulse {
+  animation: pulseBreachAlert 1.2s ease-out infinite;
+  transform-origin: center;
+}
+
+/* Rambatan 3D Status Pill */
+.rambatan-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.rambatan-status-pill.active {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #fde68a;
+}
+
+

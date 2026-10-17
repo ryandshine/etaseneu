@@ -20,7 +20,8 @@ import {
   ChevronUp,
   ChevronDown,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Zap
 } from "lucide-react";
 import { CircleMarker, GeoJSON, MapContainer, Polyline, Popup, TileLayer, ZoomControl, useMap } from "react-leaflet";
 import { SmokeControl } from "./SmokeControl";
@@ -830,6 +831,10 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
               <span style={{ fontSize: "0.86rem", fontWeight: "700", color: "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {threatDetail ? threatDetail.lembaga : "Peta Perimeter Ancaman KPS"}
               </span>
+              <div className="rambatan-status-pill active" title="Animasi vektor rambatan api aktif secara dinamis">
+                <Zap size={11} className="text-amber-400" />
+                <span>Animasi Rambatan</span>
+              </div>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexShrink: 0 }}>
@@ -1382,32 +1387,118 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                 </GeoJSON>
               )}
 
+              {/* Overview Mode: Render rambatan vectors for all threats when no threatDetail is active */}
+              {!threatDetail && threats.map((item) => {
+                if (!item.nearest_hotspot || !item.nearest_boundary_point) return null;
+                const isBahaya = item.status_level === "bahaya";
+                const isWaspada = item.status_level === "waspada";
+                const col = isBahaya ? "#ef4444" : isWaspada ? "#f97316" : "#eab308";
+
+                return (
+                  <React.Fragment key={`overview-threat-${item.polygon_id}`}>
+                    <Polyline
+                      positions={[
+                        [item.nearest_hotspot.coordinates[1], item.nearest_hotspot.coordinates[0]],
+                        [item.nearest_boundary_point[1], item.nearest_boundary_point[0]]
+                      ]}
+                      pathOptions={{
+                        className: "animated-rambatan-vector",
+                        color: col,
+                        weight: 3.5,
+                        opacity: 0.95
+                      }}
+                    >
+                      <Popup>
+                        <div style={{ color: "#2b1810", fontSize: "0.8rem" }}>
+                          <strong style={{ color: col }}>⚡ Vektor Rambatan: {item.lembaga}</strong>
+                          <br />
+                          Jarak: <strong>{item.min_distance_m < 1000 ? `${item.min_distance_m} m` : `${item.min_distance_km} km`}</strong>
+                          <br />
+                          Arah: <strong>{item.bearing_compass}</strong>
+                        </div>
+                      </Popup>
+                    </Polyline>
+
+                    <CircleMarker
+                      center={[item.nearest_hotspot.coordinates[1], item.nearest_hotspot.coordinates[0]]}
+                      radius={6.5}
+                      pathOptions={{
+                        className: "rambatan-fire-beacon",
+                        color: "#ffffff",
+                        weight: 2,
+                        fillColor: col,
+                        fillOpacity: 0.95
+                      }}
+                      eventHandlers={{
+                        click: () => {
+                          setSelectedKpsId(item.polygon_id);
+                          setIsDrawerOpen(true);
+                        }
+                      }}
+                    />
+
+                    <CircleMarker
+                      center={[item.nearest_boundary_point[1], item.nearest_boundary_point[0]]}
+                      radius={5}
+                      pathOptions={{
+                        color: "#ffffff",
+                        weight: 1.8,
+                        fillColor: "#00e5ff",
+                        fillOpacity: 1
+                      }}
+                      eventHandlers={{
+                        click: () => {
+                          setSelectedKpsId(item.polygon_id);
+                          setIsDrawerOpen(true);
+                        }
+                      }}
+                    />
+                  </React.Fragment>
+                );
+              })}
+
               {/* Garis Panah Vektor Rambatan Terdekat & Titik Batas Masuk */}
               {threatDetail?.closest_vector && (
                 <>
-                  <Polyline
-                    key={`vector-line-${threatDetail.polygon_id}`}
-                    positions={[
-                      [threatDetail.closest_vector.hotspot_coords[1], threatDetail.closest_vector.hotspot_coords[0]],
-                      [threatDetail.closest_vector.kps_boundary_coords[1], threatDetail.closest_vector.kps_boundary_coords[0]]
-                    ]}
+                  {threatDetail.closest_vector.distance_m > 0 ? (
+                    <Polyline
+                      key={`vector-line-${threatDetail.polygon_id}`}
+                      positions={[
+                        [threatDetail.closest_vector.hotspot_coords[1], threatDetail.closest_vector.hotspot_coords[0]],
+                        [threatDetail.closest_vector.kps_boundary_coords[1], threatDetail.closest_vector.kps_boundary_coords[0]]
+                      ]}
+                      pathOptions={{
+                        className: "animated-rambatan-vector",
+                        color: "#ef4444",
+                        weight: 3.8,
+                        opacity: 0.95
+                      }}
+                    >
+                      <Popup>
+                        <div style={{ color: "#2b1810", fontSize: "0.8rem" }}>
+                          <strong style={{ color: "#ef4444" }}>⚡ Vektor Rambatan Terdekat (Animasi)</strong>
+                          <br />
+                          Jarak ke batas: <strong>{threatDetail.closest_vector.distance_m < 1000 ? `${threatDetail.closest_vector.distance_m} m` : `${(threatDetail.closest_vector.distance_m / 1000).toFixed(2)} km`}</strong>
+                          <br />
+                          Arah rambatan: <strong>{threatDetail.closest_vector.bearing_compass}</strong>
+                        </div>
+                      </Popup>
+                    </Polyline>
+                  ) : null}
+
+                  {/* Pulsing Beacon Circle at Hotspot Origin */}
+                  <CircleMarker
+                    key={`kps-fire-beacon-${threatDetail.polygon_id}`}
+                    center={[threatDetail.closest_vector.hotspot_coords[1], threatDetail.closest_vector.hotspot_coords[0]]}
+                    radius={11}
                     pathOptions={{
+                      className: "rambatan-fire-beacon",
                       color: "#ef4444",
-                      weight: 3.5,
-                      dashArray: "6, 6",
-                      opacity: 0.95
+                      weight: 2,
+                      fillColor: "#ff0000",
+                      fillOpacity: 0.25
                     }}
-                  >
-                    <Popup>
-                      <div style={{ color: "#2b1810", fontSize: "0.8rem" }}>
-                        <strong style={{ color: "#ef4444" }}>⚡ Vektor Rambatan Terdekat</strong>
-                        <br />
-                        Jarak ke batas: <strong>{threatDetail.closest_vector.distance_m < 1000 ? `${threatDetail.closest_vector.distance_m} m` : `${(threatDetail.closest_vector.distance_m / 1000).toFixed(2)} km`}</strong>
-                        <br />
-                        Arah rambatan: <strong>{threatDetail.closest_vector.bearing_compass}</strong>
-                      </div>
-                    </Popup>
-                  </Polyline>
+                  />
 
                   {/* Marker Titik Batas KPS Terdekat */}
                   <CircleMarker
@@ -1416,14 +1507,14 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                     radius={7}
                     pathOptions={{
                       color: "#ffffff",
-                      weight: 2,
+                      weight: 2.2,
                       fillColor: "#00e5ff",
                       fillOpacity: 1
                     }}
                   >
                     <Popup>
                       <div style={{ color: "#2b1810", fontSize: "0.8rem" }}>
-                        <strong style={{ color: "#8A1A10" }}>📍 Titik Batas KPS Terdekat</strong>
+                        <strong style={{ color: "#0891b2" }}>📍 Titik Batas KPS Terdekat</strong>
                         <br />
                         Jarak ke api luar: <strong>{threatDetail.closest_vector.distance_m} meter</strong>
                         <br />
@@ -1433,6 +1524,38 @@ export function SiagaRambatanApiView({ onOpenKpsDetail }: { onOpenKpsDetail?: (k
                   </CircleMarker>
                 </>
               )}
+
+              {/* Sub-vektor rambatan kronologis antar-titik hotspot (jika ada >= 2 titik) */}
+              {threatDetail && threatDetail.hotspots.length >= 2 && (() => {
+                const sortedHs = [...threatDetail.hotspots].sort(
+                  (a, b) => new Date(a.detected_at).getTime() - new Date(b.detected_at).getTime()
+                );
+                const subVectors: { from: [number, number]; to: [number, number]; id: string }[] = [];
+                for (let i = 0; i < sortedHs.length - 1; i++) {
+                  const p1 = sortedHs[i];
+                  const p2 = sortedHs[i + 1];
+                  if (Math.abs(p1.latitude - p2.latitude) > 0.0001 || Math.abs(p1.longitude - p2.longitude) > 0.0001) {
+                    subVectors.push({
+                      from: [p1.latitude, p1.longitude],
+                      to: [p2.latitude, p2.longitude],
+                      id: `sub-${p1.id}-${p2.id}`
+                    });
+                  }
+                }
+                return subVectors.map((v) => (
+                  <Polyline
+                    key={v.id}
+                    positions={[v.from, v.to]}
+                    pathOptions={{
+                      className: "animated-sub-vector",
+                      color: "#f59e0b",
+                      weight: 2.5,
+                      dashArray: "4 4",
+                      opacity: 0.85
+                    }}
+                  />
+                ));
+              })()}
 
               {/* Titik-Titik Hotspot: Di Dalam Kawasan & Perimeter Luar */}
               {threatDetail?.hotspots.map((h) => {

@@ -101,6 +101,7 @@ export function useWildfire3DData(
   const [showTerrain, setShowTerrain] = useState(true);
   const [terrainExaggeration, setTerrainExaggeration] = useState(1.5);
   const [showWind, setShowWind] = useState(true);
+  const [showRambatan, setShowRambatan] = useState(true);
   const [basemap, setBasemap] = useState<"satellite" | "dark" | "topo">("satellite");
 
   // Selection & Spot Weather
@@ -547,6 +548,8 @@ export function useWildfire3DData(
     setTerrainExaggeration,
     showWind,
     setShowWind,
+    showRambatan,
+    setShowRambatan,
     basemap,
     setBasemap,
     // Selection & Weather

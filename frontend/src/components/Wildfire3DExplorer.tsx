@@ -73,6 +73,8 @@ export const Wildfire3DExplorer: React.FC<Wildfire3DExplorerProps> = ({
     setTerrainExaggeration,
     showWind,
     setShowWind,
+    showRambatan,
+    setShowRambatan,
     basemap,
     setBasemap,
     // Selection & Weather
@@ -167,6 +169,7 @@ export const Wildfire3DExplorer: React.FC<Wildfire3DExplorerProps> = ({
           showTerrain={showTerrain}
           terrainExaggeration={terrainExaggeration}
           showWind={showWind}
+          showRambatan={showRambatan}
           basemap={basemap}
           onSelectHotspot={setSelectedHotspot}
           selectedHotspot={selectedHotspot}
@@ -527,6 +530,18 @@ export const Wildfire3DExplorer: React.FC<Wildfire3DExplorerProps> = ({
                     <span className="toggle-name">Overlay Vektor Angin</span>
                   </label>
                 </div>
+
+                {/* Fire Spread Propagation (Rambatan Api) Overlay */}
+                <div className="layer-toggle-item">
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={showRambatan}
+                      onChange={(e) => setShowRambatan(e.target.checked)}
+                    />
+                    <span className="toggle-name">Animasi Rambatan Api (3D)</span>
+                  </label>
+                </div>
               </div>
 
               {/* Visual Legend */}
@@ -550,6 +565,10 @@ export const Wildfire3DExplorer: React.FC<Wildfire3DExplorerProps> = ({
                   <div className="legend-row">
                     <span className="legend-box kps" />
                     <span>Poligon Perhutanan Sosial (KPS)</span>
+                  </div>
+                  <div className="legend-row">
+                    <span style={{ display: "inline-block", width: "16px", height: "3px", backgroundColor: "#ef4444", borderRadius: "2px", border: "1px dashed #fbbf24" }} />
+                    <span>Vektor Rambatan Api (Animasi)</span>
                   </div>
                   <div className="legend-row">
                     <span className="legend-line wind" />
