@@ -4,10 +4,11 @@ from fastapi import APIRouter, Depends, Query
 
 from app.core.auth import TokenClaims, get_current_user_claims
 from app.models.query import HotspotQuery
-from app.services.hotspot_service import HotspotService
+from app.services.hotspot_service import HotspotService, SUPPORTED_SATELLITES
 from app.services.polygon_fields import PROVINSI_FALLBACK, provinsi_name
 from app.services.stats_service import build_stats
 
+DEFAULT_ACTIVE_LAYERS = ["psagustus2026", "HUTAN_ADAT_APR26", "PS_FEB_26"]
 
 router = APIRouter()
 
@@ -26,8 +27,8 @@ async def get_hotspots(
     query = HotspotQuery(
         start_at=_resolve_start_at(start_at, start_date),
         end_at=_resolve_end_at(end_at, end_date),
-        satellites=satellites,
-        active_layers=active_layers,
+        satellites=satellites or SUPPORTED_SATELLITES,
+        active_layers=active_layers or DEFAULT_ACTIVE_LAYERS,
     )
     service = HotspotService()
     result = await service.fetch_filtered_hotspots(query)

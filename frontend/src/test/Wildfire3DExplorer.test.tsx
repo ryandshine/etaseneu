@@ -217,6 +217,10 @@ describe("Wildfire3DExplorer & 3D Helpers", () => {
     const distTab = screen.getByRole("button", { name: "Distribusi KPS" });
     fireEvent.click(distTab);
 
+    expect(screen.getByText("KPS Terdampak")).toBeInTheDocument();
+    expect(screen.getByText("Distribusi Provinsi")).toBeInTheDocument();
+    expect(screen.queryByText(/Top 5/)).not.toBeInTheDocument();
+
     await waitFor(() => {
       const list = document.querySelector(".leaderboard-list");
       expect(list).toHaveTextContent("LPHD Kalibandung");
@@ -228,7 +232,7 @@ describe("Wildfire3DExplorer & 3D Helpers", () => {
     fireEvent.click(weatherTab);
 
     expect(screen.getByText(/Grid Vektor Angin \(Open-Meteo\)/)).toBeInTheDocument();
-    expect(screen.getByText(/Overlay angin adalah visualisasi kondisi meteorologis/)).toBeInTheDocument();
+    expect(screen.queryByText(/Overlay angin adalah visualisasi kondisi meteorologis/)).not.toBeInTheDocument();
   });
 
   it("SidebarNav includes Wildfire 3D Explorer and calls onChangeView", () => {

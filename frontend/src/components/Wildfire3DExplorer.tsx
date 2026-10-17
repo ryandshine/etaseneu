@@ -265,7 +265,14 @@ export const Wildfire3DExplorer: React.FC<Wildfire3DExplorerProps> = ({
               {/* Tab Content: Distribution */}
               {activeTab === "distribution" && (
                 <div className="hud-tab-pane">
-                  <div className="section-mini-title">Top 5 KPS Terdampak</div>
+                  <div className="section-mini-title flex items-center justify-between">
+                    <span>KPS Terdampak</span>
+                    {analytics.topKps.length > 0 && (
+                      <span className="text-[0.65rem] text-emerald-400 font-mono">
+                        {analytics.topKps.length} Unit
+                      </span>
+                    )}
+                  </div>
                   {analytics.topKps.length === 0 ? (
                     <div className="empty-hint">Tidak ada hotspot di KPS</div>
                   ) : (
@@ -274,7 +281,7 @@ export const Wildfire3DExplorer: React.FC<Wildfire3DExplorerProps> = ({
                         <div key={k.name} className="leaderboard-item">
                           <span className="rank-num">#{i + 1}</span>
                           <div className="item-text">
-                            <div className="main-name">{k.name}</div>
+                            <div className="main-name" title={k.name}>{k.name}</div>
                             <div className="sub-loc">{k.province}</div>
                           </div>
                           <span className="badge-count">{k.count} HS</span>
@@ -283,13 +290,20 @@ export const Wildfire3DExplorer: React.FC<Wildfire3DExplorerProps> = ({
                     </div>
                   )}
 
-                  <div className="section-mini-title mt-3">Top 5 Provinsi</div>
+                  <div className="section-mini-title mt-3 flex items-center justify-between">
+                    <span>Distribusi Provinsi</span>
+                    {analytics.topProvinces.length > 0 && (
+                      <span className="text-[0.65rem] text-sky-400 font-mono">
+                        {analytics.topProvinces.length} Prov
+                      </span>
+                    )}
+                  </div>
                   <div className="leaderboard-list">
                     {analytics.topProvinces.map((p, i) => (
                       <div key={p.name} className="leaderboard-item">
                         <span className="rank-num">#{i + 1}</span>
                         <div className="item-text">
-                          <div className="main-name">{p.name}</div>
+                          <div className="main-name" title={p.name}>{p.name}</div>
                         </div>
                         <span className="badge-count prov">{p.count}</span>
                       </div>
@@ -316,13 +330,6 @@ export const Wildfire3DExplorer: React.FC<Wildfire3DExplorerProps> = ({
                         <span className="col-label">Arah Dominan</span>
                         <span className="col-val">{windSummary?.dominantDirectionText ?? "-"} <small>({windSummary?.dominantDirectionDeg ?? "-"}°)</small></span>
                       </div>
-                    </div>
-
-                    <div className="wind-disclaimer">
-                      <Info size={13} className="shrink-0 text-amber-400 mt-0.5" />
-                      <span>
-                        Overlay angin adalah visualisasi kondisi meteorologis regional, bukan model deterministik rambatan kebakaran.
-                      </span>
                     </div>
                   </div>
 

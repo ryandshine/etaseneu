@@ -131,6 +131,20 @@ export function useWildfire3DData(active = true) {
         end_at: endIso
       });
 
+      // Satelit NASA FIRMS default
+      ["MODIS", "VIIRS_NOAA20", "VIIRS_NOAA21", "VIIRS_SNPP"].forEach((s) => {
+        params.append("satellites", s);
+      });
+
+      // Layer KPS aktif (default fallback bila layer belum selesai dimuat)
+      const activeLayerIds =
+        layers.length > 0
+          ? layers.filter((l) => l.active).map((l) => l.id)
+          : ["psagustus2026", "HUTAN_ADAT_APR26", "PS_FEB_26"];
+      activeLayerIds.forEach((l) => {
+        params.append("active_layers", l);
+      });
+
       const [hotspotRes, metricsRes] = await Promise.all([
         authFetch(`/api/hotspots?${params.toString()}`),
         authFetch("/api/scheduler/metrics").catch(() => null)
@@ -429,28 +443,30 @@ export function useWildfire3DData(active = true) {
         fCount++;
       }
 
-      const agency = h.agencyName || h.layerName || "Luar KPS";
-      const prov = h.provinceName || "Tanpa Provinsi";
+      const rawAgency = h.agencyName || h.layerName || "";
+      const isLuar = !rawAgency || rawAgency === "Unassigned" || rawAgency.startsWith("Luar Kawasan");
+      const agency = isLuar ? "Luar KPS" : rawAgency;
+      const prov = h.provinceName && h.provinceName !== "Tanpa Provinsi" ? h.provinceName : "Indonesia";
 
-      const existingKps = kpsMap.get(agency);
-      if (existingKps) {
-        existingKps.count++;
-      } else {
-        kpsMap.set(agency, { count: 1, province: prov });
+      if (!isLuar) {
+        const existingKps = kpsMap.get(agency);
+        if (existingKps) {
+          existingKps.count++;
+        } else {
+          kpsMap.set(agency, { count: 1, province: prov });
+        }
       }
 
       provMap.set(prov, (provMap.get(prov) || 0) + 1);
     });
 
-    const topKps = Array.from(kpsMap.entries())
+    const kpsDistribution = Array.from(kpsMap.entries())
       .map(([name, data]) => ({ name, count: data.count, province: data.province }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
+      .sort((a, b) => b.count - a.count);
 
-    const topProvinces = Array.from(provMap.entries())
+    const provinceDistribution = Array.from(provMap.entries())
       .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
+      .sort((a, b) => b.count - a.count);
 
     // Latest hotspot detection
     let latestTime: string | null = null;
@@ -466,8 +482,10 @@ export function useWildfire3DData(active = true) {
       low,
       maxFrp: Math.round(maxF * 10) / 10,
       avgFrp: fCount > 0 ? Math.round((sumF / fCount) * 10) / 10 : 0,
-      topKps,
-      topProvinces,
+      kpsDistribution,
+      provinceDistribution,
+      topKps: kpsDistribution,
+      topProvinces: provinceDistribution,
       latestTime
     };
   }, [filteredHotspots]);
