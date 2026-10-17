@@ -56,7 +56,7 @@ export default defineConfig({
             return;
           }
 
-          if (id.includes("react-leaflet") || id.includes("/leaflet/")) {
+          if (id.includes("react-leaflet") || id.includes("/leaflet/") || id.includes("maplibre-gl")) {
             return "map-vendor";
           }
 

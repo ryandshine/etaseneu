@@ -15,8 +15,8 @@ type SidebarNavProps = {
   // "kps" (detail satu KPS dibuka dari Buku Besar) bukan tujuan navigasi
   // sidebar, tapi activeView tetap perlu menerimanya supaya perbandingan
   // "active" di bawah tidak salah tipe saat halaman itu sedang tampil.
-  activeView: "map" | "matrix" | "kpscatalog" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "firespread" | "settings" | "kps";
-  onChangeView: (view: "map" | "matrix" | "kpscatalog" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "firespread" | "settings") => void;
+  activeView: "map" | "wildfire3d" | "matrix" | "kpscatalog" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "firespread" | "settings" | "kps";
+  onChangeView: (view: "map" | "wildfire3d" | "matrix" | "kpscatalog" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "firespread" | "settings") => void;
   onManualSync: () => void;
   onPrewarmHistory: () => void;
   onLogout: () => void;
@@ -114,6 +114,9 @@ export function SidebarNav({
         <nav className="side-nav" aria-label="Utama">
           <NavButton active={activeView === "map"} onClick={() => onChangeView("map")}>
             LIVE MAP
+          </NavButton>
+          <NavButton active={activeView === "wildfire3d"} onClick={() => onChangeView("wildfire3d")}>
+            Wildfire 3D Explorer
           </NavButton>
           <NavButton active={activeView === "matrix"} onClick={() => onChangeView("matrix")}>
             Matriks Data
