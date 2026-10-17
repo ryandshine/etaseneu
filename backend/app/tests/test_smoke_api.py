@@ -198,8 +198,8 @@ def test_processed_transparent_tile_is_cached_with_correct_type(client, monkeypa
 # --------------------------------------------------------------------------
 
 
-def _fake_cube(hours: int = 72):
-    start = datetime(2026, 9, 20, 0, 0)
+def _fake_cube(hours: int = 72, start: datetime | None = None):
+    start = start or (smoke_service._now_wib().replace(minute=0, second=0, microsecond=0) - timedelta(hours=2))
     times = [(start + timedelta(hours=h)).strftime("%Y-%m-%dT%H:%M") for h in range(hours)]
     # nilai = jam ke-h di setiap sel, supaya mudah dicek slice-nya
     n = smoke_service.NX * smoke_service.NY
@@ -215,7 +215,7 @@ def test_pm25_grid_shape_matches_header():
 
 
 def test_slice_pm25_picks_current_hour_plus_offset():
-    cube = _fake_cube()
+    cube = _fake_cube(start=datetime(2026, 9, 20, 0, 0))
     now = datetime(2026, 9, 20, 11, 42)  # jam WIB 11 -> indeks 11
     now_slice = smoke_service.slice_pm25(cube, offset_hours=0, now=now)
     assert now_slice["data"][0] == 11.0
@@ -228,7 +228,7 @@ def test_slice_pm25_picks_current_hour_plus_offset():
 
 
 def test_slice_pm25_clamps_to_last_available_hour():
-    cube = _fake_cube(hours=30)
+    cube = _fake_cube(hours=30, start=datetime(2026, 9, 20, 0, 0))
     out = smoke_service.slice_pm25(cube, offset_hours=48, now=datetime(2026, 9, 20, 11, 0))
     assert out["data"][0] == 29.0  # jam terakhir yang ada, bukan IndexError
 
