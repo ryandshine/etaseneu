@@ -27,12 +27,18 @@ import {
   Maximize2
 } from "lucide-react";
 
+import type { DashboardHotspot, DashboardLayer } from "../types/api";
+
 export interface Wildfire3DExplorerProps {
   onBackToLiveMap: () => void;
+  initialLayers?: DashboardLayer[];
+  initialHotspots?: DashboardHotspot[];
 }
 
 export const Wildfire3DExplorer: React.FC<Wildfire3DExplorerProps> = ({
   onBackToLiveMap,
+  initialLayers,
+  initialHotspots,
 }) => {
   const {
     timePreset,
@@ -85,7 +91,7 @@ export const Wildfire3DExplorer: React.FC<Wildfire3DExplorerProps> = ({
     currentCutoffTimeFormatted,
     // Analytics
     analytics
-  } = useWildfire3DData(true);
+  } = useWildfire3DData(true, initialLayers, initialHotspots);
 
   const [leftHudOpen, setLeftHudOpen] = useState(true);
   const [rightHudOpen, setRightHudOpen] = useState(true);
@@ -561,7 +567,12 @@ export const Wildfire3DExplorer: React.FC<Wildfire3DExplorerProps> = ({
             {/* Play/Pause Button */}
             <button
               type="button"
-              onClick={() => setIsPlaying(!isPlaying)}
+              onClick={() => {
+                if (!isPlaying && timelineProgress >= 100) {
+                  setTimelineProgress(0);
+                }
+                setIsPlaying(!isPlaying);
+              }}
               className={`timeline-play-btn ${isPlaying ? "playing" : ""}`}
               title={isPlaying ? "Jeda Playback" : "Mulai Animasi Waktu"}
               aria-label={isPlaying ? "Jeda" : "Putar"}

@@ -85,6 +85,7 @@ export const Wildfire3DMap: React.FC<Wildfire3DMapProps> = ({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
 
+  const [mapReady, setMapReady] = useState(false);
   const [currentPitch, setCurrentPitch] = useState(50);
   const [currentBearing, setCurrentBearing] = useState(-5);
   const [currentZoom, setCurrentZoom] = useState(4.6);
@@ -94,27 +95,43 @@ export const Wildfire3DMap: React.FC<Wildfire3DMapProps> = ({
   const hotspotsGeoJson = React.useMemo(() => {
     return {
       type: "FeatureCollection" as const,
-      features: hotspots.map((h) => ({
-        type: "Feature" as const,
-        geometry: {
-          type: "Point" as const,
-          coordinates: [h.longitude, h.latitude]
-        },
-        properties: {
-          id: h.id,
-          source: h.source,
-          satellite: h.satellite,
-          agencyName: h.agencyName,
-          provinceName: h.provinceName,
-          brightness: h.brightness ?? 0,
-          frp: h.frp ?? 0,
-          confidence: (h.confidence || "").toLowerCase(),
-          detectedAt: h.detectedAt,
-          detectedAtWib: formatDateTimeWIB(h.detectedAt),
-          fungsiKawasan: h.fungsiKawasan || "Luar Kawasan Hutan",
-          isInside: h.is_inside ?? false
+      features: hotspots.map((h) => {
+        const confRaw = (h.confidence || "").toLowerCase();
+        const numConf = Number.parseInt(confRaw, 10);
+        let normalizedConf = "high";
+        if (confRaw === "l" || confRaw === "low" || (!Number.isNaN(numConf) && numConf < 30)) {
+          normalizedConf = "low";
+        } else if (
+          confRaw === "m" ||
+          confRaw === "medium" ||
+          confRaw === "nominal" ||
+          (!Number.isNaN(numConf) && numConf >= 30 && numConf < 80)
+        ) {
+          normalizedConf = "medium";
         }
-      }))
+
+        return {
+          type: "Feature" as const,
+          geometry: {
+            type: "Point" as const,
+            coordinates: [h.longitude, h.latitude]
+          },
+          properties: {
+            id: h.id,
+            source: h.source,
+            satellite: h.satellite,
+            agencyName: h.agencyName,
+            provinceName: h.provinceName,
+            brightness: h.brightness ?? 0,
+            frp: h.frp ?? 0,
+            confidence: normalizedConf,
+            detectedAt: h.detectedAt,
+            detectedAtWib: formatDateTimeWIB(h.detectedAt),
+            fungsiKawasan: h.fungsiKawasan || "Luar Kawasan Hutan",
+            isInside: h.is_inside ?? false
+          }
+        };
+      })
     };
   }, [hotspots]);
 
@@ -122,15 +139,24 @@ export const Wildfire3DMap: React.FC<Wildfire3DMapProps> = ({
   const kpsGeoJson = React.useMemo(() => {
     const features: any[] = [];
     layers.forEach((l) => {
-      if (l.geojson && (l.geojson as any).features) {
-        (l.geojson as any).features.forEach((f: any) => {
+      let g: any = l.geojson;
+      if (typeof g === "string") {
+        try {
+          g = JSON.parse(g);
+        } catch {
+          g = null;
+        }
+      }
+      if (g && Array.isArray((g as any).features)) {
+        (g as any).features.forEach((f: any) => {
+          if (!f || !f.geometry) return;
           features.push({
             ...f,
             properties: {
               ...f.properties,
               layerName: l.name,
               layerLabel: l.label,
-              layerColor: l.color
+              layerColor: l.color || "#10b981"
             }
           });
         });
@@ -177,6 +203,22 @@ export const Wildfire3DMap: React.FC<Wildfire3DMapProps> = ({
       })
     };
   }, [windGeoJson]);
+
+  // Keep live references to GeoJSON and hotspot data to avoid stale closures during async MapLibre load
+  const hotspotsGeoJsonRef = useRef(hotspotsGeoJson);
+  hotspotsGeoJsonRef.current = hotspotsGeoJson;
+
+  const kpsGeoJsonRef = useRef(kpsGeoJson);
+  kpsGeoJsonRef.current = kpsGeoJson;
+
+  const windLinesGeoJsonRef = useRef(windLinesGeoJson);
+  windLinesGeoJsonRef.current = windLinesGeoJson;
+
+  const hotspotsRef = useRef(hotspots);
+  hotspotsRef.current = hotspots;
+
+  const onSelectHotspotRef = useRef(onSelectHotspot);
+  onSelectHotspotRef.current = onSelectHotspot;
 
   // Initialize MapLibre
   useEffect(() => {
@@ -251,7 +293,7 @@ export const Wildfire3DMap: React.FC<Wildfire3DMapProps> = ({
       // 1. KPS Layers
       map.addSource("kps-source", {
         type: "geojson",
-        data: kpsGeoJson
+        data: kpsGeoJsonRef.current
       });
 
       map.addLayer({
@@ -260,8 +302,20 @@ export const Wildfire3DMap: React.FC<Wildfire3DMapProps> = ({
         source: "kps-source",
         layout: { visibility: showKps ? "visible" : "none" },
         paint: {
-          "fill-color": "#10b981",
-          "fill-opacity": 0.12
+          "fill-color": ["coalesce", ["get", "layerColor"], "#10b981"],
+          "fill-opacity": 0.18
+        }
+      });
+
+      // Highlight fill for selected hotspot's KPS
+      map.addLayer({
+        id: "kps-selected-fill-layer",
+        type: "fill",
+        source: "kps-source",
+        layout: { visibility: "none" },
+        paint: {
+          "fill-color": "#f59e0b",
+          "fill-opacity": 0.35
         }
       });
 
@@ -269,18 +323,39 @@ export const Wildfire3DMap: React.FC<Wildfire3DMapProps> = ({
         id: "kps-line-layer",
         type: "line",
         source: "kps-source",
-        layout: { visibility: showKps ? "visible" : "none" },
+        layout: { 
+          visibility: showKps ? "visible" : "none",
+          "line-join": "round",
+          "line-cap": "round"
+        },
         paint: {
-          "line-color": "#34d399",
-          "line-width": 1.4,
-          "line-opacity": 0.75
+          "line-color": ["coalesce", ["get", "layerColor"], "#34d399"],
+          "line-width": 2.2,
+          "line-opacity": 0.85
+        }
+      });
+
+      // Highlight border for selected hotspot's KPS
+      map.addLayer({
+        id: "kps-selected-highlight-layer",
+        type: "line",
+        source: "kps-source",
+        layout: { 
+          visibility: "none",
+          "line-join": "round",
+          "line-cap": "round"
+        },
+        paint: {
+          "line-color": "#fbbf24",
+          "line-width": 3.8,
+          "line-opacity": 1.0
         }
       });
 
       // 2. Wind Vectors Layer
       map.addSource("wind-lines-source", {
         type: "geojson",
-        data: windLinesGeoJson
+        data: windLinesGeoJsonRef.current
       });
 
       map.addLayer({
@@ -310,37 +385,37 @@ export const Wildfire3DMap: React.FC<Wildfire3DMapProps> = ({
       // 3. Hotspot Point Layers
       map.addSource("hotspots-source", {
         type: "geojson",
-        data: hotspotsGeoJson
+        data: hotspotsGeoJsonRef.current
       });
 
-      // Outer glow pulse
+      // Outer glow pulse (facing camera in 3D terrain)
       map.addLayer({
         id: "hotspots-glow-layer",
         type: "circle",
         source: "hotspots-source",
-        layout: { visibility: showHotspots ? "visible" : "none" },
+        layout: { 
+          visibility: showHotspots ? "visible" : "none"
+        },
         paint: {
+          "circle-pitch-alignment": "viewport",
+          "circle-pitch-scale": "viewport",
           "circle-radius": [
             "interpolate",
             ["linear"],
             ["zoom"],
-            4, 7,
-            8, 14,
-            12, 24
+            4, 8,
+            8, 16,
+            12, 28
           ],
           "circle-color": [
             "match",
             ["get", "confidence"],
-            "h", "#ef4444",
             "high", "#ef4444",
-            "m", "#f97316",
             "medium", "#f97316",
-            "nominal", "#f97316",
-            "l", "#eab308",
             "low", "#eab308",
             "#ef4444"
           ],
-          "circle-opacity": 0.35,
+          "circle-opacity": 0.45,
           "circle-blur": 0.8
         }
       });
@@ -350,60 +425,74 @@ export const Wildfire3DMap: React.FC<Wildfire3DMapProps> = ({
         id: "hotspots-core-layer",
         type: "circle",
         source: "hotspots-source",
-        layout: { visibility: showHotspots ? "visible" : "none" },
+        layout: { 
+          visibility: showHotspots ? "visible" : "none"
+        },
         paint: {
+          "circle-pitch-alignment": "viewport",
+          "circle-pitch-scale": "viewport",
           "circle-radius": [
             "interpolate",
             ["linear"],
             ["zoom"],
-            4, 3.5,
-            8, 6.5,
-            12, 10
+            4, 4,
+            8, 7,
+            12, 11
           ],
           "circle-color": [
             "match",
             ["get", "confidence"],
-            "h", "#ef4444",
-            "high", "#ef4444",
-            "m", "#f97316",
+            "high", "#ff3333",
             "medium", "#f97316",
-            "nominal", "#f97316",
-            "l", "#eab308",
-            "low", "#eab308",
-            "#ef4444"
+            "low", "#fbbf24",
+            "#ff3333"
           ],
-          "circle-stroke-width": 1.5,
+          "circle-stroke-width": 1.8,
           "circle-stroke-color": "#ffffff"
         }
       });
 
-      // Hotspot click interaction
-      map.on("click", "hotspots-core-layer", (e) => {
+      // Hotspot click interaction (support clicking either core or glow)
+      const handleHotspotClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
         if (!e.features || e.features.length === 0) return;
         const feat = e.features[0];
         const props = feat.properties as any;
-        const coords = (feat.geometry as any).coordinates as [number, number];
-
-        // Find matching hotspot in state
-        const target = hotspots.find((h) => String(h.id) === String(props.id));
+        const target = hotspotsRef.current.find((h) => String(h.id) === String(props.id));
         if (target) {
-          onSelectHotspot(target);
+          onSelectHotspotRef.current(target);
         }
-      });
+      };
+
+      map.on("click", "hotspots-core-layer", handleHotspotClick);
+      map.on("click", "hotspots-glow-layer", handleHotspotClick);
 
       map.on("mouseenter", "hotspots-core-layer", () => {
         map.getCanvas().style.cursor = "pointer";
       });
+      map.on("mouseenter", "hotspots-glow-layer", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
       map.on("mouseleave", "hotspots-core-layer", () => {
+        map.getCanvas().style.cursor = "";
+      });
+      map.on("mouseleave", "hotspots-glow-layer", () => {
         map.getCanvas().style.cursor = "";
       });
 
       // KPS click interaction
       map.on("click", "kps-fill-layer", (e) => {
         if (!e.features || e.features.length === 0) return;
+        // If a hotspot was clicked at this spot, prioritize the hotspot click
+        const hotspotHit = map.queryRenderedFeatures(e.point, {
+          layers: ["hotspots-core-layer", "hotspots-glow-layer"]
+        });
+        if (hotspotHit.length > 0) return;
+
         const f = e.features[0];
         const p = f.properties || {};
-        new maplibregl.Popup({ closeButton: true, className: "custom-3d-popup" })
+        if (popupRef.current) popupRef.current.remove();
+
+        popupRef.current = new maplibregl.Popup({ closeButton: true, className: "custom-3d-popup" })
           .setLngLat(e.lngLat)
           .setHTML(`
             <div style="font-family: inherit; font-size: 0.8rem; padding: 4px; color: #f1f5f9;">
@@ -424,6 +513,8 @@ export const Wildfire3DMap: React.FC<Wildfire3DMapProps> = ({
       map.on("mouseleave", "kps-fill-layer", () => {
         map.getCanvas().style.cursor = "";
       });
+
+      setMapReady(true);
     });
 
     map.on("rotate", () => {
@@ -501,33 +592,107 @@ export const Wildfire3DMap: React.FC<Wildfire3DMapProps> = ({
   // Update Data Sources
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map || !mapReady || !map.isStyleLoaded()) return;
 
     const source = map.getSource("hotspots-source") as maplibregl.GeoJSONSource | undefined;
     if (source) {
       source.setData(hotspotsGeoJson as any);
     }
-  }, [hotspotsGeoJson]);
+  }, [hotspotsGeoJson, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map || !mapReady || !map.isStyleLoaded()) return;
 
     const source = map.getSource("kps-source") as maplibregl.GeoJSONSource | undefined;
     if (source) {
       source.setData(kpsGeoJson as any);
     }
-  }, [kpsGeoJson]);
+  }, [kpsGeoJson, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map || !mapReady || !map.isStyleLoaded()) return;
 
     const source = map.getSource("wind-lines-source") as maplibregl.GeoJSONSource | undefined;
     if (source) {
       source.setData(windLinesGeoJson as any);
     }
-  }, [windLinesGeoJson]);
+  }, [windLinesGeoJson, mapReady]);
+
+  // Highlight Selected Hotspot's KPS Polygon
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !map.isStyleLoaded()) return;
+
+    const agency = selectedHotspot?.agencyName?.trim();
+    if (
+      agency &&
+      !agency.toLowerCase().startsWith("luar kawasan") &&
+      !agency.toLowerCase().startsWith("luar areal") &&
+      agency !== "-" &&
+      agency !== "Tidak tersedia"
+    ) {
+      const lowerAgency = agency.toLowerCase();
+      const filterExpr: any = [
+        "any",
+        ["==", ["downcase", ["to-string", ["coalesce", ["get", "LEMBAGA"], ""]]], lowerAgency],
+        ["==", ["downcase", ["to-string", ["coalesce", ["get", "NAMA_MHA"], ""]]], lowerAgency],
+        ["==", ["downcase", ["to-string", ["coalesce", ["get", "nama_kps"], ""]]], lowerAgency],
+        ["==", ["downcase", ["to-string", ["coalesce", ["get", "layerLabel"], ""]]], lowerAgency],
+        ["==", ["downcase", ["to-string", ["coalesce", ["get", "layerName"], ""]]], lowerAgency]
+      ];
+
+      if (map.getLayer("kps-selected-fill-layer")) {
+        map.setFilter("kps-selected-fill-layer", filterExpr);
+        map.setLayoutProperty("kps-selected-fill-layer", "visibility", "visible");
+      }
+      if (map.getLayer("kps-selected-highlight-layer")) {
+        map.setFilter("kps-selected-highlight-layer", filterExpr);
+        map.setLayoutProperty("kps-selected-highlight-layer", "visibility", "visible");
+      }
+    } else {
+      if (map.getLayer("kps-selected-fill-layer")) {
+        map.setLayoutProperty("kps-selected-fill-layer", "visibility", "none");
+      }
+      if (map.getLayer("kps-selected-highlight-layer")) {
+        map.setLayoutProperty("kps-selected-highlight-layer", "visibility", "none");
+      }
+    }
+  }, [selectedHotspot, mapReady]);
+
+  // Fire Ember Pulsing Animation Effect
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !showHotspots) return;
+
+    let animId: number;
+    const startTime = performance.now();
+
+    const animateGlow = (time: number) => {
+      if (!mapRef.current) return;
+      const elapsed = (time - startTime) / 1000;
+      // Oscillate opacity between 0.35 and 0.85 at ~2.2 Hz
+      const pulseOpacity = 0.35 + 0.5 * Math.abs(Math.sin(elapsed * 2.2));
+      const pulseBlur = 0.6 + 0.35 * Math.abs(Math.sin(elapsed * 2.2));
+
+      try {
+        if (map.getLayer("hotspots-glow-layer")) {
+          map.setPaintProperty("hotspots-glow-layer", "circle-opacity", pulseOpacity);
+          map.setPaintProperty("hotspots-glow-layer", "circle-blur", pulseBlur);
+        }
+      } catch {
+        // Style might be reloading or layer unavailable
+      }
+
+      animId = requestAnimationFrame(animateGlow);
+    };
+
+    animId = requestAnimationFrame(animateGlow);
+    return () => {
+      cancelAnimationFrame(animId);
+    };
+  }, [mapReady, showHotspots]);
 
   // Update Layer Visibility Toggles
   useEffect(() => {

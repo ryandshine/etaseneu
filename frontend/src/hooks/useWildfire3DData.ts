@@ -4,6 +4,7 @@ import { authFetch } from "../lib/api";
 import { mapHotspotRecordToDashboardHotspot } from "../lib/hotspotDisplay";
 import { formatDateTimeWIB, formatDateWIB, getTodayWIB } from "../lib/date";
 import type { TimePreset } from "../constants/time-windows";
+import { loadDashboardCache } from "../lib/dashboardPersistence";
 
 export interface SpotWeatherData {
   temperature?: number;
@@ -47,13 +48,32 @@ export function windDegToCompass(deg: number): string {
   return directions[index] ?? "U";
 }
 
-export function useWildfire3DData(active = true) {
+export function useWildfire3DData(
+  active = true,
+  initialLayers?: DashboardLayer[],
+  initialHotspots?: DashboardHotspot[]
+) {
   const [timePreset, setTimePreset] = useState<TimePreset>("24h");
   const [customStartDate, setCustomStartDate] = useState<string>(getTodayWIB());
   const [customEndDate, setCustomEndDate] = useState<string>(getTodayWIB());
 
-  const [hotspots, setHotspots] = useState<DashboardHotspot[]>([]);
-  const [layers, setLayers] = useState<DashboardLayer[]>([]);
+  const [hotspots, setHotspots] = useState<DashboardHotspot[]>(() => {
+    if (initialHotspots && initialHotspots.length > 0) return initialHotspots;
+    try {
+      const cached = loadDashboardCache();
+      if (cached?.hotspots && cached.hotspots.length > 0) return cached.hotspots;
+    } catch {}
+    return [];
+  });
+
+  const [layers, setLayers] = useState<DashboardLayer[]>(() => {
+    if (initialLayers && initialLayers.length > 0) return initialLayers;
+    try {
+      const cached = loadDashboardCache();
+      if (cached?.layers && cached.layers.length > 0) return cached.layers;
+    } catch {}
+    return [];
+  });
   const [windGeoJson, setWindGeoJson] = useState<WindGeoJson | null>(null);
   const [windSummary, setWindSummary] = useState<{
     avgSpeedKmh: number;
@@ -178,7 +198,8 @@ export function useWildfire3DData(active = true) {
 
   // Fetch KPS Layers once
   const loadLayers = useCallback(async () => {
-    if (!active || layers.length > 0) return;
+    if (!active) return;
+    if (layers.length > 0 && layers.some((l) => (l.geojson as any)?.features?.length > 0)) return;
     try {
       const res = await authFetch("/api/layers?view=preview");
       if (res.ok) {
@@ -401,9 +422,10 @@ export function useWildfire3DData(active = true) {
 
     return hotspots.filter((h) => {
       const conf = (h.confidence || "").toLowerCase();
-      const isHigh = conf === "h" || conf === "high";
-      const isMed = conf === "m" || conf === "nominal" || conf === "medium";
-      const isLow = conf === "l" || conf === "low";
+      const numConf = Number.parseInt(conf, 10);
+      const isHigh = conf === "h" || conf === "high" || (!Number.isNaN(numConf) && numConf >= 80);
+      const isMed = conf === "m" || conf === "nominal" || conf === "medium" || (!Number.isNaN(numConf) && numConf >= 30 && numConf < 80);
+      const isLow = conf === "l" || conf === "low" || (!Number.isNaN(numConf) && numConf < 30);
 
       if (isHigh && !showHighConf) return false;
       if (isMed && !showMedConf) return false;
@@ -432,8 +454,9 @@ export function useWildfire3DData(active = true) {
 
     filteredHotspots.forEach((h) => {
       const c = (h.confidence || "").toLowerCase();
-      if (c === "h" || c === "high") high++;
-      else if (c === "m" || c === "nominal" || c === "medium") med++;
+      const numC = Number.parseInt(c, 10);
+      if (c === "h" || c === "high" || (!Number.isNaN(numC) && numC >= 80)) high++;
+      else if (c === "m" || c === "nominal" || c === "medium" || (!Number.isNaN(numC) && numC >= 30 && numC < 80)) med++;
       else low++;
 
       const frp = Number(h.frp || 0);

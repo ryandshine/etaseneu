@@ -1208,7 +1208,11 @@ export default function App() {
         ) : activeView === "wildfire3d" ? (
           <section aria-label="Wildfire 3D Explorer workspace" className="workspace-stage workspace-stage--wildfire3d">
             <Suspense fallback={<ViewLoader label="Memuat Wildfire 3D Explorer..." />}>
-              <Wildfire3DExplorer onBackToLiveMap={() => commitViewChange("map")} />
+              <Wildfire3DExplorer
+                onBackToLiveMap={() => commitViewChange("map")}
+                initialLayers={layers}
+                initialHotspots={session?.role === "bps" ? visibleHotspots : hotspots}
+              />
             </Suspense>
           </section>
         ) : activeView === "matrix" ? (
