@@ -66,20 +66,14 @@ const SettingsPanel = lazy(async () => {
   return { default: module.SettingsPanel };
 });
 
-const Wildfire3DExplorer = lazy(async () => {
-  const module = await import("./components/Wildfire3DExplorer");
-  return { default: module.Wildfire3DExplorer };
-});
-
 function isSchedulerFailureStatus(status?: string | null): boolean {
   return status === "failure" || status === "failed";
 }
 
-type AppView = "map" | "wildfire3d" | "matrix" | "kpscatalog" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "firespread" | "settings" | "kps";
+type AppView = "map" | "matrix" | "kpscatalog" | "pointmatch" | "kompleks" | "landcover" | "earlywarning" | "firespread" | "settings" | "kps";
 
 const VIEW_TITLES: Record<AppView, string> = {
   map: "Live Map",
-  wildfire3d: "Wildfire 3D Explorer",
   matrix: "Matriks Data",
   kpscatalog: "Data KPS",
   pointmatch: "Cek Titik Api (Titik & Poligon)",
@@ -154,9 +148,6 @@ function readViewFromUrl(): AppView {
   }
   const params = new URLSearchParams(window.location.search);
   const view = params.get("view");
-  if (view === "wildfire3d") {
-    return "wildfire3d";
-  }
   if (view === "matrix") {
     return "matrix";
   }
@@ -424,7 +415,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     params.delete("kps");
     params.delete("polygon");
-    if (view === "wildfire3d" || view === "matrix" || view === "kpscatalog" || view === "pointmatch" || view === "kompleks" || view === "landcover" || view === "earlywarning" || view === "firespread") {
+    if (view === "matrix" || view === "kpscatalog" || view === "pointmatch" || view === "kompleks" || view === "landcover" || view === "earlywarning" || view === "firespread") {
       params.set("view", view);
     } else {
       params.delete("view");
@@ -906,7 +897,7 @@ export default function App() {
       {/* Mobile Hamburger Floating Button:
           Hanya muncul jika drawer navigasi terbuka (tombol 'X' untuk menutup),
           atau saat berada di kanvas Live Map (full-screen canvas tanpa top bar). */}
-      {(mobileMenuOpen || activeView === "map" || activeView === "wildfire3d") && (
+      {(mobileMenuOpen || activeView === "map") && (
         <button
           type="button"
           className="mobile-hamburger"
@@ -981,7 +972,7 @@ export default function App() {
       {/* Mobile Top Navigation Bar:
           Khusus layar mobile (< 640px) pada tampilan dokumen / tabel / analitik yang digulir.
           Mencegah tombol hamburger mengambang di atas konten saat pengguna menggulir halaman. */}
-      {activeView !== "map" && activeView !== "wildfire3d" && (
+      {activeView !== "map" && (
         <header className="mobile-app-header">
           <div className="mobile-app-header__left">
             <button
@@ -1204,16 +1195,6 @@ export default function App() {
             {loadError ? <p className="toast-error">{loadError}</p> : null}
             {exportError ? <p className="toast-error toast-error--bottom">{exportError}</p> : null}
             {syncError ? <p className="toast-error toast-error--bottom">{syncError}</p> : null}
-          </section>
-        ) : activeView === "wildfire3d" ? (
-          <section aria-label="Wildfire 3D Explorer workspace" className="workspace-stage workspace-stage--wildfire3d">
-            <Suspense fallback={<ViewLoader label="Memuat Wildfire 3D Explorer..." />}>
-              <Wildfire3DExplorer
-                onBackToLiveMap={() => commitViewChange("map")}
-                initialLayers={layers}
-                initialHotspots={session?.role === "bps" ? visibleHotspots : hotspots}
-              />
-            </Suspense>
           </section>
         ) : activeView === "matrix" ? (
           <section aria-label="Matrix workspace" className="workspace-stage workspace-stage--matrix">
