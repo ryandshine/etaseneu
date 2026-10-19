@@ -14,6 +14,7 @@ import { useIsMobile } from "./hooks/useIsMobile";
 import { setAuthToken, setUnauthorizedHandler } from "./lib/api";
 import { clearDashboardCache } from "./lib/dashboardPersistence";
 import { getTodayWIB, formatDateTimeWIB } from "./lib/date";
+import { getConfidenceCategory } from "./lib/hotspotDisplay";
 import type { AppSession, KpsCatalogItem } from "./types/api";
 
 const HotspotMap = lazy(async () => {
@@ -672,14 +673,10 @@ export default function App() {
         stats[formattedSat] = { tinggi: 0, sedang: 0, rendah: 0, total: 0 };
       }
 
-      const frp = h.frp ?? 0;
-      let category = "rendah";
-      if (frp > 30) category = "tinggi";
-      else if (frp >= 10) category = "sedang";
-      else category = "rendah";
+      const category = getConfidenceCategory(h);
 
-      if (category === "tinggi") stats[formattedSat].tinggi++;
-      else if (category === "sedang") stats[formattedSat].sedang++;
+      if (category === "Tinggi") stats[formattedSat].tinggi++;
+      else if (category === "Sedang") stats[formattedSat].sedang++;
       else stats[formattedSat].rendah++;
 
       stats[formattedSat].total++;
@@ -1067,8 +1064,8 @@ export default function App() {
                     <article className="metric-card" style={{ padding: '0.65rem 0.75rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem', marginBottom: '0.3rem' }}>
                         <p className="metric-label" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0, fontSize: '0.72rem' }}>
-                          Titik Panas (FRP)
-                          <span title="Kategori Intensitas Panas (FRP)&#10;&#10;Tinggi: > 30 MW&#10;Sedang: 10–30 MW&#10;Rendah: < 10 MW&#10;&#10;FRP (Fire Radiative Power) menunjukkan tingkat energi panas yang dipancarkan oleh hotspot yang terdeteksi satelit." style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '13px', height: '13px', borderRadius: '50%', border: '1px solid currentColor', fontSize: '9px', flexShrink: 0 }}>i</span>
+                          Tingkat Konfiden Titik Panas
+                          <span title="Kategori Konfiden Titik Panas&#10;&#10;Tinggi: VIIRS h / MODIS > 80%&#10;Sedang: VIIRS n / MODIS 30–80%&#10;Rendah: VIIRS l / MODIS < 30%&#10;&#10;Konfiden menunjukkan tingkat keyakinan satelit bahwa piksel tersebut adalah titik panas (bukan FRP)."style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '13px', height: '13px', borderRadius: '50%', border: '1px solid currentColor', fontSize: '9px', flexShrink: 0 }}>i</span>
                         </p>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                           <button

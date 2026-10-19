@@ -776,8 +776,9 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               days'` supaya maks 7), `satellites_7d` (`COUNT(DISTINCT
               NULLIF(satellite,''))`). Ditampilkan sebagai satu sel
               "FRP N MW (Tinggi/Sedang/Rendah) · N/7 hari · N satelit" —
-              ambang FRP >30/10-30/<10 MW SAMA dengan kartu statistik FRP peta
-              utama (`App.tsx`). Ini INFORMASI keandalan, TIDAK memfilter
+              ambang FRP >30/10-30/<10 MW (ini BUKAN ambang kartu statistik peta
+              utama — kartu itu sekarang mengelompokkan per KONFIDEN, lihat
+              bagian "Ringkasan" di bawah). Ini INFORMASI keandalan, TIDAK memfilter
               (FRP rendah ≠ palsu; gambut membara sering FRP kecil). Ada juga
               opsi sort "FRP Tertinggi". "Sinkron terakhir NASA FIRMS" ikut
               di baris "📅 Status per <tanggal> WIB" di atas 3 kartu (banner
@@ -803,8 +804,11 @@ components/   HotspotMap.tsx (peta Leaflet. Pane: `batas-kps` z400 non-interakti
               `MapSheet.tsx` (bottom sheet 3-detent peek/half/full berisi
               Lapisan+Basemap+Legenda+Ringkasan). "Ringkasan" di sheet menghitung
               ulang T/S/R + per-satelit dari prop `hotspots` dengan algoritma
-              IDENTIK `App.tsx::dynamicConfidenceStats` — kalau ambang FRP/
-              normalisasi nama satelit diubah di satu tempat, ubah juga di sini.
+              IDENTIK `App.tsx::dynamicConfidenceStats` — keduanya mengelompokkan
+              Tinggi/Sedang/Rendah lewat `getConfidenceCategory` (`lib/hotspotDisplay.ts`,
+              konfiden VIIRS h/n/l atau MODIS %), BUKAN FRP. Kalau logika/ambang
+              konfiden diubah, ubah di satu tempat (`getConfidenceCategory`) + cek
+              normalisasi nama satelit di kedua file.
               Panel statistik + `.stats-sheet-toggle` + `.ui-toggle-btn` milik
               App.tsx disembunyikan via CSS di `@media (max-width:639px)`
               (`.workspace-stage--map ...`) supaya tidak ada dua sheet.

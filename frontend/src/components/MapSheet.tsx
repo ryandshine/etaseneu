@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Clock, Flame, Map as MapIcon, Satellite, Trees } from "lucide-react";
-import { formatHectares } from "../lib/hotspotDisplay";
+import { formatHectares, getConfidenceCategory } from "../lib/hotspotDisplay";
 import { KAWASAN_HUTAN_LEGEND } from "../constants/kawasanHutan";
 import { SmokeControl } from "./SmokeControl";
 import type { SmokeLayersState } from "../hooks/useSmokeLayers";
@@ -8,7 +8,7 @@ import type { SmokeLayersState } from "../hooks/useSmokeLayers";
 type HotspotLike = {
   source: string;
   satellite: string;
-  frp?: number | null;
+  confidence?: string | null;
 };
 
 type OverlayLike<T> = { data: T | null; loading: boolean };
@@ -72,9 +72,9 @@ function summarise(hotspots: HotspotLike[]) {
       rows.set(name, row);
     }
 
-    const frp = hotspot.frp ?? 0;
-    if (frp > 30) row.tinggi += 1;
-    else if (frp >= 10) row.sedang += 1;
+    const category = getConfidenceCategory(hotspot);
+    if (category === "Tinggi") row.tinggi += 1;
+    else if (category === "Sedang") row.sedang += 1;
     else row.rendah += 1;
     row.total += 1;
   }
