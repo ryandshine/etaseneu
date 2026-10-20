@@ -29,6 +29,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Inches, Pt
 
 from app.core.config import get_settings
+from app.core.telegram_token import PERMANENT_AUTH_STATUSES
 from app.services.hotspot_categories import confidence_category
 from app.services.postgres_store import PostgresStore
 
@@ -1707,6 +1708,7 @@ class DailyReportService:
             return {
                 "success": False,
                 "error": "telegram_bot_token atau telegram_chat_id belum dikonfigurasi.",
+                "permanent": True,
             }
 
         jakarta_tz = ZoneInfo("Asia/Jakarta")
@@ -1814,10 +1816,27 @@ class DailyReportService:
                     "success": False,
                     "status_code": resp.status_code,
                     "error": resp.text,
+                    "permanent": resp.status_code in PERMANENT_AUTH_STATUSES,
                 }
         except Exception as e:
             logger.error("Exception saat mengirim laporan harian PPTX ke Telegram: %s", e)
             return {"success": False, "error": str(e)}
+
+
+MAX_DAILY_REPORT_ATTEMPTS = 6
+_RETRY_BASE_SECONDS = 600.0
+_RETRY_MAX_SECONDS = 3600.0
+
+
+def next_retry_delay_seconds(result: dict[str, Any], attempts: int) -> float | None:
+    """Jeda sebelum percobaan ulang setelah pengiriman gagal; None = menyerah untuk hari ini.
+
+    Pembuatan PPTX itu mahal (query DB + grafik + render slide), jadi kegagalan tidak boleh
+    diulang tiap siklus 5 menit. Kegagalan permanen (token/chat salah) tidak diulang sama sekali.
+    """
+    if result.get("permanent") or attempts >= MAX_DAILY_REPORT_ATTEMPTS:
+        return None
+    return min(_RETRY_BASE_SECONDS * (2 ** (attempts - 1)), _RETRY_MAX_SECONDS)
 
 
 async def daily_report_scheduler_loop() -> None:
@@ -1828,19 +1847,46 @@ async def daily_report_scheduler_loop() -> None:
 
     logger.info("DAILY_REPORT: Scheduler aktif — disetel setiap hari pada pukul %02d:00 WIB.", target_hour)
 
+    state_day: str | None = None
+    attempts = 0
+    retry_not_before: datetime | None = None
+    gave_up = False
+
     while True:
         try:
             now_jkt = datetime.now(jakarta_tz)
             today_str = now_jkt.strftime("%Y-%m-%d")
+            if today_str != state_day:
+                state_day, attempts, retry_not_before, gave_up = today_str, 0, None, False
 
-            if now_jkt.hour >= target_hour:
+            due = retry_not_before is None or now_jkt >= retry_not_before
+            if now_jkt.hour >= target_hour and not gave_up and due:
                 service = DailyReportService()
                 if not service.is_daily_report_already_sent(today_str):
                     logger.info(
                         "DAILY_REPORT: Menjalankan pengiriman laporan harian PPTX otomatis untuk tanggal %s...",
                         today_str,
                     )
-                    await service.send_daily_telegram_report(force=False)
+                    result = await service.send_daily_telegram_report(force=False)
+                    if not result.get("success"):
+                        attempts += 1
+                        delay = next_retry_delay_seconds(result, attempts)
+                        if delay is None:
+                            gave_up = True
+                            logger.error(
+                                "DAILY_REPORT: Menyerah untuk %s setelah %d percobaan (%s). "
+                                "Periksa TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID lalu kirim manual.",
+                                today_str,
+                                attempts,
+                                "kegagalan permanen" if result.get("permanent") else "batas percobaan",
+                            )
+                        else:
+                            retry_not_before = now_jkt + timedelta(seconds=delay)
+                            logger.warning(
+                                "DAILY_REPORT: Percobaan %d gagal; ulangi paling cepat %d menit lagi.",
+                                attempts,
+                                int(delay // 60),
+                            )
 
             now_jkt = datetime.now(jakarta_tz)
             if now_jkt.hour < target_hour:

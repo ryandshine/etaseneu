@@ -16,6 +16,11 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from app.core.config import Settings, get_settings
+from app.core.telegram_token import (
+    PERMANENT_AUTH_STATUSES,
+    describe_token_shape,
+    is_valid_bot_token_format,
+)
 from app.services.daily_report_service import DailyReportService
 from app.services.postgres_store import PostgresStore
 
@@ -754,6 +759,12 @@ class TelegramBotService:
             return
 
         logger.info("TELEGRAM_BOT: Memulai long-polling listener untuk publik (token: %s)...", self.masked_token)
+        if not is_valid_bot_token_format(self.token):
+            logger.error(
+                "TELEGRAM_BOT: Format TELEGRAM_BOT_TOKEN tidak wajar (%s) -- kemungkinan terpotong/salah salin. "
+                "Tetap dicoba, tapi bila Telegram menolak (401) polling dihentikan.",
+                describe_token_shape(self.token),
+            )
         self._running = True
 
         backoff = 1.0
@@ -781,6 +792,16 @@ class TelegramBotService:
                                 except Exception as e:
                                     logger.error("Error saat memproses update Telegram %s: %s", upd_id, e)
                         backoff = 1.0
+                    elif resp.status_code in PERMANENT_AUTH_STATUSES:
+                        # Token ditolak: mengulang tiap beberapa detik tidak akan pernah berhasil
+                        # dan hanya membanjiri log. Hentikan; butuh token baru + restart/redeploy.
+                        logger.error(
+                            "TELEGRAM_BOT: getUpdates HTTP %s -- token ditolak Telegram (%s). "
+                            "Polling DIHENTIKAN. Perbarui TELEGRAM_BOT_TOKEN (BotFather) lalu redeploy.",
+                            resp.status_code,
+                            describe_token_shape(self.token),
+                        )
+                        break
                     else:
                         logger.warning("getUpdates HTTP %s: %s", resp.status_code, resp.text)
                         await asyncio.sleep(backoff)
