@@ -3,6 +3,7 @@ import { useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { authFetch } from "../lib/api";
 import { pointInGeometry } from "../lib/polygonHit";
+import { escapeHtml } from "../lib/escapeHtml";
 
 type LayerLike = {
   id: string;
@@ -24,12 +25,6 @@ type Props = {
 const HOTSPOT_GUARD_PX = 30;
 
 type Hit = { layer: string; props: Record<string, unknown> };
-
-function esc(value: unknown): string {
-  return String(value ?? "").replace(/[&<>"]/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string),
-  );
-}
 
 function friendlyLayer(layer: LayerLike): string {
   const n = `${layer.name} ${layer.id}`.toLowerCase();
@@ -53,19 +48,19 @@ function renderPopup(hits: Hit[]): string {
     .slice(0, 4)
     .map((h) => {
       const p = h.props;
-      const nama = esc(firstOf(p, "LEMBAGA", "lembaga", "label") || "-");
+      const nama = escapeHtml(firstOf(p, "LEMBAGA", "lembaga", "label") || "-");
       const rows: string[] = [];
       const skema = firstOf(p, "SKEMA", "skema");
-      if (skema) rows.push(`Skema: <strong>${esc(skema)}</strong>`);
+      if (skema) rows.push(`Skema: <strong>${escapeHtml(skema)}</strong>`);
       const balai = firstOf(p, "WILKER_BPS");
-      if (balai) rows.push(`Balai PS: <strong>${esc(balai)}</strong>`);
+      if (balai) rows.push(`Balai PS: <strong>${escapeHtml(balai)}</strong>`);
       const wil = [firstOf(p, "NAMA_KAB"), firstOf(p, "NAMA_PROV")]
         .filter(Boolean)
-        .map(esc)
+        .map(escapeHtml)
         .join(", ");
       if (wil) rows.push(`Wilayah: <strong>${wil}</strong>`);
       return `<div style="margin-top:8px">
-        <div style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#6b7280">${esc(h.layer)}</div>
+        <div style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#6b7280">${escapeHtml(h.layer)}</div>
         <div style="font-weight:700;margin-top:2px">${nama}</div>
         ${rows.length ? `<div style="margin-top:3px;color:#374151;line-height:1.5">${rows.join("<br>")}</div>` : ""}
       </div>`;
@@ -81,8 +76,8 @@ function kawasanBlock(k: {
   kelompok?: string;
   nama_kawasan?: string;
 }): string {
-  const judul = [k.fungsi, k.singkatan ? `(${k.singkatan})` : ""].filter(Boolean).map(esc).join(" ");
-  const sub = [k.kelompok, k.nama_kawasan].filter(Boolean).map(esc).join(" · ");
+  const judul = [k.fungsi, k.singkatan ? `(${k.singkatan})` : ""].filter(Boolean).map(escapeHtml).join(" ");
+  const sub = [k.kelompok, k.nama_kawasan].filter(Boolean).map(escapeHtml).join(" · ");
   return `<div style="margin-top:8px;border-top:1px solid #e5e7eb;padding-top:6px">
     <div style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#6b7280">Fungsi Kawasan Hutan</div>
     <div style="font-weight:700;margin-top:2px">${judul || "-"}</div>
