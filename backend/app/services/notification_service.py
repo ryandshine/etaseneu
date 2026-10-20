@@ -454,7 +454,7 @@ class NotificationService:
                             FROM hotspot_observations h
                             LEFT JOIN polygon_metadata p ON (
                                 p.is_active = TRUE AND (
-                                    ST_Contains(p.geometry, ST_SetSRID(ST_Point(h.longitude, h.latitude), 4326))
+                                    ST_Covers(p.geometry, ST_SetSRID(ST_Point(h.longitude, h.latitude), 4326))
                                     OR p.lembaga = h.agency_name
                                     OR p.lembaga = (h.raw_payload->>'nearest_kps_name')
                                 )

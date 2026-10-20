@@ -55,6 +55,9 @@ class HotspotService:
 
         hydrated_hotspots: list[dict] = []
         cache_hit = False
+        # Status penyimpanan observasi + relasi pada panggilan ini. Hanya `ok` yang ikut ke
+        # respons (aman dipublikasikan); detail error hanya masuk log.
+        persistence: dict[str, object] = {"ok": True, "skipped": True}
 
         if not bypass_cache:
             cached_hotspots = self.cache_service.read(query.cache_key())
@@ -106,8 +109,15 @@ class HotspotService:
                             )
                         )
                     except Exception as e:
+                        # `layer` adalah dict layer spasial (bukan objek): `layer.name` di handler
+                        # ini dulu melempar AttributeError dan menggagalkan SELURUH siklus sinkron
+                        # tiap kali satu panggilan FIRMS error sesaat (produksi, 19 Okt 2026).
                         logger.warning(
-                            "NASA fetch failed for %s %s–%s: %s", layer.name, year_start, year_end, e
+                            "NASA fetch failed for %s %s–%s: %s",
+                            layer.get("name") or layer.get("id"),
+                            year_start,
+                            year_end,
+                            e,
                         )
 
             filtered = _filter_unique_hotspots_by_date(
@@ -116,14 +126,8 @@ class HotspotService:
                 query.end_at,
             )
             if self.postgres_store.enabled:
-                try:
-                    self.postgres_store.upsert_hotspot_observations(filtered)
-                except Exception:
-                    pass
-                internal_hotspots = [h for h in filtered if not h.get("is_perimeter")]
-                self._persist_filtered_hotspots(internal_hotspots)
-            else:
-                internal_hotspots = [h for h in filtered if not h.get("is_perimeter")]
+                persistence = self._persist_observations_and_relations(filtered)
+            internal_hotspots = [h for h in filtered if not h.get("is_perimeter")]
             hydrated_hotspots = self._hydrate_polygon_metadata(query, internal_hotspots)
             self.cache_service.write(query.cache_key(), hydrated_hotspots)
 
@@ -207,7 +211,12 @@ class HotspotService:
         )
         logger.debug("%s", debug_log)
 
-        return {"count": len(hydrated_hotspots), "hotspots": hydrated_hotspots, "stats": stats}
+        return {
+            "count": len(hydrated_hotspots),
+            "hotspots": hydrated_hotspots,
+            "stats": stats,
+            "persistence": persistence,
+        }
 
     async def prewarm_year_history(
         self,
@@ -290,10 +299,12 @@ class HotspotService:
             try:
                 summary["polygon_hotspot_summary"] = self.refresh_polygon_hotspot_summaries()
             except Exception:
+                logger.exception("GEOJSON SYNC: refresh relasi/ringkasan hotspot gagal setelah sinkron layer")
                 summary["polygon_hotspot_summary"] = {
                     "active_polygon_count": 0,
                     "pruned": 0,
                     "rebuilt": 0,
+                    "failed": 1,
                 }
         return summary
 
@@ -464,86 +475,49 @@ class HotspotService:
         target_layers = all_layers if all_layers else [layer]
         return filter_hotspots_by_layers(normalized, target_layers, include_perimeter=True)
 
-    def _persist_filtered_hotspots(self, hotspots: list[dict]) -> None:
-        if not hotspots or not self.postgres_store.enabled:
-            return
+    def _persist_observations_and_relations(self, hotspots: list[dict]) -> dict[str, object]:
+        """Simpan observasi, lengkapi relasi spasial, bangun ulang ringkasan -- error TIDAK ditelan.
 
+        Kegagalan dicatat lengkap dengan konteks (jumlah titik, rentang waktu) dan dikembalikan
+        sebagai ``{"ok": False}`` supaya pemanggil (scheduler) bisa menandainya. Pembacaan API
+        tetap jalan karena penyimpanan hanyalah efek samping dari permintaan baca.
+        """
+        if not hotspots:
+            return {"ok": True, "skipped": True}
         try:
-            observation_rows = self.postgres_store.read_hotspot_observation_records(hotspots)
+            self.postgres_store.upsert_hotspot_observations(hotspots)
+            result = self._persist_filtered_hotspots(hotspots)
         except Exception:
-            return
-
-        observation_index = {
-            _hotspot_observation_key(row): int(row["id"])
-            for row in observation_rows
-            if row.get("id") is not None
+            logger.exception(
+                "HOTSPOT PERSIST: gagal menyimpan %d observasi atau melengkapi relasi/ringkasan",
+                len(hotspots),
+            )
+            return {"ok": False}
+        return {
+            "ok": True,
+            "relations_inserted": int(result.get("inserted", 0)),
+            "relations_updated": int(result.get("updated", 0)),
+            "summaries_rebuilt": int(result.get("summary_rebuilt", 0)),
         }
 
-        relation_rows: list[dict[str, object]] = []
-        impacted_polygon_ids: set[int] = set()
-        polygon_lookup_cache: dict[str, dict[str, int]] = {}
-        polygon_index_lookup_cache: dict[str, dict[int, int]] = {}
+    def _persist_filtered_hotspots(self, hotspots: list[dict]) -> dict[str, object]:
+        """Lengkapi relasi hotspot<->poligon dan ringkasan untuk jendela waktu ``hotspots``.
 
-        for hotspot in hotspots:
-            polygon_metadata = hotspot.get("polygon_metadata") or {}
-            layer_key = str(hotspot.get("layer_id") or hotspot.get("layer_key") or "")
-            if not layer_key:
-                continue
-
-            polygon_metadata_id = polygon_metadata.get("polygon_metadata_id") or polygon_metadata.get("id")
-            feature_index = polygon_metadata.get("feature_index")
-            feature_key = polygon_metadata.get("feature_key")
-            if polygon_metadata_id is None and feature_index is not None:
-                if layer_key not in polygon_index_lookup_cache:
-                    try:
-                        polygon_index_lookup_cache[layer_key] = self.postgres_store.read_polygon_metadata_ids_by_index(
-                            layer_key=layer_key,
-                            feature_indices=[int(feature_index)],
-                        )
-                    except Exception:
-                        polygon_index_lookup_cache[layer_key] = {}
-                polygon_metadata_id = polygon_index_lookup_cache[layer_key].get(int(feature_index))
-
-            if polygon_metadata_id is None and feature_key:
-                if layer_key not in polygon_lookup_cache:
-                    try:
-                        polygon_lookup_cache[layer_key] = self.postgres_store.read_polygon_metadata_ids(
-                            layer_key=layer_key,
-                            feature_keys=[str(feature_key)],
-                        )
-                    except Exception:
-                        polygon_lookup_cache[layer_key] = {}
-                polygon_metadata_id = polygon_lookup_cache[layer_key].get(str(feature_key))
-
-            if polygon_metadata_id is None:
-                continue
-
-            observation_id = observation_index.get(_hotspot_observation_key(hotspot))
-            if observation_id is None:
-                continue
-
-            polygon_metadata_id = int(polygon_metadata_id)
-            relation_rows.append(
-                {
-                    "hotspot_observation_id": observation_id,
-                    "polygon_metadata_id": polygon_metadata_id,
-                    "layer_key": layer_key,
-                    "match_method": "contains",
-                }
-            )
-            impacted_polygon_ids.add(polygon_metadata_id)
-
-        if relation_rows:
-            try:
-                self.postgres_store.upsert_hotspot_polygon_relation(relation_rows)
-            except Exception:
-                pass
-
-        if impacted_polygon_ids:
-            try:
-                self.postgres_store.rebuild_polygon_hotspot_summary(sorted(impacted_polygon_ids))
-            except Exception:
-                pass
+        Pencocokan SPASIAL dilakukan di database (mesin bersama ``_hotspot_match``) atas
+        observasi yang baru di-upsert -- BUKAN dari metadata poligon yang dibawa dict hotspot.
+        Jalur lama (pencarian id poligon lewat ``feature_index``/``feature_key`` dengan cache per
+        layer yang hanya diisi indeks hotspot pertama) cuma menghasilkan relasi untuk hotspot
+        yang kebetulan satu poligon dengan hotspot pertama di layernya (~5% data produksi).
+        Exception dibiarkan naik; ``_persist_observations_and_relations`` yang mencatatnya.
+        """
+        if not hotspots or not self.postgres_store.enabled:
+            return {}
+        window = _detected_at_window(hotspots)
+        if window is None:
+            logger.warning("HOTSPOT PERSIST: %d titik tanpa detected_at valid, relasi dilewati", len(hotspots))
+            return {}
+        start_at, end_at = window
+        return self.postgres_store.sync_hotspot_relations_and_summaries(start_at=start_at, end_at=end_at)
 
     def _hydrate_polygon_metadata(self, query: HotspotQuery, hotspots: list[dict]) -> list[dict]:
         if not hotspots or not self.postgres_store.enabled:
@@ -694,6 +668,28 @@ def _dedupe_hotspots(hotspots: Iterable[dict]) -> list[dict]:
         deduped.append(hotspot)
 
     return deduped
+
+
+def _detected_at_window(hotspots: Iterable[dict]) -> tuple[datetime, datetime] | None:
+    """Jendela ``[awal, akhir + 1 detik)`` (UTC, timezone-aware) yang memuat semua ``detected_at``."""
+    stamps: list[datetime] = []
+    for hotspot in hotspots:
+        value = hotspot.get("detected_at")
+        if value is None:
+            continue
+        if isinstance(value, datetime):
+            stamp = value
+        else:
+            try:
+                stamp = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            except ValueError:
+                continue
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=ZoneInfo("Asia/Jakarta"))
+        stamps.append(stamp.astimezone(timezone.utc))
+    if not stamps:
+        return None
+    return min(stamps), max(stamps) + timedelta(seconds=1)
 
 
 def _hotspot_observation_key(hotspot: dict) -> tuple[str, str, float, float, str, str]:

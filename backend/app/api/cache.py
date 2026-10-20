@@ -1,6 +1,8 @@
 import asyncio
+import logging
 import os
 import shutil
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, Query, UploadFile, File, HTTPException
@@ -8,6 +10,8 @@ from fastapi import APIRouter, Depends, Form, Query, UploadFile, File, HTTPExcep
 from app.core.auth import require_admin_key
 from app.services.hotspot_service import HotspotService
 
+
+logger = logging.getLogger("hotspot.api.cache")
 
 router = APIRouter()
 
@@ -167,7 +171,8 @@ async def deactivate_geojson(
         try:
             summary = service.refresh_polygon_hotspot_summaries()
         except Exception:
-            pass
+            logger.exception("CACHE API: refresh ringkasan hotspot gagal setelah perubahan layer")
+            summary = {**summary, "failed": 1}
 
     return {
         "status": "deactivated",
@@ -219,7 +224,8 @@ async def delete_geojson(
         try:
             summary = service.refresh_polygon_hotspot_summaries()
         except Exception:
-            pass
+            logger.exception("CACHE API: refresh ringkasan hotspot gagal setelah perubahan layer")
+            summary = {**summary, "failed": 1}
 
     return {
         "status": "deleted",
@@ -232,8 +238,64 @@ async def delete_geojson(
 
 @router.post("/polygon-hotspot-summary/refresh")
 async def polygon_hotspot_summary_refresh(_: None = Depends(require_admin_key)) -> dict[str, int]:
+    """Refresh PENUH relasi hotspot<->poligon + ringkasan tahunan (menulis ke database)."""
     service = HotspotService()
     return service.refresh_polygon_hotspot_summaries()
+
+
+@router.get("/hotspot-relations/integrity")
+async def hotspot_relation_integrity(
+    start_at: datetime | None = Query(default=None),
+    end_at: datetime | None = Query(default=None),
+    _: None = Depends(require_admin_key),
+) -> dict[str, object]:
+    """Laporan integritas relasi hotspot<->poligon. BACA-SAJA (transaksi READ ONLY).
+
+    Memisahkan relasi valid, yatim (observasi hilang), ke poligon nonaktif, pasangan spasial yang
+    belum tercatat (``missing_pairs``), dan relasi usang (``stale_pairs``).
+    """
+    store = HotspotService().postgres_store
+    if not store.enabled:
+        raise HTTPException(status_code=503, detail="Database tidak tersedia.")
+    try:
+        return await asyncio.to_thread(
+            store.hotspot_relation_integrity_report, start_at=start_at, end_at=end_at
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/hotspot-relations/reconcile")
+async def hotspot_relation_reconcile(
+    start_at: datetime = Query(...),
+    end_at: datetime = Query(...),
+    dry_run: bool = Query(default=True),
+    _: None = Depends(require_admin_key),
+) -> dict[str, object]:
+    """Lengkapi relasi untuk ``[start_at, end_at)``. ``dry_run=true`` (bawaan) hanya menghitung.
+
+    ``dry_run=false`` MENULIS ke ``hotspot_polygon_relation`` (idempoten, hanya menambah/menyelaraskan)
+    lalu membangun ulang ringkasan poligon terdampak. Tidak pernah menghapus relasi.
+    """
+    store = HotspotService().postgres_store
+    if not store.enabled:
+        raise HTTPException(status_code=503, detail="Database tidak tersedia.")
+    try:
+        if dry_run:
+            result = await asyncio.to_thread(
+                store.reconcile_hotspot_polygon_relations,
+                start_at=start_at,
+                end_at=end_at,
+                dry_run=True,
+            )
+        else:
+            result = await asyncio.to_thread(
+                store.sync_hotspot_relations_and_summaries, start_at=start_at, end_at=end_at
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    result.pop("polygon_ids", None)
+    return result
 
 
 @router.get("/cache/history/status")

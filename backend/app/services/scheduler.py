@@ -300,7 +300,15 @@ async def _run_sync_cycle(service: HotspotService) -> dict:
         count = result.get("count", 0)
         hotspots_list = list(result.get("hotspots", []))
         new_hotspot_count, new_hotspots = _extract_new_hotspots(hotspots_list)
+        persistence = result.get("persistence") or {}
+        persistence_ok = bool(persistence.get("ok", True))
         logger.info("SCHEDULER: Sync selesai — %d titik hotspot ditemukan/diperbarui.", count)
+        if not persistence_ok:
+            logger.error(
+                "SCHEDULER: Data FIRMS terambil (%d titik) tetapi GAGAL disimpan/direlasikan ke "
+                "database -- siklus ditandai gagal. Lihat log 'HOTSPOT PERSIST' / 'HOTSPOT RELATION'.",
+                count,
+            )
         
         if service.postgres_store.enabled:
             try:
@@ -328,7 +336,8 @@ async def _run_sync_cycle(service: HotspotService) -> dict:
                 logger.error("SCHEDULER: Gagal membuat notifikasi hotspot baru — %s", e)
 
         summary = {
-            "success": True,
+            "success": persistence_ok,
+            "persistence_ok": persistence_ok,
             "hotspot_count": count,
             "new_hotspot_count": new_hotspot_count,
             "synced_at": now.isoformat(),

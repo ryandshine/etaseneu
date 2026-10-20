@@ -156,6 +156,7 @@ class _HotspotObservationMixin:
                             obs.id AS observation_id,
                             obs.raw_payload,
                             p.id AS polygon_metadata_id,
+                            p.layer_key AS polygon_layer_key,
                             p.feature_key,
                             p.feature_index,
                             p.lembaga,
@@ -190,14 +191,14 @@ class _HotspotObservationMixin:
                             COALESCE(lbl.fungsi, 'Kode ' || hkh.fungsikws::text) AS khutan_fungsi
                         FROM hotspot_observations obs
                         JOIN polygon_metadata p
-                          ON p.layer_key = obs.layer_key
-                         AND p.is_active = TRUE
+                          ON p.is_active = TRUE
+                         AND p.geometry && obs.geom
                          AND ST_Covers(p.geometry, obs.geom)
                         LEFT JOIN hotspot_kawasan_hutan hkh ON hkh.hotspot_id = obs.id
                         LEFT JOIN ref_fungsi_kawasan_label lbl ON lbl.kode = hkh.fungsikws
                         WHERE obs.detected_at >= %s::timestamptz AND obs.detected_at < %s::timestamptz
                           AND obs.source = ANY(%s)
-                          AND obs.layer_key = ANY(%s)
+                          AND p.layer_key = ANY(%s)
                           AND obs.geom IS NOT NULL
                         ORDER BY obs.id ASC, p.feature_index ASC, p.id ASC
                     )
@@ -251,6 +252,16 @@ class _HotspotObservationMixin:
                 merged_metadata = {**orig_metadata, **db_metadata}
                 payload["polygon_metadata"] = merged_metadata
 
+                # Keanggotaan poligon = fakta spasial; `layer_id` di raw_payload hanyalah label
+                # saat ingest (bisa `perimeter_threat` untuk titik yang kini di dalam poligon,
+                # mis. setelah layer diperbarui). Selaraskan dengan poligon yang memuat titik.
+                polygon_layer_key = row.get("polygon_layer_key")
+                if polygon_layer_key:
+                    payload["layer_id"] = polygon_layer_key
+                    if "layer_key" in payload:
+                        payload["layer_key"] = polygon_layer_key
+                    payload["is_perimeter"] = False
+
                 kode = row.get("khutan_kode")
                 kawasan = {
                     "kode": int(kode) if kode is not None else None,
@@ -297,7 +308,7 @@ class _HotspotObservationMixin:
                             p.nama_prov
                         FROM polygon_metadata p
                         WHERE p.is_active
-                          AND p.layer_key = obs.layer_key
+                          AND p.geometry && obs.geom
                           AND ST_Covers(p.geometry, obs.geom)
                         ORDER BY p.id ASC
                         LIMIT 1

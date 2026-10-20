@@ -1,10 +1,20 @@
-"""Relasi hotspot <-> polygon: intersect spasial dan ringkasan agregat per polygon per tahun."""
+"""Relasi hotspot <-> polygon: ringkasan agregat per polygon per tahun + upsert relasi.
+
+Pencocokan spasial ada di ``_hotspot_match`` (satu definisi "di dalam" untuk semua jalur)."""
 
 import logging
 from collections.abc import Sequence
+from datetime import timedelta
 from typing import Any
 
 from ._base import _safe_json
+from ._hotspot_match import (
+    ANALYSIS_TIMEZONE,
+    DEFAULT_STATEMENT_TIMEOUT_MS,
+    SUMMARY_ADVISORY_LOCK_KEY,
+    _set_local_timeouts,
+    pairs_cte_sql,
+)
 
 logger = logging.getLogger("hotspot.postgres")
 
@@ -34,6 +44,12 @@ class _PolygonRelationMixin:
                         logger.warning("Gagal membuat index performa: %s (%s)", sql, e)
 
     def refresh_polygon_hotspot_summaries(self, layer_keys: Sequence[str] | None = None) -> dict[str, int]:
+        """Refresh PENUH: baris ringkasan basi dibuang, relasi dilengkapi, ringkasan dibangun ulang.
+
+        Urutan sengaja relasi -> ringkasan: kalau rekonsiliasi relasi gagal, exception naik dan
+        ringkasan lama tidak diganti. Semua nilai balikan bertipe int (dipakai sebagai response
+        model ``dict[str, int]`` di endpoint admin).
+        """
         active_polygon_ids = self.read_active_polygon_metadata_ids(layer_keys=layer_keys)
         pruned_count = 0
 
@@ -53,12 +69,30 @@ class _PolygonRelationMixin:
                     cur.execute(query, ())
                     pruned_count += int(getattr(cur, "rowcount", 0) or 0)
 
+        relation = self._reconcile_full_range(layer_keys)
         rebuilt_count = self.rebuild_polygon_hotspot_summary(active_polygon_ids)
         return {
             "active_polygon_count": len(active_polygon_ids),
             "pruned": pruned_count,
             "rebuilt": rebuilt_count,
+            "relation_spatial_pairs": int(relation.get("spatial_pairs", 0)),
+            "relation_inserted": int(relation.get("inserted", 0)),
+            "relation_updated": int(relation.get("updated", 0)),
         }
+
+    def _reconcile_full_range(self, layer_keys: Sequence[str] | None = None) -> dict[str, Any]:
+        """Rekonsiliasi relasi untuk SELURUH rentang observasi (pada poligon di ``layer_keys``)."""
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT MIN(detected_at) AS first_at, MAX(detected_at) AS last_at FROM hotspot_observations")
+                row = cur.fetchone() or {}
+        if not row.get("first_at"):
+            return {"spatial_pairs": 0, "inserted": 0, "updated": 0, "polygon_ids": []}
+        return self.reconcile_hotspot_polygon_relations(
+            start_at=row["first_at"],
+            end_at=row["last_at"] + timedelta(seconds=1),
+            layer_keys=layer_keys,
+        )
 
     def upsert_hotspot_polygon_relation(self, relations: Sequence[dict[str, Any]]) -> int:
         if not relations:
@@ -95,120 +129,96 @@ class _PolygonRelationMixin:
                 )
 
     def intersect_hotspots_for_layer(self, layer_key: str) -> int:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                # 1. Insert relations
-                cur.execute(
-                    """
-                    INSERT INTO hotspot_polygon_relation (
-                        hotspot_observation_id,
-                        polygon_metadata_id,
-                        layer_key,
-                        match_method
-                    )
-                    SELECT
-                        obs.id AS hotspot_observation_id,
-                        poly.id AS polygon_metadata_id,
-                        poly.layer_key AS layer_key,
-                        'contains' AS match_method
-                    FROM polygon_metadata poly
-                    JOIN hotspot_observations obs ON ST_Contains(poly.geometry, obs.geom)
-                    WHERE poly.layer_key = %s
-                      AND poly.is_active = TRUE
-                    ON CONFLICT (hotspot_observation_id, polygon_metadata_id) DO NOTHING
-                    """,
-                    (layer_key,),
-                )
-                relation_count = getattr(cur, "rowcount", 0) or 0
+        """Lengkapi relasi untuk poligon aktif di ``layer_key`` (seluruh rentang), lalu ringkasannya.
 
-                # 2. Get all polygon IDs of this layer to rebuild summary
-                cur.execute(
-                    """
-                    SELECT id FROM polygon_metadata
-                    WHERE layer_key = %s AND is_active = TRUE
-                    """,
-                    (layer_key,),
-                )
-                rows = cur.fetchall()
-                polygon_ids = [int(row["id"]) for row in rows if row.get("id") is not None]
-
+        Dipanggil sesudah sinkron GeoJSON. Memakai mesin pencocokan yang sama dengan ingest
+        (``ST_Covers`` + geometri valid, tanpa syarat ``layer_key`` observasi).
+        """
+        relation = self._reconcile_full_range([layer_key])
+        polygon_ids = self.read_active_polygon_metadata_ids(layer_keys=[layer_key])
         if polygon_ids:
             self.rebuild_polygon_hotspot_summary(polygon_ids)
+        return int(relation.get("inserted", 0)) + int(relation.get("updated", 0))
 
-        return relation_count
+    def rebuild_polygon_hotspot_summary(
+        self,
+        polygon_metadata_ids: Sequence[int],
+        *,
+        years: Sequence[int] | None = None,
+    ) -> int:
+        """Bangun ulang ringkasan (grain: satu poligon aktif per tahun WIB) secara atomik.
 
-    def rebuild_polygon_hotspot_summary(self, polygon_metadata_ids: Sequence[int]) -> int:
+        ``hotspot_count`` = jumlah observasi UNIK yang berada di dalam poligon pada tahun itu;
+        ``start_at``/``end_at``/``last_hotspot_at``/``sources``/``satellites`` dihitung dari
+        himpunan observasi yang SAMA. ``sources``/``satellites`` adalah DAFTAR nilai berbeda
+        (terurut), bukan jumlah per sumber. Dihitung langsung dari geometri poligon saat ini
+        (bukan dari tabel relasi) lewat mesin pencocokan bersama. DELETE + INSERT dalam satu
+        transaksi: pembaca melihat ringkasan lama atau baru, tidak pernah setengah-setengah.
+        """
         unique_ids = [int(polygon_metadata_id) for polygon_metadata_id in dict.fromkeys(polygon_metadata_ids)]
         if not unique_ids:
             return 0
 
+        params: dict[str, Any] = {"polygon_ids": unique_ids, "tz": ANALYSIS_TIMEZONE}
+        year_delete_filter = ""
+        observation_filter = ""
+        if years is not None:
+            params["years"] = [int(year) for year in years]
+            year_delete_filter = " AND year = ANY(%(years)s)"
+            observation_filter = (
+                "AND EXTRACT(YEAR FROM obs.detected_at AT TIME ZONE %(tz)s)::int = ANY(%(years)s)"
+            )
+
+        delete_sql = (
+            "DELETE FROM polygon_hotspot_summary "
+            "WHERE polygon_metadata_id = ANY(%(polygon_ids)s)" + year_delete_filter
+        )
+        insert_sql = f"""
+            WITH {pairs_cte_sql(polygon_filter="AND p.id = ANY(%(polygon_ids)s)", observation_filter=observation_filter)},
+            aggregated AS (
+                SELECT
+                    polygon_id AS polygon_metadata_id,
+                    polygon_layer_key AS layer_key,
+                    EXTRACT(YEAR FROM detected_at AT TIME ZONE %(tz)s)::int AS year,
+                    MIN(detected_at) AS start_at,
+                    MAX(detected_at) AS end_at,
+                    COUNT(DISTINCT observation_id)::int AS hotspot_count,
+                    MAX(detected_at) AS last_hotspot_at,
+                    to_jsonb(ARRAY_AGG(DISTINCT source ORDER BY source)) AS sources,
+                    to_jsonb(ARRAY_AGG(DISTINCT satellite ORDER BY satellite)) AS satellites
+                FROM pairs
+                GROUP BY polygon_id, polygon_layer_key, EXTRACT(YEAR FROM detected_at AT TIME ZONE %(tz)s)
+            )
+            INSERT INTO polygon_hotspot_summary (
+                polygon_metadata_id, layer_key, year, start_at, end_at,
+                hotspot_count, last_hotspot_at, sources, satellites
+            )
+            SELECT
+                polygon_metadata_id, layer_key, year, start_at, end_at,
+                hotspot_count, last_hotspot_at,
+                COALESCE(sources, '[]'::jsonb),
+                COALESCE(satellites, '[]'::jsonb)
+            FROM aggregated
+            ON CONFLICT (polygon_metadata_id, year)
+            DO UPDATE SET
+                layer_key = EXCLUDED.layer_key,
+                start_at = EXCLUDED.start_at,
+                end_at = EXCLUDED.end_at,
+                hotspot_count = EXCLUDED.hotspot_count,
+                last_hotspot_at = EXCLUDED.last_hotspot_at,
+                sources = EXCLUDED.sources,
+                satellites = EXCLUDED.satellites,
+                updated_at = NOW()
+        """
+
         with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    DELETE FROM polygon_hotspot_summary
-                    WHERE polygon_metadata_id = ANY(%s)
-                    """,
-                    (unique_ids,),
-                )
-                cur.execute(
-                    """
-                    WITH aggregated AS (
-                        SELECT
-                            p.id AS polygon_metadata_id,
-                            p.layer_key,
-                            EXTRACT(YEAR FROM obs.detected_at)::int AS year,
-                            MIN(obs.detected_at) AS start_at,
-                            MAX(obs.detected_at) AS end_at,
-                            COUNT(*)::int AS hotspot_count,
-                            MAX(obs.detected_at) AS last_hotspot_at,
-                            to_jsonb(ARRAY_AGG(DISTINCT obs.source)) AS sources,
-                            to_jsonb(ARRAY_AGG(DISTINCT obs.satellite)) AS satellites
-                        FROM polygon_metadata p
-                        JOIN hotspot_observations obs
-                          ON obs.layer_key = p.layer_key
-                         AND ST_Covers(p.geometry, obs.geom)
-                        WHERE p.id = ANY(%s)
-                          AND p.is_active = TRUE
-                          AND obs.geom IS NOT NULL
-                        GROUP BY p.id, p.layer_key, EXTRACT(YEAR FROM obs.detected_at)
-                    )
-                    INSERT INTO polygon_hotspot_summary (
-                        polygon_metadata_id,
-                        layer_key,
-                        year,
-                        start_at,
-                        end_at,
-                        hotspot_count,
-                        last_hotspot_at,
-                        sources,
-                        satellites
-                    )
-                    SELECT
-                        polygon_metadata_id,
-                        layer_key,
-                        year,
-                        start_at,
-                        end_at,
-                        hotspot_count,
-                        last_hotspot_at,
-                        COALESCE(sources, '[]'::jsonb),
-                        COALESCE(satellites, '[]'::jsonb)
-                    FROM aggregated
-                    ON CONFLICT (polygon_metadata_id, year)
-                    DO UPDATE SET
-                        layer_key = EXCLUDED.layer_key,
-                        start_at = EXCLUDED.start_at,
-                        end_at = EXCLUDED.end_at,
-                        hotspot_count = EXCLUDED.hotspot_count,
-                        last_hotspot_at = EXCLUDED.last_hotspot_at,
-                        sources = EXCLUDED.sources,
-                        satellites = EXCLUDED.satellites,
-                        updated_at = NOW()
-                    """,
-                    (unique_ids,),
-                )
-                return cur.rowcount
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    _set_local_timeouts(cur, DEFAULT_STATEMENT_TIMEOUT_MS, lock_timeout_ms=30_000)
+                    cur.execute("SELECT pg_advisory_xact_lock(%s)", (SUMMARY_ADVISORY_LOCK_KEY,))
+                    cur.execute(delete_sql, params)
+                    cur.execute(insert_sql, params)
+                    return int(cur.rowcount or 0)
 
     def read_polygon_hotspot_summary(
         self,

@@ -197,9 +197,9 @@ class GeoJsonSyncService:
             if features_upserted > 0:
                 try:
                     self.postgres_store.intersect_hotspots_for_layer(layer_key)
-                except Exception as e:
-                    logger.error(
-                        "GEOJSON SYNC: Gagal melakukan intersect hotspot untuk layer %s — %s", layer_key, e
+                except Exception:
+                    logger.exception(
+                        "GEOJSON SYNC: Gagal melengkapi relasi hotspot untuk layer %s", layer_key
                     )
         else:
             features_upserted = 0

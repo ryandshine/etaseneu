@@ -18,6 +18,7 @@ from ._burned_area import _BurnedAreaMixin
 from ._cache import _CacheMixin
 from ._gambut import _GambutMixin
 from ._history import _HistoryArchiveMixin
+from ._hotspot_match import _HotspotMatchMixin
 from ._hotspots import _HotspotObservationMixin
 from ._land_cover import _LandCoverMixin
 from ._layers import _LayerRegistryMixin
@@ -41,6 +42,7 @@ class PostgresStore(
     _SchedulerMetricsMixin,
     _HotspotObservationMixin,
     _PolygonRelationMixin,
+    _HotspotMatchMixin,
     _SpatialMatchMixin,
     _BurnedAreaMixin,
     _S2BurnedAreaMixin,

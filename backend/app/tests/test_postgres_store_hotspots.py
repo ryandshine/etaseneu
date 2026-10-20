@@ -13,7 +13,7 @@ class FakeCursor:
     def __exit__(self, exc_type, exc, tb):
         return False
 
-    def execute(self, query: str, params: tuple[object, ...]) -> None:
+    def execute(self, query: str, params: object = ()) -> None:
         self.executed.append((query, params))
 
     def fetchall(self) -> list[dict[str, object]]:
@@ -32,6 +32,9 @@ class FakeConnection:
 
     def cursor(self):
         return self.cursor_obj
+
+    def transaction(self):
+        return self
 
 
 def test_read_hotspot_observations_enriches_polygon_metadata(monkeypatch) -> None:
@@ -233,16 +236,25 @@ def test_rebuild_polygon_hotspot_summary_uses_current_polygon_geometry(monkeypat
         def cursor(self):
             return self.cursor_obj
 
+        def transaction(self):
+            return self
+
     store = PostgresStore("postgresql://demo")
     fake_connection = _FakeConnection()
     monkeypatch.setattr(store, "connection", lambda: fake_connection)
 
     store.rebuild_polygon_hotspot_summary([99])
 
-    first_query = fake_connection.cursor_obj.executed[1][0]
-    assert "FROM polygon_metadata p" in first_query
-    assert "ST_Covers(p.geometry, obs.geom)" in first_query
-    assert "hotspot_polygon_relation" not in first_query
+    insert_query = fake_connection.cursor_obj.executed[-1][0]
+    assert "FROM polygon_metadata p" in insert_query
+    # geometri poligon SAAT INI (versi valid), titik di batas ikut masuk, label layer observasi bukan syarat
+    assert "ST_Covers(p.analysis_geometry, obs.geom)" in insert_query
+    assert "obs.layer_key" not in insert_query
+    assert "hotspot_polygon_relation" not in insert_query
+    # hapus + isi ulang dalam satu transaksi, dengan penguncian agar tidak saling timpa
+    queries = [query for query, _ in fake_connection.cursor_obj.executed]
+    assert any("pg_advisory_xact_lock" in query for query in queries)
+    assert any(query.startswith("DELETE FROM polygon_hotspot_summary") for query in queries)
 
 
 def test_refresh_polygon_hotspot_summaries_rebuilds_active_and_prunes_stale_rows(monkeypatch) -> None:
@@ -261,15 +273,65 @@ def test_refresh_polygon_hotspot_summaries_rebuilds_active_and_prunes_stale_rows
         def cursor(self):
             return self.cursor_obj
 
+        def transaction(self):
+            return self
+
     store = PostgresStore("postgresql://demo")
     fake_connection = _FakeConnection()
+    calls: list[str] = []
     monkeypatch.setattr(store, "connection", lambda: fake_connection)
     monkeypatch.setattr(store, "read_active_polygon_metadata_ids", lambda layer_keys=None: [11, 22])
-    monkeypatch.setattr(store, "rebuild_polygon_hotspot_summary", lambda polygon_metadata_ids: len(polygon_metadata_ids))
+    monkeypatch.setattr(
+        store,
+        "_reconcile_full_range",
+        lambda layer_keys=None: calls.append("relasi") or {"spatial_pairs": 5, "inserted": 3, "updated": 1},
+    )
+    monkeypatch.setattr(
+        store,
+        "rebuild_polygon_hotspot_summary",
+        lambda polygon_metadata_ids: calls.append("ringkasan") or len(polygon_metadata_ids),
+    )
 
     summary = store.refresh_polygon_hotspot_summaries()
 
     assert summary["active_polygon_count"] == 2
     assert summary["rebuilt"] == 2
+    assert summary["relation_inserted"] == 3 and summary["relation_updated"] == 1
+    assert calls == ["relasi", "ringkasan"]  # relasi dilengkapi lebih dulu
+    assert all(isinstance(value, int) for value in summary.values())  # response model dict[str, int]
     assert len(fake_connection.cursor_obj.executed) >= 1
     assert "DELETE FROM polygon_hotspot_summary" in fake_connection.cursor_obj.executed[0][0]
+
+
+def test_refresh_does_not_rebuild_summary_when_relation_reconcile_fails(monkeypatch) -> None:
+    import pytest
+
+    from app.services.postgres_store import PostgresStore
+
+    class _FakeConnection:
+        def __init__(self) -> None:
+            self.cursor_obj = FakeCursor([])
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def cursor(self):
+            return self.cursor_obj
+
+    store = PostgresStore("postgresql://demo")
+    monkeypatch.setattr(store, "connection", lambda: _FakeConnection())
+    monkeypatch.setattr(store, "read_active_polygon_metadata_ids", lambda layer_keys=None: [11])
+
+    def failing(layer_keys=None):
+        raise RuntimeError("rekonsiliasi gagal")
+
+    rebuilt: list[object] = []
+    monkeypatch.setattr(store, "_reconcile_full_range", failing)
+    monkeypatch.setattr(store, "rebuild_polygon_hotspot_summary", lambda ids: rebuilt.append(ids))
+
+    with pytest.raises(RuntimeError):
+        store.refresh_polygon_hotspot_summaries()
+    assert rebuilt == []

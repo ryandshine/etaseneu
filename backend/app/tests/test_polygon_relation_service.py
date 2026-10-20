@@ -1,69 +1,59 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 
 class FakePostgresStore:
+    """Store palsu: mencatat jendela waktu yang direkonsiliasi, tanpa menyentuh database."""
+
     def __init__(self) -> None:
         self.enabled = True
-        self.observation_rows = [
-            {
-                "id": 17,
-                "source": "MODIS",
-                "satellite": "Terra",
-                "latitude": 4.1,
-                "longitude": 95.1,
-                "detected_at": "2026-05-02T12:00:00Z",
-                "layer_key": "sample_area",
-            }
-        ]
-        self.polygon_lookup = {"feature-1": 99}
-        self.relations: list[dict[str, object]] = []
-        self.rebuilt: list[int] = []
+        self.synced: list[tuple[datetime, datetime]] = []
 
-    def read_hotspot_observation_records(self, hotspots):
-        return list(self.observation_rows)
-
-    def read_polygon_metadata_ids(self, *, layer_key: str, feature_keys: list[str]):
-        return {feature_key: self.polygon_lookup[feature_key] for feature_key in feature_keys if feature_key in self.polygon_lookup}
-
-    def upsert_hotspot_polygon_relation(self, relations):
-        self.relations.extend(relations)
-        return len(relations)
-
-    def rebuild_polygon_hotspot_summary(self, polygon_metadata_ids):
-        self.rebuilt.extend(int(item) for item in polygon_metadata_ids)
-        return len(polygon_metadata_ids)
+    def sync_hotspot_relations_and_summaries(self, *, start_at, end_at):
+        self.synced.append((start_at, end_at))
+        return {"inserted": 2, "updated": 0, "summary_rebuilt": 2}
 
 
-def test_persist_filtered_hotspots_builds_relation_and_summary() -> None:
+def _hotspot(detected_at: str, lon: float) -> dict[str, object]:
+    return {
+        "source": "MODIS",
+        "satellite": "Terra",
+        "latitude": 4.1,
+        "longitude": lon,
+        "detected_at": detected_at,
+        "layer_id": "sample_area",
+    }
+
+
+def test_persist_filtered_hotspots_syncs_relations_for_the_whole_batch_window() -> None:
+    """Relasi dibentuk dari pencocokan spasial di database untuk SELURUH jendela waktu batch --
+    bukan dari metadata poligon milik tiap dict hotspot (jalur lama hanya membentuk relasi untuk
+    hotspot yang satu poligon dengan hotspot pertama di layernya)."""
     from app.services.hotspot_service import HotspotService
 
-    service = HotspotService()
+    service = HotspotService.__new__(HotspotService)
     service.postgres_store = FakePostgresStore()
 
-    service._persist_filtered_hotspots(
-        [
-            {
-                "id": "hotspot-1",
-                "source": "MODIS",
-                "satellite": "Terra",
-                "latitude": 4.1,
-                "longitude": 95.1,
-                "detected_at": "2026-05-02T12:00:00Z",
-                "layer_id": "sample_area",
-                "polygon_metadata": {
-                    "feature_key": "feature-1",
-                    "layer_key": "sample_area",
-                },
-            }
-        ]
+    result = service._persist_filtered_hotspots(
+        [_hotspot("2026-05-02T12:00:00Z", 95.1), _hotspot("2026-05-03T03:00:00Z", 120.7)]
     )
 
-    assert service.postgres_store.relations == [
-        {
-            "hotspot_observation_id": 17,
-            "polygon_metadata_id": 99,
-            "layer_key": "sample_area",
-            "match_method": "contains",
-        }
+    assert service.postgres_store.synced == [
+        (
+            datetime(2026, 5, 2, 12, 0, tzinfo=timezone.utc),
+            datetime(2026, 5, 3, 3, 0, 1, tzinfo=timezone.utc),
+        )
     ]
-    assert service.postgres_store.rebuilt == [99]
+    assert result["inserted"] == 2
+
+
+def test_persist_filtered_hotspots_skips_when_database_disabled() -> None:
+    from app.services.hotspot_service import HotspotService
+
+    service = HotspotService.__new__(HotspotService)
+    service.postgres_store = FakePostgresStore()
+    service.postgres_store.enabled = False
+
+    assert service._persist_filtered_hotspots([_hotspot("2026-05-02T12:00:00Z", 95.1)]) == {}
+    assert service.postgres_store.synced == []

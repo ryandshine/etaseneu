@@ -69,7 +69,8 @@ tidak berubah (`from app.services.postgres_store import PostgresStore`).
 | `_cache.py` | Cache generik berbasis tabel (`api_cache_entries`) |
 | `_scheduler.py` | State/metrik scheduler sync NASA FIRMS (`hotspot_sync_state`) |
 | `_hotspots.py` | Titik hotspot mentah dari NASA (`hotspot_observations`) |
-| `_relations.py` | Relasi hotspot↔poligon + ringkasan agregat per tahun |
+| `_relations.py` | Ringkasan agregat per poligon per tahun (WIB) + refresh penuh + upsert relasi |
+| `_hotspot_match.py` | **Mesin pencocokan spasial hotspot↔poligon (satu definisi "di dalam")**: rekonsiliasi relasi, laporan integritas — lihat bagian "Hotspot ↔ Poligon" di bawah |
 | `_spatial.py` | Pencocokan titik→poligon massal (fitur "Cek Titik ke KPS") |
 | `_burned_area.py` | Luas bekas terbakar per poligon per bulan (`burned_area_summary`) |
 | `_land_cover.py` | Tutupan lahan per poligon per tahun (`land_cover_analysis`, `land_cover_year_class`, `land_cover_year_geom`) |
@@ -630,6 +631,41 @@ tidak di-persist) + fungsi murni `lib/smoke.ts`.
   Kalau menambah peta baru: pasang `useSmokeLayers` + `<SmokeControl className="smoke-control--…">` (beri posisi di
   index.css di sudut yang kosong) + `<SmokeMapLayers>` di dalam MapContainer.
 
+## Hotspot ↔ Poligon: relasi, ringkasan, dan kontrak (audit 2026-10-21)
+
+Dokumen lengkap (peta alur, akar masalah, kontrak, validasi, rencana deploy/rollback):
+`docs/hotspot-polygon-contract.md`. Yang wajib diingat:
+
+- **"Di dalam poligon" = `ST_Covers(analysis_geometry, obs.geom)`** atas poligon AKTIF, di SATU tempat:
+  `postgres_store/_hotspot_match.py` (`pairs_cte_sql`). `analysis_geometry` = geometri sumber bila valid, kalau tidak
+  `ST_CollectionExtract(ST_MakeValid(...), 3)`; geometri sumber tidak pernah diubah (58 poligon aktif punya
+  self-intersection). **Jangan** menulis join spasial hotspot↔poligon baru di tempat lain.
+- **`hotspot_observations.layer_key` = label saat ingest** (layer pemuat titik waktu itu, atau `perimeter_threat` — baru
+  ada sejak 4 Sep 2026), BUKAN fakta spasial. Jangan dipakai sebagai syarat join ke poligon. Lonjakan hotspot Sep 2026
+  (±10×) terutama berasal dari `perimeter_threat` (zona penyangga ≤5 km); hotspot di dalam poligon hanya ±2×.
+- **Relasi** (`hotspot_polygon_relation`) dibentuk di DATABASE lewat `reconcile_hotspot_polygon_relations` (idempoten,
+  `ON CONFLICT`, jendela waktu, `dry_run`), dipanggil dari ingest (`HotspotService._persist_filtered_hotspots`), sesudah
+  sinkron GeoJSON (`intersect_hotspots_for_layer`), dan refresh penuh. Jalur lama (cari id poligon dari metadata dict
+  hotspot dengan cache per layer yang hanya diisi indeks hotspot PERTAMA) cuma menghasilkan ~5% relasi — jangan dihidupkan lagi.
+- **Ringkasan** (`polygon_hotspot_summary`): satu poligon aktif per tahun **Asia/Jakarta**, `hotspot_count` = observasi
+  unik; `sources`/`satellites` = DAFTAR nilai berbeda (bukan jumlah). Dihitung langsung dari geometri (bukan dari
+  relasi), DELETE+INSERT atomik dengan advisory lock. Tabel ini saat ini TIDAK punya pembaca di aplikasi (hanya endpoint refresh).
+- **Titik di >1 poligon** (122 dari 93.415) dicatat di semua poligon; hitungan per poligon JANGAN dijumlahkan menjadi total
+  regional (93.537 pasangan vs 93.415 titik unik).
+- **Konsumen tabel relasi**: `kps_catalog_service` (statistik/filter hotspot 30 hari), `telegram_bot_service`
+  (`hotspot_count_today`), `run_gee_august_analysis.py`. Sebelum relasi direkonsiliasi di produksi angkanya jauh di bawah
+  kenyataan (mis. KPS terdampak 30 hari: 46 vs 1.603 spasial). Konsumen spasial langsung (tidak terpengaruh): Peringatan Dini,
+  notifikasi, rambatan api, klaster, peta.
+- **Kegagalan persistensi TIDAK boleh ditelan**: `fetch_filtered_hotspots` mengembalikan `persistence: {ok}`; scheduler menandai
+  siklus `success=false` bila `ok=false` (metrik Prometheus yang ada ikut menangkap). Handler error FIRMS memakai `layer.get("name")`
+  — `layer` adalah `dict` (`layer.name` pernah menggagalkan seluruh siklus sinkron, 19 Okt 2026).
+- **Endpoint admin**: `GET /api/hotspot-relations/integrity` (baca-saja), `POST /api/hotspot-relations/reconcile`
+  (`dry_run=true` BAWAAN), `POST /api/polygon-hotspot-summary/refresh` (menulis; sekarang = relasi lengkap lalu ringkasan penuh).
+  `prune_orphan_relations` (`dry_run=True` bawaan) sengaja TIDAK punya endpoint.
+- **Belum diterapkan di produksi** (per 2026-10-21): relasi masih 5,19% lengkap, ada 26.006 relasi yatim (asal belum
+  diketahui, tidak ada FK ke observasi). Rencana: `backend/sql/migrations/2026-10-21_hotspot_relation_integrity.sql`.
+- Validasi baca-saja: `backend/validate_hotspot_relations.py` (`VALIDATE_DATABASE_URL`, sengaja bukan `DATABASE_URL`).
+
 ## ⚠️ Bahaya #2: GEE sudah digantikan data Kementerian Kehutanan untuk luas bekas terbakar
 
 Google Earth Engine (MODIS/VIIRS) BUKAN lagi sumber data luas terbakar. Sumber resmi sekarang: file
@@ -981,6 +1017,11 @@ mengubah bentuk `DashboardHotspot`/`DashboardLayer`, naikkan versi kunci cache.*
 **Backend**: `cd backend && .venv/bin/python -m pytest app/tests -q` (pytest-cov terpasang tapi
 `--cov` tidak di-wire otomatis di config manapun — tambahkan manual kalau perlu coverage). WAJIB baca
 bahaya #1 di atas sebelum menulis test baru yang menyentuh Postgres/layer sync.
+
+**Backend, tes integrasi PostGIS** (`test_hotspot_matching_integration.py`, 21 tes): MENULIS ke database, jadi dipagari —
+hanya jalan bila `ETASENEU_TEST_DATABASE_URL` diisi (nama db wajib mengandung `test`, tidak boleh sama dengan `DATABASE_URL`;
+tabel dibuat di skema sementara). Jalankan kontainer `postgis/postgis:16-3.4` terpisah; JANGAN arahkan ke database produksi.
+Tanpa variabel itu tes dilewati (skip), bukan gagal.
 
 **Frontend**: `npm test` (vitest run, environment jsdom). Tidak ada script `lint` terpisah — `npm run
 build` (`tsc --noEmit && vite build`) merangkap sebagai typecheck. Tidak ada config ESLint di repo ini.

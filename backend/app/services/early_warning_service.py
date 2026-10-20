@@ -87,7 +87,7 @@ class EarlyWarningService:
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Jakarta')) as h_month
                         FROM polygon_metadata p
                         JOIN polygon_burned b ON p.id = b.polygon_metadata_id
-                        JOIN hotspot_observations h ON ST_Contains(p.geometry, h.geom)
+                        JOIN hotspot_observations h ON ST_Covers(p.geometry, h.geom)
                         WHERE p.is_active = TRUE {wilker_clause}
                         GROUP BY p.id
                     )
@@ -123,7 +123,7 @@ class EarlyWarningService:
                             COUNT(h.id) FILTER (WHERE h.detected_at >= DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Jakarta')) as h_month,
                             COUNT(h.id) as h_total
                         FROM polygon_metadata p
-                        JOIN hotspot_observations h ON ST_Contains(p.geometry, h.geom)
+                        JOIN hotspot_observations h ON ST_Covers(p.geometry, h.geom)
                         LEFT JOIN (
                             SELECT polygon_metadata_id
                             FROM burned_area_summary
@@ -309,7 +309,7 @@ class EarlyWarningService:
                             MAX(h.detected_at) as latest_hotspot_at
                         FROM polygon_metadata p
                         LEFT JOIN polygon_burned b ON p.id = b.polygon_metadata_id
-                        JOIN hotspot_observations h ON ST_Contains(p.geometry, h.geom)
+                        JOIN hotspot_observations h ON ST_Covers(p.geometry, h.geom)
                         WHERE p.is_active = TRUE
                         GROUP BY p.id
                     )
